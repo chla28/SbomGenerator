@@ -1,0 +1,12 @@
+# Example RPM package list for SBOM generation
+# Lines starting with # are ignored
+# Each line is either:
+#   - An installed package name:  bash
+#   - A NEVRA:                    bash-5.1.8-6.el9.x86_64
+#   - A local .rpm file path:     /tmp/mypkg-1.0-1.el9.x86_64.rpm
+
+bash
+glibc
+openssl-libs
+coreutils
+systemd

@@ -1,0 +1,200 @@
+import 'dart:convert';
+import 'dart:io';
+import 'models.dart';
+
+/// Generates an SPDX 3.0 JSON-LD SBOM.
+///
+/// Specification: https://spdx.github.io/spdx-spec/v3.0/
+class Spdx3Generator {
+  static const _context = 'https://spdx.org/rdf/3.0.0/spdx-context.jsonld';
+  static const _specVersion = '3.0.0';
+
+  Map<String, dynamic> generate(
+    List<Package> packages,
+    List<PackageDependency> dependencies, {
+    String? documentName,
+  }) {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final base = 'https://sbom.local/spdx3/${generateUuidV4()}';
+
+    final docId = base;
+    final ciId = '$base#creationInfo';
+    final toolId = '$base#tool-sbom_generator';
+
+    final pkgIds = {
+      for (final pkg in packages) pkg.bomRef: '$base#${pkg.spdxId}',
+    };
+
+    final graph = <Map<String, dynamic>>[];
+
+    graph.add({
+      '@id': ciId,
+      'type': 'CreationInfo',
+      'specVersion': _specVersion,
+      'created': now,
+      'createdBy': [toolId],
+    });
+
+    graph.add({
+      'type': 'Tool',
+      'spdxId': toolId,
+      'creationInfo': ciId,
+      'name': 'sbom_generator',
+      'toolVersion': '1.0.0',
+    });
+
+    final vendorIds = _buildVendorElements(packages, base, ciId, graph);
+
+    graph.add({
+      'type': 'SpdxDocument',
+      'spdxId': docId,
+      'creationInfo': ciId,
+      'name': documentName ?? 'Package Set SBOM',
+      'profileConformance': ['core', 'software'],
+      'rootElement': pkgIds.values.toList(),
+    });
+
+    for (final pkg in packages) {
+      graph.add(_packageToElement(
+        pkg,
+        spdxId: pkgIds[pkg.bomRef]!,
+        ciId: ciId,
+        vendorId: vendorIds[pkg.vendor],
+      ));
+    }
+
+    graph.add({
+      'type': 'Relationship',
+      'spdxId': '$base#rel-describes',
+      'creationInfo': ciId,
+      'from': docId,
+      'to': pkgIds.values.toList(),
+      'relationshipType': 'describes',
+    });
+
+    int idx = 0;
+    for (final dep in dependencies) {
+      final fromId = pkgIds[dep.sourceRef];
+      if (fromId == null || dep.dependsOn.isEmpty) continue;
+      for (final target in dep.dependsOn) {
+        final toId = pkgIds[target];
+        if (toId == null) continue;
+        idx++;
+        graph.add({
+          'type': 'Relationship',
+          'spdxId': '$base#rel-$idx',
+          'creationInfo': ciId,
+          'from': fromId,
+          'to': [toId],
+          'relationshipType': 'dependsOn',
+        });
+      }
+    }
+
+    return {
+      '@context': _context,
+      '@graph': graph,
+    };
+  }
+
+  Map<String, String> _buildVendorElements(
+    List<Package> packages,
+    String base,
+    String ciId,
+    List<Map<String, dynamic>> graph,
+  ) {
+    final seen = <String, String>{};
+    for (final pkg in packages) {
+      if (!_hasValue(pkg.vendor) || seen.containsKey(pkg.vendor)) continue;
+      final id = '$base#org-${_safeId(pkg.vendor)}';
+      seen[pkg.vendor] = id;
+      graph.add({
+        'type': 'Organization',
+        'spdxId': id,
+        'creationInfo': ciId,
+        'name': pkg.vendor,
+      });
+    }
+    return seen;
+  }
+
+  Map<String, dynamic> _packageToElement(
+    Package pkg, {
+    required String spdxId,
+    required String ciId,
+    String? vendorId,
+  }) {
+    final elem = <String, dynamic>{
+      'type': 'software:Package',
+      'spdxId': spdxId,
+      'creationInfo': ciId,
+      'name': pkg.name,
+      'software:packageVersion': pkg.fullVersion,
+      'software:primaryPurpose': 'library',
+      'externalIdentifier': [
+        {
+          'externalIdentifierType': 'purl',
+          'identifier': pkg.purl,
+        }
+      ],
+    };
+
+    if (_hasValue(pkg.summary)) elem['summary'] = pkg.summary;
+    if (_hasValue(pkg.url)) elem['software:downloadLocation'] = pkg.url;
+
+    elem['concludedLicense'] =
+        _hasValue(pkg.license) ? pkg.license : 'NOASSERTION';
+    elem['declaredLicense'] =
+        _hasValue(pkg.license) ? pkg.license : 'NOASSERTION';
+    elem['copyrightText'] = 'NOASSERTION';
+
+    if (vendorId != null) elem['suppliedBy'] = vendorId;
+
+    final statement = _annotationStatement(pkg);
+    if (statement.isNotEmpty) {
+      elem['annotation'] = [
+        {
+          'type': 'Annotation',
+          'annotationType': 'other',
+          'subject': spdxId,
+          'statement': statement,
+        }
+      ];
+    }
+
+    return elem;
+  }
+
+  String _annotationStatement(Package pkg) {
+    if (pkg is RpmPackage) {
+      return [
+        'rpm:arch=${pkg.arch}',
+        'rpm:release=${pkg.release}',
+        if (pkg.epoch != '(none)' && pkg.epoch.isNotEmpty)
+          'rpm:epoch=${pkg.epoch}',
+        if (_hasValue(pkg.buildTime)) 'rpm:buildTime=${pkg.buildTime}',
+      ].join('; ');
+    }
+    if (pkg is WheelPackage) {
+      final ns = pkg.packageType == 'pypi' ? 'pypi' : 'source';
+      return '$ns:platform=${pkg.arch}';
+    }
+    return '';
+  }
+
+  bool _hasValue(String s) => s.isNotEmpty && s != '(none)';
+
+  String _safeId(String s) =>
+      s.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '-').toLowerCase();
+
+  Future<void> writeToFile(
+    List<Package> packages,
+    List<PackageDependency> dependencies,
+    String outputPath, {
+    String? documentName,
+  }) async {
+    final sbom = generate(packages, dependencies, documentName: documentName);
+    await File(outputPath)
+        .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
+  }
+}

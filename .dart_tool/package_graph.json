@@ -1,0 +1,21 @@
+{
+  "roots": [
+    "sbom_generator"
+  ],
+  "packages": [
+    {
+      "name": "sbom_generator",
+      "version": "1.0.0",
+      "dependencies": [
+        "args"
+      ],
+      "devDependencies": []
+    },
+    {
+      "name": "args",
+      "version": "2.7.0",
+      "dependencies": []
+    }
+  ],
+  "configVersion": 1
+}
