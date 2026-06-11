@@ -20,14 +20,14 @@ class RpmParser {
     final isFile = packageRef.endsWith('.rpm');
     final qFlag = isFile ? '-qp' : '-q';
 
-    // --- Basic metadata ---
-    final infoResult = await Process.run('rpm', [
-      qFlag,
-      '--queryformat',
-      _queryFormat,
-      packageRef,
+    // Run all three queries concurrently (metadata + requires + provides)
+    final results = await Future.wait([
+      Process.run('rpm', [qFlag, '--queryformat', _queryFormat, packageRef]),
+      Process.run('rpm', [qFlag, '--requires', packageRef]),
+      Process.run('rpm', [qFlag, '--provides', packageRef]),
     ]);
 
+    final infoResult = results[0];
     if (infoResult.exitCode != 0) {
       stderr.writeln('Warning: cannot query "$packageRef"');
       final errMsg = infoResult.stderr.toString().trim();
@@ -45,7 +45,8 @@ class RpmParser {
     final line = rawOutput.split('\n').first;
     final allParts = line.split('|');
     if (allParts.length < 12) {
-      stderr.writeln('Warning: unexpected query output for "$packageRef": $line');
+      stderr
+          .writeln('Warning: unexpected query output for "$packageRef": $line');
       return null;
     }
 
@@ -54,18 +55,17 @@ class RpmParser {
         ? [...allParts.sublist(0, 11), allParts.sublist(11).join('|')]
         : allParts;
 
-    // --- Requires ---
-    final requires = await _queryCapabilities(qFlag, '--requires', packageRef);
-
-    // --- Provides ---
-    final provides = await _queryCapabilities(qFlag, '--provides', packageRef);
+    final requires = _parseCapabilities(results[1]);
+    final provides = _parseCapabilities(results[2]);
 
     // Sanitise checksum: rpm returns "(none)" when unavailable
     final sha256Raw = parts[9].trim();
-    final sha256 = (sha256Raw == '(none)' || sha256Raw.isEmpty) ? '' : sha256Raw;
+    final sha256 =
+        (sha256Raw == '(none)' || sha256Raw.isEmpty) ? '' : sha256Raw;
 
     final sourceRpmRaw = parts[10].trim();
-    final sourceRpm = (sourceRpmRaw == '(none)' || sourceRpmRaw.isEmpty) ? '' : sourceRpmRaw;
+    final sourceRpm =
+        (sourceRpmRaw == '(none)' || sourceRpmRaw.isEmpty) ? '' : sourceRpmRaw;
 
     return RpmPackage(
       name: parts[0].trim(),
@@ -86,9 +86,7 @@ class RpmParser {
     );
   }
 
-  Future<List<String>> _queryCapabilities(
-      String qFlag, String option, String packageRef) async {
-    final result = await Process.run('rpm', [qFlag, option, packageRef]);
+  List<String> _parseCapabilities(ProcessResult result) {
     if (result.exitCode != 0) return [];
     return result.stdout
         .toString()

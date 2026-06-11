@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:sbom_generator/models.dart';
+import 'package:sbom_generator/deb_parser.dart';
+import 'package:sbom_generator/requirements_parser.dart';
 import 'package:sbom_generator/rpm_parser.dart';
-import 'package:sbom_generator/wheel_parser.dart';
 import 'package:sbom_generator/tar_parser.dart';
+import 'package:sbom_generator/wheel_parser.dart';
+import 'package:sbom_generator/zip_parser.dart';
 import 'package:sbom_generator/cyclonedx_generator.dart';
 import 'package:sbom_generator/spdx_generator.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
@@ -20,7 +24,10 @@ Future<void> main(List<String> arguments) async {
       help: 'Input file containing one package reference per line.\n'
           'Each line may be:\n'
           '  • an RPM package name, NEVRA, or path to a .rpm file\n'
-          '  • a path to a Python .whl file',
+          '  • a path to a Debian .deb file\n'
+          '  • a path to a Python .whl file\n'
+          '  • a path to a requirements.txt file\n'
+          '  • a path to a .tar / .tar.gz / .tgz / .zip archive',
     )
     ..addOption(
       'output',
@@ -60,6 +67,13 @@ Future<void> main(List<String> arguments) async {
       defaultsTo: false,
       negatable: false,
       help: 'Print progress details.',
+    )
+    ..addOption(
+      'concurrency',
+      abbr: 'c',
+      defaultsTo: '4',
+      help: 'Maximum packages processed concurrently.\n'
+          '1 = sequential. 0 = unlimited.',
     )
     ..addFlag(
       'version',
@@ -105,6 +119,14 @@ Future<void> main(List<String> arguments) async {
   final docName = args['name'] as String?;
   final verbose = args['verbose'] as bool;
   final rpmDir = args['rpm-dir'] as String?;
+  final concurrencyN = () {
+    final n = int.tryParse(args['concurrency'] as String) ?? 4;
+    if (n < 0) {
+      _err('--concurrency must be ≥ 0.');
+      exit(1);
+    }
+    return n;
+  }();
 
   final inputFile = File(inputPath);
   if (!await inputFile.exists()) {
@@ -126,8 +148,9 @@ Future<void> main(List<String> arguments) async {
   }
 
   // --- Build RPM file index from --rpm-dir ---
-  final rpmExactIndex = <String, String>{};   // stem (without .rpm) → path
-  final rpmNameIndex  = <String, List<String>>{}; // package name → sorted [paths]
+  final rpmExactIndex = <String, String>{}; // stem (without .rpm) → path
+  final rpmNameIndex =
+      <String, List<String>>{}; // package name → sorted [paths]
   if (rpmDir != null) {
     final dir = Directory(rpmDir);
     if (!await dir.exists()) {
@@ -136,7 +159,8 @@ Future<void> main(List<String> arguments) async {
     }
     await for (final entity in dir.list(recursive: true, followLinks: false)) {
       if (entity is File && entity.path.endsWith('.rpm')) {
-        final stem = entity.path.split('/').last.replaceAll(RegExp(r'\.rpm$'), '');
+        final stem =
+            entity.path.split('/').last.replaceAll(RegExp(r'\.rpm$'), '');
         rpmExactIndex[stem] = entity.path;
         final name = RegExp(r'^(.+?)-\d').firstMatch(stem)?.group(1) ?? stem;
         rpmNameIndex.putIfAbsent(name, () => []).add(entity.path);
@@ -148,10 +172,29 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
+  // --- Expand requirements.txt files (preprocess before the main loop) ---
+  final reqParser = RequirementsParser();
+  final preloadedPackages = <Package>[];
+  final filteredRefs = <String>[];
+  for (final ref in packageRefs) {
+    if (_isRequirements(ref)) {
+      preloadedPackages.addAll(reqParser.parseFile(ref));
+    } else {
+      filteredRefs.add(ref);
+    }
+  }
+  final mainRefs = filteredRefs;
+
   // --- Detect tool availability ---
-  final hasRpm = packageRefs.any((r) => !r.endsWith('.whl') && !_isTar(r));
-  final hasWhl = packageRefs.any((r) => r.endsWith('.whl'));
-  final hasTar = packageRefs.any(_isTar);
+  final hasRpm = mainRefs.any((r) =>
+      !r.endsWith('.whl') &&
+      !_isTar(r) &&
+      !r.endsWith('.deb') &&
+      !r.endsWith('.zip'));
+  final hasWhl = mainRefs.any((r) => r.endsWith('.whl'));
+  final hasTar = mainRefs.any(_isTar);
+  final hasZip = mainRefs.any((r) => r.endsWith('.zip'));
+  final hasDeb = mainRefs.any((r) => r.endsWith('.deb'));
 
   if (hasRpm) {
     final rpmCheck = await Process.run('rpm', ['--version']);
@@ -162,69 +205,105 @@ Future<void> main(List<String> arguments) async {
     if (verbose) print('rpm: ${(rpmCheck.stdout as String).trim()}');
   }
 
-  if (hasWhl || hasTar) {
+  if (hasWhl || hasTar || hasZip) {
     final py3Check = await Process.run('python3', ['--version']);
     if (py3Check.exitCode != 0) {
-      _err('python3 not found — required to read .whl and tar archive files.');
+      _err('python3 not found — required to read .whl, tar, and zip archives.');
       exit(1);
     }
     if (verbose) print('python3: ${(py3Check.stdout as String).trim()}');
   }
 
+  if (hasDeb) {
+    final debCheck = await Process.run('dpkg-deb', ['--version']);
+    if (debCheck.exitCode != 0) {
+      _err('dpkg-deb not found — required to read .deb files.');
+      exit(1);
+    }
+    if (verbose)
+      print(
+          'dpkg-deb: ${(debCheck.stdout as String).split('\n').first.trim()}');
+  }
+
   // --- Parse packages ---
-  final total = packageRefs.length;
-  print('Querying $total package(s)…');
+  final total = mainRefs.length + (preloadedPackages.isNotEmpty ? 1 : 0);
+  final conLabel = concurrencyN == 0 ? 'illimité' : '$concurrencyN';
+  print('Querying ${mainRefs.length} package(s) — concurrence : $conLabel'
+      '${preloadedPackages.isNotEmpty ? " (+ ${preloadedPackages.length} depuis requirements)" : ""}…');
 
   final rpmParser = RpmParser();
   final whlParser = WheelParser();
   final tarParser = TarParser();
+  final zipParser = ZipParser();
+  final debParser = DebParser();
+
+  final mainTotal = mainRefs.length;
+  final sem = _Semaphore(
+      concurrencyN == 0 ? mainTotal.clamp(1, 1 << 20) : concurrencyN);
+  int completed = 0;
+
+  final rawResults = await Future.wait(
+    List<Future<Package?>>.generate(mainTotal, (i) async {
+      var ref = mainRefs[i];
+
+      // Resolve bare RPM name to a local file when --rpm-dir is set
+      if (rpmDir != null &&
+          !ref.contains('/') &&
+          !ref.endsWith('.whl') &&
+          !ref.endsWith('.deb') &&
+          !ref.endsWith('.zip') &&
+          !_isTar(ref)) {
+        final resolved = rpmExactIndex[ref] ??
+            (() {
+              final paths = rpmNameIndex[ref];
+              if (paths == null || paths.isEmpty) return null;
+              if (paths.length > 1) {
+                stderr.writeln(
+                  'Warning: multiple RPM files match "$ref"; '
+                  'using ${paths.first.split('/').last}',
+                );
+              }
+              return paths.first;
+            })();
+        if (resolved != null) ref = resolved;
+      }
+
+      await sem.acquire();
+      try {
+        Package? pkg;
+        if (ref.endsWith('.whl')) {
+          pkg = await whlParser.parseWheelFile(ref);
+        } else if (_isTar(ref)) {
+          pkg = await tarParser.parseTarFile(ref);
+        } else if (ref.endsWith('.zip')) {
+          pkg = await zipParser.parseZipFile(ref);
+        } else if (ref.endsWith('.deb')) {
+          pkg = await debParser.parseDebFile(ref);
+        } else {
+          pkg = await rpmParser.parsePackage(ref);
+        }
+        completed++;
+        final label = ref.contains('/') ? ref.split('/').last : ref;
+        _printProgress(completed, mainTotal, label);
+        return pkg;
+      } finally {
+        sem.release();
+      }
+    }),
+  );
+
+  stdout.writeln();
+
   final packages = <Package>[];
   int failed = 0;
-
-  for (int i = 0; i < total; i++) {
-    var ref = packageRefs[i];
-
-    // Resolve bare RPM name to a local file when --rpm-dir is set
-    if (rpmDir != null &&
-        !ref.contains('/') &&
-        !ref.endsWith('.whl') &&
-        !_isTar(ref)) {
-      final resolved = rpmExactIndex[ref] ??
-          (() {
-            final paths = rpmNameIndex[ref];
-            if (paths == null || paths.isEmpty) return null;
-            if (paths.length > 1) {
-              stderr.writeln(
-                'Warning: multiple RPM files match "$ref"; '
-                'using ${paths.first.split('/').last}',
-              );
-            }
-            return paths.first;
-          })();
-      if (resolved != null) ref = resolved;
-    }
-
-    final label = ref.contains('/') ? ref.split('/').last : ref;
-    _printProgress(i, total, label);
-
-    Package? pkg;
-    if (ref.endsWith('.whl')) {
-      pkg = await whlParser.parseWheelFile(ref);
-    } else if (_isTar(ref)) {
-      pkg = await tarParser.parseTarFile(ref);
-    } else {
-      pkg = await rpmParser.parsePackage(ref);
-    }
-
+  for (final pkg in rawResults) {
     if (pkg != null) {
       packages.add(pkg);
     } else {
       failed++;
     }
   }
-
-  _printProgress(total, total, 'terminé');
-  stdout.writeln();
+  packages.addAll(preloadedPackages);
 
   // --- Deduplicate ---
   final seenRefs = <String>{};
@@ -240,7 +319,8 @@ Future<void> main(List<String> arguments) async {
 
   final failedNote = failed > 0 ? '  ($failed échec(s))' : '';
   final dupeNote = dupes > 0 ? '  ($dupes doublon(s) supprimé(s))' : '';
-  print('Analysés : ${uniquePackages.length}/$total paquet(s).$failedNote$dupeNote');
+  print(
+      'Analysés : ${uniquePackages.length}/$total paquet(s).$failedNote$dupeNote');
 
   if (uniquePackages.isEmpty) {
     _err('No packages could be parsed. Aborting.');
@@ -273,27 +353,36 @@ Future<void> main(List<String> arguments) async {
     switch (format) {
       case 'cyclonedx':
         await CycloneDxGenerator().writeToFile(
-          uniquePackages, dependencies, outputPath,
+          uniquePackages,
+          dependencies,
+          outputPath,
           documentName: docName,
         );
       case 'spdx':
         await SpdxGenerator().writeToFile(
-          uniquePackages, dependencies, outputPath,
+          uniquePackages,
+          dependencies,
+          outputPath,
           documentName: docName,
         );
       case 'spdx3':
         await Spdx3Generator().writeToFile(
-          uniquePackages, dependencies, outputPath,
+          uniquePackages,
+          dependencies,
+          outputPath,
           documentName: docName,
         );
       case 'json':
         await SimpleJsonGenerator().writeToFile(
-          uniquePackages, dependencies, outputPath,
+          uniquePackages,
+          dependencies,
+          outputPath,
           documentName: docName,
         );
       case 'markdown':
         await MarkdownGenerator().writeToFile(
-          uniquePackages, outputPath,
+          uniquePackages,
+          outputPath,
           documentName: docName,
         );
     }
@@ -311,6 +400,9 @@ Future<void> main(List<String> arguments) async {
 bool _isTar(String ref) =>
     ref.endsWith('.tar') || ref.endsWith('.tar.gz') || ref.endsWith('.tgz');
 
+bool _isRequirements(String ref) =>
+    ref.endsWith('.txt') && !ref.endsWith('.whl');
+
 void _err(String msg) => stderr.writeln('Error: $msg');
 
 void _printProgress(int current, int total, String label) {
@@ -321,8 +413,7 @@ void _printProgress(int current, int total, String label) {
   final bar = '${'█' * filled}${'░' * (barWidth - filled)}';
 
   final pct = '${(ratio * 100).round().toString().padLeft(3)}%';
-  final count =
-      '${current.toString().padLeft(total.toString().length)}/$total';
+  final count = '${current.toString().padLeft(total.toString().length)}/$total';
 
   const prefix = '  ';
   final head = '[$bar] $count  $pct  ';
@@ -332,6 +423,30 @@ void _printProgress(int current, int total, String label) {
       : label;
 
   stdout.write('\r$prefix$head$shortLabel\x1B[K');
+}
+
+class _Semaphore {
+  _Semaphore(int count) : _count = count;
+  int _count;
+  final _waiters = <Completer<void>>[];
+
+  Future<void> acquire() async {
+    if (_count > 0) {
+      _count--;
+      return;
+    }
+    final waiter = Completer<void>();
+    _waiters.add(waiter);
+    await waiter.future;
+  }
+
+  void release() {
+    if (_waiters.isNotEmpty) {
+      _waiters.removeAt(0).complete();
+    } else {
+      _count++;
+    }
+  }
 }
 
 void _printUsage(ArgParser parser) {

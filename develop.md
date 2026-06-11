@@ -6,27 +6,36 @@ Ce document explique le fonctionnement interne du code pour une prise en main ra
 
 ## Architecture générale
 
-Le programme suit un pipeline linéaire :
+Le programme suit un pipeline concurrent :
 
 ```
 Fichier d'entrée (.txt)
         │
+        ├─ lignes .txt ──► RequirementsParser (pur Dart, pré-expansion)
+        │
         ▼
-┌───────────────────────────────────────┐
-│  bin/sbom_generator.dart              │  1. Lecture + validation CLI
-│  (main + _printProgress)              │  2. Détection du type par extension
-│                                       │  3. Dispatch vers le bon parser
-│                                       │  4. Déduplication par bomRef
-└──┬──────────┬──────────┬──────────────┘
-   │          │          │
-   ▼          ▼          ▼
-RpmParser  WheelParser  TarParser
-   │          │          │
-   └──────────┴──────────┘
-              │  List<Package>
+┌────────────────────────────────────────────┐
+│  bin/sbom_generator.dart                   │  1. Lecture + validation CLI
+│  (main + _Semaphore + _printProgress)      │  2. Détection du type par extension
+│                                            │  3. Dispatch concurrent (--concurrency N)
+│                                            │  4. Déduplication par bomRef
+└──┬──────┬──────┬──────┬──────┬─────────────┘
+   │      │      │      │      │
+   ▼      ▼      ▼      ▼      ▼
+  Rpm   Wheel   Tar   Zip   Deb
+Parser Parser Parser Parser Parser
+               └──┬───┘
+                  ▼
+          archive_helpers.dart
+    (parseArchiveFilename, identifyArchiveLicense)
+
+              │  List<Package>  (RpmPackage | WheelPackage | DebPackage)
               ▼
    RpmParser.buildDependencies()
               │  List<PackageDependency>
+              ▼
+       LicenseNormalizer ◄─── importé par tous les générateurs
+              │
               ▼
 ┌─────────────────────────────────────────────┐
 │  cyclonedx_generator.dart                   │
@@ -40,7 +49,7 @@ RpmParser  WheelParser  TarParser
    Fichier SBOM (.json / .jsonld / .md)
 ```
 
-Tous les générateurs travaillent sur `List<Package>` — la classe abstraite commune à `RpmPackage` et `WheelPackage`.
+Tous les générateurs travaillent sur `List<Package>` — la classe abstraite commune à `RpmPackage`, `WheelPackage` et `DebPackage`.
 
 ---
 
@@ -70,7 +79,7 @@ abstract class Package {
   String get purl;          // Package URL (purl-spec)
   String get bomRef;        // identifiant CycloneDX unique
   String get spdxId;        // identifiant SPDX (SPDXRef-…)
-  String get packageType;   // 'rpm' | 'pypi' | 'source'
+  String get packageType;   // 'rpm' | 'pypi' | 'source' | 'deb'
 }
 ```
 
@@ -112,6 +121,28 @@ Le nom Python est normalisé selon PEP 503 dans le PURL (`_normalizePyName` : mi
 
 Le champ `arch` contient le platform tag du wheel (ex. `any`, `linux_x86_64`) ou l'architecture détectée depuis le nom de fichier pour les archives génériques.
 
+### `DebPackage extends Package`
+
+Représente un paquet Debian extrait par `dpkg-deb -f`. Champs supplémentaires :
+
+| Champ | Source control | Exemple |
+|-------|---------------|---------|
+| `arch` | `Architecture` | `amd64` |
+| `vendor` | `Maintainer` | `Ubuntu Developers` |
+| `url` | `Homepage` | `https://…` |
+| `summary` | première ligne de `Description` | `OpenSSL shared library` |
+| `requires` | `Depends` + `Pre-Depends` (split virgule/pipe, contraintes retirées) | `["libc6", "libssl3"]` |
+| `provides` | `Provides` | `["libssl3"]` |
+
+Identifiants calculés :
+
+| Getter | Exemple |
+|--------|---------|
+| `purl` | `pkg:deb/libssl3@3.0.1?arch=amd64` |
+| `bomRef` | `pkg-deb-libssl3-3.0.1-amd64` |
+| `spdxId` | `SPDXRef-deb-libssl3-3.0.1` |
+| `packageType` | `'deb'` |
+
 ### `PackageDependency`
 
 Structure simple liant un `bomRef` source à la liste des `bomRef` cibles dont il dépend.
@@ -142,12 +173,25 @@ static const _queryFormat =
 
 ### `parsePackage(String packageRef)`
 
-Trois appels `rpm` séquentiels :
-1. `rpm -q[p] --queryformat ...` → 12 champs de métadonnées
-2. `rpm -q[p] --requires` → liste des capabilities requises
-3. `rpm -q[p] --provides` → liste des capabilities fournies
+Les trois appels `rpm` sont lancés en **parallèle** via `Future.wait` :
 
-Retourne `null` avec un avertissement sur `stderr` en cas d'échec.
+```dart
+final results = await Future.wait([
+  Process.run('rpm', [qFlag, '--queryformat', _queryFormat, packageRef]),
+  Process.run('rpm', [qFlag, '--requires', packageRef]),
+  Process.run('rpm', [qFlag, '--provides', packageRef]),
+]);
+```
+
+1. `rpm -q[p] --queryformat ...` → 12 champs de métadonnées
+2. `rpm -q[p] --requires` → liste des capabilities requises (parsée par `_parseCapabilities`)
+3. `rpm -q[p] --provides` → liste des capabilities fournies (parsée par `_parseCapabilities`)
+
+Retourne `null` avec un avertissement sur `stderr` si le premier appel échoue.
+
+### `_parseCapabilities(ProcessResult result)` *(nouveau)*
+
+Méthode synchrone remplaçant l'ancien `_queryCapabilities` asynchrone. Prend un `ProcessResult` déjà disponible et retourne `List<String>` (vide si `exitCode != 0`).
 
 ### `buildDependencies(List<Package> packages)`
 
@@ -254,12 +298,14 @@ Si `type == 'python'` : délègue à `WheelParser().parseMetadataText(path, cont
 
 ### Cas archive générique
 
-Si `type == 'generic'` : `_buildGenericPackage()` :
-1. Analyse le nom de fichier via `_parseFilename()`
-2. Identifie la licence via `_identifyLicense()`
+Si `type == 'generic'` : délègue à `buildGenericArchivePackage()` (depuis `archive_helpers.dart`) :
+1. Analyse le nom de fichier via `parseArchiveFilename()`
+2. Identifie la licence via `identifyArchiveLicense()`
 3. Retourne un `WheelPackage` avec `packageType='source'`
 
-### Parsing du nom de fichier (`_parseFilename`)
+> Ces fonctions sont désormais dans `lib/archive_helpers.dart` (partagées avec `ZipParser`). La logique est identique à l'ancienne implémentation privée de `TarParser`.
+
+### Parsing du nom de fichier (`parseArchiveFilename` dans archive_helpers)
 
 **Algorithme :**
 
@@ -286,7 +332,7 @@ Si `type == 'generic'` : `_buildGenericPackage()` :
 | `mongodb-database-tools-rhel88-x86_64-100.13.0.tgz` | `mongodb-database-tools` | `100.13.0` | `x86_64` |
 | `mongosh-2.5.6-linux-x64.tgz` | `mongosh` | `2.5.6` | `x86_64` |
 
-### Identification de licence (`_identifyLicense`)
+### Identification de licence (`identifyArchiveLicense` dans archive_helpers)
 
 Travaille sur les 2 000 premiers caractères du fichier de licence. Utilise deux zones :
 
@@ -296,6 +342,157 @@ Travaille sur les 2 000 premiers caractères du fichier de licence. Utilise deux
 Licences reconnues : `SSPL-1.0`, `Apache-2.0`, `Apache-1.1`, `GPL-2.0-only`, `GPL-3.0-only`, `LGPL-2.0-only`, `LGPL-2.1-only`, `LGPL-3.0-only`, `MPL-2.0`, `MPL-1.1`, `MIT`, `ISC`, `BSD-2-Clause`, `BSD-3-Clause`, `EPL-2.0`, `EPL-1.0`, `CDDL-1.0`.
 
 > **Piège :** Le texte GPL-2.0 contient « use the GNU Library General Public License instead » dans la section « How to Apply ». Vérifier uniquement le titre (300 premiers chars) empêche ce faux positif LGPL.
+
+---
+
+## `lib/license_normalizer.dart` — Normalisation SPDX centralisée
+
+Factorisation de la logique de normalisation des licences qui était auparavant enfouie dans `cyclonedx_generator.dart`. Désormais importé par les trois générateurs (CycloneDX 1.6, SPDX 2.3, SPDX 3.0).
+
+### `LicenseNormalizer` (classe, méthodes toutes `static`)
+
+| Méthode | Retour | Usage |
+|---------|--------|-------|
+| `toSpdxExpression(String raw)` | `String` | Expression SPDX pour SPDX 2.3 / 3.0 |
+| `toCycloneDxLicenses(String raw)` | `List<Map<String, dynamic>>` | Structure `licenses[]` CycloneDX 1.6 |
+
+### Algorithme commun
+
+1. Cas vide / `(none)` → retourne vide
+2. Normalisation des opérateurs booléens (`and` → `AND`, `or` → `OR`, `with` → `WITH`) avec regex lookbehind/lookahead `\S` pour protéger les tokens collés (`GPL-2.0-or-later` non altéré)
+3. Détection d'expression composée (présence de `AND`/`OR`/`WITH` entourés d'espaces)
+4. Résolution token par token dans `_sortedEntries` (tri longueur décroissante → évite les matches courts avant les longs)
+5. Choix du champ CycloneDX : `expression` (composé), `id` (SPDX versionné ou `LicenseRef-*`), `name` (inconnu sans numéro)
+
+> **Optimisation :** `_sortedEntries` est `static final` — calculé une seule fois au chargement de la classe. L'ancien code retriait la table à chaque appel de `_normaliseExpressionTokens`.
+
+---
+
+## `lib/archive_helpers.dart` — Helpers partagés archives
+
+Code partagé entre `TarParser` et `ZipParser` pour éviter la duplication de ~120 lignes.
+
+### Exports (fonctions et classe niveau bibliothèque)
+
+| Symbole | Description |
+|---------|-------------|
+| `class ArchiveFilenameInfo` | `{String name, version, arch}` — résultat du parsing de nom de fichier |
+| `parseArchiveFilename(String path)` | Analyse nom/version/arch depuis le nom de fichier (extensions `.tar.gz`, `.tgz`, `.tar`, `.zip`) |
+| `identifyArchiveLicense(String text)` | Heuristique SPDX depuis ≤ 2 000 chars du fichier licence — même algorithme que l'ancienne `_identifyLicense` de TarParser |
+| `buildGenericArchivePackage(String path, {...})` | Construit un `WheelPackage(packageType='source')` depuis les infos de filename + licence |
+
+> Ces fonctions sont package-level (sans préfixe `_`) pour être accessibles depuis `tar_parser.dart` et `zip_parser.dart` tout en restant internes au package.
+
+---
+
+## `lib/zip_parser.dart` — Lecture des archives ZIP génériques
+
+Même logique que `TarParser` mais pour les fichiers `.zip`. Utilise `python3 zipfile` au lieu de `tarfile`.
+
+### `ZipParser`
+
+```dart
+class ZipParser {
+  final _wheelParser = WheelParser();
+  Future<Package?> parseZipFile(String path) async { … }
+}
+```
+
+### Script Python embarqué
+
+Le script utilise `zipfile.ZipFile` pour inspecter le contenu sans extraction complète :
+
+1. Cherche `*.dist-info/METADATA` ou `PKG-INFO` → `{"type": "python", "content": "…"}`
+2. Cherche un fichier `LICENSE`/`COPYING` à profondeur ≤ 2 → `{"type": "generic", "licenseFile": "…", "license": "…"}`
+3. Ni l'un ni l'autre → `{"type": "generic", "licenseFile": "", "license": ""}`
+
+### Dispatch Python sdist vs générique
+
+Identique à `TarParser` : `type == 'python'` → `WheelParser.parseMetadataText()`, `type == 'generic'` → `buildGenericArchivePackage()`.
+
+---
+
+## `lib/deb_parser.dart` — Lecture des paquets Debian
+
+### `DebParser`
+
+```dart
+class DebParser {
+  Future<DebPackage?> parseDebFile(String path) async { … }
+  Map<String, String> _parseControl(String text) { … }
+  List<String> _parseDependsList(String depends) { … }
+}
+```
+
+### Extraction
+
+```bash
+dpkg-deb -f /opt/pkgs/libssl3_3.0.1_amd64.deb
+```
+
+Retourne le contenu du fichier `DEBIAN/control` en RFC 822. Champs lus :
+
+| Champ control | Champ `DebPackage` | Notes |
+|--------------|-------------------|-------|
+| `Package` | `name` | |
+| `Version` | `version` | |
+| `Architecture` | `arch` | |
+| `License` / `X-License` | `license` | absent de nombreux .deb |
+| `Maintainer` | `vendor` | |
+| `Homepage` | `url` | |
+| `Description` | `summary` | première ligne seulement |
+| `Depends`, `Pre-Depends` | `requires` | split virgule puis pipe |
+| `Provides` | `provides` | |
+
+### `_parseDependsList`
+
+Découpe sur `,` puis sur `|` (alternatives), retire les contraintes de version `(>= …)`, normalise les espaces. Exemple : `"libc6 (>= 2.17) | libc6-amd64"` → `["libc6", "libc6-amd64"]`.
+
+---
+
+## `lib/requirements_parser.dart` — Parsing requirements.txt Python
+
+Parser **pur Dart**, sans subprocess. Retourne `List<WheelPackage>`.
+
+### `RequirementsParser`
+
+```dart
+class RequirementsParser {
+  List<WheelPackage> parseFile(String path) { … }
+  WheelPackage? _parseLine(String raw, String sourceRef) { … }
+}
+```
+
+### Lignes ignorées
+
+- Vides ou commençant par `#`
+- Directives pip : `-r`, `-i`, `-e`, `-f`, `-c`
+
+### Extraction par ligne
+
+1. Retire les marqueurs d'environnement (`;` et suite)
+2. Retire les commentaires inline (`#` et suite)
+3. Retire les extras `[security]` (regex `\[.*?\]`)
+4. Extrait la version après `==` (épinglée) ou le premier nombre de version sinon
+5. Normalise le nom selon PEP 503 (`[-_.]+ → -`, minuscules)
+
+### Intégration dans `main()`
+
+Les fichiers `.txt` sont **pré-expansés avant la boucle concurrente** :
+
+```dart
+for (final ref in inputRefs) {
+  if (_isRequirements(ref)) {
+    preloadedPackages.addAll(RequirementsParser().parseFile(ref));
+  } else {
+    mainRefs.add(ref);
+  }
+}
+// … boucle Future.wait sur mainRefs …
+packages.addAll(preloadedPackages);
+```
+
+> **Pourquoi pré-expansion ?** La boucle concurrente produit `Future<Package?>` (1 ref → 0 ou 1 paquet). Un requirements.txt peut contenir N paquets (cardinalité 1:N), incompatible avec ce modèle.
 
 ---
 
@@ -337,15 +534,65 @@ if (rpmDir != null && !ref.contains('/') && !ref.endsWith('.whl') && !_isTar(ref
 
 Si aucune correspondance n'est trouvée dans le dossier, `rpm -q` est utilisé normalement (fallback transparent).
 
-Les références `.whl` et archives tar ne sont jamais concernées, même si `--rpm-dir` est spécifié.
+Les références `.whl`, archives tar/zip et `.deb` ne sont jamais concernées, même si `--rpm-dir` est spécifié.
 
-### Dispatch par extension
+### Option `--concurrency` / `-c` *(nouveau)*
+
+Contrôle le nombre de tâches traitées simultanément (défaut : `4`, `0` = illimité). Implémenté via la classe `_Semaphore` :
+
+```dart
+class _Semaphore {
+  _Semaphore(int count) : _count = count;
+  int _count;
+  final _waiters = <Completer<void>>[];
+  Future<void> acquire() async {
+    if (_count > 0) { _count--; return; }
+    final waiter = Completer<void>();
+    _waiters.add(waiter);
+    await waiter.future;
+  }
+  void release() {
+    if (_waiters.isNotEmpty) _waiters.removeAt(0).complete();
+    else _count++;
+  }
+}
+```
+
+La boucle principale est remplacée par :
+
+```dart
+final sem = _Semaphore(concurrencyN == 0 ? mainRefs.length : concurrencyN);
+final rawResults = await Future.wait(
+  List<Future<Package?>>.generate(mainRefs.length, (i) async {
+    await sem.acquire();
+    try {
+      return await _processRef(mainRefs[i], …);
+    } finally { sem.release(); }
+  }),
+);
+```
+
+> `Future.wait(List.generate(...))` préserve l'ordre : `rawResults[i]` correspond à `mainRefs[i]`.
+
+### Pré-traitement requirements.txt (`_isRequirements`)
+
+```dart
+bool _isRequirements(String ref) => ref.endsWith('.txt') && !ref.endsWith('.whl');
+```
+
+Les lignes `.txt` sont extraites de la liste principale avant la boucle concurrente et pré-parsées par `RequirementsParser`. Leurs paquets sont accumulés dans `preloadedPackages` et ajoutés après la boucle.
+
+### Dispatch par extension *(étendu)*
 
 ```dart
 if (ref.endsWith('.whl')) {
   pkg = await whlParser.parseWheelFile(ref);
 } else if (_isTar(ref)) {          // .tar | .tar.gz | .tgz
   pkg = await tarParser.parseTarFile(ref);
+} else if (ref.endsWith('.zip')) {
+  pkg = await zipParser.parseZipFile(ref);
+} else if (ref.endsWith('.deb')) {
+  pkg = await debParser.parseDebFile(ref);
 } else {
   pkg = await rpmParser.parsePackage(ref);
 }
@@ -353,7 +600,9 @@ if (ref.endsWith('.whl')) {
 
 ### Vérification des outils
 
-`rpm` est vérifié seulement si la liste contient au moins une référence non-`.whl` non-tar. `python3` est vérifié si la liste contient au moins un `.whl` ou une archive tar.
+- `rpm` : vérifié si la liste contient au moins une référence non-`.whl`, non-tar, non-`.zip`, non-`.deb`
+- `python3` : vérifié si la liste contient au moins un `.whl`, tar ou `.zip`
+- `dpkg-deb` : vérifié si la liste contient au moins un `.deb`
 
 ### Déduplication
 
@@ -397,19 +646,26 @@ if (pkg is RpmPackage) {
 
 Le CPE n'est généré que pour les `RpmPackage` (les CPE NVD concernent les distributions Linux).
 
-### Normalisation des licences (`_buildLicenses`)
+### Propriétés spécifiques Debian (`_packageToComponent`)
 
-Algorithme à 4 étapes (inchangé) :
-1. Normalisation des opérateurs booléens (`and` → `AND`, `or` → `OR`, `with` → `WITH`) avec lookbehind/lookahead `\S` pour protéger `GPL-2.0-or-later`.
-2. Détection expression composée (`AND`/`OR`/`WITH`) → `{"expression": "…"}`.
-3. Résolution dans `_rpmToSpdx` (~70 entrées).
-4. Choix du champ : `id` (SPDX connu), `name` (LicenseRef-* ou inconnu), `expression` (composé).
+```dart
+} else if (pkg is DebPackage) {
+  properties.add({'name': 'deb:arch', 'value': pkg.arch});
+  for (final req in pkg.requires) {
+    properties.add({'name': 'deb:depends', 'value': req});
+  }
+}
+```
+
+### Normalisation des licences
+
+Délégué à `LicenseNormalizer.toCycloneDxLicenses(pkg.license)` (depuis `lib/license_normalizer.dart`). La table `_rpmToSpdx` et toute la logique `AND/OR/WITH` ont été retirées de ce fichier.
 
 ---
 
 ## `lib/spdx_generator.dart` — Générateur SPDX 2.3
 
-Signature : `List<Package>`. Annotation type-aware :
+Signature : `List<Package>`. Normalisation via `LicenseNormalizer.toSpdxExpression()`. Annotation type-aware :
 
 ```dart
 String _annotationComment(Package pkg) {
@@ -417,6 +673,8 @@ String _annotationComment(Package pkg) {
     return 'arch=${pkg.arch}; epoch=${pkg.epoch}; release=${pkg.release}…';
   if (pkg is WheelPackage)
     return '${pkg.packageType == "pypi" ? "pypi" : "source"}:platform=${pkg.arch}';
+  if (pkg is DebPackage)
+    return 'deb:arch=${pkg.arch}';
 }
 ```
 
@@ -424,7 +682,7 @@ String _annotationComment(Package pkg) {
 
 ## `lib/spdx3_generator.dart` — Générateur SPDX 3.0 JSON-LD
 
-Signature : `List<Package>`. Même logique d'annotation que SPDX 2.3. `_buildVendorElements` crée un nœud `Organization` par valeur unique de `pkg.vendor` (fonctionne pour tous les types).
+Signature : `List<Package>`. Normalisation via `LicenseNormalizer.toSpdxExpression()`. Même logique d'annotation que SPDX 2.3 (branche `DebPackage` incluse). `_buildVendorElements` crée un nœud `Organization` par valeur unique de `pkg.vendor` (fonctionne pour tous les types).
 
 ---
 
@@ -456,7 +714,7 @@ Signature : `List<Package>`. Génère un tableau trié alphabétiquement par nom
 1. Détection : .rpm → RpmParser.parsePackage()
 2. rpm -qp --queryformat '…' → "bash|5.1.8|6.el9|x86_64|(none)|GPL-3.0-or-later|…"
 3. RpmPackage : bomRef="pkg-bash-5.1.8-6.el9-x86_64", purl="pkg:rpm/bash@5.1.8-6.el9?arch=x86_64"
-4. _buildLicenses("GPL-3.0-or-later")
+4. LicenseNormalizer.toCycloneDxLicenses("GPL-3.0-or-later")
    → normalised = "GPL-3.0-or-later" (pas d'opérateur booléen)
    → mapped = "GPL-3.0-or-later" (pas dans _rpmToSpdx, mais isVersioned=true)
    → {"license": {"id": "GPL-3.0-or-later"}}
@@ -497,6 +755,28 @@ Signature : `List<Package>`. Génère un tableau trié alphabétiquement par nom
 2. python3 tarfile : PKG-INFO trouvé → type='python', contenu RFC 822
 3. Délégation à WheelParser.parseMetadataText(path, content)
 4. WheelPackage : packageType='pypi', purl="pkg:pypi/django@4.2.1"
+```
+
+### Paquet Debian : `libssl3_3.0.1-1_amd64.deb`
+
+```
+1. Détection : .deb → DebParser.parseDebFile()
+2. dpkg-deb -f → control RFC 822 : "Package: libssl3\nVersion: 3.0.1-1\n..."
+3. _parseControl() → {Package: libssl3, Version: 3.0.1-1, Architecture: amd64, …}
+4. _parseDependsList("libc6 (>= 2.17), libgcc-s1") → ["libc6", "libgcc-s1"]
+5. DebPackage : bomRef="pkg-deb-libssl3-3.0.1-1-amd64",
+               purl="pkg:deb/libssl3@3.0.1-1?arch=amd64"
+```
+
+### Requirements.txt : `/opt/reqs/requirements.txt`
+
+```
+1. Détection : .txt → pré-expansion RequirementsParser (avant la boucle concurrente)
+2. Lecture ligne par ligne : "requests==2.28.0\nnumpy>=1.24\nflask\n"
+3. _parseLine("requests==2.28.0") → WheelPackage(name="requests", version="2.28.0",
+                                                  packageType="pypi")
+4. _parseLine("flask") → WheelPackage(name="flask", version="", packageType="pypi")
+5. Résultats ajoutés à preloadedPackages (puis packages après boucle principale)
 ```
 
 ---
@@ -578,6 +858,18 @@ Le texte GPL-2.0 mentionne « GNU Library General Public License » dans sa sect
 
 La résolution fonctionne si les noms sont normalisés de manière cohérente (PEP 503). `WheelPackage.provides` contient le nom normalisé ; `Requires-Dist` est aussi normalisé au parsing. `buildDependencies` ajoute de plus `pkg.name` brut à `providesMap`, couvrant les deux formes.
 
+### 8. Requirements.txt : cardinalité 1:N
+
+Un fichier `.txt` unique peut produire N paquets. La boucle concurrente modélise `Future<Package?>` (1 ref → 0 ou 1 résultat), ce qui est incompatible avec la cardinalité 1:N. Solution : pré-expansion des `.txt` avant la boucle dans `preloadedPackages`.
+
+### 9. Champ `License` absent dans de nombreux `.deb`
+
+Le standard Debian ne rend pas le champ `License` obligatoire dans `DEBIAN/control`. `DebPackage.license` sera souvent vide, ce qui donne `NOASSERTION` dans SPDX et une liste `licenses` vide dans CycloneDX — comportement conforme, non une erreur.
+
+### 10. Ordre préservé par `Future.wait(List.generate(...))`
+
+`Future.wait` garantit que le résultat à l'index `i` correspond à l'entrée `i`. L'ordre d'apparition dans le SBOM final est donc identique à l'ordre du fichier d'entrée, malgré le traitement concurrent.
+
 ---
 
 ## Conventions de code
@@ -622,6 +914,8 @@ Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` qui
 | **Python** `requires` × N | `properties[pypi:requires]` × N | — | — |
 | **RPM** CPE calculé | `cpe` | — | — |
 | **RPM** `sourceRpm` | `externalReferences[vcs]` | — | — |
+| **Debian** `arch` | `properties[deb:arch]` | `annotations` | `annotation` |
+| **Debian** `requires` × N | `properties[deb:depends]` × N | — | — |
 | résolution requires/provides | `dependencies[].dependsOn` | `relationships[DEPENDS_ON]` | `Relationship[dependsOn]` |
 
 ---
@@ -632,12 +926,15 @@ Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` qui
 
 | Type | Appels subprocess | Temps estimé |
 |------|------------------|-------------|
-| RPM (installé ou fichier) | 3 × `rpm` | ~15–50 ms |
+| RPM (installé ou fichier) | 3 × `rpm` en parallèle | ~15–50 ms |
 | Wheel `.whl` | 1 × `python3` | ~20–50 ms |
 | Archive tar (Python sdist) | 1 × `python3` | ~20–80 ms |
 | Archive tar (générique) | 1 × `python3` | ~20–80 ms |
+| Archive ZIP (générique ou sdist) | 1 × `python3` | ~20–80 ms |
+| Paquet Debian `.deb` | 1 × `dpkg-deb` | ~5–20 ms |
+| Requirements.txt | 0 subprocess | < 1 ms |
 
-La boucle est séquentielle. Une parallélisation avec `Future.wait()` réduirait le temps d'un facteur ~4–8 mais mélangerait les messages d'erreur.
+La boucle est parallélisée via `Future.wait()` + `_Semaphore(--concurrency)`. Avec `--concurrency 4` (défaut) sur une grande liste, le gain est ~4× par rapport à l'ancienne boucle séquentielle. Avec `--concurrency 0` (illimité), toutes les entrées sont lancées simultanément.
 
 ### Taille des fichiers générés
 
@@ -653,8 +950,9 @@ La boucle est séquentielle. Une parallélisation avec `Future.wait()` réduirai
 
 - **Pas de résolution transitive** : seules les dépendances entre paquets présents dans la liste sont incluses.
 - **CPE approximatifs** : valides syntaxiquement, peuvent différer des entrées NVD officielles.
-- **Licences tar heuristiques** : la détection depuis les fichiers LICENSE est basée sur des patterns textuels, non sur une analyse exhaustive.
-- **Pas de vérification d'existence des fichiers** : si un chemin `.whl` ou `.tar.gz` n'existe pas, python3 échoue et le paquet est compté comme `échec`.
+- **Licences archive heuristiques** : la détection depuis les fichiers LICENSE/COPYING est basée sur des patterns textuels, non sur une analyse exhaustive.
+- **Champ License absent dans les `.deb`** : la plupart des paquets Debian n'incluent pas de champ `License` dans leur `control` — `DebPackage.license` sera vide, ce qui produit `NOASSERTION` dans SPDX.
+- **Pas de vérification d'existence des fichiers** : si un chemin `.whl`, `.tar.gz`, `.zip` ou `.deb` n'existe pas, le subprocess échoue et le paquet est compté comme `échec`.
 
 ---
 
@@ -662,32 +960,66 @@ La boucle est séquentielle. Une parallélisation avec `Future.wait()` réduirai
 
 ```
 main()
-  ├── ArgParser.parse()
+  ├── ArgParser.parse()                       (--concurrency validé ≥ 0)
   ├── File.readAsLines()
+  ├── [pré-expansion .txt]
+  │     └── RequirementsParser.parseFile() → preloadedPackages
   ├── [indexation --rpm-dir]                  [si --rpm-dir spécifié]
   │     └── dir.list(recursive: true) → rpmExactIndex + rpmNameIndex
   ├── Process.run('rpm', ['--version'])       [si RPM présents]
-  ├── Process.run('python3', ['--version'])   [si .whl ou tar présents]
-  ├── _printProgress()
-  ├── [résolution --rpm-dir par référence]    [si --rpm-dir spécifié]
-  ├── RpmParser.parsePackage() × N_rpm
-  │     ├── Process.run('rpm', ['--queryformat', …])
-  │     ├── Process.run('rpm', ['--requires', …])
-  │     └── Process.run('rpm', ['--provides', …])
-  ├── WheelParser.parseWheelFile() × N_whl
-  │     └── Process.run('python3', ['-c', zipScript, path])
-  ├── TarParser.parseTarFile() × N_tar
-  │     ├── Process.run('python3', ['-c', tarScript, path])
-  │     └── WheelParser.parseMetadataText()  [si Python sdist]
+  ├── Process.run('python3', ['--version'])   [si .whl, tar ou .zip présents]
+  ├── Process.run('dpkg-deb', ['--version'])  [si .deb présents]
+  ├── Future.wait(List.generate(N)) via _Semaphore(--concurrency)
+  │     ├── RpmParser.parsePackage()          [si RPM]
+  │     │     └── Future.wait([rpm-queryformat, rpm-requires, rpm-provides])
+  │     ├── WheelParser.parseWheelFile()      [si .whl]
+  │     │     └── Process.run('python3', ['-c', zipScript, path])
+  │     ├── TarParser.parseTarFile()          [si tar]
+  │     │     ├── Process.run('python3', ['-c', tarScript, path])
+  │     │     └── WheelParser.parseMetadataText()  [si Python sdist]
+  │     ├── ZipParser.parseZipFile()          [si .zip]
+  │     │     ├── Process.run('python3', ['-c', zipScript, path])
+  │     │     └── WheelParser.parseMetadataText()  [si Python sdist]
+  │     └── DebParser.parseDebFile()          [si .deb]
+  │           └── Process.run('dpkg-deb', ['-f', path])
+  ├── packages.addAll(preloadedPackages)
   ├── [déduplication par bomRef]
   ├── RpmParser.buildDependencies(List<Package>)
   └── <Generator>.writeToFile(List<Package>, …)
         ├── _packageToComponent/_packageToSpdx/… × N
-        │     ├── _buildLicenses() / _identifyLicense()
-        │     └── if (pkg is RpmPackage) { … RPM-specific … }
-        │         else if (pkg is WheelPackage) { … Python/source … }
+        │     ├── LicenseNormalizer.toCycloneDxLicenses() / toSpdxExpression()
+        │     ├── if (pkg is RpmPackage) { … RPM-specific … }
+        │     ├── else if (pkg is WheelPackage) { … Python/source … }
+        │     └── else if (pkg is DebPackage) { … deb-specific … }
         └── File.writeAsString()
 ```
+
+---
+
+## Tests
+
+```bash
+dart test                            # tous les tests (67 au total)
+dart test test/unit/                 # tests unitaires seuls (59)
+dart test test/integration/          # tests d'intégration (8, requiert python3)
+```
+
+### Suites unitaires
+
+| Fichier | Tests | Couverture |
+|---------|-------|-----------|
+| `test/unit/license_normalizer_test.dart` | 23 | `toSpdxExpression`, `toCycloneDxLicenses`, cas limites |
+| `test/unit/archive_helpers_test.dart` | 18 | `parseArchiveFilename` (5 archives réelles + edge cases), `identifyArchiveLicense` (10 licences) |
+| `test/unit/rpm_parser_test.dart` | 8 | `buildDependencies` sans subprocess |
+| `test/unit/requirements_parser_test.dart` | 10 | parsing RFC, PEP 503, extras, marqueurs, directives |
+
+### Suite d'intégration
+
+| Fichier | Tests | Couverture |
+|---------|-------|-----------|
+| `test/integration/tar_integration_test.dart` | 8 | TarParser sur 5 archives réelles, WheelParser sur 2 wheels, bomRefs uniques |
+
+Les tests d'intégration sont marqués `@TestOn('posix')` et se sautent automatiquement si `python3` est absent.
 
 ---
 
@@ -695,16 +1027,17 @@ main()
 
 - [ ] `dart analyze` passe sans erreur ni avertissement (`No issues found!`)
 - [ ] `dart format --output=none lib/ bin/` passe sans différence
+- [ ] `dart test` — tous les 67 tests verts
 - [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
-- [ ] Test avec liste mixte RPM + .whl + .tar.gz
+- [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + requirements.txt
 - [ ] Si modification de `--rpm-dir` : vérifier résolution exacte (NEVRA), résolution par nom, avertissement multi-match, fallback `rpm -q` si absent
 - [ ] Le SBOM CycloneDX passe `sbom_schema_valid: 10.0` dans sbomqs
 - [ ] Pas de `bom-ref` dupliqués dans la sortie CycloneDX
-- [ ] Si modification de `_buildLicenses` : tester licences composées (`GPL-2.0-or-later AND MIT`) et cas limites (`(none)`, `LicenseRef-PublicDomain`)
-- [ ] Si modification de `_identifyLicense` : vérifier que GPL-2.0 (MariaDB COPYING) n'est pas détecté comme LGPL
-- [ ] Si modification de `_parseFilename` : vérifier les 5 cas 3PP du tableau ci-dessus
+- [ ] Si modification de `LicenseNormalizer` : relancer `test/unit/license_normalizer_test.dart` (23 cas)
+- [ ] Si modification de `identifyArchiveLicense` : vérifier que GPL-2.0 (MariaDB COPYING) n'est pas détecté comme LGPL
+- [ ] Si modification de `parseArchiveFilename` : vérifier les 5 cas 3PP du tableau dans `archive_helpers_test.dart`
 - [ ] Si modification de `_capabilityName` : vérifier `python3dist(lxml) >= 3.0` → `python3dist(lxml)`
-- [ ] Si ajout d'un type de paquet : mettre à jour tous les générateurs (`if (pkg is …)`) et ce document
+- [ ] Si ajout d'un type de paquet : mettre à jour `models.dart`, tous les générateurs (`if (pkg is …)`), `bin/sbom_generator.dart` (dispatch + outil check) et ce document
 
 ---
 
@@ -713,15 +1046,17 @@ main()
 | Package | Version | Rôle |
 |---------|---------|------|
 | `args` | `^2.4.2` | Parsing des arguments CLI |
+| `test` *(dev)* | `^1.24.0` | Framework de tests unitaires et d'intégration |
 
-Tout le reste : bibliothèque standard Dart (`dart:io`, `dart:convert`, `dart:math`).
+Tout le reste : bibliothèque standard Dart (`dart:io`, `dart:convert`, `dart:math`, `dart:async`).
 
 Outils système requis à l'exécution :
 
 | Outil | Requis pour |
 |-------|------------|
 | `rpm` | paquets RPM (installés ou fichiers `.rpm`) |
-| `python3` + `zipfile` (stdlib) | wheels `.whl` et archives `.tar*` |
+| `python3` + `zipfile` + `tarfile` (stdlib) | wheels `.whl`, archives `.tar*` et `.zip` |
+| `dpkg-deb` | paquets Debian `.deb` |
 
 ---
 
@@ -734,10 +1069,15 @@ dart run bin/sbom_generator.dart -i packages.txt
 # Binaire natif autonome (AOT, ~30 s de compilation)
 dart compile exe bin/sbom_generator.dart -o sbom_generator
 
+# Tests
+dart test                            # tous les tests
+dart test test/unit/                 # unitaires seulement
+dart test test/integration/          # intégration seulement
+
 # Analyse statique
 dart analyze
 
 # Formatage
-dart format lib/ bin/
-dart format --output=none lib/ bin/   # mode CI (pas de modification)
+dart format lib/ bin/ test/
+dart format --output=none lib/ bin/ test/   # mode CI (pas de modification)
 ```

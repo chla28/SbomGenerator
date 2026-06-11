@@ -47,8 +47,7 @@ sys.stdout.buffer.write(z.read(name))
         packageType: packageType);
   }
 
-  WheelPackage? _buildPackage(
-      String path, Map<String, List<String>> headers,
+  WheelPackage? _buildPackage(String path, Map<String, List<String>> headers,
       {String packageType = 'pypi'}) {
     final name = headers['name']?.first ?? '';
     if (name.isEmpty) {
@@ -60,9 +59,8 @@ sys.stdout.buffer.write(z.read(name))
 
     // License: prefer PEP 639 License-Expression, then License field,
     // then extract from Classifier: License :: OSI Approved :: <name>
-    var license = headers['license-expression']?.first ??
-        headers['license']?.first ??
-        '';
+    var license =
+        headers['license-expression']?.first ?? headers['license']?.first ?? '';
     if (license.isEmpty || license == 'UNKNOWN') {
       license = _licenseFromClassifiers(headers['classifier'] ?? []);
     }

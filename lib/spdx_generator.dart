@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'license_normalizer.dart';
 import 'models.dart';
 
 /// Generates an SPDX 2.3 JSON SBOM.
@@ -84,8 +85,8 @@ class SpdxGenerator {
           'referenceLocator': pkg.purl,
         }
       ],
-      'licenseConcluded': _hasValue(pkg.license) ? pkg.license : 'NOASSERTION',
-      'licenseDeclared': _hasValue(pkg.license) ? pkg.license : 'NOASSERTION',
+      'licenseConcluded': _normalizeLicense(pkg.license),
+      'licenseDeclared': _normalizeLicense(pkg.license),
       'copyrightText': 'NOASSERTION',
     };
 
@@ -116,11 +117,18 @@ class SpdxGenerator {
       return 'arch=${pkg.arch}; epoch=${pkg.epoch}; release=${pkg.release}'
           '${_hasValue(pkg.buildTime) ? "; buildTime=${pkg.buildTime}" : ""}';
     }
+    if (pkg is DebPackage) return 'deb:arch=${pkg.arch}';
     if (pkg is WheelPackage) {
       final ns = pkg.packageType == 'pypi' ? 'pypi' : 'source';
       return '$ns:platform=${pkg.arch}';
     }
     return '';
+  }
+
+  String _normalizeLicense(String raw) {
+    if (!_hasValue(raw)) return 'NOASSERTION';
+    final expr = LicenseNormalizer.toSpdxExpression(raw);
+    return expr.isNotEmpty ? expr : 'NOASSERTION';
   }
 
   bool _hasValue(String s) => s.isNotEmpty && s != '(none)';

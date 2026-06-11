@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dart analyze *)",
+      "Bash(dart pub *)",
+      "Bash(dart test *)",
+      "Bash(dart format *)",
+      "Bash(\\\\.\" /data/clafaill/IA/cyber/projets/dart/sbom_generator/develop.md | head -20)",
+      "Bash(grep -n \"_buildLicenses\\\\|_parseFilename\\\\|_identifyLicense\\\\|_buildGenericPackage\\\\|WheelPackage`\\\\.\" /data/clafaill/IA/cyber/projets/dart/sbom_generator/develop.md | head -20)"
+    ]
+  }
+}

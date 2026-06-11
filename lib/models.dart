@@ -32,21 +32,32 @@ abstract class Package {
 // ── RPM package ──────────────────────────────────────────────────────────────
 
 class RpmPackage extends Package {
-  @override final String name;
-  @override final String version;
+  @override
+  final String name;
+  @override
+  final String version;
   final String release;
-  @override final String arch;
+  @override
+  final String arch;
   final String epoch;
-  @override final String license;
-  @override final String vendor;
-  @override final String url;
+  @override
+  final String license;
+  @override
+  final String vendor;
+  @override
+  final String url;
   final String buildTime;
-  @override final String summary;
-  @override final List<String> requires;
-  @override final List<String> provides;
-  @override final String sha256Header;
+  @override
+  final String summary;
+  @override
+  final List<String> requires;
+  @override
+  final List<String> provides;
+  @override
+  final String sha256Header;
   final String sourceRpm;
-  @override final String sourceRef;
+  @override
+  final String sourceRef;
 
   RpmPackage({
     required this.name,
@@ -102,20 +113,31 @@ class RpmPackage extends Package {
 /// [packageType] is 'pypi' for wheels and Python sdist (PKG-INFO present),
 /// or 'source' for generic source archives where metadata is filename-derived.
 class WheelPackage extends Package {
-  @override final String name;
-  @override final String version;
-  @override final String license;
-  @override final String url;
-  @override final String summary;
-  @override final String vendor;
+  @override
+  final String name;
+  @override
+  final String version;
+  @override
+  final String license;
+  @override
+  final String url;
+  @override
+  final String summary;
+  @override
+  final String vendor;
 
   /// Platform tag from the wheel filename, or 'any' for source archives.
-  @override final String arch;
+  @override
+  final String arch;
 
-  @override final String sourceRef;
-  @override final String sha256Header;
-  @override final List<String> requires;
-  @override final List<String> provides;
+  @override
+  final String sourceRef;
+  @override
+  final String sha256Header;
+  @override
+  final List<String> requires;
+  @override
+  final List<String> provides;
 
   final String _packageType;
 
@@ -168,6 +190,72 @@ class WheelPackage extends Package {
 
   @override
   String toString() => '$name-$version ($arch)';
+}
+
+// ── Debian package ───────────────────────────────────────────────────────────
+
+/// Represents a Debian `.deb` package parsed via `dpkg-deb`.
+class DebPackage extends Package {
+  @override
+  final String name;
+  @override
+  final String version;
+  @override
+  final String arch;
+  @override
+  final String license;
+  @override
+  final String vendor;
+  @override
+  final String url;
+  @override
+  final String summary;
+  @override
+  final String sourceRef;
+  @override
+  final String sha256Header;
+  @override
+  final List<String> requires;
+  @override
+  final List<String> provides;
+
+  DebPackage({
+    required this.name,
+    required this.version,
+    required this.arch,
+    required this.license,
+    required this.vendor,
+    required this.url,
+    required this.summary,
+    required this.sourceRef,
+    this.sha256Header = '',
+    required this.requires,
+    required this.provides,
+  });
+
+  @override
+  String get packageType => 'deb';
+
+  @override
+  String get fullVersion => version;
+
+  @override
+  String get purl {
+    final n = Uri.encodeComponent(name.toLowerCase());
+    final v = Uri.encodeComponent(version);
+    final a = Uri.encodeComponent(arch);
+    return 'pkg:deb/$n@$v?arch=$a';
+  }
+
+  @override
+  String get bomRef =>
+      'pkg-deb-${_safeId(name)}-${_safeId(version)}-${_safeId(arch)}';
+
+  @override
+  String get spdxId => 'SPDXRef-deb-${_safeId(name)}-${_safeId(version)}';
+
+  @override
+  String toString() => '$name $version ($arch)';
 }
 
 // ── Dependency record ────────────────────────────────────────────────────────

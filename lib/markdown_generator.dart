@@ -19,9 +19,9 @@ class MarkdownGenerator {
       ..sort((a, b) => a.name.compareTo(b.name));
 
     for (final pkg in sorted) {
-      final name    = _escape(pkg.name);
+      final name = _escape(pkg.name);
       final version = _escape(pkg.fullVersion);
-      final arch    = _escape(pkg.arch);
+      final arch = _escape(pkg.arch);
       final license = _escape(pkg.license.isEmpty ? '(inconnue)' : pkg.license);
       buf.writeln('| $name | $version | $arch | $license |');
     }

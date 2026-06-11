@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'license_normalizer.dart';
 import 'models.dart';
 
 /// Generates a CycloneDX 1.6 JSON SBOM.
@@ -136,7 +137,8 @@ class CycloneDxGenerator {
     }
 
     if (_hasValue(pkg.license)) {
-      component['licenses'] = _buildLicenses(pkg.license);
+      component['licenses'] =
+          LicenseNormalizer.toCycloneDxLicenses(pkg.license);
     }
 
     // CPE only makes practical sense for RPM packages (NVD uses distro CPEs)
@@ -192,6 +194,11 @@ class CycloneDxGenerator {
       for (final req in pkg.requires) {
         properties.add({'name': 'rpm:requires', 'value': req});
       }
+    } else if (pkg is DebPackage) {
+      properties.add({'name': 'deb:arch', 'value': pkg.arch});
+      for (final req in pkg.requires) {
+        properties.add({'name': 'deb:depends', 'value': req});
+      }
     } else if (pkg is WheelPackage) {
       final ns = pkg.packageType == 'pypi' ? 'pypi' : 'source';
       properties.add({'name': '$ns:platform', 'value': pkg.arch});
@@ -207,167 +214,12 @@ class CycloneDxGenerator {
     return component;
   }
 
-  // ── License normalisation ──────────────────────────────────────────────────
-
-  static const _rpmToSpdx = <String, String>{
-    // GPL family
-    'GPL': 'GPL-2.0-only',
-    'GPL+': 'GPL-2.0-or-later',
-    'GPL-2.0': 'GPL-2.0-only',
-    'GPL-2.0+': 'GPL-2.0-or-later',
-    'GPLv2': 'GPL-2.0-only',
-    'GPLv2+': 'GPL-2.0-or-later',
-    'GPL-3.0': 'GPL-3.0-only',
-    'GPL-3.0+': 'GPL-3.0-or-later',
-    'GPLv3': 'GPL-3.0-only',
-    'GPLv3+': 'GPL-3.0-or-later',
-    // LGPL family
-    'LGPL': 'LGPL-2.0-only',
-    'LGPLv2': 'LGPL-2.0-only',
-    'LGPLv2+': 'LGPL-2.0-or-later',
-    'LGPL-2.0': 'LGPL-2.0-only',
-    'LGPL-2.0+': 'LGPL-2.0-or-later',
-    'LGPLv2.1': 'LGPL-2.1-only',
-    'LGPLv2.1+': 'LGPL-2.1-or-later',
-    'LGPL-2.1': 'LGPL-2.1-only',
-    'LGPL-2.1+': 'LGPL-2.1-or-later',
-    'LGPLv3': 'LGPL-3.0-only',
-    'LGPLv3+': 'LGPL-3.0-or-later',
-    'LGPL-3.0': 'LGPL-3.0-only',
-    'LGPL-3.0+': 'LGPL-3.0-or-later',
-    // Apache / MIT / BSD
-    'ASL 1.1': 'Apache-1.1',
-    'ASL 2.0': 'Apache-2.0',
-    'ASL2.0': 'Apache-2.0',
-    'Apache 2.0': 'Apache-2.0',
-    'Apache-2.0': 'Apache-2.0',
-    'Apache Software License': 'Apache-2.0',
-    'MIT': 'MIT',
-    'MIT License': 'MIT',
-    'MIT-0': 'MIT-0',
-    'ISC': 'ISC',
-    'BSD': 'BSD-2-Clause',
-    'BSD License': 'BSD-2-Clause',
-    'BSD 2-Clause': 'BSD-2-Clause',
-    'BSD-2-Clause': 'BSD-2-Clause',
-    'BSD 3-Clause': 'BSD-3-Clause',
-    'BSD-3-Clause': 'BSD-3-Clause',
-    'BSD 4-Clause': 'BSD-4-Clause',
-    // Mozilla
-    'MPLv1.1': 'MPL-1.1',
-    'MPL-1.1': 'MPL-1.1',
-    'MPLv2.0': 'MPL-2.0',
-    'MPL-2.0': 'MPL-2.0',
-    'MPL': 'MPL-2.0',
-    // CDDL / CPL / EPL
-    'CDDL': 'CDDL-1.0',
-    'CDDLv1.0': 'CDDL-1.0',
-    'CDDL-1.0': 'CDDL-1.0',
-    'CPL': 'CPL-1.0',
-    'CPL-1.0': 'CPL-1.0',
-    'EPLv1.0': 'EPL-1.0',
-    'EPL-1.0': 'EPL-1.0',
-    'EPLv2.0': 'EPL-2.0',
-    'EPL-2.0': 'EPL-2.0',
-    // Artistic / Perl
-    'Artistic': 'Artistic-1.0',
-    'Artistic-1.0': 'Artistic-1.0',
-    'Artistic 2.0': 'Artistic-2.0',
-    'Artistic-2.0': 'Artistic-2.0',
-    'Perl': 'Artistic-1.0',
-    // Python / Ruby / others
-    'Python': 'Python-2.0',
-    'Python-2.0': 'Python-2.0',
-    'Ruby': 'Ruby',
-    'WTFPL': 'WTFPL',
-    'Unlicense': 'Unlicense',
-    'CC0': 'CC0-1.0',
-    'CC0-1.0': 'CC0-1.0',
-    'CC BY 4.0': 'CC-BY-4.0',
-    'OFL': 'OFL-1.1',
-    'OFL-1.1': 'OFL-1.1',
-    'SIL OFL 1.1': 'OFL-1.1',
-    'ZPLv2.0': 'ZPL-2.0',
-    'ZPL-2.0': 'ZPL-2.0',
-    'EUPL 1.1': 'EUPL-1.1',
-    'EUPL-1.1': 'EUPL-1.1',
-    'EUPL 1.2': 'EUPL-1.2',
-    'EUPL-1.2': 'EUPL-1.2',
-    'FTL': 'FTL',
-    'FSFUL': 'LicenseRef-FSFUL',
-    'FSFAP': 'FSFAP',
-    'HPND': 'HPND',
-    'NLPL': 'NLPL',
-    'OpenLDAP': 'OLDAP-2.8',
-    'Sleepycat': 'Sleepycat',
-    'Boost': 'BSL-1.0',
-    'zlib': 'Zlib',
-    'Zlib': 'Zlib',
-    'Public Domain': 'LicenseRef-PublicDomain',
-    'PublicDomain': 'LicenseRef-PublicDomain',
-    'public domain': 'LicenseRef-PublicDomain',
-  };
-
-  List<Map<String, dynamic>> _buildLicenses(String licenseStr) {
-    final s = licenseStr.trim();
-    if (s.isEmpty || s == '(none)') return [];
-
-    final normalised = s
-        .replaceAll(RegExp(r'(?<=\S)\s+and\s+(?=\S)', caseSensitive: false), ' AND ')
-        .replaceAll(RegExp(r'(?<=\S)\s+or\s+(?=\S)', caseSensitive: false), ' OR ')
-        .replaceAll(RegExp(r'(?<=\S)\s+with\s+(?=\S)', caseSensitive: false), ' WITH ');
-
-    final isCompound = normalised.contains(' AND ') ||
-        normalised.contains(' OR ') ||
-        normalised.contains(' WITH ');
-
-    if (isCompound) {
-      return [{'expression': _normaliseExpressionTokens(normalised)}];
-    }
-
-    final mapped = _rpmToSpdx[s] ?? s;
-
-    if (_looksLikeSpdxId(mapped)) {
-      if (mapped.startsWith('LicenseRef-')) {
-        return [{'license': {'name': s}}];
-      }
-      final fromTable = _rpmToSpdx.containsKey(s);
-      final isVersioned = mapped.contains(RegExp(r'-\d'));
-      if (fromTable || isVersioned) {
-        return [{'license': {'id': mapped}}];
-      }
-    }
-
-    return [
-      {'license': {'name': s}}
-    ];
-  }
-
-  String _normaliseExpressionTokens(String expr) {
-    final sorted = _rpmToSpdx.entries.toList()
-      ..sort((a, b) => b.key.length.compareTo(a.key.length));
-    var result = expr;
-    for (final e in sorted) {
-      final pattern =
-          RegExp('(?<![A-Za-z0-9._-])${RegExp.escape(e.key)}(?![A-Za-z0-9._-])');
-      result = result.replaceAll(pattern, e.value);
-    }
-    return result.trim();
-  }
-
-  bool _looksLikeSpdxId(String s) =>
-      s.isNotEmpty &&
-      !s.contains(' ') &&
-      RegExp(r'^[A-Za-z0-9][A-Za-z0-9.+\-]+$').hasMatch(s);
-
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   String _buildCpe(RpmPackage pkg) {
     final product = _cpeToken(pkg.name);
     if (product.isEmpty) return '';
-    final vendor = _hasValue(pkg.vendor)
-        ? _vendorToCpe(pkg.vendor)
-        : product;
+    final vendor = _hasValue(pkg.vendor) ? _vendorToCpe(pkg.vendor) : product;
     final version = _cpeToken(pkg.version);
     if (version.isEmpty) return '';
     return 'cpe:2.3:a:$vendor:$product:$version:*:*:*:*:*:*:*';
@@ -399,6 +251,8 @@ class CycloneDxGenerator {
   String _sourcePackageName(String sourceRpm) {
     final stripped = sourceRpm.replaceAll(RegExp(r'\.src\.rpm$'), '');
     final parts = stripped.split('-');
-    return parts.length > 2 ? parts.sublist(0, parts.length - 2).join('-') : stripped;
+    return parts.length > 2
+        ? parts.sublist(0, parts.length - 2).join('-')
+        : stripped;
   }
 }
