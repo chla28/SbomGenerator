@@ -66,11 +66,14 @@ sbom_generator --input <fichier> [options]
 Options :
   -i, --input        Fichier d'entrée (requis)
   -o, --output       Fichier de sortie (défaut : sbom.json)
-  -f, --format       Format : cyclonedx | spdx | spdx3 | json | markdown
+                     Avec plusieurs formats, utilisé comme base de nom
+  -f, --format       Format(s), virgule-séparés : cyclonedx | spdx | spdx3 | json | markdown
+                     Exemple : -f cyclonedx,spdx,markdown
   -n, --name         Nom du document SBOM / composant racine
   -d, --rpm-dir      Dossier racine où chercher les fichiers .rpm
                      (résout les noms RPM nus ; ne s'applique pas aux .whl/.tar)
   -c, --concurrency  Nombre de tâches traitées en parallèle (0 = illimité, défaut : 4)
+  -l, --license-map  Fichier d'override de licences (une ligne "nom: SPDX-expression")
   -v, --verbose      Afficher les détails
       --version      Afficher la version
   -h, --help         Afficher l'aide
@@ -102,7 +105,24 @@ Options :
 
 # Désactiver la limite de parallélisme (toutes les entrées simultanées)
 ./sbom_generator -i packages.txt -c 0 -o sbom.cdx.json
+
+# Générer CycloneDX + SPDX + Markdown en une seule passe (→ sbom.cdx.json, sbom.spdx.json, sbom.md)
+./sbom_generator -i packages.txt -f cyclonedx,spdx,markdown -o sbom
+
+# Override de licences (fichier texte : une ligne "nom: SPDX-expression")
+./sbom_generator -i packages.txt -l overrides.txt -o sbom.cdx.json
 ```
+
+### Exemple de fichier d'override de licences (`overrides.txt`)
+
+```text
+# Overrides de licences — format : nom_paquet: SPDX-expression
+libssl3: Apache-2.0
+mongodb: SSPL-1.0
+my-internal-lib: LicenseRef-Proprietary
+```
+
+Chaque ligne `nom: expression` remplace la licence détectée automatiquement pour le paquet de ce nom. Les lignes commençant par `#` sont ignorées.
 
 ### Exemple de fichier d'entrée
 

@@ -16,6 +16,8 @@ import 'package:sbom_generator/markdown_generator.dart';
 
 const _version = '1.0.0';
 
+const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown'};
+
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption(
@@ -33,21 +35,22 @@ Future<void> main(List<String> arguments) async {
       'output',
       abbr: 'o',
       defaultsTo: 'sbom.json',
-      help: 'Path for the generated SBOM file.',
+      help: 'Output file path.\n'
+          'Single format : used as-is.\n'
+          'Multiple formats (-f a,b) : used as a base path; format-specific\n'
+          'extensions are appended (.cdx.json, .spdx.json, .spdx3.jsonld, …).',
     )
     ..addOption(
       'format',
       abbr: 'f',
       defaultsTo: 'cyclonedx',
-      allowed: ['cyclonedx', 'spdx', 'spdx3', 'json', 'markdown'],
-      allowedHelp: {
-        'cyclonedx': 'CycloneDX 1.6 JSON  (default)',
-        'spdx': 'SPDX 2.3 JSON',
-        'spdx3': 'SPDX 3.0 JSON-LD',
-        'json': 'Custom human-friendly JSON',
-        'markdown': 'Tableau Markdown des licences',
-      },
-      help: 'Output SBOM format.',
+      help: 'Output format(s), comma-separated.\n'
+          '  cyclonedx  CycloneDX 1.6 JSON (default)\n'
+          '  spdx       SPDX 2.3 JSON\n'
+          '  spdx3      SPDX 3.0 JSON-LD\n'
+          '  json       Custom human-friendly JSON\n'
+          '  markdown   Tableau Markdown des licences\n'
+          'Example: -f cyclonedx,spdx,markdown',
     )
     ..addOption(
       'name',
@@ -74,6 +77,14 @@ Future<void> main(List<String> arguments) async {
       defaultsTo: '4',
       help: 'Maximum packages processed concurrently.\n'
           '1 = sequential. 0 = unlimited.',
+    )
+    ..addOption(
+      'license-map',
+      abbr: 'l',
+      help: 'Path to a license override file.\n'
+          'Format: one "package_name: SPDX-expression" per line.\n'
+          'Lines starting with # are ignored.\n'
+          'Overrides the detected license for matching package names.',
     )
     ..addFlag(
       'version',
@@ -115,7 +126,6 @@ Future<void> main(List<String> arguments) async {
 
   final inputPath = args['input'] as String;
   final outputPath = args['output'] as String;
-  final format = args['format'] as String;
   final docName = args['name'] as String?;
   final verbose = args['verbose'] as bool;
   final rpmDir = args['rpm-dir'] as String?;
@@ -127,6 +137,31 @@ Future<void> main(List<String> arguments) async {
     }
     return n;
   }();
+
+  // Parse and validate format list (comma-separated)
+  final formats = (args['format'] as String)
+      .split(',')
+      .map((f) => f.trim())
+      .where((f) => f.isNotEmpty)
+      .toList();
+  if (formats.isEmpty) {
+    _err('--format must not be empty.');
+    exit(1);
+  }
+  for (final f in formats) {
+    if (!_validFormats.contains(f)) {
+      _err('Unknown format "$f". Valid: ${_validFormats.join(', ')}');
+      exit(1);
+    }
+  }
+
+  // Load license overrides
+  final licenseMapPath = args['license-map'] as String?;
+  final licenseOverrides =
+      licenseMapPath != null ? _parseLicenseMap(licenseMapPath) : <String, String>{};
+  if (verbose && licenseOverrides.isNotEmpty) {
+    print('License overrides: ${licenseOverrides.length} entr(ée(s)) chargée(s).');
+  }
 
   final inputFile = File(inputPath);
   if (!await inputFile.exists()) {
@@ -295,19 +330,21 @@ Future<void> main(List<String> arguments) async {
   stdout.writeln();
 
   final packages = <Package>[];
-  int failed = 0;
-  for (final pkg in rawResults) {
+  final failedRefs = <String>[];
+  for (int i = 0; i < rawResults.length; i++) {
+    final pkg = rawResults[i];
     if (pkg != null) {
       packages.add(pkg);
     } else {
-      failed++;
+      failedRefs.add(mainRefs[i]);
     }
   }
+  final failed = failedRefs.length;
   packages.addAll(preloadedPackages);
 
   // --- Deduplicate ---
   final seenRefs = <String>{};
-  final uniquePackages = <Package>[];
+  var uniquePackages = <Package>[];
   int dupes = 0;
   for (final pkg in packages) {
     if (seenRefs.add(pkg.bomRef)) {
@@ -317,19 +354,39 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
+  // --- Apply license overrides ---
+  if (licenseOverrides.isNotEmpty) {
+    uniquePackages = _applyLicenseOverrides(uniquePackages, licenseOverrides);
+    if (verbose) {
+      final n = uniquePackages.where((p) => licenseOverrides.containsKey(p.name)).length;
+      print('License overrides applied to $n package(s).');
+    }
+  }
+
   final failedNote = failed > 0 ? '  ($failed échec(s))' : '';
   final dupeNote = dupes > 0 ? '  ($dupes doublon(s) supprimé(s))' : '';
   print(
       'Analysés : ${uniquePackages.length}/$total paquet(s).$failedNote$dupeNote');
+
+  // --- Error report ---
+  if (failedRefs.isNotEmpty) {
+    stderr.writeln('');
+    stderr.writeln('⚠  ${failedRefs.length} paquet(s) ignoré(s) :');
+    for (final r in failedRefs) {
+      final name = r.contains('/') ? r.split('/').last : r;
+      stderr.writeln('   • $name');
+    }
+    stderr.writeln('');
+  }
 
   if (uniquePackages.isEmpty) {
     _err('No packages could be parsed. Aborting.');
     exit(1);
   }
 
-  // --- Build dependency graph (skipped for markdown) ---
+  // --- Build dependency graph (skipped when all formats are markdown) ---
   final dependencies = <PackageDependency>[];
-  if (format != 'markdown') {
+  if (formats.any((f) => f != 'markdown')) {
     print('Resolving dependencies…');
     dependencies.addAll(rpmParser.buildDependencies(uniquePackages));
     final relCount =
@@ -347,54 +404,38 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
-  // --- Generate SBOM ---
-  print('Generating SBOM ($format format)…');
-  try {
-    switch (format) {
-      case 'cyclonedx':
-        await CycloneDxGenerator().writeToFile(
-          uniquePackages,
-          dependencies,
-          outputPath,
-          documentName: docName,
-        );
-      case 'spdx':
-        await SpdxGenerator().writeToFile(
-          uniquePackages,
-          dependencies,
-          outputPath,
-          documentName: docName,
-        );
-      case 'spdx3':
-        await Spdx3Generator().writeToFile(
-          uniquePackages,
-          dependencies,
-          outputPath,
-          documentName: docName,
-        );
-      case 'json':
-        await SimpleJsonGenerator().writeToFile(
-          uniquePackages,
-          dependencies,
-          outputPath,
-          documentName: docName,
-        );
-      case 'markdown':
-        await MarkdownGenerator().writeToFile(
-          uniquePackages,
-          outputPath,
-          documentName: docName,
-        );
+  // --- Generate SBOM (loop over requested formats) ---
+  final outputBase = formats.length > 1 ? _basePath(outputPath) : null;
+  for (final fmt in formats) {
+    final outPath =
+        outputBase != null ? '$outputBase${_formatExtension(fmt)}' : outputPath;
+    print('Generating SBOM ($fmt)…');
+    try {
+      switch (fmt) {
+        case 'cyclonedx':
+          await CycloneDxGenerator().writeToFile(
+              uniquePackages, dependencies, outPath, documentName: docName);
+        case 'spdx':
+          await SpdxGenerator().writeToFile(
+              uniquePackages, dependencies, outPath, documentName: docName);
+        case 'spdx3':
+          await Spdx3Generator().writeToFile(
+              uniquePackages, dependencies, outPath, documentName: docName);
+        case 'json':
+          await SimpleJsonGenerator().writeToFile(
+              uniquePackages, dependencies, outPath, documentName: docName);
+        case 'markdown':
+          await MarkdownGenerator()
+              .writeToFile(uniquePackages, outPath, documentName: docName);
+      }
+    } catch (e, st) {
+      _err('Failed to write SBOM ($fmt): $e');
+      if (verbose) stderr.writeln(st);
+      exit(1);
     }
-  } catch (e, st) {
-    _err('Failed to write SBOM: $e');
-    if (verbose) stderr.writeln(st);
-    exit(1);
+    final sz = await File(outPath).length();
+    print('SBOM written → $outPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
   }
-
-  final outputSize = await File(outputPath).length();
-  final sizeKb = (outputSize / 1024).toStringAsFixed(1);
-  print('SBOM written → $outputPath  ($sizeKb KB)');
 }
 
 bool _isTar(String ref) =>
@@ -449,6 +490,119 @@ class _Semaphore {
   }
 }
 
+// ── Format helpers ────────────────────────────────────────────────────────────
+
+String _formatExtension(String format) => switch (format) {
+      'cyclonedx' => '.cdx.json',
+      'spdx' => '.spdx.json',
+      'spdx3' => '.spdx3.jsonld',
+      'json' => '.custom.json',
+      'markdown' => '.md',
+      _ => '.json',
+    };
+
+/// Strips well-known SBOM extensions from [output] to produce a base path.
+String _basePath(String output) {
+  const exts = [
+    '.cdx.json',
+    '.spdx.json',
+    '.spdx3.jsonld',
+    '.custom.json',
+    '.jsonld',
+    '.json',
+    '.md',
+  ];
+  for (final ext in exts) {
+    if (output.endsWith(ext)) {
+      return output.substring(0, output.length - ext.length);
+    }
+  }
+  return output;
+}
+
+// ── License override helpers ──────────────────────────────────────────────────
+
+/// Parses a license override file (one "name: SPDX-expression" per line).
+Map<String, String> _parseLicenseMap(String path) {
+  final file = File(path);
+  if (!file.existsSync()) {
+    _err('License map file not found: $path');
+    exit(1);
+  }
+  final result = <String, String>{};
+  for (final line in file.readAsLinesSync()) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+    final idx = trimmed.indexOf(':');
+    if (idx < 1) continue;
+    final name = trimmed.substring(0, idx).trim();
+    final license = trimmed.substring(idx + 1).trim();
+    if (name.isNotEmpty && license.isNotEmpty) result[name] = license;
+  }
+  return result;
+}
+
+/// Returns a new list with license overrides applied by package name.
+List<Package> _applyLicenseOverrides(
+    List<Package> packages, Map<String, String> overrides) {
+  if (overrides.isEmpty) return packages;
+  return packages.map((pkg) {
+    final lic = overrides[pkg.name];
+    if (lic == null) return pkg;
+    if (pkg is RpmPackage) {
+      return RpmPackage(
+        name: pkg.name,
+        version: pkg.version,
+        release: pkg.release,
+        arch: pkg.arch,
+        epoch: pkg.epoch,
+        license: lic,
+        vendor: pkg.vendor,
+        url: pkg.url,
+        buildTime: pkg.buildTime,
+        summary: pkg.summary,
+        requires: pkg.requires,
+        provides: pkg.provides,
+        sha256Header: pkg.sha256Header,
+        sourceRpm: pkg.sourceRpm,
+        sourceRef: pkg.sourceRef,
+      );
+    }
+    if (pkg is WheelPackage) {
+      return WheelPackage(
+        name: pkg.name,
+        version: pkg.version,
+        license: lic,
+        url: pkg.url,
+        summary: pkg.summary,
+        vendor: pkg.vendor,
+        arch: pkg.arch,
+        sourceRef: pkg.sourceRef,
+        sha256Header: pkg.sha256Header,
+        requires: pkg.requires,
+        provides: pkg.provides,
+        packageType: pkg.packageType,
+      );
+    }
+    if (pkg is DebPackage) {
+      return DebPackage(
+        name: pkg.name,
+        version: pkg.version,
+        arch: pkg.arch,
+        license: lic,
+        vendor: pkg.vendor,
+        url: pkg.url,
+        summary: pkg.summary,
+        sourceRef: pkg.sourceRef,
+        sha256Header: pkg.sha256Header,
+        requires: pkg.requires,
+        provides: pkg.provides,
+      );
+    }
+    return pkg;
+  }).toList();
+}
+
 void _printUsage(ArgParser parser) {
   stdout.writeln('''
 sbom_generator – Generate an SBOM from a list of RPM and/or Python wheel packages.
@@ -487,14 +641,14 @@ Examples:
   # SPDX 2.3
   dart run bin/sbom_generator.dart -i packages.txt -f spdx -o sbom.spdx.json
 
-  # SPDX 3.0 JSON-LD
-  dart run bin/sbom_generator.dart -i packages.txt -f spdx3 -o sbom.spdx3.jsonld
+  # Multi-format en un seul passage (génère sbom.cdx.json + sbom.spdx.json + sbom.md)
+  dart run bin/sbom_generator.dart -i packages.txt -f cyclonedx,spdx,markdown -o sbom
 
-  # Simple JSON with a custom name
-  dart run bin/sbom_generator.dart -i packages.txt -f json -n "My App" -o sbom.json -v
+  # 8 paquets en parallèle
+  dart run bin/sbom_generator.dart -i packages.txt -c 8 -o sbom.cdx.json
 
-  # Tableau Markdown des licences
-  dart run bin/sbom_generator.dart -i packages.txt -f markdown -o licences.md
+  # Override de licences
+  dart run bin/sbom_generator.dart -i packages.txt -l overrides.txt -o sbom.cdx.json
 
   # Résoudre les noms RPM nus depuis un dossier local
   dart run bin/sbom_generator.dart -i packages.txt -d /mnt/repo -o sbom.cdx.json

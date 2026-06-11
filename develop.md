@@ -536,6 +536,49 @@ Si aucune correspondance n'est trouvée dans le dossier, `rpm -q` est utilisé n
 
 Les références `.whl`, archives tar/zip et `.deb` ne sont jamais concernées, même si `--rpm-dir` est spécifié.
 
+### Option `--format` / `-f` — multi-format *(nouveau)*
+
+Accepte désormais une liste virgule-séparée de formats. Chaque format génère un fichier de sortie distinct.
+
+- **Format unique** (`-f cyclonedx`) : `--output` est utilisé tel quel (compatibilité ascendante)
+- **Formats multiples** (`-f cyclonedx,spdx,markdown`) : `--output` est traité comme un **chemin de base** ; l'extension appropriée est ajoutée automatiquement par `_formatExtension()` / `_basePath()`
+
+| Format | Extension ajoutée |
+|--------|------------------|
+| `cyclonedx` | `.cdx.json` |
+| `spdx` | `.spdx.json` |
+| `spdx3` | `.spdx3.jsonld` |
+| `json` | `.custom.json` |
+| `markdown` | `.md` |
+
+`_basePath(output)` retire les extensions connues du nom passé à `--output` avant d'ajouter la nouvelle extension. La validation des formats est faite manuellement (const `_validFormats`) puisque `ArgParser.allowed:` ne supporte pas les valeurs composites.
+
+La boucle de résolution de dépendances est skippée seulement si **tous** les formats demandés sont `markdown`.
+
+### Option `--license-map` / `-l` *(nouveau)*
+
+Fichier de substitution de licences : une ligne `nom_paquet: SPDX-expression` par entrée, commentaires `#`.
+
+Parsé par `_parseLicenseMap(String path)` → `Map<String, String>`. Appliqué après la déduplication via `_applyLicenseOverrides(packages, overrides)` qui reconstruit les objets package immuables (`RpmPackage`, `WheelPackage`, `DebPackage`) avec la licence substituée. Les paquets sans correspondance sont retournés inchangés.
+
+```text
+# Exemple overrides.txt
+libssl3: Apache-2.0
+mongodb: SSPL-1.0
+```
+
+### Rapport d'erreurs structuré *(nouveau)*
+
+Les packages dont le parser retourne `null` sont désormais **tracés par ref** (pas seulement comptés). À la fin du traitement, un rapport est émis sur `stderr` :
+
+```
+⚠  2 paquet(s) ignoré(s) :
+   • openssl-libs
+   • mypkg-1.0-1.el9.x86_64.rpm
+```
+
+Implémentation : la boucle `Future.wait` utilise l'index `i` pour corréler `rawResults[i]` → `mainRefs[i]` dans `failedRefs`. Les messages d'erreur détaillés des parsers restent émis sur `stderr` au fil de l'eau.
+
 ### Option `--concurrency` / `-c` *(nouveau)*
 
 Contrôle le nombre de tâches traitées simultanément (défaut : `4`, `0` = illimité). Implémenté via la classe `_Semaphore` :
