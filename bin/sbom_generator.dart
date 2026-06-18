@@ -13,10 +13,11 @@ import 'package:sbom_generator/spdx_generator.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
 import 'package:sbom_generator/markdown_generator.dart';
+import 'package:sbom_generator/asciidoc_generator.dart';
 
 const _version = '1.0.0';
 
-const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown'};
+const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc'};
 
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
@@ -50,6 +51,7 @@ Future<void> main(List<String> arguments) async {
           '  spdx3      SPDX 3.0 JSON-LD\n'
           '  json       Custom human-friendly JSON\n'
           '  markdown   Tableau Markdown des licences\n'
+          '  asciidoc   Tableau AsciiDoc des licences\n'
           'Example: -f cyclonedx,spdx,markdown',
     )
     ..addOption(
@@ -386,7 +388,7 @@ Future<void> main(List<String> arguments) async {
 
   // --- Build dependency graph (skipped when all formats are markdown) ---
   final dependencies = <PackageDependency>[];
-  if (formats.any((f) => f != 'markdown')) {
+  if (formats.any((f) => f != 'markdown' && f != 'asciidoc')) {
     print('Resolving dependencies…');
     dependencies.addAll(rpmParser.buildDependencies(uniquePackages));
     final relCount =
@@ -426,6 +428,9 @@ Future<void> main(List<String> arguments) async {
               uniquePackages, dependencies, outPath, documentName: docName);
         case 'markdown':
           await MarkdownGenerator()
+              .writeToFile(uniquePackages, outPath, documentName: docName);
+        case 'asciidoc':
+          await AsciidocGenerator()
               .writeToFile(uniquePackages, outPath, documentName: docName);
       }
     } catch (e, st) {
@@ -498,6 +503,7 @@ String _formatExtension(String format) => switch (format) {
       'spdx3' => '.spdx3.jsonld',
       'json' => '.custom.json',
       'markdown' => '.md',
+      'asciidoc' => '.adoc',
       _ => '.json',
     };
 
@@ -511,6 +517,7 @@ String _basePath(String output) {
     '.jsonld',
     '.json',
     '.md',
+    '.adoc',
   ];
   for (final ext in exts) {
     if (output.endsWith(ext)) {
