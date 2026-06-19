@@ -1,0 +1,3 @@
+{{- range .Matches}}
+|{{.Vulnerability.Severity}}|{{.Vulnerability.ID}}|{{.Artifact.Name}}|{{.Artifact.Version}}|{{.Vulnerability.Fix.Versions}}({{.Vulnerability.Fix.State}})|{{.Artifact.Type}}|YYYY
+{{- end}}

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/sbom_result.dart';
+import 'grype_panel.dart';
 
 class ResultsPanel extends StatefulWidget {
   final List<String> logLines;
@@ -46,7 +47,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -171,6 +172,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.security_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Grype'),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -194,6 +205,9 @@ class _ResultsPanelState extends State<ResultsPanel>
                 fatalError: widget.fatalError,
                 exitCode: widget.exitCode,
               ),
+
+              // Tab 2 : Grype
+              GrypePanel(outputFiles: widget.outputFiles),
             ],
           ),
         ),

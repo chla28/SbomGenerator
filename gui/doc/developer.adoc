@@ -1,0 +1,684 @@
+= SBOM Generator GUI — Guide développeur
+:toc: left
+:toc-title: Sommaire
+:toclevels: 3
+:sectnums:
+:icons: font
+:source-highlighter: rouge
+:rouge-style: monokai
+:experimental:
+:docdate: 2026-06-19
+
+== Introduction
+
+Ce document décrit l'architecture du GUI Flutter du projet `sbom_generator`.
+Il s'adresse à un développeur Dart qui n'a pas encore pratiqué Flutter, ou qui
+rejoint le projet sans en connaître l'historique.
+
+Le GUI est une application de bureau Linux (Flutter desktop).
+Il n'effectue aucun traitement métier lui-même : il orchestre deux outils
+en ligne de commande externes —
+
+* *sbom-generator* : génère les fichiers SBOM
+* *grype* : analyse les SBOM générés et détecte les vulnérabilités CVE
+
+== Setup développement
+
+=== Prérequis
+
+[cols="1,2", options="header"]
+|===
+|Outil |Version minimale
+
+|Flutter SDK
+|3.44.x (channel stable)
+
+|Dart SDK
+|^3.12.2 (inclus dans Flutter)
+
+|`sbom-generator`
+|binaire compilé accessible dans le PATH ou à côté du GUI (voir <<sec-settings-service>>)
+
+|`grype`
+|installé et accessible dans le PATH (`grype --version`)
+
+|`asciidoctor-pdf`
+|optionnel, pour la conversion PDF depuis l'UI
+|===
+
+=== Installation de Flutter
+
+[source,bash]
+----
+# Cloner Flutter
+git clone https://github.com/flutter/flutter.git ~/flutter
+export PATH="$HOME/flutter/bin:$PATH"
+
+# Activer le support bureau Linux
+flutter config --enable-linux-desktop
+
+# Vérifier
+flutter doctor
+----
+
+=== Lancer le GUI en développement
+
+[source,bash]
+----
+cd gui/
+
+# Télécharger les dépendances
+flutter pub get
+
+# Lancer en mode debug (hot-reload disponible)
+flutter run -d linux
+
+# Analyser le code (équivalent dart analyze)
+flutter analyze
+
+# Exécuter les tests
+flutter test
+----
+
+En mode debug, Flutter affiche des assertions dans la console (ex. ListTile dans
+ColoredBox). Ces messages sont des _warnings_ inoffensifs, pas des crashes
+(voir <<sec-piege-listile>>).
+
+=== Compiler un binaire autonome
+
+[source,bash]
+----
+flutter build linux --release
+# Binaire produit dans :
+# build/linux/x64/release/bundle/sbom_generator_gui
+----
+
+== Architecture & fichiers
+
+=== Vue d'ensemble
+
+----
+gui/
+├── lib/
+│   ├── main.dart                     # Point d'entrée de l'application
+│   ├── home_screen.dart              # Écran principal — layout 2 colonnes
+│   ├── models/
+│   │   ├── sbom_config.dart          # Configuration SBOM (état + sérialisation CLI)
+│   │   └── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
+│   ├── services/
+│   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
+│   │   ├── grype_runner.dart         # Exécute grype, stream d'événements
+│   │   └── settings_service.dart     # Résolution du chemin du binaire CLI
+│   └── widgets/
+│       ├── config_panel.dart         # Panneau gauche : formulaire de configuration
+│       ├── results_panel.dart        # Panneau droit : onglets Progression/Résultats/Grype
+│       └── grype_panel.dart          # Contenu de l'onglet Grype (autonome)
+├── doc/
+│   └── developer.adoc               # Ce document
+├── test/
+│   └── widget_test.dart
+└── pubspec.yaml
+----
+
+=== Rôle de chaque fichier
+
+==== `main.dart` — Point d'entrée
+
+Crée le `MaterialApp` avec le thème (bleu indigo, Material 3) et monte `HomeScreen`.
+Ne contient aucune logique métier.
+
+==== `home_screen.dart` — Écran principal
+
+`HomeScreen` est un `StatefulWidget` (voir <<sec-flutter-stateful>>) qui :
+
+* détient l'état global de la session SBOM : log, fichiers produits, progression,
+  code de retour, état d'exécution
+* instancie `SbomRunner` et `SbomConfig`
+* écoute le stream de `SbomRunner` et redistribue les événements vers `ResultsPanel`
+  via des `setState()`
+* déclenche automatiquement la conversion PDF (`asciidoctor-pdf`) après un
+  succès si l'option est cochée
+
+Layout : `Row` avec deux enfants —
+
+[source,text]
+----
+HomeScreen
+├── ConfigPanel    (largeur fixe 390 px)
+│     └── SbomConfig (modèle mutable partagé)
+└── ResultsPanel   (Expanded — prend le reste)
+----
+
+==== `models/sbom_config.dart` — Configuration SBOM
+
+Objet mutable (`SbomConfig`) partagé entre `HomeScreen` et `ConfigPanel`.
+Expose `toArgs()` qui construit la liste d'arguments CLI à passer à
+`sbom-generator`, et `expectedOutputPaths()` pour la prévisualisation des
+fichiers avant génération.
+
+Les constantes `allFormats`, `formatLabels` et `_formatExtensions` sont
+définies ici : elles servent à générer dynamiquement les checkboxes de format
+dans `ConfigPanel`.
+
+==== `models/sbom_result.dart` — Modèles de résultat
+
+Contient `OutputFile` (chemin + taille formatée) et `SbomResult` (agrégat de
+sortie). `SbomResult` n'est pas utilisé directement dans l'UI — les champs
+sont remontés un à un via les événements du stream (voir <<sec-stream>>).
+
+==== `services/sbom_runner.dart` — Exécution SBOM
+
+[[sec-sbom-runner]]
+Lance `sbom-generator` via `Process.start()` et expose un
+`Stream<SbomEvent>`. Quatre types d'événements (sealed class) :
+
+[cols="1,2", options="header"]
+|===
+|Événement |Contenu
+
+|`SbomProgressEvent`
+|current, total, percent, label — parsés depuis la barre de progression stdout
+
+|`SbomLogEvent`
+|line, isError, isWarning — toute ligne de log
+
+|`SbomOutputFileEvent`
+|un `OutputFile` parsé depuis `"SBOM written → path (size)"`
+
+|`SbomDoneEvent`
+|exitCode
+|===
+
+`HomeScreen` écoute ce stream avec `.listen()` et appelle `setState()` à chaque
+événement pour mettre à jour l'UI.
+
+==== `services/grype_runner.dart` — Exécution Grype
+
+[[sec-grype-runner]]
+Même principe que `sbom_runner.dart`, mais les événements sont différents :
+
+[cols="1,2", options="header"]
+|===
+|Événement |Contenu
+
+|`GrypeOutputEvent`
+|JSON complet de grype (accumulé depuis stdout, émis après exit)
+
+|`GrypeTemplateEvent`
+|Contenu du fichier temporaire de sortie template (lu après exit)
+
+|`GrypeDoneEvent`
+|exitCode + stderr optionnel
+|===
+
+Lorsqu'un fichier template est configuré, grype est lancé avec deux sorties :
+
+[source,bash]
+----
+grype sbom.cdx.json \
+  --output json \
+  --output template=/tmp/grype_tmpl_<ts>.txt \
+  --template ./grype_csv.tmpl \
+  ...
+----
+
+La sortie JSON arrive sur stdout (capturée dans `jsonBuf`).
+La sortie template est écrite dans un fichier temporaire, lue après exit,
+puis supprimée (voir <<sec-piege-tmpl>>).
+
+[[sec-settings-service]]
+==== `services/settings_service.dart` — Résolution du binaire
+
+`SettingsService.cliBinary` cherche le binaire `sbom-generator` dans cet ordre :
+
+1. `<exe_dir>/../../bin/sbom-generator` (bundle installé Linux)
+2. `<exe_dir>/sbom-generator` (binaire côte-à-côte)
+3. `sbom-generator` dans le PATH (fallback développement)
+
+En développement, il suffit que le CLI soit compilé et accessible dans le PATH :
+
+[source,bash]
+----
+cd ..   # racine du projet
+dart compile exe bin/sbom_generator.dart -o build/sbom-generator
+export PATH="$PWD/build:$PATH"
+----
+
+==== `widgets/config_panel.dart` — Formulaire de configuration
+
+`ConfigPanel` est un `StatefulWidget` qui :
+
+* expose un formulaire Flutter `Form` + `TextFormField`
+* synchronise les champs vers l'objet `SbomConfig` à chaque modification
+  (via `_sync()`)
+* déclenche le lancement via `widget.onRun()` (callback vers `HomeScreen`)
+* génère dynamiquement les checkboxes de format depuis la liste `allFormats`
+
+==== `widgets/results_panel.dart` — Panneau de résultats
+
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **3 onglets** :
+
+[cols="1,1,2", options="header"]
+|===
+|Index |Libellé |Contenu
+
+|0
+|Progression
+|`_LogView` — terminal texte coloré (fond noir)
+
+|1
+|Résultats (N)
+|`_ResultsView` — liste des fichiers générés, avertissements, erreur fatale
+
+|2
+|Grype
+|`GrypePanel` — panneau d'analyse grype autonome
+|===
+
+Comportement automatique du `TabController` :
+
+* bascule vers l'onglet *Progression* dès le démarrage d'une génération
+* bascule vers l'onglet *Résultats* à la fin d'une génération réussie
+
+==== `widgets/grype_panel.dart` — Onglet Grype
+
+`GrypePanel` est un `StatefulWidget` **autonome** : il gère son propre état
+(fichier SBOM, options, résultats) sans passer par `HomeScreen`.
+
+Il reçoit un seul paramètre du parent : `List<OutputFile> outputFiles`.
+Quand cette liste change, `didUpdateWidget` met à jour automatiquement le
+champ fichier SBOM si celui-ci est encore vide.
+
+Les résultats sont affichés dans un second `TabController` à 3 onglets internes :
+
+[cols="1,1,2", options="header"]
+|===
+|Index |Libellé |Contenu
+
+|0
+|Table (N)
+|`_VulnTableView` — cartes colorées par sévérité
+
+|1
+|JSON
+|`_JsonView` — JSON brut formaté (fond noir)
+
+|2
+|Template
+|`_TemplateView` — sortie brute du fichier template
+|===
+
+=== Flux de données
+
+==== Génération SBOM
+
+[source,text]
+----
+Utilisateur
+  │ clique "Générer le SBOM"
+  ▼
+HomeScreen._startScan()
+  │ construit List<String> args via SbomConfig.toArgs()
+  ▼
+SbomRunner.run(args: args)   →   Process.start('sbom-generator', args)
+  │
+  │ Stream<SbomEvent>
+  ├── SbomProgressEvent  →  setState() → _progressCurrent/Total/Percent/Label
+  ├── SbomLogEvent       →  setState() → _logLines, _fatalError, _warnings
+  ├── SbomOutputFileEvent →  setState() → _outputFiles
+  └── SbomDoneEvent      →  setState() → _isRunning=false, _exitCode
+                            si exitCode==0 && generatePdf → _generatePdf()
+----
+
+==== Analyse Grype
+
+[source,text]
+----
+Utilisateur
+  │ clique "Analyser" dans GrypePanel
+  ▼
+GrypePanel._analyze()
+  │ construit les args depuis l'état local
+  ▼
+GrypeRunner.run(...)   →   Process.start('grype', args)
+  │
+  │ Stream<GrypeEvent>
+  ├── GrypeOutputEvent(json)    →  setState() → _vulns (parsés), _jsonOutput
+  ├── GrypeTemplateEvent(text)  →  setState() → _templateOutput, bascule tab 2
+  └── GrypeDoneEvent(code)      →  setState() → _isRunning=false, _exitCode
+----
+
+== Concepts Flutter pour débutant
+
+[[sec-flutter-stateful]]
+=== StatefulWidget vs StatelessWidget
+
+Un `StatelessWidget` est immutable : ses propriétés ne changent pas après
+construction. Un `StatefulWidget` possède un objet `State<T>` séparé, qui
+peut appeler `setState()` pour déclencher un *rebuild* (re-rendu) du widget.
+
+[source,dart]
+----
+class MyWidget extends StatefulWidget {
+  const MyWidget({super.key});
+  @override
+  State<MyWidget> createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  int _count = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('$_count');
+  }
+
+  void _increment() {
+    setState(() => _count++);   // déclenche un rebuild
+  }
+}
+----
+
+Dans ce projet : `HomeScreen`, `ResultsPanel`, `ConfigPanel` et `GrypePanel`
+sont tous des `StatefulWidget`.
+
+[[sec-stream]]
+=== Stream et écoute d'événements
+
+Un `Stream<T>` est un flux asynchrone qui émet zéro, une ou plusieurs valeurs
+dans le temps, puis se termine.
+
+[source,dart]
+----
+final stream = SbomRunner().run(args: [...]);
+
+stream.listen(
+  (event) {
+    // appelé à chaque événement
+    setState(() { /* mettre à jour l'UI */ });
+  },
+  onError: (Object e) { /* erreur */ },
+);
+----
+
+Côté `SbomRunner`, le stream est produit avec un `StreamController<T>` :
+
+[source,dart]
+----
+final controller = StreamController<SbomEvent>();
+// ... émettre des événements :
+controller.add(SbomLogEvent('ligne de log'));
+// ... terminer :
+controller.close();
+return controller.stream;
+----
+
+=== TabController
+
+Un `TabController` gère l'onglet actif d'un `TabBar` / `TabBarView`.
+Son `length` est fixé à la construction et *ne peut pas être modifié* (voir
+<<sec-piege-tabcontroller>>).
+
+Il est créé dans `initState()` et libéré dans `dispose()`.
+Le mixin `SingleTickerProviderStateMixin` est nécessaire pour fournir
+l'animation (paramètre `vsync`).
+
+[source,dart]
+----
+class _MyState extends State<My> with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+}
+----
+
+Pour changer d'onglet par programme : `_tabs.animateTo(index)`.
+
+=== didUpdateWidget
+
+`didUpdateWidget(OldWidget old)` est appelé lorsque le parent reconstruit
+le widget avec de nouveaux paramètres. C'est le bon endroit pour réagir à
+un changement de prop sans recréer tout l'état :
+
+[source,dart]
+----
+@override
+void didUpdateWidget(GrypePanel old) {
+  super.didUpdateWidget(old);
+  if (widget.outputFiles != old.outputFiles) {
+    _updateAutoFile();   // mettre à jour le champ fichier SBOM
+  }
+}
+----
+
+== Guide d'extension
+
+=== Ajouter un format de sortie SBOM
+
+Tous les formats sont déclarés dans `models/sbom_config.dart`.
+Aucune modification de widget n'est nécessaire : les checkboxes sont
+générées dynamiquement depuis `allFormats`.
+
+. Dans `_formatExtensions`, ajouter l'extension : `'newformat': '.new.json'`
+. Dans `allFormats`, ajouter `'newformat'`
+. Dans `formatLabels`, ajouter le libellé affiché : `'newformat': 'Nouveau Format 1.0'`
+
+=== Ajouter un paramètre à la génération SBOM
+
+. Dans `models/sbom_config.dart` : ajouter le champ dans `SbomConfig` et
+  l'injecter dans `toArgs()`
+. Dans `widgets/config_panel.dart` : ajouter le contrôle UI dans la section
+  *Options* du `ListView`
+
+=== Ajouter un paramètre à Grype
+
+. Dans `services/grype_runner.dart` : ajouter le paramètre nommé à `run()`
+  et construire l'argument CLI dans la liste `args`
+
+[source,dart]
+----
+Stream<GrypeEvent> run({
+  // ... paramètres existants ...
+  bool nouveauFlag = false,      // <1>
+}) {
+  // ...
+  if (nouveauFlag) args.add('--nouveau-flag');   // <2>
+}
+----
+<1> Déclarer le paramètre avec sa valeur par défaut
+<2> Injecter dans la liste d'arguments
+
+. Dans `widgets/grype_panel.dart` :
+  * Ajouter l'état dans `_GrypePanelState` (`bool _nouveauFlag = false;`)
+  * Ajouter le contrôle dans `_ConfigSection` (le passer en paramètre)
+  * Passer la valeur à `_runner.run(..., nouveauFlag: _nouveauFlag)`
+
+=== Ajouter un onglet dans ResultsPanel
+
+. Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
++
+[source,dart]
+----
+_tabs = TabController(length: 4, vsync: this);  // était 3
+----
+
+. Ajouter un `Tab(...)` dans le `TabBar` :
++
+[source,dart]
+----
+Tab(
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(Icons.my_icon, size: 16),
+      SizedBox(width: 6),
+      Text('Nouvel onglet'),
+    ],
+  ),
+),
+----
+
+. Ajouter le widget correspondant dans le `TabBarView` :
++
+[source,dart]
+----
+MonNouveauWidget(outputFiles: widget.outputFiles),
+----
+
+. Si le nouvel onglet reçoit des données de `HomeScreen`, ajouter le
+  paramètre correspondant à `ResultsPanel` et le propager depuis `home_screen.dart`.
+
+=== Ajouter un sous-onglet dans GrypePanel
+
+Les sous-onglets de résultats Grype (Table / JSON / Template) sont gérés par
+`_resultTabs` dans `_GrypePanelState`.
+
+. Changer `TabController(length: 3)` en `TabController(length: 4)`
+. Ajouter l'état correspondant dans `_GrypePanelState`
+. Gérer la réception des données dans le `.listen()` de `_runner.run()`
+. Ajouter le `Tab` dans le `TabBar` de résultats et le widget dans le `TabBarView`
+
+== Pièges & décisions techniques
+
+[[sec-piege-tabcontroller]]
+=== TabController.length est fixe
+
+Le `length` d'un `TabController` est immuable après création.
+Pour un onglet conditionnel (visible uniquement si une condition est remplie),
+deux approches :
+
+* *Onglet toujours présent, contenu conditionnel* : c'est l'approche choisie
+  pour l'onglet *Template* de `GrypePanel` — il est toujours là, mais affiche
+  un hint si aucun template n'est configuré.
+* *Recréer le widget avec une clé* : assigner une `Key` au widget contenant
+  le `TabController` et la changer pour forcer la reconstruction complète.
+  À éviter si possible car cela réinitialise tout l'état.
+
+[[sec-piege-tmpl]]
+=== Fichier temporaire pour la sortie template Grype
+
+Grype ne peut écrire qu'une sortie sur stdout. Quand le mode template est
+activé en plus du mode JSON, il faut deux canaux de sortie.
+
+La solution retenue dans `grype_runner.dart` :
+
+. grype est lancé avec `-o json` (stdout) *et* `-o template=/tmp/grype_tmpl_<ts>.txt`
+. stdout est capturé dans `jsonBuf` (habituel)
+. après l'exit du processus, le fichier temp est lu, son contenu est émis
+  via `GrypeTemplateEvent`, puis le fichier est supprimé
+
+[source,dart]
+----
+// Fichier temp créé avant Process.start()
+final tmpFile = File('${Directory.systemTemp.path}/grype_tmpl_${ts}.txt');
+
+// Après exitCode.then(...)
+final content = await tmpFile.readAsString();
+controller.add(GrypeTemplateEvent(content));
+await tmpFile.delete();
+----
+
+Si grype ne supporte pas la syntaxe `-o template=<fichier>` (versions < 0.65),
+une alternative est de lancer grype deux fois séquentiellement.
+
+=== Stream vs Future pour les processus externes
+
+`Process.run()` retourne un `Future<ProcessResult>` — pratique mais bloquant :
+on n'a accès à stdout qu'après la fin du processus.
+
+`Process.start()` retourne un `Future<Process>` depuis lequel on accède
+aux streams `stdout` et `stderr` en temps réel. C'est obligatoire pour
+afficher la progression ligne par ligne dans `SbomRunner`.
+
+Pour `GrypeRunner`, le choix du stream n'est pas pour le temps réel (grype
+n'affiche rien d'utile en cours de route) mais pour la cohérence
+architecturale et pour pouvoir appeler `kill()` à tout moment.
+
+=== Sélection automatique du fichier SBOM dans GrypePanel
+
+`GrypePanel._updateAutoFile()` est appelé depuis `didUpdateWidget` quand
+`outputFiles` change (après une génération réussie).
+
+La garde `_fileCtrl.text.isNotEmpty` est essentielle : sans elle, chaque
+nouvelle génération SBOM écraserait une sélection manuelle faite par
+l'utilisateur dans le champ "Fichier SBOM" de l'onglet Grype.
+
+La priorité de sélection automatique :
+
+. `.cdx.json` ou `.spdx.json` (formats reconnus par grype nativement)
+. `.json` ou `.jsonld` (fallback)
+
+=== unawaited(process.stdin.close())
+
+Après `Process.start()`, le stdin du processus fils reste ouvert.
+Certains processus attendent la fermeture de stdin avant de démarrer.
+L'appel `process.stdin.close()` retourne un `Future<void>` qu'on ne veut
+pas `await`er (on ne veut pas bloquer le stream).
+
+`unawaited()` de `dart:async` marque explicitement ce Future comme
+intentionnellement ignoré, ce qui supprime le warning Dart.
+
+[[sec-piege-listile]]
+=== Assertions ListTile en mode debug
+
+En mode debug Flutter, un avertissement s'affiche quand un `CheckboxListTile`
+ou `ListTile` est enfant d'un `ColoredBox` ou `Container(color: ...)`.
+Flutter ne peut pas peindre les effets d'encre (ripple) sur le bon ancêtre.
+
+Ce sont des *assertions* (warnings de dev), pas des erreurs : l'application
+fonctionne normalement. Ils disparaissent en mode release.
+
+Pour les supprimer en dev : encapsuler le `ListTile` dans un `Material` :
+
+[source,dart]
+----
+Material(
+  color: Colors.transparent,
+  child: CheckboxListTile(...),
+)
+----
+
+=== SbomConfig est un objet mutable partagé
+
+`SbomConfig` est instancié dans `HomeScreen` et passé en référence à
+`ConfigPanel`. `ConfigPanel` le modifie directement (via `_sync()`) sans
+passer par des callbacks.
+
+C'est un choix délibéré de simplicité : le modèle est toujours cohérent
+au moment du lancement (la méthode `_run()` appelle `_sync()` avant
+`widget.onRun()`). En contrepartie, `HomeScreen` ne reçoit pas de
+notification à chaque frappe clavier, ce qui évite des rebuilds inutiles
+du panneau de résultats.
+
+== Dépendances
+
+[cols="2,1,3", options="header"]
+|===
+|Package |Version |Usage
+
+|`file_picker`
+|^8.1.7
+|Sélecteurs de fichiers natifs (SBOM, template, config grype)
+
+|`shared_preferences`
+|^2.3.5
+|Persistance des préférences (non utilisé pour l'instant, prévu)
+
+|`path`
+|^1.9.1
+|Manipulation de chemins (`path.join`, `path.dirname`) dans `SettingsService`
+
+|`url_launcher`
+|^6.3.1
+|Ouverture des fichiers générés avec l'application système (`launchUrl(Uri.file(...))`)
+|===

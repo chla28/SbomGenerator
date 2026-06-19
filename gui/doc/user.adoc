@@ -1,0 +1,801 @@
+= SBOM Generator GUI — Guide utilisateur
+:toc: left
+:toc-title: Sommaire
+:toclevels: 3
+:sectnums:
+:icons: font
+:experimental:
+:docdate: 2026-06-19
+
+== Introduction
+
+=== Qu'est-ce qu'un SBOM ?
+
+Un *SBOM* (Software Bill of Materials — inventaire logiciel) est un fichier
+structuré listant tous les composants d'un logiciel : paquets, bibliothèques,
+versions, licences. Il joue le rôle d'une nomenclature, au sens industriel
+du terme.
+
+Les formats les plus répandus sont :
+
+* *CycloneDX* (JSON, recommandé par l'OWASP et l'ANSSI)
+* *SPDX* (standard ISO/IEC 5962:2021, adopté par la Linux Foundation)
+
+=== Qu'est-ce que Grype ?
+
+*Grype* (Anchore) est un scanner de vulnérabilités CVE open-source.
+Il analyse un fichier SBOM et le compare à des bases de données de
+vulnérabilités (NVD, GitHub Security Advisories…) pour identifier les
+paquets affectés et leur niveau de sévérité.
+
+Niveaux de sévérité (du plus critique au plus bénin) :
+
+[cols="1,1,3", options="header"]
+|===
+|Niveau |Couleur dans l'UI |Signification
+
+|Critical
+|Rouge foncé
+|Exploitation immédiate, impact maximal (RCE, élévation de privilèges…)
+
+|High
+|Rouge-orange
+|Impact important, exploitation probable
+
+|Medium
+|Orange
+|Exploitable sous conditions particulières
+
+|Low
+|Vert
+|Impact limité, exploitation difficile
+
+|Negligible
+|Gris
+|Impact théorique, généralement non exploitable en pratique
+|===
+
+=== Présentation de l'outil
+
+*SBOM Generator GUI* est une interface graphique de bureau Linux qui orchestre
+deux outils en ligne de commande :
+
+* `sbom-generator` : génère des fichiers SBOM depuis une liste de paquets
+* `grype` : analyse les SBOM générés pour détecter les vulnérabilités CVE
+
+L'interface permet de configurer les options, suivre l'exécution en temps réel,
+accéder aux fichiers produits et lancer une analyse de vulnérabilités sans
+jamais ouvrir un terminal.
+
+== Prérequis & installation
+
+=== Prérequis
+
+[cols="2,1,2", options="header"]
+|===
+|Composant |Obligatoire |Rôle
+
+|`sbom-generator`
+|Oui
+|Génération des fichiers SBOM
+
+|`grype`
+|Non
+|Analyse des vulnérabilités CVE (onglet Grype)
+
+|`asciidoctor-pdf`
+|Non
+|Conversion automatique du rapport AsciiDoc en PDF
+|===
+
+==== Vérifier que les outils sont disponibles
+
+[source,bash]
+----
+sbom-generator --version
+grype version
+asciidoctor-pdf --version
+----
+
+==== Installer grype
+
+[source,bash]
+----
+# Script officiel Anchore
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Vérifier
+grype version
+----
+
+==== Installer asciidoctor-pdf (optionnel)
+
+[source,bash]
+----
+gem install asciidoctor-pdf
+----
+
+=== Lancer l'interface
+
+[source,bash]
+----
+sbom_generator_gui
+----
+
+Si le binaire n'est pas dans le PATH, exécutez-le directement :
+
+[source,bash]
+----
+/chemin/vers/sbom_generator_gui
+----
+
+== Vue d'ensemble de l'interface
+
+L'interface est divisée en deux panneaux séparés par un séparateur vertical.
+
+----
+┌───────────────────────────────────────────────────────────────────────┐
+│  🗒 SBOM Generator                                              [ℹ]   │
+├─────────────────────┬─────────────────────────────────────────────────┤
+│                     │                                                 │
+│   Configuration     │  [ Progression ] [ Résultats (2) ] [ Grype ]   │
+│   ───────────────   │  ─────────────────────────────────────────────  │
+│   ENTRÉE            │                                                 │
+│   [fichier.lst 📂]  │   ░░░░░░░░░░░░░░░ 12 / 23  52 %               │
+│                     │   ████████████████████░░░░░░░░░░░░░            │
+│   SORTIE            │                                                 │
+│   [sbom       📂]   │   Generating CycloneDX…                        │
+│   [x] CycloneDX     │   Resolved bash-5.1.8                          │
+│   [ ] SPDX 2.3      │   Resolved openssl-3.0.7                       │
+│   [ ] AsciiDoc      │   …                                            │
+│   ...               │                                                 │
+│   OPTIONS           │                                                 │
+│   [Nom document ]   │                                                 │
+│   Concurrence: 4    │                                                 │
+│   [ ] Verbeux        │                                                 │
+│                     │                                                 │
+│  [▶ Générer SBOM]   │                                                 │
+│                     │                                                 │
+└─────────────────────┴─────────────────────────────────────────────────┘
+----
+
+*Panneau gauche — Configuration* : réglage de toutes les options avant
+le lancement. Largeur fixe.
+
+*Panneau droit — Résultats* : trois onglets affichant respectivement la
+progression en temps réel, les fichiers générés, et l'analyse de vulnérabilités.
+
+== Panneau Configuration
+
+=== Section Entrée
+
+==== Fichier d'entrée (`--input`)
+
+Chemin vers le fichier contenant la liste des paquets à analyser.
+Cliquez sur l'icône 📂 pour ouvrir un sélecteur de fichiers.
+
+Le fichier doit contenir *un élément par ligne*. Les types acceptés sont :
+
+[cols="2,3", options="header"]
+|===
+|Type |Format de la ligne
+
+|Paquet RPM installé
+|`bash` ou `bash-5.1.8-6.el9.x86_64`
+
+|Fichier RPM local
+|`/chemin/vers/package.rpm`
+
+|Wheel Python (`.whl`)
+|`/chemin/vers/package-1.0-py3-none-any.whl`
+
+|Archive tar
+|`/chemin/vers/pkg.tar.gz` ou `.tgz`
+
+|Archive Zip
+|`/chemin/vers/archive.zip`
+
+|Paquet Debian (`.deb`)
+|`/chemin/vers/package.deb`
+
+|Dépendances Python
+|`/chemin/vers/requirements.txt`
+|===
+
+Un seul fichier d'entrée peut contenir des lignes de types différents.
+
+=== Section Sortie
+
+==== Chemin de base (`--output`)
+
+Préfixe des fichiers générés, sans extension.
+Exemple : `sbom` produira `sbom.cdx.json`, `sbom.spdx.json`, etc.
+Un chemin relatif est résolu depuis le répertoire courant au moment du lancement.
+
+Une prévisualisation des noms de fichiers attendus s'affiche dès que
+le champ est renseigné.
+
+==== Formats (`--format`)
+
+Cochez un ou plusieurs formats. Au moins un format doit être sélectionné.
+
+[cols="2,2,3", options="header"]
+|===
+|Format |Extension produite |Usage typique
+
+|CycloneDX 1.6
+|`.cdx.json`
+|Analyse de vulnérabilités avec grype, outils OWASP
+
+|SPDX 2.3
+|`.spdx.json`
+|Conformité légale, outils OpenChain
+
+|SPDX 3.0 JSON-LD
+|`.spdx3.jsonld`
+|Écosystèmes liés (RDF/ontologie)
+
+|JSON personnalisé
+|`.custom.json`
+|Intégration dans des pipelines internes
+
+|Markdown
+|`.md`
+|Documentation lisible directement sur GitHub/GitLab
+
+|AsciiDoc
+|`.adoc`
+|Rapport technique riche (tableaux, styles)
+|===
+
+==== Option PDF (AsciiDoc uniquement)
+
+Quand le format *AsciiDoc* est coché, une option supplémentaire apparaît :
+*Convertir en PDF (asciidoctor-pdf)*. Si elle est activée, l'outil
+`asciidoctor-pdf` est lancé automatiquement après la génération du `.adoc`.
+
+Un champ optionnel permet de spécifier le chemin de destination du PDF.
+Sans valeur, le PDF est créé dans le même dossier que le `.adoc`, avec
+le même nom de base.
+
+=== Section Options
+
+==== Nom du document SBOM (`--name`)
+
+Libellé qui apparaîtra dans les métadonnées du SBOM
+(champ `metadata.component.name` en CycloneDX).
+Exemple : `Mon Application 2.1.0`.
+Laissez vide pour utiliser le nom du fichier d'entrée.
+
+==== Répertoire RPM local (`--rpm-dir`)
+
+Dossier contenant des fichiers `.rpm` supplémentaires à inclure dans l'analyse.
+Utile pour enrichir la résolution de métadonnées (version exacte, licence)
+lorsque les paquets ne sont pas installés sur la machine courante.
+
+==== Override de licences (`--license-map`)
+
+Fichier texte permettant de corriger ou préciser les licences de certains paquets.
+Format : une règle par ligne : `nom-paquet: SPDX-expression`
+
+Exemple :
+----
+openssl: OpenSSL
+my-internal-lib: LicenseRef-PROPRIETARY
+----
+
+==== Concurrence (`--concurrency`)
+
+Nombre de paquets traités en parallèle. Le curseur va de *0* (illimité)
+à *16*. La valeur par défaut est *4*.
+
+* Augmentez si votre machine a de nombreux cœurs et une bonne connexion réseau.
+* Diminuez (1 = séquentiel) en cas d'erreurs de rate-limiting sur les dépôts.
+* La valeur 0 traite tous les paquets simultanément — à utiliser avec prudence
+  sur de grandes listes.
+
+==== Mode verbeux (`--verbose`)
+
+Affiche dans l'onglet *Progression* des informations supplémentaires :
+outils de résolution utilisés, statistiques de traitement, détails de chaque
+paquet trouvé.
+
+=== Lancer et arrêter la génération
+
+Cliquez sur *▶ Générer le SBOM* pour démarrer.
+Le bouton se transforme en *■ Arrêter la génération* pendant l'exécution.
+Cliquer sur Arrêter envoie un signal d'interruption au processus.
+
+== Onglet Progression
+
+L'onglet *Progression* s'active automatiquement au démarrage de la génération.
+
+----
+  12 / 23 paquets   52%                       bash-5.1.8-6.el9.x86_64
+  ████████████████████████████░░░░░░░░░░░░░░░
+
+  Generating CycloneDX 1.6 SBOM…
+  Resolved bash-5.1.8-6.el9.x86_64
+  Warning: licence inconnue pour 'mylib'
+  SBOM written → sbom.cdx.json  (42.3 KB)
+----
+
+=== Codes couleur du terminal
+
+[cols="2,3", options="header"]
+|===
+|Couleur |Signification
+
+|Blanc (défaut)
+|Information générale
+
+|Bleu
+|Début d'une étape (`Generating`, `Resolving`, `Found`, `Analysés`)
+
+|Orange
+|Avertissement (`Warning:`, `⚠`)
+
+|Rouge
+|Erreur fatale (`Error:`)
+
+|Vert
+|Fichier produit (`SBOM written`, `PDF written`)
+
+|Bleu clair
+|Conversion PDF en cours
+|===
+
+Le texte du terminal est sélectionnable pour copier-coller des messages d'erreur.
+
+=== Barre de progression
+
+La barre de progression indique le nombre de paquets traités, le pourcentage
+et le nom du paquet en cours. Elle apparaît uniquement pendant la génération.
+
+Une fois la génération terminée, l'onglet *Résultats* s'active automatiquement
+en cas de succès.
+
+== Onglet Résultats
+
+L'onglet *Résultats (N)* affiche le nombre de fichiers générés dans son libellé.
+
+----
+  ✔  2 fichier(s) SBOM généré(s) — 1 avertissement(s)
+  ┌─────────────────────────────────────────────────────┐
+  │ 📄 sbom.cdx.json                                    │
+  │    /home/user/projet/sbom.cdx.json     [📋] [↗]    │
+  │    42.3 KB                                          │
+  ├─────────────────────────────────────────────────────┤
+  │ 📄 sbom.spdx.json                                   │
+  │    /home/user/projet/sbom.spdx.json    [📋] [↗]    │
+  │    38.1 KB                                          │
+  └─────────────────────────────────────────────────────┘
+
+  ⚠ Avertissements (1)
+  Warning: licence inconnue pour 'mylib-1.2.3'
+----
+
+=== Bannière de résultat
+
+* *Fond vert* : génération réussie. Le nombre de fichiers et d'avertissements
+  est affiché.
+* *Fond rouge* : la génération a échoué. Le message d'erreur est affiché
+  directement dans la bannière.
+
+=== Fichiers générés
+
+Chaque fichier est présenté dans une carte avec :
+
+* son nom (en gras, police monospace)
+* son chemin complet
+* sa taille
+
+Deux boutons sont disponibles à droite de chaque carte :
+
+[cols="1,3"]
+|===
+|📋 |Copie le chemin complet dans le presse-papiers
+|↗ |Ouvre le fichier avec l'application système par défaut (visionneuse JSON, éditeur…)
+|===
+
+=== Avertissements
+
+Les avertissements sont affichés dans un bloc orange replié. Si leur nombre
+dépasse 5, un bouton *Voir N de plus…* permet de les afficher tous.
+Ces avertissements sont non bloquants : les fichiers SBOM ont bien été générés.
+
+=== Erreur fatale
+
+En cas d'échec (code de retour non nul), le message d'erreur apparaît dans
+un bloc rouge sélectionnable pour faciliter le copier-coller.
+
+== Onglet Grype — Analyse de vulnérabilités
+
+L'onglet *Grype* est entièrement autonome : il peut être utilisé à tout moment,
+indépendamment d'une génération SBOM récente.
+
+----
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  Fichier SBOM : [ /projet/sbom.cdx.json                ] [Choisir]│
+  │                                                                   │
+  │  [x] --platform linux   [x] --add-cpes-if-none   [x] --by-cve   │
+  │                                                                   │
+  │  Distro            --fail-on       --only-fixed                   │
+  │  [ rhel:9  ▼ ]     [ (aucun) ▼ ]  [ ]              [Analyser]   │
+  │                                                                   │
+  │  Template (-t) : [ ./grype_csv.tmpl              ] [Choisir]     │
+  │  grype.yaml    : [                               ] [Choisir]     │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 5 vulnérabilité(s) : 1 Critical, 2 High, 2 Medium             │
+  ├──────────────┬───────────────────────────────────────────────────┤
+  │ [Table (5)]  │ [JSON]  │ [Template]                              │
+  ├──────────────┴───────────────────────────────────────────────────┤
+  │  CRITICAL  openssl 1.1.1k → 1.1.1l  CVE-2021-3711  rpm         │
+  │  HIGH      bash 5.0.17              CVE-2021-3489   rpm         │
+  │  HIGH      curl 7.76.1              CVE-2023-38545  rpm         │
+  │  MEDIUM    zlib 1.2.11              CVE-2022-37434  rpm         │
+  │  MEDIUM    expat 2.2.10             CVE-2022-25235  rpm         │
+  └───────────────────────────────────────────────────────────────────┘
+----
+
+=== Sélection du fichier SBOM
+
+Le champ *Fichier SBOM* est pré-rempli automatiquement avec le dernier fichier
+SBOM généré dans la session courante, en priorisant les formats reconnus par
+grype : `.cdx.json` (CycloneDX) puis `.spdx.json` (SPDX).
+
+Vous pouvez saisir manuellement un chemin ou cliquer sur *Choisir* pour
+parcourir le système de fichiers. Les formats `.json` et `.jsonld` sont
+proposés dans le sélecteur.
+
+NOTE: Grype analyse le contenu du fichier, pas son extension.
+Un fichier CycloneDX renommé `.json` est reconnu correctement.
+
+=== Options de scan
+
+==== `--platform linux`
+
+Force grype à considérer la plateforme cible comme Linux lors de la
+résolution des vulnérabilités. Recommandé pour les SBOM issus de listes
+de paquets RPM ou DEB.
+
+Décochez cette option si vous analysez un SBOM issu d'un autre système
+(image Docker multi-plateforme, bibliothèques macOS…).
+
+==== `--add-cpes-if-none`
+
+Grype utilise les identifiants *CPE* (Common Platform Enumeration) pour
+faire correspondre les paquets aux entrées CVE. Si un paquet du SBOM ne
+possède pas de CPE déclaré, cette option demande à grype d'en générer un
+automatiquement depuis le nom et la version du paquet.
+
+Recommandé : réduit les faux-négatifs sur des SBOM produits sans CPE
+(c'est le cas de la plupart des SBOM générés par `sbom-generator`).
+
+==== `--by-cve`
+
+Sans cette option, grype groupe les résultats par identifiant *GHSA*
+(GitHub Security Advisory) quand il est disponible.
+Avec cette option, chaque résultat est présenté sous son identifiant
+*CVE* principal, plus universel et reconnu par les outils de gestion
+des vulnérabilités.
+
+Recommandé pour l'interopérabilité avec des outils de ticketing (Jira,
+défauts, etc.) ou des référentiels de vulnérabilités internes.
+
+==== `--distro rhel:<version>`
+
+Précise la distribution Linux cible. Sans cette option, grype tente
+de la déduire du SBOM, ce qui peut échouer ou produire des correspondances
+imprécises.
+
+Versions RHEL disponibles dans le menu : *7*, *8*, *9*, *10*. Sélectionnez
+*(aucune)* pour laisser grype détecter automatiquement la distribution.
+
+NOTE: Choisir la mauvaise version peut engendrer des faux-positifs
+(vulnérabilités non applicables car déjà corrigées par le backport RHEL)
+ou des faux-négatifs. Vérifiez la version exacte de votre système avec
+`cat /etc/redhat-release`.
+
+==== `--fail-on <sévérité>`
+
+Contrôle le code de retour de grype. Avec cette option, grype retourne
+un code d'erreur (non nul) si au moins une vulnérabilité du niveau
+indiqué ou supérieur est détectée. Utile en CI/CD.
+
+Exemple : `--fail-on high` fait échouer l'analyse si une vulnérabilité
+*High* ou *Critical* est trouvée.
+
+La bannière de résultat dans l'UI reflète ce code de retour : fond rouge
+si grype a retourné une erreur, fond vert sinon.
+
+==== `--only-fixed`
+
+N'affiche que les vulnérabilités pour lesquelles une version corrigée
+est disponible. Permet de se concentrer sur les actions immédiatement
+réalisables.
+
+=== Template de sortie (`-t`)
+
+Le champ *Template (-t)* permet de générer une sortie personnalisée
+(CSV, HTML, texte) via un fichier template Go.
+
+Le champ est pré-rempli avec `./grype_csv.tmpl`. Si ce fichier n'existe
+pas au moment du lancement, la sortie template est ignorée sans erreur.
+
+Exemple de template Go pour un CSV :
+
+----
+"CVE","Paquet","Version installée","Version corrigée","Sévérité"
+{{- range .Matches}}
+"{{.Vulnerability.ID}}","{{.Artifact.Name}}","{{.Artifact.Version}}","{{fixedIn .Vulnerability}}","{{.Vulnerability.Severity}}"
+{{- end}}
+----
+
+La sortie produite est affichée dans l'onglet *Template* (voir <<sec-vue-template>>)
+et peut être copiée dans le presse-papiers.
+
+NOTE: Grype est lancé en une seule passe qui produit simultanément la sortie
+JSON (pour la vue Table) et la sortie template (via un fichier temporaire).
+
+=== Fichier de configuration (`grype.yaml`)
+
+Chemin vers un fichier de configuration grype au format YAML.
+Permet de définir des règles d'ignorance, des bases de données personnalisées,
+des proxies, etc.
+
+Ce paramètre est optionnel. Laissez le champ vide pour utiliser la
+configuration grype par défaut (`~/.grype.yaml` si elle existe).
+
+Documentation officielle : https://github.com/anchore/grype#configuration
+
+=== Lancer et arrêter l'analyse
+
+Cliquez sur *Analyser* pour démarrer. Une barre de progression linéaire
+s'affiche pendant l'exécution. Le bouton devient *Stop* pour interrompre.
+
+=== Interprétation des résultats
+
+==== Bannière de résumé
+
+Apparaît une fois l'analyse terminée, avant les onglets de résultats.
+
+[cols="2,3", options="header"]
+|===
+|Couleur de la bannière |Signification
+
+|Fond vert
+|Aucune vulnérabilité détectée (ou aucune au-dessus du seuil `--fail-on`)
+
+|Fond jaune
+|Vulnérabilités détectées de niveau Medium ou Low
+
+|Fond orange
+|Au moins une vulnérabilité High
+
+|Fond rouge
+|Au moins une vulnérabilité Critical
+|===
+
+==== Vue Table
+
+[[sec-vue-table]]
+Chaque vulnérabilité est présentée sur une ligne colorée selon sa sévérité :
+
+----
+  ┌────────────┬──────────────────────────────────────┬───────────────┬──────┐
+  │ CRITICAL   │ openssl       1.1.1k → 1.1.1l       │ CVE-2021-3711 │ rpm  │
+  │ HIGH       │ bash          5.0.17  (no fix)       │ CVE-2021-3489 │ rpm  │
+  │ MEDIUM     │ zlib          1.2.11  → 1.2.12       │ CVE-2022-37434│ rpm  │
+  └────────────┴──────────────────────────────────────┴───────────────┴──────┘
+----
+
+Colonnes :
+
+* *Badge de sévérité* : libellé coloré (CRITICAL / HIGH / MEDIUM / LOW / NEGLIGIBLE)
+* *Paquet* : nom du paquet concerné en gras
+* *Versions* : version installée, et version corrigée si disponible (après `→`).
+  La mention `(won't fix)` indique que le mainteneur ne prévoit pas de correction.
+* *CVE* : identifiant cliquable — un clic copie l'identifiant dans le presse-papiers
+* *Type* : type de paquet (`rpm`, `python`, `deb`…)
+
+Les résultats sont triés par sévérité décroissante (Critical en premier).
+
+==== Vue JSON
+
+[[sec-vue-json]]
+Affiche la sortie JSON brute de grype, formatée et indentée. Utile pour
+inspecter le détail d'une vulnérabilité (CVSS, références, métadonnées…).
+
+Le bouton 📋 en haut à droite copie l'intégralité du JSON dans le presse-papiers.
+
+==== Vue Template
+
+[[sec-vue-template]]
+Affiche le résultat de la génération du fichier template (CSV ou autre format
+personnalisé). Visible uniquement si un fichier template a été configuré
+dans le champ *Template (-t)*.
+
+Un hint s'affiche si aucun template n'est configuré ou si l'analyse n'a
+pas encore été lancée.
+
+Le bouton 📋 copie la sortie dans le presse-papiers.
+
+== Flux de travail typiques
+
+=== Scénario 1 — Générer un SBOM depuis une liste RPM
+
+[cols="1,4"]
+|===
+|Étape |Action
+
+|1
+|Préparez un fichier `rpm.lst` contenant la liste des paquets RPM
+(sortie de `rpm -qa`, un paquet par ligne)
+
+|2
+|Dans le champ *Fichier d'entrée*, sélectionnez `rpm.lst`
+
+|3
+|Dans le champ *Chemin de base*, saisissez le chemin de sortie : `sbom` ou
+`/tmp/audit/sbom`
+
+|4
+|Cochez *CycloneDX 1.6* (format recommandé pour l'analyse grype)
+
+|5
+|Renseignez optionnellement le *Nom du document* (ex: `RHEL 9.3 — Serveur HA`)
+
+|6
+|Cliquez sur *▶ Générer le SBOM*
+
+|7
+|Suivez la progression dans l'onglet *Progression*
+
+|8
+|À la fin, l'onglet *Résultats* s'ouvre automatiquement.
+Utilisez ↗ pour ouvrir le fichier JSON généré.
+|===
+
+=== Scénario 2 — Générer un SBOM puis analyser les vulnérabilités
+
+Suite du scénario 1 :
+
+[cols="1,4"]
+|===
+|Étape |Action
+
+|9
+|Passez sur l'onglet *Grype*. Le champ *Fichier SBOM* est déjà rempli
+avec le `.cdx.json` généré à l'étape précédente.
+
+|10
+|Sélectionnez la version RHEL dans le menu *Distro* : ex. `rhel:9`
+
+|11
+|Laissez *--platform linux*, *--add-cpes-if-none* et *--by-cve* cochés
+
+|12
+|Optionnel : sélectionnez un *seuil* `--fail-on` (ex. `high`) et cochez
+*--only-fixed* pour filtrer sur les vulnérabilités corrigeables
+
+|13
+|Optionnel : renseignez le champ *Template (-t)* avec `./grype_csv.tmpl`
+pour produire un export CSV
+
+|14
+|Cliquez sur *Analyser*
+
+|15
+|Consultez la vue *Table* pour un aperçu par sévérité, la vue *JSON* pour
+les détails techniques, et la vue *Template* pour l'export CSV
+|===
+
+=== Scénario 3 — Rapport AsciiDoc + PDF
+
+[cols="1,4"]
+|===
+|Étape |Action
+
+|1
+|Cochez les formats *AsciiDoc* (et optionnellement d'autres formats)
+
+|2
+|Cochez *Convertir en PDF (asciidoctor-pdf)*
+
+|3
+|Optionnel : renseignez un chemin de PDF dans le champ qui apparaît
+
+|4
+|Lancez la génération. Le PDF est créé automatiquement après le `.adoc`.
+
+|5
+|Les deux fichiers (`.adoc` et `.pdf`) apparaissent dans l'onglet *Résultats*
+|===
+
+== Problèmes courants
+
+=== `sbom-generator` introuvable
+
+*Symptôme* : la génération échoue immédiatement avec une erreur du type
+`sbom-generator: commande introuvable`.
+
+*Solution* : vérifiez que le binaire `sbom-generator` est accessible dans le PATH :
+
+[source,bash]
+----
+which sbom-generator
+sbom-generator --version
+----
+
+Si le binaire est installé à un emplacement non standard, placez-le dans
+un dossier du PATH ou créez un lien symbolique :
+
+[source,bash]
+----
+ln -s /chemin/vers/sbom-generator /usr/local/bin/sbom-generator
+----
+
+=== `grype` introuvable
+
+*Symptôme* : l'analyse Grype échoue avec le message
+`grype introuvable. Installez-le : https://github.com/anchore/grype`.
+
+*Solution* : installez grype (voir <<_installer_grype>>) et vérifiez qu'il
+est dans le PATH :
+
+[source,bash]
+----
+which grype
+grype version
+----
+
+=== Aucune vulnérabilité détectée malgré un SBOM chargé
+
+*Causes possibles :*
+
+* Le fichier SBOM sélectionné n'est pas un format reconnu par grype.
+  Grype supporte nativement CycloneDX JSON (`.cdx.json`) et SPDX JSON
+  (`.spdx.json`). Le format SPDX 3.0 JSON-LD peut nécessiter une version
+  récente de grype.
+
+* La base de données de vulnérabilités grype est obsolète.
+  Grype la met à jour automatiquement au premier lancement,
+  mais peut avoir besoin d'une mise à jour manuelle :
++
+[source,bash]
+----
+grype db update
+----
+
+* La version RHEL sélectionnée dans *Distro* ne correspond pas aux paquets
+  du SBOM. Essayez *(aucune)* pour laisser grype détecter automatiquement.
+
+=== Avertissements de licence
+
+*Symptôme* : des lignes `Warning: licence inconnue pour 'paquet'` apparaissent
+dans la progression.
+
+*Explication* : `sbom-generator` n'a pas pu déterminer la licence SPDX du
+paquet. Le SBOM est généré quand même avec la valeur `NOASSERTION` pour
+la licence concernée.
+
+*Solution* : utilisez un fichier *override de licences* (`--license-map`)
+pour définir manuellement la licence des paquets non reconnus.
+
+=== La conversion PDF échoue
+
+*Symptôme* : le message `asciidoctor-pdf introuvable` apparaît dans les logs.
+
+*Solution* : installez `asciidoctor-pdf` (voir <<_installer_asciidoctor_pdf_optionnel>>).
+
+Si `asciidoctor-pdf` est installé mais introuvable, assurez-vous que le
+dossier des gems Ruby est dans le PATH :
+
+[source,bash]
+----
+gem environment gemdir
+# Exemple : /home/user/.local/share/gem/ruby/3.2.0
+export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
+----
