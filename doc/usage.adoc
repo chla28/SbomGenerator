@@ -8,22 +8,35 @@
 :rouge-style: monokai
 :docdate: 2026-06-19
 
-Générateur de SBOM (Software Bill of Materials) à partir d'une liste de paquets RPM.
-Prend en charge les formats *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSON-LD* et un format *JSON personnalisé*.
+Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets.
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian* et *requirements.txt*.
+Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown* et *AsciiDoc*.
 
 == Prérequis
 
-[cols="1,1,2", options="header"]
+[cols="1,1,1,2", options="header"]
 |===
-|Composant |Version minimale |Rôle
+|Composant |Version minimale |Requis pour |Rôle
 
 |https://dart.dev/get-dart[Dart SDK]
 |3.0.0
+|toujours
 |Compilation et exécution
 
 |`rpm`
 |—
+|paquets RPM
 |Interrogation des métadonnées RPM
+
+|`python3`
+|3.6+
+|`.whl`, `.tar*`, `.zip`
+|Extraction des métadonnées depuis les archives
+
+|`dpkg-deb`
+|—
+|`.deb`
+|Lecture des métadonnées des paquets Debian
 |===
 
 Vérification :
@@ -32,6 +45,8 @@ Vérification :
 ----
 dart --version
 rpm --version
+python3 --version
+dpkg-deb --version
 ----
 
 == Installation
@@ -70,22 +85,37 @@ sbom_generator -i <fichier> [options]
 |`--input <fichier>`
 |`-i`
 |_(requis)_
-|Fichier contenant la liste des RPM
+|Fichier contenant la liste des paquets/archives (une référence par ligne)
 
 |`--output <fichier>`
 |`-o`
 |`sbom.json`
-|Fichier SBOM de sortie
+|Fichier SBOM de sortie (chemin de base si multi-format)
 
 |`--format <fmt>`
 |`-f`
 |`cyclonedx`
-|Format de sortie (voir ci-dessous)
+|Format(s) de sortie, virgule-séparé (voir ci-dessous)
 
 |`--name <nom>`
 |`-n`
-|`RPM Package Set`
-|Nom du document SBOM / composant racine
+|`Package Set`
+|Nom du composant racine dans le SBOM
+
+|`--rpm-dir <dossier>`
+|`-d`
+|—
+|Dossier de recherche récursive de fichiers `.rpm` ; résout les noms nus sans interroger la base installée
+
+|`--concurrency <N>`
+|`-c`
+|`4`
+|Nombre de paquets traités simultanément (`0` = illimité)
+
+|`--license-map <fichier>`
+|`-l`
+|—
+|Fichier de substitution de licences (`nom: SPDX-expression` par ligne)
 
 |`--verbose`
 |`-v`
@@ -105,34 +135,54 @@ sbom_generator -i <fichier> [options]
 
 === Formats disponibles
 
-[cols="1,1,1,3", options="header"]
+[cols="1,1,1,1,3", options="header"]
 |===
-|Valeur |Standard |Version |Description
+|Valeur |Standard |Version |Extension |Description
 
 |`cyclonedx`
 |CycloneDX
 |1.6
+|`.cdx.json`
 |Format par défaut. JSON conforme au schéma CycloneDX 1.6.
 
 |`spdx`
 |SPDX
 |2.3
+|`.spdx.json`
 |JSON SPDX 2.3 avec `packages[]` et `relationships[]`.
 
 |`spdx3`
 |SPDX
 |3.0
+|`.spdx3.jsonld`
 |JSON-LD SPDX 3.0 avec graphe plat d'éléments (`@graph`).
 
 |`json`
 |Personnalisé
-|1.0
-|JSON lisible incluant toutes les métadonnées RPM brutes.
+|—
+|`.custom.json`
+|JSON lisible incluant toutes les métadonnées brutes.
+
+|`markdown`
+|—
+|—
+|`.md`
+|Tableau Markdown des paquets et licences.
+
+|`asciidoc`
+|—
+|—
+|`.adoc`
+|Tableau AsciiDoc des paquets et licences.
 |===
+
+En mode multi-format (`-f cyclonedx,spdx,markdown`), `--output` est traité comme
+un chemin de base auquel chaque extension est ajoutée.
 
 == Format du fichier d'entrée
 
-Un fichier texte, *une référence RPM par ligne*.
+Un fichier texte, *une référence par ligne*. Les types peuvent être mélangés
+librement dans le même fichier.
 
 === Types de références acceptées
 
@@ -140,7 +190,7 @@ Un fichier texte, *une référence RPM par ligne*.
 |===
 |Type |Exemple |Mécanisme
 
-|Nom de paquet installé
+|Nom de paquet RPM installé
 |`bash`
 |`rpm -q bash`
 
@@ -148,44 +198,71 @@ Un fichier texte, *une référence RPM par ligne*.
 |`bash-5.1.8-6.el9.x86_64`
 |`rpm -q bash-5.1.8-6.el9.x86_64`
 
-|Chemin vers un fichier `.rpm`
+|Fichier `.rpm` local
 |`/mnt/repo/bash-5.1.8.rpm`
 |`rpm -qp /mnt/repo/bash-5.1.8.rpm`
+
+|Wheel Python `.whl`
+|`/opt/wheels/requests-2.28.0-py3-none-any.whl`
+|`python3 zipfile` (extraction METADATA)
+
+|Archive tar `.tar.gz` / `.tgz` / `.tar`
+|`/opt/src/mariadb-11.4.8.tar.gz`
+|`python3 tarfile` → PURL `pkg:pypi/…` ou `pkg:generic/…`
+
+|Archive ZIP `.zip`
+|`/opt/src/mylib-1.0.zip`
+|`python3 zipfile` → PURL `pkg:pypi/…` ou `pkg:generic/…`
+
+|Paquet Debian `.deb`
+|`/opt/pkgs/libssl3_3.0.1_amd64.deb`
+|`dpkg-deb -f`
+
+|Fichier `requirements.txt`
+|`/opt/project/requirements.txt`
+|Parseur pur Dart (PEP 508 simplifié)
 |===
 
 === Règles de syntaxe
 
 * Les lignes vides sont ignorées.
 * Les lignes commençant par `#` sont des commentaires et sont ignorées.
-* Les paquets identiques (même NEVRA, présents dans plusieurs dépôts) sont automatiquement dédupliqués.
+* Les paquets identiques (même `bomRef`) sont automatiquement dédupliqués.
 
-=== Exemple de fichier d'entrée
+=== Exemple de fichier d'entrée mixte
 
 [source,text]
 ----
-# Système de base RHEL 9
+# Paquets RPM (noms installés)
 bash
 glibc
 openssl-libs
-systemd
-
-# Paquets réseau
-NetworkManager
-NetworkManager-team
 
 # Fichiers RPM locaux
 /mnt/BaseOS/Packages/curl-7.76.1-14.el9.x86_64.rpm
 /mnt/AppStream/Packages/nginx-1.20.1-14.el9.x86_64.rpm
 
+# Wheels Python
+/opt/wheels/requests-2.28.0-py3-none-any.whl
+
+# Archives tierces
+/opt/src/mariadb-11.4.8-linux-systemd-x86_64.tar.gz
+
+# Paquet Debian
+/opt/pkgs/libssl3_3.0.1_amd64.deb
+
+# Dépendances Python
+/opt/project/requirements.txt
+
 # Commenter un paquet temporairement
-# python3
+# systemd
 ----
 
 === Générer la liste depuis un système installé
 
 [source,bash]
 ----
-# Tous les paquets installés
+# Tous les paquets RPM installés
 rpm -qa > packages.txt
 
 # Paquets d'un groupe spécifique
@@ -234,6 +311,30 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 ./sbom_generator -i liste.txt -f cyclonedx -n "RHEL 9 BaseOS+AppStream" -o rhel9.cdx.json
 ----
 
+=== Multi-format en un seul passage
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f cyclonedx,spdx,markdown -o sbom
+# Génère : sbom.cdx.json + sbom.spdx.json + sbom.md
+----
+
+=== Traitement parallèle et override de licences
+
+[source,bash]
+----
+# 8 paquets en parallèle + substitution de licences
+./sbom_generator -i packages.txt -c 8 -l overrides.txt -o sbom.cdx.json
+----
+
+=== Résolution de noms RPM depuis un dossier local
+
+[source,bash]
+----
+# Les noms nus (bash, glibc…) sont résolus dans /mnt/repo au lieu de rpm -q
+./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
+----
+
 === Pipeline complet : génération + validation qualité
 
 [source,bash]
@@ -260,10 +361,10 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 |`sbom_generator 1.0.0`
 
 |Auteur
-|Configurable via `--name`
+|Fixé à `sbom_generator` (non configurable)
 
 |Supplier
-|Organisation productrice du SBOM
+|Fixé à `local` (non configurable)
 
 |Lifecycle
 |`operations` (par défaut)
@@ -427,16 +528,30 @@ sbom_generator/
 ├── bin/
 │   └── sbom_generator.dart        # Point d'entrée CLI
 ├── lib/
-│   ├── models.dart                # RpmPackage, PackageDependency, UUID
+│   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, PackageDependency
 │   ├── rpm_parser.dart            # Interrogation rpm + résolution dépendances
+│   ├── wheel_parser.dart          # Lecture wheels .whl (python3 zipfile)
+│   ├── tar_parser.dart            # Lecture archives .tar/.tar.gz/.tgz
+│   ├── zip_parser.dart            # Lecture archives .zip
+│   ├── deb_parser.dart            # Lecture paquets .deb (dpkg-deb)
+│   ├── requirements_parser.dart   # Lecture requirements.txt (pur Dart)
+│   ├── archive_helpers.dart       # Helpers partagés tar + zip
+│   ├── license_normalizer.dart    # Normalisation SPDX centralisée
 │   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6
 │   ├── spdx_generator.dart        # Générateur SPDX 2.3
 │   ├── spdx3_generator.dart       # Générateur SPDX 3.0 JSON-LD
-│   └── simple_json_generator.dart # Générateur JSON personnalisé
+│   ├── simple_json_generator.dart # Générateur JSON personnalisé
+│   ├── markdown_generator.dart    # Tableau Markdown des licences
+│   └── asciidoc_generator.dart    # Tableau AsciiDoc des licences
+├── doc/
+│   ├── developer.adoc             # Documentation développeur
+│   └── usage.adoc                 # Ce document
+├── test/
+│   ├── unit/                      # Tests unitaires (60 tests)
+│   └── integration/               # Tests d'intégration (8 tests)
 ├── sbom_generator                 # Binaire natif compilé
 ├── pubspec.yaml                   # Dépendances Dart (args ^2.4.2)
 ├── rpm97.lst                      # Exemple : liste RHEL 9
-├── rpm97.cdx.json                 # Exemple : SBOM CycloneDX généré
 └── sbomqs                         # Outil de mesure de qualité
 ....
 
@@ -453,6 +568,32 @@ sudo dnf install rpm
 
 # Debian/Ubuntu
 sudo apt install rpm
+----
+
+=== `python3 not found — required to read .whl, tar, and zip archives`
+
+Installez Python 3 :
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install python3
+
+# Debian/Ubuntu
+sudo apt install python3
+----
+
+=== `dpkg-deb not found — required to read .deb files`
+
+Installez `dpkg` :
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install dpkg
+
+# Debian/Ubuntu
+sudo apt install dpkg
 ----
 
 === `Warning: cannot query "pkg"`

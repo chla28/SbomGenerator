@@ -49,10 +49,11 @@ Parser Parser Parser Parser Parser
 │  spdx3_generator.dart              selon -f)│
 │  simple_json_generator.dart                 │
 │  markdown_generator.dart                    │
+│  asciidoc_generator.dart                    │
 └─────────────────────────────────────────────┘
               │
               ▼
-   Fichier SBOM (.json / .jsonld / .md)
+   Fichier SBOM (.json / .jsonld / .md / .adoc)
 ....
 
 Tous les générateurs travaillent sur `List<Package>` — la classe abstraite
@@ -669,13 +670,13 @@ Retourne le contenu du fichier `DEBIAN/control` en RFC 822. Champs lus :
 |`summary`
 |première ligne seulement
 
-|`Depends`, `Pre-Depends`
+|`Depends`
 |`requires`
-|split virgule puis pipe
+|split virgule puis pipe, contraintes retirées
 
-|`Provides`
+|—
 |`provides`
-|
+|`[name]` (nom du paquet uniquement — le champ `Provides` du control n'est pas lu)
 |===
 
 === `_parseDependsList`
@@ -808,6 +809,9 @@ un fichier de sortie distinct.
 
 |`markdown`
 |`.md`
+
+|`asciidoc`
+|`.adoc`
 |===
 
 `_basePath(output)` retire les extensions connues du nom passé à `--output`
@@ -815,8 +819,9 @@ avant d'ajouter la nouvelle extension. La validation des formats est faite
 manuellement (const `_validFormats`) puisque `ArgParser.allowed:` ne supporte
 pas les valeurs composites.
 
-La boucle de résolution de dépendances est skippée seulement si *tous* les
-formats demandés sont `markdown`.
+La boucle de résolution de dépendances est skippée si *tous* les formats
+demandés sont `markdown` ou `asciidoc` (les deux formats tabulaires ne
+nécessitent pas les relations de dépendances).
 
 === Option `--license-map` / `-l` _(nouveau)_
 
@@ -946,11 +951,21 @@ for (final pkg in packages) {
 
 === Résolution des dépendances
 
-Skippée pour le format `markdown` (inutile et coûteuse).
+Skippée si *tous* les formats demandés sont `markdown` ou `asciidoc` (inutile
+et coûteuse pour ces formats tabulaires qui n'exposent pas les dépendances).
 
 === `_printProgress()`
 
-`\r` + `\x1B[K` (ANSI EL) pour écraser la ligne courante sans défiler.
+Affiche une barre de progression ANSI sur la ligne courante (écrasée à chaque
+appel via `\r` + `\x1B[K`). La barre est composée de 32 cellules `█` (remplies)
+et `░` (vides), suivies du compteur `current/total` et du pourcentage :
+
+[source,text]
+----
+  [████████████████░░░░░░░░░░░░░░░░] 12/50   24%  bash-5.1.8-6.el9.x86_64.rpm
+----
+
+Le libellé est tronqué à gauche si le nom dépasse la largeur disponible.
 
 == `lib/cyclonedx_generator.dart` — Générateur CycloneDX 1.6
 
@@ -1036,8 +1051,48 @@ if (pkg is RpmPackage) {
 == `lib/markdown_generator.dart` — Tableau Markdown
 
 Signature : `List<Package>`. Génère un tableau trié alphabétiquement par nom.
-La résolution des dépendances est skippée en amont (format `markdown` dans le
-`switch`). Affiche `(inconnue)` si `pkg.license` est vide.
+La résolution des dépendances est skippée en amont (formats `markdown` et
+`asciidoc`). Affiche `(inconnue)` si `pkg.license` est vide.
+
+== `lib/asciidoc_generator.dart` — Tableau AsciiDoc
+
+Signature : `List<Package>`. Génère un tableau AsciiDoc trié alphabétiquement
+par nom — équivalent AsciiDoc de `MarkdownGenerator`.
+
+[source,dart]
+----
+class AsciidocGenerator {
+  Future<void> writeToFile(
+    List<Package> packages,
+    String outputPath, {
+    String? documentName,
+  }) async { … }
+}
+----
+
+Structure de sortie :
+
+[source,asciidoc]
+----
+= Software Bill of Materials — Licences
+:doctype: article
+:toc:
+:toclevels: 1
+:icons: font
+
+[cols="<1,<2,<1,<2",options="header",stripes=odd]
+|===
+| Paquet | Version | Architecture | Licence
+
+| bash | 5.1.8-6.el9 | x86_64 | GPL-3.0-or-later
+…
+|===
+
+_Généré par sbom_generator — N paquet(s)._
+----
+
+Le caractère `|` dans les valeurs est échappé (`\|`) pour éviter toute
+ambiguïté avec les séparateurs de cellules AsciiDoc.
 
 == Flux de données — exemples concrets
 
@@ -1256,9 +1311,9 @@ RPM retourne `"(none)"` pour les champs vides.
 
 === Pattern `generate()` + `writeToFile()`
 
-Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` qui
-n'a que `writeToFile`). `generate()` retourne un `Map<String, dynamic>` testable
-sans I/O.
+Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` et
+`AsciidocGenerator` qui n'ont que `writeToFile`). `generate()` retourne un
+`Map<String, dynamic>` testable sans I/O.
 
 == Tableau de correspondance : source → champs SBOM
 
@@ -1483,8 +1538,8 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (67 au total)
-dart test test/unit/                 # tests unitaires seuls (59)
+dart test                            # tous les tests (68 au total)
+dart test test/unit/                 # tests unitaires seuls (60)
 dart test test/integration/          # tests d'intégration (8, requiert python3)
 ----
 
@@ -1503,7 +1558,7 @@ dart test test/integration/          # tests d'intégration (8, requiert python3
 |`parseArchiveFilename` (5 archives réelles + edge cases), `identifyArchiveLicense` (10 licences)
 
 |`test/unit/rpm_parser_test.dart`
-|8
+|9
 |`buildDependencies` sans subprocess
 
 |`test/unit/requirements_parser_test.dart`
@@ -1529,7 +1584,7 @@ automatiquement si `python3` est absent.
 
 * [ ] `dart analyze` passe sans erreur ni avertissement (`No issues found!`)
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
-* [ ] `dart test` — tous les 67 tests verts
+* [ ] `dart test` — tous les 68 tests verts
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
 * [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + requirements.txt
 * [ ] Si modification de `--rpm-dir` : vérifier résolution exacte (NEVRA), résolution
@@ -1558,7 +1613,7 @@ automatiquement si `python3` est absent.
 |Parsing des arguments CLI
 
 |`test` _(dev)_
-|`^1.24.0`
+|`^1.31.1`
 |Framework de tests unitaires et d'intégration
 |===
 
