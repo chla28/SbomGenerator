@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/sbom_result.dart';
+import 'settings_service.dart';
 
 // ─── Événements de progression ───────────────────────────────────────────────
 
@@ -57,17 +58,12 @@ class SbomRunner {
 
   bool get isRunning => _process != null;
 
-  Stream<SbomEvent> run({
-    required String projectRoot,
-    required List<String> args,
-  }) {
+  static String get _cli => SettingsService.cliBinary;
+
+  Stream<SbomEvent> run({required List<String> args}) {
     final controller = StreamController<SbomEvent>();
 
-    Process.start(
-      'dart',
-      args,
-      workingDirectory: projectRoot,
-    ).then((process) {
+    Process.start(_cli, args).then((process) {
       _process = process;
       unawaited(process.stdin.close());
 

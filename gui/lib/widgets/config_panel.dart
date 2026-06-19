@@ -4,20 +4,16 @@ import '../models/sbom_config.dart';
 
 class ConfigPanel extends StatefulWidget {
   final SbomConfig config;
-  final String projectRoot;
   final bool isRunning;
   final VoidCallback onRun;
   final VoidCallback onStop;
-  final ValueChanged<String> onProjectRootChanged;
 
   const ConfigPanel({
     super.key,
     required this.config,
-    required this.projectRoot,
     required this.isRunning,
     required this.onRun,
     required this.onStop,
-    required this.onProjectRootChanged,
   });
 
   @override
@@ -31,7 +27,6 @@ class _ConfigPanelState extends State<ConfigPanel> {
   late TextEditingController _nameCtrl;
   late TextEditingController _rpmDirCtrl;
   late TextEditingController _licenseMapCtrl;
-  late TextEditingController _projectRootCtrl;
   late TextEditingController _pdfCtrl;
 
   @override
@@ -43,23 +38,14 @@ class _ConfigPanelState extends State<ConfigPanel> {
     _nameCtrl = TextEditingController(text: c.documentName);
     _rpmDirCtrl = TextEditingController(text: c.rpmDir);
     _licenseMapCtrl = TextEditingController(text: c.licenseMapFile);
-    _projectRootCtrl = TextEditingController(text: widget.projectRoot);
     _pdfCtrl = TextEditingController(text: c.pdfOutputPath);
-  }
-
-  @override
-  void didUpdateWidget(ConfigPanel old) {
-    super.didUpdateWidget(old);
-    if (widget.projectRoot != old.projectRoot) {
-      _projectRootCtrl.text = widget.projectRoot;
-    }
   }
 
   @override
   void dispose() {
     for (final c in [
       _inputCtrl, _outputCtrl, _nameCtrl, _rpmDirCtrl,
-      _licenseMapCtrl, _projectRootCtrl, _pdfCtrl,
+      _licenseMapCtrl, _pdfCtrl,
     ]) {
       c.dispose();
     }
@@ -149,30 +135,6 @@ class _ConfigPanelState extends State<ConfigPanel> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // ── Projet ──────────────────────────────────────
-                  _Section(
-                    title: 'Projet',
-                    icon: Icons.folder_open,
-                    children: [
-                      _FileField(
-                        label: 'Racine du projet sbom_generator',
-                        controller: _projectRootCtrl,
-                        hint: '/chemin/vers/sbom_generator',
-                        onPick: () => _pickDir(
-                          _projectRootCtrl,
-                          title: 'Sélectionner la racine du projet sbom_generator',
-                          onDone: () => widget.onProjectRootChanged(
-                              _projectRootCtrl.text.trim()),
-                        ),
-                        onChanged: (v) =>
-                            widget.onProjectRootChanged(v.trim()),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Requis' : null,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
                   // ── Entrée ──────────────────────────────────────
                   _Section(
                     title: 'Entrée',

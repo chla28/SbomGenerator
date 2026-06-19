@@ -46,12 +46,7 @@ class SbomConfig {
   }) : formats = formats ?? {'cyclonedx'};
 
   List<String> toArgs() {
-    final args = <String>[
-      'run',
-      'bin/sbom_generator.dart',
-      '--input',
-      inputFile,
-    ];
+    final args = <String>['--input', inputFile];
     if (outputBase.isNotEmpty) {
       args.addAll(['--output', outputBase]);
     }

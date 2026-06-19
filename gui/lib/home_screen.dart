@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'models/sbom_config.dart';
 import 'models/sbom_result.dart';
 import 'services/sbom_runner.dart';
-import 'services/settings_service.dart';
 import 'widgets/config_panel.dart';
 import 'widgets/results_panel.dart';
 
@@ -20,7 +19,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _config = SbomConfig();
   final _runner = SbomRunner();
 
-  String _projectRoot = '';
   List<String> _logLines = [];
   List<OutputFile> _outputFiles = [];
   List<String> _warnings = [];
@@ -35,28 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _progressPercent = 0;
   String _progressLabel = '';
 
-  @override
-  void initState() {
-    super.initState();
-    SettingsService.getProjectRoot().then((root) {
-      if (mounted) setState(() => _projectRoot = root);
-    });
-  }
-
   void _startScan() {
-    if (!SettingsService.isValidRoot(_projectRoot)) {
-      setState(() {
-        _fatalError =
-            'Le répertoire "$_projectRoot" ne contient pas bin/sbom_generator.dart.\n'
-            'Vérifiez la racine du projet dans la configuration.';
-        _logLines = [];
-        _outputFiles = [];
-        _warnings = [];
-        _exitCode = 1;
-      });
-      return;
-    }
-
     setState(() {
       _isRunning = true;
       _isPdfRunning = false;
@@ -72,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _runner
-        .run(projectRoot: _projectRoot, args: _config.toArgs())
+        .run(args: _config.toArgs())
         .listen(
       (event) {
         if (!mounted) return;
@@ -189,11 +166,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _onProjectRootChanged(String root) {
-    setState(() => _projectRoot = root);
-    SettingsService.setProjectRoot(root);
-  }
-
   bool get _isBusy => _isRunning || _isPdfRunning;
 
   @override
@@ -226,13 +198,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-          if (_projectRoot.isNotEmpty &&
-              !SettingsService.isValidRoot(_projectRoot))
-            IconButton(
-              icon: const Icon(Icons.warning_amber, color: Colors.amber),
-              tooltip: 'Racine du projet invalide',
-              onPressed: () {},
-            ),
           IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'À propos',
@@ -245,11 +210,9 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           ConfigPanel(
             config: _config,
-            projectRoot: _projectRoot,
             isRunning: _isBusy,
             onRun: _startScan,
             onStop: _stopScan,
-            onProjectRootChanged: _onProjectRootChanged,
           ),
           const VerticalDivider(width: 1),
           Expanded(

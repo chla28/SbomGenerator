@@ -1,3 +1,4 @@
 example
 bin/sbom_generator.exe
 bin/sbom_generator
+dist/

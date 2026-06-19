@@ -1,37 +1,20 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 
+/// Localise le binaire sbom-generator compilé.
+/// Cherche d'abord à côté du GUI (installation bundle), puis dans le PATH.
 class SettingsService {
-  static const _kProjectRoot = 'sbom_project_root';
-
-  static Future<String> getProjectRoot() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_kProjectRoot);
-    if (saved != null && saved.isNotEmpty) return saved;
-    return _detectProjectRoot();
-  }
-
-  static Future<void> setProjectRoot(String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kProjectRoot, value);
-  }
-
-  static String _detectProjectRoot() {
+  static String get cliBinary {
+    final exeDir = p.dirname(Platform.resolvedExecutable);
     final candidates = [
-      Directory.current.path,
-      Directory.current.parent.path,
-      p.dirname(Platform.resolvedExecutable),
-      p.join(p.dirname(Platform.resolvedExecutable), '..', '..', '..', '..'),
+      // Bundle installé : PREFIX/lib/sbom_generator/sbom_generator_gui
+      //                   PREFIX/bin/sbom-generator
+      p.normalize(p.join(exeDir, '..', '..', 'bin', 'sbom-generator')),
+      p.join(exeDir, 'sbom-generator'),
     ];
-    for (final dir in candidates) {
-      if (_isValid(dir)) return p.normalize(dir);
+    for (final c in candidates) {
+      if (File(c).existsSync()) return c;
     }
-    return Directory.current.path;
+    return 'sbom-generator'; // fallback PATH
   }
-
-  static bool isValidRoot(String path) => _isValid(path);
-
-  static bool _isValid(String path) =>
-      File(p.join(path, 'bin', 'sbom_generator.dart')).existsSync();
 }
