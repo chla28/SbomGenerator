@@ -13,7 +13,9 @@
       "Bash(flutter devices *)",
       "Bash(flutter run *)",
       "Bash(echo \"PID: $!\")",
-      "Bash(jobs -l)"
+      "Bash(jobs -l)",
+      "Bash(flutter pub *)",
+      "Bash(flutter build *)"
     ]
   }
 }

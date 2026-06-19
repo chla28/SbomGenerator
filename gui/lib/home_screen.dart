@@ -5,18 +5,28 @@ import 'package:flutter/material.dart';
 import 'models/sbom_config.dart';
 import 'models/sbom_result.dart';
 import 'services/sbom_runner.dart';
+import 'services/settings_service.dart';
 import 'widgets/config_panel.dart';
 import 'widgets/results_panel.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final SbomConfig? initialConfig;
+  final ThemeMode themeMode;
+  final VoidCallback onThemeToggle;
+
+  const HomeScreen({
+    super.key,
+    this.initialConfig,
+    required this.themeMode,
+    required this.onThemeToggle,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _config = SbomConfig();
+  late SbomConfig _config;
   final _runner = SbomRunner();
 
   List<String> _logLines = [];
@@ -26,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isRunning = false;
   bool _isPdfRunning = false;
   int? _exitCode;
+  String? _sbomqsOutput;
 
   // Progression parsée
   int _progressCurrent = 0;
@@ -33,7 +44,16 @@ class _HomeScreenState extends State<HomeScreen> {
   int _progressPercent = 0;
   String _progressLabel = '';
 
+  @override
+  void initState() {
+    super.initState();
+    _config = widget.initialConfig ?? SbomConfig();
+  }
+
+  void _saveSettings() => SettingsService.saveConfig(_config);
+
   void _startScan() {
+    _saveSettings();
     setState(() {
       _isRunning = true;
       _isPdfRunning = false;
@@ -42,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _warnings = [];
       _fatalError = null;
       _exitCode = null;
+      _sbomqsOutput = null;
       _progressCurrent = 0;
       _progressTotal = 0;
       _progressPercent = 0;
@@ -83,16 +104,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 _fatalError = 'Génération échouée (exit $exitCode)';
               }
             });
-            if (exitCode == 0 && _config.generatePdf) {
-              String? adocPath;
-              for (final f in _outputFiles) {
-                if (f.path.endsWith('.adoc')) {
-                  adocPath = f.path;
-                  break;
+            if (exitCode == 0) {
+              if (_config.generatePdf) {
+                String? adocPath;
+                for (final f in _outputFiles) {
+                  if (f.path.endsWith('.adoc')) {
+                    adocPath = f.path;
+                    break;
+                  }
                 }
+                if (adocPath != null) _generatePdf(adocPath);
               }
-              if (adocPath != null) {
-                _generatePdf(adocPath);
+              if (_config.enableSbomqs) {
+                _runSbomqs();
               }
             }
         }
@@ -158,6 +182,29 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _runSbomqs() async {
+    // Cible le premier SBOM JSON généré
+    final target = _outputFiles
+        .where((f) =>
+            f.path.endsWith('.cdx.json') ||
+            f.path.endsWith('.spdx.json') ||
+            f.path.endsWith('.jsonld'))
+        .map((f) => f.path)
+        .firstOrNull;
+    if (target == null) return;
+
+    try {
+      final result = await Process.run('sbomqs', ['score', target]);
+      if (!mounted) return;
+      if (result.exitCode == 0 || result.exitCode == 1) {
+        final out = (result.stdout as String).trim();
+        if (out.isNotEmpty) setState(() => _sbomqsOutput = out);
+      }
+    } catch (_) {
+      // sbomqs non installé — on ignore silencieusement
+    }
+  }
+
   void _stopScan() {
     _runner.kill();
     setState(() {
@@ -170,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = widget.themeMode == ThemeMode.dark;
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -199,6 +247,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            tooltip: isDark ? 'Mode clair' : 'Mode sombre',
+            onPressed: widget.onThemeToggle,
+          ),
+          IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'À propos',
             onPressed: () => _showAbout(context),
@@ -213,6 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
             isRunning: _isBusy,
             onRun: _startScan,
             onStop: _stopScan,
+            onChanged: _saveSettings,
           ),
           const VerticalDivider(width: 1),
           Expanded(
@@ -228,6 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
               progressTotal: _progressTotal,
               progressPercent: _progressPercent,
               progressLabel: _progressLabel,
+              sbomqsOutput: _sbomqsOutput,
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../models/sbom_config.dart';
@@ -7,6 +8,7 @@ class ConfigPanel extends StatefulWidget {
   final bool isRunning;
   final VoidCallback onRun;
   final VoidCallback onStop;
+  final VoidCallback? onChanged;
 
   const ConfigPanel({
     super.key,
@@ -14,6 +16,7 @@ class ConfigPanel extends StatefulWidget {
     required this.isRunning,
     required this.onRun,
     required this.onStop,
+    this.onChanged,
   });
 
   @override
@@ -28,6 +31,8 @@ class _ConfigPanelState extends State<ConfigPanel> {
   late TextEditingController _rpmDirCtrl;
   late TextEditingController _licenseMapCtrl;
   late TextEditingController _pdfCtrl;
+
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -60,6 +65,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.rpmDir = _rpmDirCtrl.text.trim();
     c.licenseMapFile = _licenseMapCtrl.text.trim();
     c.pdfOutputPath = _pdfCtrl.text.trim();
+    widget.onChanged?.call();
   }
 
   void _run() {
@@ -140,18 +146,57 @@ class _ConfigPanelState extends State<ConfigPanel> {
                     title: 'Entrée',
                     icon: Icons.input,
                     children: [
-                      _FileField(
-                        label: 'Fichier d\'entrée (--input)',
-                        controller: _inputCtrl,
-                        hint: 'rpm.lst, requirements.txt, …',
-                        onPick: () => _pickFile(
-                          _inputCtrl,
-                          title: 'Sélectionner le fichier d\'entrée',
-                          extensions: ['lst', 'txt'],
+                      // Drag & drop wrapping le champ fichier d'entrée
+                      DropTarget(
+                        onDragEntered: (_) =>
+                            setState(() => _isDragging = true),
+                        onDragExited: (_) =>
+                            setState(() => _isDragging = false),
+                        onDragDone: (detail) {
+                          if (detail.files.isNotEmpty) {
+                            _inputCtrl.text = detail.files.first.path;
+                            _sync();
+                          }
+                          setState(() => _isDragging = false);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          decoration: _isDragging
+                              ? BoxDecoration(
+                                  border: Border.all(
+                                      color: theme.colorScheme.primary,
+                                      width: 2),
+                                  borderRadius: BorderRadius.circular(8),
+                                )
+                              : const BoxDecoration(),
+                          child: _FileField(
+                            label: 'Fichier d\'entrée (--input)',
+                            controller: _inputCtrl,
+                            hint: _isDragging
+                                ? 'Déposez le fichier ici…'
+                                : 'rpm.lst, requirements.txt, …',
+                            onPick: () => _pickFile(
+                              _inputCtrl,
+                              title: 'Sélectionner le fichier d\'entrée',
+                              extensions: ['lst', 'txt'],
+                            ),
+                            onChanged: (_) => _sync(),
+                            validator: (v) =>
+                                (v == null || v.trim().isEmpty)
+                                    ? 'Requis'
+                                    : null,
+                          ),
                         ),
-                        onChanged: (_) => _sync(),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Requis' : null,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Glissez-déposez un fichier depuis votre gestionnaire',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.45),
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       _InputTypeLegend(),
@@ -195,6 +240,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               c.formats.remove(fmt);
                               if (fmt == 'asciidoc') c.generatePdf = false;
                             }
+                            widget.onChanged?.call();
                           }),
                         ),
 
@@ -215,8 +261,10 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           secondary:
                               const Icon(Icons.picture_as_pdf, size: 20),
                           value: c.generatePdf,
-                          onChanged: (v) =>
-                              setState(() => c.generatePdf = v ?? false),
+                          onChanged: (v) => setState(() {
+                            c.generatePdf = v ?? false;
+                            widget.onChanged?.call();
+                          }),
                           controlAffinity: ListTileControlAffinity.leading,
                         ),
                         if (c.generatePdf) ...[
@@ -297,7 +345,9 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               style: TextStyle(fontSize: 12)),
                           const Spacer(),
                           Text(
-                            c.concurrency == 0 ? 'illimitée' : '${c.concurrency}',
+                            c.concurrency == 0
+                                ? 'illimitée'
+                                : '${c.concurrency}',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
@@ -314,8 +364,10 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         label: c.concurrency == 0
                             ? 'illimitée'
                             : '${c.concurrency}',
-                        onChanged: (v) =>
-                            setState(() => c.concurrency = v.round()),
+                        onChanged: (v) => setState(() {
+                          c.concurrency = v.round();
+                          widget.onChanged?.call();
+                        }),
                       ),
                       Text(
                         c.concurrency == 0
@@ -338,8 +390,29 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           style: TextStyle(fontSize: 11),
                         ),
                         value: c.verbose,
-                        onChanged: (v) =>
-                            setState(() => c.verbose = v ?? false),
+                        onChanged: (v) => setState(() {
+                          c.verbose = v ?? false;
+                          widget.onChanged?.call();
+                        }),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      const Divider(height: 16),
+
+                      CheckboxListTile.adaptive(
+                        dense: true,
+                        title: const Text('Score qualité sbomqs',
+                            style: TextStyle(fontSize: 13)),
+                        subtitle: const Text(
+                          'Analyse le SBOM généré avec sbomqs après génération',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        secondary:
+                            const Icon(Icons.analytics_outlined, size: 20),
+                        value: c.enableSbomqs,
+                        onChanged: (v) => setState(() {
+                          c.enableSbomqs = v ?? false;
+                          widget.onChanged?.call();
+                        }),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
                     ],

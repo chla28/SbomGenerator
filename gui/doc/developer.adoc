@@ -100,21 +100,22 @@ flutter build linux --release
 ----
 gui/
 ├── lib/
-│   ├── main.dart                     # Point d'entrée de l'application
+│   ├── main.dart                     # Point d'entrée — StatefulWidget, ThemeMode
 │   ├── home_screen.dart              # Écran principal — layout 2 colonnes
 │   ├── models/
-│   │   ├── sbom_config.dart          # Configuration SBOM (état + sérialisation CLI)
+│   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson)
 │   │   └── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
 │   │   ├── grype_runner.dart         # Exécute grype, stream d'événements
-│   │   └── settings_service.dart     # Résolution du chemin du binaire CLI
+│   │   └── settings_service.dart     # Localisation binaire + persistance settings
 │   └── widgets/
-│       ├── config_panel.dart         # Panneau gauche : formulaire de configuration
-│       ├── results_panel.dart        # Panneau droit : onglets Progression/Résultats/Grype
+│       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop
+│       ├── results_panel.dart        # Panneau droit : 4 onglets
 │       └── grype_panel.dart          # Contenu de l'onglet Grype (autonome)
 ├── doc/
-│   └── developer.adoc               # Ce document
+│   ├── developer.adoc               # Ce document
+│   └── user.adoc                    # Guide utilisateur
 ├── test/
 │   └── widget_test.dart
 └── pubspec.yaml
@@ -124,20 +125,33 @@ gui/
 
 ==== `main.dart` — Point d'entrée
 
-Crée le `MaterialApp` avec le thème (bleu indigo, Material 3) et monte `HomeScreen`.
-Ne contient aucune logique métier.
+`main()` est *async* : il charge la configuration sauvegardée et le thème
+(`shared_preferences`) avant le premier rendu, puis passe ces valeurs à
+`SbomGeneratorApp`.
+
+`SbomGeneratorApp` est un `StatefulWidget` qui :
+
+* gère `ThemeMode _themeMode` (clair / sombre / système)
+* expose `_toggleTheme()` transmis à `HomeScreen` via callback
+* déclare un `theme` (clair) et un `darkTheme` (sombre), tous deux basés
+  sur `ColorScheme.fromSeed(seedColor: 0xFF1A237E)` avec le bon `brightness`
 
 ==== `home_screen.dart` — Écran principal
 
 `HomeScreen` est un `StatefulWidget` (voir <<sec-flutter-stateful>>) qui :
 
+* reçoit `initialConfig`, `themeMode` et `onThemeToggle` depuis `SbomGeneratorApp`
 * détient l'état global de la session SBOM : log, fichiers produits, progression,
-  code de retour, état d'exécution
-* instancie `SbomRunner` et `SbomConfig`
+  code de retour, état d'exécution, sortie sbomqs
+* instancie `SbomRunner` ; initialise `_config` depuis `initialConfig`
 * écoute le stream de `SbomRunner` et redistribue les événements vers `ResultsPanel`
   via des `setState()`
 * déclenche automatiquement la conversion PDF (`asciidoctor-pdf`) après un
-  succès si l'option est cochée
+  succès si `_config.generatePdf` est vrai
+* déclenche `_runSbomqs()` après un succès si `_config.enableSbomqs` est vrai
+* sauvegarde la configuration (`SettingsService.saveConfig`) avant chaque
+  génération et sur chaque changement de champ (`onChanged` de `ConfigPanel`)
+* affiche le bouton de bascule de thème dans l'`AppBar`
 
 Layout : `Row` avec deux enfants —
 
@@ -155,6 +169,13 @@ Objet mutable (`SbomConfig`) partagé entre `HomeScreen` et `ConfigPanel`.
 Expose `toArgs()` qui construit la liste d'arguments CLI à passer à
 `sbom-generator`, et `expectedOutputPaths()` pour la prévisualisation des
 fichiers avant génération.
+
+Expose aussi `toJson()` / `SbomConfig.fromJson(Map)` pour la persistance
+via `SettingsService`. Les champs *non* persistés (trop contextuels) sont
+`inputFile` et `pdfOutputPath`.
+
+Champ ajouté : `bool enableSbomqs` (défaut : `false`) — active l'analyse
+qualité automatique après génération.
 
 Les constantes `allFormats`, `formatLabels` et `_formatExtensions` sont
 définies ici : elles servent à générer dynamiquement les checkboxes de format
@@ -227,7 +248,7 @@ La sortie template est écrite dans un fichier temporaire, lue après exit,
 puis supprimée (voir <<sec-piege-tmpl>>).
 
 [[sec-settings-service]]
-==== `services/settings_service.dart` — Résolution du binaire
+==== `services/settings_service.dart` — Résolution du binaire + persistance
 
 `SettingsService.cliBinary` cherche le binaire `sbom-generator` dans cet ordre :
 
@@ -244,19 +265,51 @@ dart compile exe bin/sbom_generator.dart -o build/sbom-generator
 export PATH="$PWD/build:$PATH"
 ----
 
+Le service gère également la *persistance* via `shared_preferences` :
+
+[cols="2,3", options="header"]
+|===
+|Méthode |Rôle
+
+|`saveConfig(SbomConfig)`
+|Sérialise la config en JSON et la stocke sous la clé `sbom_config_v1`
+
+|`loadConfig()`
+|Désérialise et retourne un `SbomConfig?` (null si aucune config sauvée)
+
+|`saveTheme(ThemeMode)`
+|Stocke `'light'`, `'dark'` ou `'system'` sous la clé `theme_mode`
+
+|`loadTheme()`
+|Retourne le `ThemeMode` sauvegardé, ou `ThemeMode.system` par défaut
+|===
+
+La clé `sbom_config_v1` inclut un suffixe de version pour faciliter les
+migrations futures (ignorer les clés `v0` obsolètes, ajouter `v2`, etc.).
+
 ==== `widgets/config_panel.dart` — Formulaire de configuration
 
 `ConfigPanel` est un `StatefulWidget` qui :
 
 * expose un formulaire Flutter `Form` + `TextFormField`
 * synchronise les champs vers l'objet `SbomConfig` à chaque modification
-  (via `_sync()`)
+  (via `_sync()`) et appelle le callback optionnel `widget.onChanged?.()`
 * déclenche le lancement via `widget.onRun()` (callback vers `HomeScreen`)
 * génère dynamiquement les checkboxes de format depuis la liste `allFormats`
+* encapsule le champ *Fichier d'entrée* dans un `DropTarget` (package
+  `desktop_drop`) pour accepter les glisser-déposer de fichiers depuis le
+  gestionnaire de fichiers système — un booléen `_isDragging` déclenche un
+  `AnimatedContainer` avec liseré bleu
+* propose la checkbox *Score qualité sbomqs* (pilote `SbomConfig.enableSbomqs`)
+
+Le paramètre `VoidCallback? onChanged` est appelé après chaque modification
+d'un champ (texte via `_sync()`, booléens directement dans leur `setState`).
+`HomeScreen` l'utilise pour déclencher `SettingsService.saveConfig()` sans
+attendre le prochain lancement.
 
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **3 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **4 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -264,21 +317,40 @@ export PATH="$PWD/build:$PATH"
 
 |0
 |Progression
-|`_LogView` — terminal texte coloré (fond noir)
+|`_LogExportBar` + `_LogView` + `_StatsCard`
 
 |1
 |Résultats (N)
-|`_ResultsView` — liste des fichiers générés, avertissements, erreur fatale
+|`_ResultsView` — fichiers générés, score sbomqs, avertissements, erreur fatale
 
 |2
 |Grype
 |`GrypePanel` — panneau d'analyse grype autonome
+
+|3
+|Aperçu (N)
+|`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===
 
 Comportement automatique du `TabController` :
 
 * bascule vers l'onglet *Progression* dès le démarrage d'une génération
 * bascule vers l'onglet *Résultats* à la fin d'une génération réussie
+* pré-sélectionne automatiquement le premier fichier non-PDF dans
+  `_SbomPreviewTab` quand `outputFiles` change
+
+Sous-widgets notables :
+
+* `_LogExportBar` — barre sombre avec boutons *Copier* (clipboard) et
+  *Enregistrer* (FilePicker) ; visible uniquement une fois la génération terminée
+* `_StatsCard` — carte avec compteurs paquets / fichiers / avertissements ;
+  visible uniquement en cas de succès (`exitCode == 0 && progressTotal > 0`)
+* `_SbomPreviewTab` — dropdown de sélection + contenu monospace fond noir ;
+  lecture asynchrone, troncature à 50 000 caractères
+* `_ResultsView` — accepte `String? sbomqsOutput` et l'affiche dans un bloc
+  indigo si non nul
+
+Le paramètre `String? sbomqsOutput` est propagé depuis `HomeScreen`.
 
 ==== `widgets/grype_panel.dart` — Onglet Grype
 
@@ -297,7 +369,7 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 
 |0
 |Table (N)
-|`_VulnTableView` — cartes colorées par sévérité
+|`_VulnTableView` — filtre par sévérité + cartes colorées
 
 |1
 |JSON
@@ -307,6 +379,11 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 |Template
 |`_TemplateView` — sortie brute du fichier template
 |===
+
+`_VulnTableView` est un `StatefulWidget` depuis la version courante.
+Il maintient un `Set<String> _activeFilters` (vide = tout afficher) et
+affiche une barre de `FilterChip` pour les sévérités présentes dans les résultats.
+La propriété calculée `_filtered` applique le filtre à la liste complète `widget.vulns`.
 
 === Flux de données
 
@@ -318,6 +395,7 @@ Utilisateur
   │ clique "Générer le SBOM"
   ▼
 HomeScreen._startScan()
+  │ SettingsService.saveConfig(_config)
   │ construit List<String> args via SbomConfig.toArgs()
   ▼
 SbomRunner.run(args: args)   →   Process.start('sbom-generator', args)
@@ -328,6 +406,9 @@ SbomRunner.run(args: args)   →   Process.start('sbom-generator', args)
   ├── SbomOutputFileEvent →  setState() → _outputFiles
   └── SbomDoneEvent      →  setState() → _isRunning=false, _exitCode
                             si exitCode==0 && generatePdf → _generatePdf()
+                            si exitCode==0 && enableSbomqs → _runSbomqs()
+                              └── Process.run('sbomqs', ['score', path])
+                                  setState() → _sbomqsOutput
 ----
 
 ==== Analyse Grype
@@ -431,7 +512,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);  // ResultsPanel : 4 onglets
   }
 
   @override
@@ -505,11 +586,14 @@ Stream<GrypeEvent> run({
 
 === Ajouter un onglet dans ResultsPanel
 
+Le `TabController` est actuellement à `length: 4` (Progression, Résultats,
+Grype, Aperçu). Pour en ajouter un cinquième :
+
 . Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
 +
 [source,dart]
 ----
-_tabs = TabController(length: 4, vsync: this);  // était 3
+_tabs = TabController(length: 5, vsync: this);  // était 4
 ----
 
 . Ajouter un `Tab(...)` dans le `TabBar` :
@@ -650,15 +734,20 @@ Material(
 
 === SbomConfig est un objet mutable partagé
 
-`SbomConfig` est instancié dans `HomeScreen` et passé en référence à
+`SbomConfig` est instancié dans `HomeScreen` (depuis `initialConfig` chargé
+par `main()` ou un `SbomConfig()` par défaut) et passé en référence à
 `ConfigPanel`. `ConfigPanel` le modifie directement (via `_sync()`) sans
-passer par des callbacks.
+passer par des callbacks de valeur.
 
 C'est un choix délibéré de simplicité : le modèle est toujours cohérent
 au moment du lancement (la méthode `_run()` appelle `_sync()` avant
 `widget.onRun()`). En contrepartie, `HomeScreen` ne reçoit pas de
 notification à chaque frappe clavier, ce qui évite des rebuilds inutiles
 du panneau de résultats.
+
+Pour la persistance, `ConfigPanel` appelle le callback `widget.onChanged?.call()`
+après chaque modification. `HomeScreen` y connecte `_saveSettings()` qui
+appelle `SettingsService.saveConfig(_config)` de façon asynchrone et non bloquante.
 
 == Dépendances
 
@@ -668,11 +757,11 @@ du panneau de résultats.
 
 |`file_picker`
 |^8.1.7
-|Sélecteurs de fichiers natifs (SBOM, template, config grype)
+|Sélecteurs de fichiers natifs (SBOM, template, config grype, sauvegarde logs)
 
 |`shared_preferences`
 |^2.3.5
-|Persistance des préférences (non utilisé pour l'instant, prévu)
+|Persistance de la configuration et du thème entre sessions (`SettingsService`)
 
 |`path`
 |^1.9.1
@@ -681,4 +770,9 @@ du panneau de résultats.
 |`url_launcher`
 |^6.3.1
 |Ouverture des fichiers générés avec l'application système (`launchUrl(Uri.file(...))`)
+
+|`desktop_drop`
+|^0.4.4
+|Réception des glisser-déposer de fichiers depuis le gestionnaire de fichiers
+système (Linux) dans `ConfigPanel`
 |===

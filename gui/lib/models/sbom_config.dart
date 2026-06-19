@@ -31,6 +31,7 @@ class SbomConfig {
   bool verbose;
   bool generatePdf;
   String pdfOutputPath; // vide = même répertoire que .adoc, extension .pdf
+  bool enableSbomqs;
 
   SbomConfig({
     this.inputFile = '',
@@ -43,7 +44,32 @@ class SbomConfig {
     this.verbose = false,
     this.generatePdf = false,
     this.pdfOutputPath = '',
+    this.enableSbomqs = false,
   }) : formats = formats ?? {'cyclonedx'};
+
+  Map<String, dynamic> toJson() => {
+    'outputBase': outputBase,
+    'formats': formats.toList(),
+    'documentName': documentName,
+    'rpmDir': rpmDir,
+    'licenseMapFile': licenseMapFile,
+    'concurrency': concurrency,
+    'verbose': verbose,
+    'generatePdf': generatePdf,
+    'enableSbomqs': enableSbomqs,
+  };
+
+  factory SbomConfig.fromJson(Map<String, dynamic> j) => SbomConfig(
+    outputBase: j['outputBase'] as String? ?? 'sbom',
+    formats: (j['formats'] as List?)?.cast<String>().toSet() ?? {'cyclonedx'},
+    documentName: j['documentName'] as String? ?? '',
+    rpmDir: j['rpmDir'] as String? ?? '',
+    licenseMapFile: j['licenseMapFile'] as String? ?? '',
+    concurrency: j['concurrency'] as int? ?? 4,
+    verbose: j['verbose'] as bool? ?? false,
+    generatePdf: j['generatePdf'] as bool? ?? false,
+    enableSbomqs: j['enableSbomqs'] as bool? ?? false,
+  );
 
   List<String> toArgs() {
     final args = <String>['--input', inputFile];

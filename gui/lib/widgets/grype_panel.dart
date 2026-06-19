@@ -775,9 +775,26 @@ class _ErrorBanner extends StatelessWidget {
 
 // ─── Vue table des vulnérabilités ─────────────────────────────────────────────
 
-class _VulnTableView extends StatelessWidget {
+class _VulnTableView extends StatefulWidget {
   final List<GrypeVuln> vulns;
   const _VulnTableView({required this.vulns});
+
+  @override
+  State<_VulnTableView> createState() => _VulnTableViewState();
+}
+
+class _VulnTableViewState extends State<_VulnTableView> {
+  static const _severityOrder = [
+    'Critical', 'High', 'Medium', 'Low', 'Negligible'
+  ];
+
+  Set<String> _activeFilters = {};
+
+  List<GrypeVuln> get _filtered => _activeFilters.isEmpty
+      ? widget.vulns
+      : widget.vulns
+          .where((v) => _activeFilters.contains(v.severity))
+          .toList();
 
   static Color _fg(String s) => switch (s.toLowerCase()) {
         'critical' => const Color(0xFFB71C1C),
@@ -799,7 +816,7 @@ class _VulnTableView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (vulns.isEmpty) {
+    if (widget.vulns.isEmpty) {
       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -808,112 +825,203 @@ class _VulnTableView extends StatelessWidget {
                 size: 56, color: Colors.green),
             SizedBox(height: 12),
             Text('Aucune vulnérabilité détectée',
-                style:
-                    TextStyle(color: Colors.green, fontSize: 15)),
+                style: TextStyle(color: Colors.green, fontSize: 15)),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: vulns.length,
-      itemBuilder: (_, i) {
-        final v = vulns[i];
-        final fg = _fg(v.severity);
-        final bg = _bg(v.severity);
-        return Card(
-          margin: const EdgeInsets.only(bottom: 6),
-          color: bg,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-            side: BorderSide(color: fg.withValues(alpha: 0.3)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 72,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: fg,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    v.severity.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold),
-                  ),
+    // Compter par sévérité
+    final counts = <String, int>{};
+    for (final v in widget.vulns) {
+      counts[v.severity] = (counts[v.severity] ?? 0) + 1;
+    }
+
+    final filtered = _filtered;
+
+    return Column(
+      children: [
+        // Barre de filtres
+        Container(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              const Text('Filtre :',
+                  style: TextStyle(fontSize: 11)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    for (final s in _severityOrder)
+                      if ((counts[s] ?? 0) > 0)
+                        FilterChip(
+                          label: Text(
+                            '$s (${counts[s]})',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          selected: _activeFilters.contains(s),
+                          selectedColor:
+                              _fg(s).withValues(alpha: 0.2),
+                          checkmarkColor: _fg(s),
+                          onSelected: (v) => setState(() {
+                            if (v) {
+                              _activeFilters.add(s);
+                            } else {
+                              _activeFilters.remove(s);
+                            }
+                          }),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4),
+                        ),
+                    if (_activeFilters.isNotEmpty)
+                      ActionChip(
+                        label: const Text('Tout voir',
+                            style: TextStyle(fontSize: 11)),
+                        onPressed: () =>
+                            setState(() => _activeFilters = {}),
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 3,
+              ),
+            ],
+          ),
+        ),
+
+        // Liste filtrée
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(v.packageName,
-                          style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13)),
+                      const Icon(Icons.filter_alt_off_outlined,
+                          size: 40, color: Colors.grey),
+                      const SizedBox(height: 8),
                       Text(
-                        v.fixedVersion.isNotEmpty
-                            ? '${v.installedVersion} → ${v.fixedVersion}'
-                            : v.installedVersion,
-                        style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11,
-                            color: Colors.grey[700]),
+                        'Aucun résultat pour ${_activeFilters.join(', ')}',
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 13),
                       ),
                     ],
                   ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Tooltip(
-                    message: 'Copier l\'identifiant',
-                    child: InkWell(
-                      onTap: () {
-                        Clipboard.setData(
-                            ClipboardData(text: v.id));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('CVE copié'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        v.id,
-                        style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            color: fg,
-                            fontWeight: FontWeight.w600),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) {
+                    final v = filtered[i];
+                    final fg = _fg(v.severity);
+                    final bg = _bg(v.severity);
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      color: bg,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        side: BorderSide(
+                            color: fg.withValues(alpha: 0.3)),
                       ),
-                    ),
-                  ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 72,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: fg,
+                                borderRadius:
+                                    BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                v.severity.toUpperCase(),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(v.packageName,
+                                      style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          fontSize: 13)),
+                                  Text(
+                                    v.fixedVersion.isNotEmpty
+                                        ? '${v.installedVersion} → ${v.fixedVersion}'
+                                        : v.installedVersion,
+                                    style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 11,
+                                        color: Colors.grey[700]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Tooltip(
+                                message: 'Copier l\'identifiant',
+                                child: InkWell(
+                                  onTap: () {
+                                    Clipboard.setData(
+                                        ClipboardData(text: v.id));
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      const SnackBar(
+                                        content: Text('CVE copié'),
+                                        duration:
+                                            Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    v.id,
+                                    style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 12,
+                                        color: fg,
+                                        fontWeight:
+                                            FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              v.packageType,
+                              style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                  color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                Text(
-                  v.packageType,
-                  style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
