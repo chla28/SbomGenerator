@@ -12,6 +12,7 @@ class ResultsPanel extends StatefulWidget {
   final List<String> warnings;
   final String? fatalError;
   final bool isRunning;
+  final bool isPdfRunning;
   final int? exitCode;
   final int progressCurrent;
   final int progressTotal;
@@ -25,6 +26,7 @@ class ResultsPanel extends StatefulWidget {
     required this.warnings,
     this.fatalError,
     required this.isRunning,
+    this.isPdfRunning = false,
     this.exitCode,
     this.progressCurrent = 0,
     this.progressTotal = 0,
@@ -71,8 +73,10 @@ class _ResultsPanelState extends State<ResultsPanel>
     }
     // Basculer vers Progression dès le démarrage
     if (widget.isRunning && !old.isRunning) _tabs.animateTo(0);
-    // Basculer vers Résultats à la fin
-    if (!widget.isRunning && old.isRunning && widget.exitCode == 0) {
+    // Basculer vers Résultats une fois SBOM + PDF terminés
+    final wasBusy = old.isRunning || old.isPdfRunning;
+    final isBusy = widget.isRunning || widget.isPdfRunning;
+    if (!isBusy && wasBusy && widget.exitCode == 0) {
       _tabs.animateTo(1);
     }
   }
@@ -80,13 +84,14 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasActivity = widget.isRunning ||
+    final isBusy = widget.isRunning || widget.isPdfRunning;
+    final hasActivity = isBusy ||
         widget.logLines.isNotEmpty ||
         widget.outputFiles.isNotEmpty;
 
     return Column(
       children: [
-        // Barre de progression
+        // Barre de progression SBOM
         if (widget.isRunning && widget.progressTotal > 0)
           _ProgressBar(
             current: widget.progressCurrent,
@@ -95,8 +100,32 @@ class _ResultsPanelState extends State<ResultsPanel>
             label: widget.progressLabel,
           ),
 
+        // Bannière PDF en cours
+        if (widget.isPdfRunning)
+          Container(
+            color: Colors.blue[50],
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.blue),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Conversion PDF (asciidoctor-pdf) en cours…',
+                  style: TextStyle(
+                      fontSize: 13, color: Colors.blue[800]),
+                ),
+              ],
+            ),
+          ),
+
         // Bannière de résultat
-        if (!widget.isRunning && widget.exitCode != null)
+        if (!isBusy && widget.exitCode != null)
           _StatusBanner(
             exitCode: widget.exitCode!,
             outputFiles: widget.outputFiles,
@@ -299,6 +328,8 @@ class _LogView extends StatelessWidget {
       return Colors.orange[300];
     }
     if (line.contains('SBOM written')) return Colors.green[300];
+    if (line.contains('PDF written')) return Colors.green[300];
+    if (line.startsWith('Conversion PDF')) return Colors.lightBlue[300];
     if (line.startsWith('Generating') ||
         line.startsWith('Resolving') ||
         line.startsWith('Found') ||
@@ -424,13 +455,18 @@ class _OutputFileCard extends StatelessWidget {
     final iconColor = switch (ext) {
       'json' || 'jsonld' => theme.colorScheme.primary,
       'md' => Colors.purple[600],
+      'adoc' => Colors.teal[600],
+      'pdf' => Colors.red[700],
       _ => theme.colorScheme.secondary,
     };
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: Icon(Icons.description_outlined, color: iconColor),
+        leading: Icon(
+          ext == 'pdf' ? Icons.picture_as_pdf_outlined : Icons.description_outlined,
+          color: iconColor,
+        ),
         title: Text(
           file.path.split('/').last,
           style: const TextStyle(

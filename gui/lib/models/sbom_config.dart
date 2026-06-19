@@ -29,6 +29,8 @@ class SbomConfig {
   String licenseMapFile;
   int concurrency;
   bool verbose;
+  bool generatePdf;
+  String pdfOutputPath; // vide = même répertoire que .adoc, extension .pdf
 
   SbomConfig({
     this.inputFile = '',
@@ -39,6 +41,8 @@ class SbomConfig {
     this.licenseMapFile = '',
     this.concurrency = 4,
     this.verbose = false,
+    this.generatePdf = false,
+    this.pdfOutputPath = '',
   }) : formats = formats ?? {'cyclonedx'};
 
   List<String> toArgs() {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'models/sbom_config.dart';
@@ -24,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _warnings = [];
   String? _fatalError;
   bool _isRunning = false;
+  bool _isPdfRunning = false;
   int? _exitCode;
 
   // Progression parsée
@@ -56,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _isRunning = true;
+      _isPdfRunning = false;
       _logLines = [];
       _outputFiles = [];
       _warnings = [];
@@ -102,6 +106,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 _fatalError = 'Génération échouée (exit $exitCode)';
               }
             });
+            if (exitCode == 0 && _config.generatePdf) {
+              String? adocPath;
+              for (final f in _outputFiles) {
+                if (f.path.endsWith('.adoc')) {
+                  adocPath = f.path;
+                  break;
+                }
+              }
+              if (adocPath != null) {
+                _generatePdf(adocPath);
+              }
+            }
         }
       },
       onError: (Object e) {
@@ -114,6 +130,55 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
     );
+  }
+
+  Future<void> _generatePdf(String adocPath) async {
+    final pdfPath = _config.pdfOutputPath.isNotEmpty
+        ? _config.pdfOutputPath
+        : adocPath.endsWith('.adoc')
+            ? '${adocPath.substring(0, adocPath.length - 5)}.pdf'
+            : '$adocPath.pdf';
+
+    setState(() {
+      _isPdfRunning = true;
+      _logLines.add('');
+      _logLines.add('Conversion PDF (asciidoctor-pdf)…');
+      _logLines.add('  ← $adocPath');
+      _logLines.add('  → $pdfPath');
+    });
+
+    try {
+      final result =
+          await Process.run('asciidoctor-pdf', [adocPath, '-o', pdfPath]);
+
+      if (!mounted) return;
+
+      if (result.exitCode == 0) {
+        final size = await File(pdfPath).length();
+        if (!mounted) return;
+        final sizeStr = '${(size / 1024).toStringAsFixed(1)} KB';
+        setState(() {
+          _isPdfRunning = false;
+          _outputFiles.add(OutputFile(path: pdfPath, size: sizeStr));
+          _logLines.add('PDF written → $pdfPath  ($sizeStr)');
+        });
+      } else {
+        final stderr = (result.stderr as String).trim();
+        setState(() {
+          _isPdfRunning = false;
+          _logLines.add('Erreur asciidoctor-pdf (exit ${result.exitCode})');
+          if (stderr.isNotEmpty) _logLines.add('  $stderr');
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isPdfRunning = false;
+        _logLines.add('');
+        _logLines.add('Erreur : asciidoctor-pdf introuvable.');
+        _logLines.add('  Installez avec : gem install asciidoctor-pdf');
+      });
+    }
   }
 
   void _stopScan() {
@@ -129,6 +194,8 @@ class _HomeScreenState extends State<HomeScreen> {
     SettingsService.setProjectRoot(root);
   }
 
+  bool get _isBusy => _isRunning || _isPdfRunning;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -142,15 +209,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          if (_isRunning)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+          if (_isBusy)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
+                child: Tooltip(
+                  message: _isPdfRunning
+                      ? 'Conversion PDF en cours…'
+                      : 'Génération SBOM en cours…',
+                  child: const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  ),
                 ),
               ),
             ),
@@ -174,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ConfigPanel(
             config: _config,
             projectRoot: _projectRoot,
-            isRunning: _isRunning,
+            isRunning: _isBusy,
             onRun: _startScan,
             onStop: _stopScan,
             onProjectRootChanged: _onProjectRootChanged,
@@ -187,6 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
               warnings: _warnings,
               fatalError: _fatalError,
               isRunning: _isRunning,
+              isPdfRunning: _isPdfRunning,
               exitCode: _exitCode,
               progressCurrent: _progressCurrent,
               progressTotal: _progressTotal,
@@ -211,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'Génère des SBOM (Software Bill of Materials) depuis des listes '
           'de paquets RPM, .whl, .tar.gz, .deb, .zip ou requirements.txt.\n\n'
           'Formats supportés : CycloneDX 1.6, SPDX 2.3, SPDX 3.0 JSON-LD, '
-          'JSON personnalisé, Markdown.',
+          'JSON personnalisé, Markdown, AsciiDoc.',
         ),
       ],
     );

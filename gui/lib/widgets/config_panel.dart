@@ -32,6 +32,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
   late TextEditingController _rpmDirCtrl;
   late TextEditingController _licenseMapCtrl;
   late TextEditingController _projectRootCtrl;
+  late TextEditingController _pdfCtrl;
 
   @override
   void initState() {
@@ -43,6 +44,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
     _rpmDirCtrl = TextEditingController(text: c.rpmDir);
     _licenseMapCtrl = TextEditingController(text: c.licenseMapFile);
     _projectRootCtrl = TextEditingController(text: widget.projectRoot);
+    _pdfCtrl = TextEditingController(text: c.pdfOutputPath);
   }
 
   @override
@@ -57,7 +59,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
   void dispose() {
     for (final c in [
       _inputCtrl, _outputCtrl, _nameCtrl, _rpmDirCtrl,
-      _licenseMapCtrl, _projectRootCtrl,
+      _licenseMapCtrl, _projectRootCtrl, _pdfCtrl,
     ]) {
       c.dispose();
     }
@@ -71,6 +73,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.documentName = _nameCtrl.text.trim();
     c.rpmDir = _rpmDirCtrl.text.trim();
     c.licenseMapFile = _licenseMapCtrl.text.trim();
+    c.pdfOutputPath = _pdfCtrl.text.trim();
   }
 
   void _run() {
@@ -228,9 +231,47 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               c.formats.add(fmt);
                             } else if (c.formats.length > 1) {
                               c.formats.remove(fmt);
+                              if (fmt == 'asciidoc') c.generatePdf = false;
                             }
                           }),
                         ),
+
+                      // Option PDF (visible uniquement si asciidoc sélectionné)
+                      if (c.formats.contains('asciidoc')) ...[
+                        const SizedBox(height: 6),
+                        const Divider(height: 16),
+                        CheckboxListTile.adaptive(
+                          dense: true,
+                          title: const Text(
+                            'Convertir en PDF (asciidoctor-pdf)',
+                            style: TextStyle(fontSize: 13),
+                          ),
+                          subtitle: const Text(
+                            'Lance asciidoctor-pdf après la génération',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          secondary:
+                              const Icon(Icons.picture_as_pdf, size: 20),
+                          value: c.generatePdf,
+                          onChanged: (v) =>
+                              setState(() => c.generatePdf = v ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                        if (c.generatePdf) ...[
+                          const SizedBox(height: 4),
+                          _FileField(
+                            label: 'Chemin du PDF (optionnel)',
+                            controller: _pdfCtrl,
+                            hint: 'Défaut : même dossier que .adoc',
+                            onPick: () => _saveFile(
+                              _pdfCtrl,
+                              title: 'Enregistrer le PDF sous…',
+                              fileName: 'sbom.pdf',
+                            ),
+                            onChanged: (_) => _sync(),
+                          ),
+                        ],
+                      ],
 
                       // Preview des fichiers attendus
                       if (c.outputBase.isNotEmpty) ...[
