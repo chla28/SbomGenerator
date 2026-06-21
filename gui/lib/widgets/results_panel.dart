@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/sbom_result.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
+import 'quality_panel.dart';
 import 'trivy_panel.dart';
 
 class ResultsPanel extends StatefulWidget {
@@ -57,7 +58,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 6, vsync: this);
+    _tabs = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -251,6 +252,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Qualité SBOM'),
+                  ],
+                ),
+              ),
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -316,7 +327,10 @@ class _ResultsPanelState extends State<ResultsPanel>
               // Tab 4 : Trivy
               TrivyPanel(outputFiles: widget.outputFiles),
 
-              // Tab 5 : Aperçu SBOM
+              // Tab 5 : Qualité SBOM
+              QualityPanel(outputFiles: widget.outputFiles),
+
+              // Tab 6 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,

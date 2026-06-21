@@ -78,10 +78,7 @@ class _TrivyPanelState extends State<TrivyPanel>
   late final TabController _resultTabs;
 
   // Options Trivy
-  static const _allSeverities = [
-    'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'
-  ];
-  Set<String> _selectedSeverities = {};
+  final Set<String> _selectedSeverities = {};
   bool _ignoreUnfixed = false;
   bool _skipDbUpdate = false;
 

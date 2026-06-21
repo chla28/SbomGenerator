@@ -241,10 +241,10 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : six onglets — Progression (avec export
+*Panneau droit — Résultats* : sept onglets — Progression (avec export
 des logs et résumé), Résultats (fichiers + score sbomqs), Grype,
-OSV-Scanner et Trivy (analyses CVE), et Aperçu (prévisualisation du
-contenu SBOM).
+OSV-Scanner et Trivy (analyses CVE), Qualité SBOM (sbomqs + sbom-scorecard),
+et Aperçu (prévisualisation du contenu SBOM).
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
@@ -996,6 +996,106 @@ trivy sbom --format json --quiet \
 Même présentation que l'onglet OSV-Scanner.
 La colonne *Titre* est affichée en sous-titre de chaque entrée,
 directement depuis le champ `Title` du JSON Trivy.
+
+== Onglet Qualité SBOM — Évaluation de la qualité
+
+L'onglet *Qualité SBOM* évalue la qualité d'un fichier SBOM avec deux outils
+complémentaires : *sbomqs* (Interlynk) et *sbom-scorecard* (eBay). Un seul
+clic sur *Analyser* lance les deux en parallèle.
+
+----
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Fichier SBOM : [ /projet/sbom.cdx.json     ] [📂▾]  [Analyser]│
+  ├─────────────────────────────────────────────────────────────────┤
+  │ ┌─ sbomqs ─────────────────────────────────────── 8.3 / 10 ──┐ │
+  │ │ Filtre : [NTIA-minimum] [Quality] [Semantic] [Sharing]      │ │
+  │ │                                                              │ │
+  │ │  ✔ Has creation timestamp          NTIA-minimum   1/1       │ │
+  │ │  ✔ Has component licenses          Quality        1/1       │ │
+  │ │  ✘ Has SBOM version                NTIA-minimum   0/1       │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ sbom-scorecard ─────────────────────────────── 69 / 100 ──┐ │
+  │ │  Spec          ████████████████████████████████████  100    │ │
+  │ │  Quality       ████████████████████████░░░░░░░░░░░░   63    │ │
+  │ │  NTIA-minimum  ████████████████████████████████░░░░   88    │ │
+  │ │  Semantic      ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░   25    │ │
+  │ │  Sharing       ████████████████░░░░░░░░░░░░░░░░░░░░   44    │ │
+  │ │  ─────────────────────────────────────────────────── Total  │ │
+  │ │  Total         ██████████████████████████░░░░░░░░░░   69    │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  └─────────────────────────────────────────────────────────────────┘
+----
+
+=== Prérequis
+
+[cols="2,1,2", options="header"]
+|===
+|Outil |Source |Rôle
+
+|`sbomqs`
+|Interlynk
+|Score de qualité par critère NTIA, Quality, Semantic, Sharing
+
+|`sbom-scorecard`
+|eBay
+|Score global en pourcentage, décomposé par catégorie
+|===
+
+Les deux outils sont optionnels : si l'un n'est pas installé, sa section
+affiche un message d'erreur sans bloquer l'autre.
+
+==== Installer sbom-scorecard (optionnel)
+
+[source,bash]
+----
+# Via Go
+go install github.com/eBay/sbom-scorecard@latest
+
+# Ou télécharger le binaire depuis les releases GitHub
+# https://github.com/eBay/sbom-scorecard/releases
+
+# Vérifier
+sbom-scorecard --version
+----
+
+=== Section sbomqs
+
+Affiche un tableau de critères de qualité, regroupés par catégorie.
+Une icône ✔ (vert) / ✘ (rouge) indique si chaque critère est satisfait.
+
+*Filtres par catégorie* : les FilterChips permettent d'afficher uniquement
+les critères d'une catégorie (NTIA-minimum, Quality, Semantic, Sharing…).
+
+Le bouton 📋 copie le JSON brut dans le presse-papiers.
+Le bouton `{ }` / ≡ bascule entre le tableau et le JSON brut.
+
+=== Section sbom-scorecard
+
+Affiche un graphique à barres pour chaque catégorie de score.
+
+[cols="2,3", options="header"]
+|===
+|Couleur |Signification
+
+|Vert
+|Score ≥ 80 % — excellente qualité
+
+|Orange
+|Score entre 60 % et 80 % — qualité correcte
+
+|Rouge
+|Score < 60 % — qualité insuffisante
+|===
+
+Le bouton `{ }` / ≡ bascule entre le graphique et la sortie brute.
+
+=== Persistance de l'état
+
+Comme les autres onglets d'analyse, l'onglet *Qualité SBOM* mémorise son
+état lors de la navigation entre onglets : le fichier sélectionné et les
+résultats restent affichés même après avoir consulté un autre onglet.
 
 == Personnalisation de l'apparence
 

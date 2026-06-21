@@ -117,7 +117,8 @@ gui/
 │       ├── results_panel.dart        # Panneau droit : 6 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
-│       └── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
+│       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
+│       └── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
 ├── doc/
 │   ├── developer.adoc               # Ce document
 │   └── user.adoc                    # Guide utilisateur
@@ -130,22 +131,28 @@ gui/
 
 ==== `main.dart` — Point d'entrée
 
-`main()` est *async* : il charge la configuration sauvegardée et le thème
-(`shared_preferences`) avant le premier rendu, puis passe ces valeurs à
-`SbomGeneratorApp`.
+`main()` est *async* : il charge la configuration sauvegardée, le thème
+et l'index de couleur (`shared_preferences`) avant le premier rendu,
+puis passe ces valeurs à `SbomGeneratorApp`.
 
 `SbomGeneratorApp` est un `StatefulWidget` qui :
 
-* gère `ThemeMode _themeMode` (clair / sombre / système)
-* expose `_toggleTheme()` transmis à `HomeScreen` via callback
+* gère `ThemeMode _themeMode` (clair / sombre)
+* gère `int _themeIndex` (index dans `kAppThemes`)
+* expose `_toggleTheme()` et `_onThemeIndexChanged(int)` transmis à `HomeScreen`
 * déclare un `theme` (clair) et un `darkTheme` (sombre), tous deux basés
-  sur `ColorScheme.fromSeed(seedColor: 0xFF1A237E)` avec le bon `brightness`
+  sur `ColorScheme.fromSeed(seedColor: kAppThemes[_themeIndex].color)`
+  avec le bon `brightness`
+
+Quand `_themeIndex` change, `SettingsService.saveThemeColorIndex(index)`
+est appelé de façon non bloquante.
 
 ==== `home_screen.dart` — Écran principal
 
 `HomeScreen` est un `StatefulWidget` (voir <<sec-flutter-stateful>>) qui :
 
-* reçoit `initialConfig`, `themeMode` et `onThemeToggle` depuis `SbomGeneratorApp`
+* reçoit `initialConfig`, `themeMode`, `onThemeToggle`, `themeIndex` et
+  `onThemeIndexChanged` depuis `SbomGeneratorApp`
 * détient l'état global de la session SBOM : log, fichiers produits, progression,
   code de retour, état d'exécution, sortie sbomqs
 * instancie `SbomRunner` ; initialise `_config` depuis `initialConfig`
@@ -156,7 +163,15 @@ gui/
 * déclenche `_runSbomqs()` après un succès si `_config.enableSbomqs` est vrai
 * sauvegarde la configuration (`SettingsService.saveConfig`) avant chaque
   génération et sur chaque changement de champ (`onChanged` de `ConfigPanel`)
-* affiche le bouton de bascule de thème dans l'`AppBar`
+* affiche dans l'`AppBar` : bouton palette 🎨 (`IconButton` → `_showThemePicker`),
+  bouton bascule thème 🌙/☀, bouton info
+
+`_startScan()` place comme première entrée de `_logLines` la commande shell
+complète via `_config.toCommandLine(SettingsService.cliBinary)`.
+
+`_showThemePicker()` ouvre `_ThemePickerDialog` (dialog inline défini en bas
+du fichier). `_ThemePickerDialog` affiche un `Wrap` de `_ThemeSwatch` —
+des cercles colorés (`AnimatedContainer`) avec une coche pour le thème actif.
 
 Layout : `Row` avec deux enfants —
 
@@ -171,9 +186,22 @@ HomeScreen
 ==== `models/sbom_config.dart` — Configuration SBOM
 
 Objet mutable (`SbomConfig`) partagé entre `HomeScreen` et `ConfigPanel`.
-Expose `toArgs()` qui construit la liste d'arguments CLI à passer à
-`sbom-generator`, et `expectedOutputPaths()` pour la prévisualisation des
-fichiers avant génération.
+Expose `toArgs()` qui construit la liste d'arguments CLI, et
+`expectedOutputPaths()` pour la prévisualisation des fichiers avant génération.
+
+`toCommandLine(String binary)` est ajouté pour l'affichage humain :
+
+[source,dart]
+----
+String toCommandLine(String binary) {
+  return [binary, ...toArgs()]
+      .map((s) => s.contains(' ') ? '"$s"' : s)
+      .join(' ');
+}
+----
+
+Cette méthode est appelée dans `_startScan()` de `HomeScreen` (première ligne
+du log) et dans `_CommandPreview` de `ConfigPanel` (prévisualisation live).
 
 Expose aussi `toJson()` / `SbomConfig.fromJson(Map)` pour la persistance
 via `SettingsService`. Les champs *non* persistés (trop contextuels) sont
@@ -185,6 +213,30 @@ qualité automatique après génération.
 Les constantes `allFormats`, `formatLabels` et `_formatExtensions` sont
 définies ici : elles servent à générer dynamiquement les checkboxes de format
 dans `ConfigPanel`.
+
+==== `models/app_themes.dart` — Thèmes de couleur
+
+Définit `AppTheme` (un label + une couleur) et la constante `kAppThemes`,
+liste de 10 thèmes prédéfinis :
+
+[source,dart]
+----
+const kAppThemes = [
+  AppTheme('Indigo',  Color(0xFF1A237E)),  // thème par défaut (index 0)
+  AppTheme('Bleu',    Color(0xFF1565C0)),
+  AppTheme('Violet',  Color(0xFF4A148C)),
+  AppTheme('Teal',    Color(0xFF004D40)),
+  AppTheme('Vert',    Color(0xFF1B5E20)),
+  AppTheme('Orange',  Color(0xFFBF360C)),
+  AppTheme('Rouge',   Color(0xFFB71C1C)),
+  AppTheme('Rose',    Color(0xFF880E4F)),
+  AppTheme('Ardoise', Color(0xFF37474F)),
+  AppTheme('Marron',  Color(0xFF4E342E)),
+];
+----
+
+La couleur est injectée dans `ColorScheme.fromSeed(seedColor: ...)` de Material 3,
+ce qui génère automatiquement toute la palette thème (primaires, surfaces, états).
 
 ==== `models/sbom_result.dart` — Modèles de résultat
 
@@ -252,6 +304,72 @@ La sortie JSON arrive sur stdout (capturée dans `jsonBuf`).
 La sortie template est écrite dans un fichier temporaire, lue après exit,
 puis supprimée (voir <<sec-piege-tmpl>>).
 
+==== `services/osv_runner.dart` — Exécution OSV-Scanner
+
+Même architecture que `grype_runner.dart`. Deux types d'événements (sealed class) :
+
+[cols="1,2", options="header"]
+|===
+|Événement |Contenu
+
+|`OsvOutputEvent`
+|JSON complet d'osv-scanner (accumulé depuis stdout, émis après exit)
+
+|`OsvDoneEvent`
+|exitCode + stderr optionnel
+|===
+
+Particularité : un code de retour *1* indique que des vulnérabilités ont été
+trouvées (comportement normal d'osv-scanner), pas une erreur. Seul un code
+*supérieur à 1* signale une vraie erreur.
+
+La commande lancée est :
+
+[source,bash]
+----
+osv-scanner --format json --sbom <sbomFile> [--config <configFile>]
+----
+
+==== `services/trivy_runner.dart` — Exécution Trivy
+
+Même architecture. Paramètres nommés de `run()` :
+
+[source,dart]
+----
+Stream<TrivyEvent> run({
+  required String sbomFile,
+  List<String> severities = const [],   // ex. ['CRITICAL', 'HIGH']
+  bool ignoreUnfixed = false,
+  bool skipDbUpdate = false,
+  String? configFile,
+})
+----
+
+Deux types d'événements :
+
+[cols="1,2", options="header"]
+|===
+|Événement |Contenu
+
+|`TrivyOutputEvent`
+|JSON complet de trivy (accumulé depuis stdout, émis après exit)
+
+|`TrivyDoneEvent`
+|exitCode + stderr optionnel
+|===
+
+La commande lancée est :
+
+[source,bash]
+----
+trivy sbom --format json --quiet \
+  [--severity CRITICAL,HIGH,...] \
+  [--ignore-unfixed] \
+  [--skip-db-update] \
+  [--config trivy.yaml] \
+  <sbomFile>
+----
+
 [[sec-settings-service]]
 ==== `services/settings_service.dart` — Résolution du binaire + persistance
 
@@ -287,6 +405,12 @@ Le service gère également la *persistance* via `shared_preferences` :
 
 |`loadTheme()`
 |Retourne le `ThemeMode` sauvegardé, ou `ThemeMode.system` par défaut
+
+|`saveThemeColorIndex(int)`
+|Stocke l'index du thème de couleur (0-9) sous la clé `theme_color_index`
+
+|`loadThemeColorIndex()`
+|Retourne l'index sauvegardé, ou `0` (Indigo) par défaut
 |===
 
 La clé `sbom_config_v1` inclut un suffixe de version pour faciliter les
@@ -312,9 +436,87 @@ d'un champ (texte via `_sync()`, booléens directement dans leur `setState`).
 `HomeScreen` l'utilise pour déclencher `SettingsService.saveConfig()` sans
 attendre le prochain lancement.
 
+*Filtre de type de fichier* : le widget interne `_FileField` accepte
+deux callbacks optionnels — `onPick` (sélection standard filtrée) et
+`onPickAll` (tous les fichiers). Quand les deux sont fournis, l'icône 📂
+est remplacée par un `PopupMenuButton<bool>` qui propose :
+
+* *Type filtré (extensions)* — appelle `onPick`
+* *Tous les fichiers* — appelle `onPickAll`
+
+*Prévisualisation de la commande* : le widget `_CommandPreview` est inséré
+entre le bouton *▶ Générer le SBOM* et la fin du formulaire. Il lit
+`config.toCommandLine(SettingsService.cliBinary)` à chaque `build()` (donc
+se met à jour à chaque `setState` existant) et l'affiche sur fond sombre
+avec un bouton 📋 copie.
+
+==== `widgets/osv_panel.dart` — Onglet OSV-Scanner
+
+`OsvPanel` est un `StatefulWidget` autonome avec `AutomaticKeepAliveClientMixin`
+(état préservé lors de la navigation entre onglets). Il reçoit
+`List<OutputFile> outputFiles` et pré-sélectionne automatiquement le premier
+fichier SBOM via `didUpdateWidget`.
+
+Structure interne :
+
+* `_ConfigSection` — champs "Fichier SBOM" et "Config toml" (avec `_SplitPickButton`)
+* Bannière de résultat (vert / jaune / orange / rouge selon sévérités)
+* `TabController` à 2 onglets internes : *Vulnérabilités* et *JSON brut*
+
+`OsvVuln` est un modèle de données parsé depuis le JSON OSV :
+`results[].packages[].vulnerabilities[]`. La sévérité est extraite depuis
+`database_specific.severity` ou calculée depuis les scores CVSS v2/v3.
+La version corrigée est lue depuis `affected[].ranges[].events[].fixed`.
+
+==== `widgets/trivy_panel.dart` — Onglet Trivy
+
+`TrivyPanel` — même architecture que `OsvPanel` avec les options supplémentaires :
+
+* 5 `FilterChip` pour `--severity` (CRITICAL / HIGH / MEDIUM / LOW / UNKNOWN)
+* `CheckboxListTile` pour `--ignore-unfixed`
+* `CheckboxListTile` pour `--skip-db-update`
+* Champ "trivy.yaml" avec `_SplitPickButton`
+
+`TrivyVuln` est parsé depuis `Results[].Vulnerabilities[]` du JSON Trivy.
+Le champ `Title` est affiché en sous-titre de chaque entrée.
+
+NOTE: `_SplitPickButton` est défini localement (privé `_`) dans chaque panel.
+C'est une duplication intentionnelle pour éviter de créer un fichier partagé.
+Pour une refactorisation future, extraire vers `widgets/shared/split_pick_button.dart`.
+
+==== `widgets/quality_panel.dart` — Onglet Qualité SBOM
+
+`QualityPanel` est un `StatefulWidget` autonome avec `AutomaticKeepAliveClientMixin`.
+Il lance deux outils en parallèle via `Future.wait` :
+
+[cols="1,2", options="header"]
+|===
+|Outil |Commande
+
+|`sbomqs`
+|`sbomqs score -f json <sbomFile>`
+
+|`sbom-scorecard`
+|`sbom-scorecard score <sbomFile>`
+|===
+
+Les modèles privés `_SbomqsResult` / `_SbomqsCheck` parsent le JSON de sbomqs
+(champ `files[0].score.checks`). `_ScorecardResult` parse la sortie texte
+(regex) ou JSON de sbom-scorecard.
+
+Si un outil n'est pas installé, `Process.run` lève `ProcessException` → section
+affiche `_ErrorBanner` sans bloquer l'autre. Les deux outils sont indépendants.
+
+Interface :
+
+* `_SbomqsSection` — en-tête avec `_ScoreBadge`, `_CategoryFilter` (FilterChips),
+  `_SbomqsTable` (ListView avec icônes ✔/✘), bouton bascule tableau/JSON brut
+* `_ScorecardSection` — en-tête avec `_ScoreBadge`, `_ScoreBar` pour chaque catégorie
+  (LinearProgressIndicator coloré selon seuils 80 %/60 %), bouton bascule graphique/brut
+
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **4 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **6 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -333,6 +535,18 @@ attendre le prochain lancement.
 |`GrypePanel` — panneau d'analyse grype autonome
 
 |3
+|OSV-Scanner
+|`OsvPanel` — panneau d'analyse osv-scanner autonome
+
+|4
+|Trivy
+|`TrivyPanel` — panneau d'analyse trivy autonome
+
+|5
+|Qualité SBOM
+|`QualityPanel` — sbomqs + sbom-scorecard en parallèle
+
+|6
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===
@@ -359,12 +573,17 @@ Le paramètre `String? sbomqsOutput` est propagé depuis `HomeScreen`.
 
 ==== `widgets/grype_panel.dart` — Onglet Grype
 
-`GrypePanel` est un `StatefulWidget` **autonome** : il gère son propre état
-(fichier SBOM, options, résultats) sans passer par `HomeScreen`.
+`GrypePanel` est un `StatefulWidget` **autonome** avec
+`AutomaticKeepAliveClientMixin` (état préservé lors de la navigation entre
+onglets — voir <<sec-keepalive>>). Il gère son propre état (fichier SBOM,
+options, résultats) sans passer par `HomeScreen`.
 
 Il reçoit un seul paramètre du parent : `List<OutputFile> outputFiles`.
 Quand cette liste change, `didUpdateWidget` met à jour automatiquement le
 champ fichier SBOM si celui-ci est encore vide.
+
+Les boutons de sélection de fichier utilisent `_SplitPickButton` (basé sur
+`MenuAnchor`) pour proposer "Type filtré" / "Tous les fichiers" en split-button.
 
 Les résultats sont affichés dans un second `TabController` à 3 onglets internes :
 
@@ -432,6 +651,41 @@ GrypeRunner.run(...)   →   Process.start('grype', args)
   ├── GrypeOutputEvent(json)    →  setState() → _vulns (parsés), _jsonOutput
   ├── GrypeTemplateEvent(text)  →  setState() → _templateOutput, bascule tab 2
   └── GrypeDoneEvent(code)      →  setState() → _isRunning=false, _exitCode
+----
+
+==== Analyse OSV-Scanner
+
+[source,text]
+----
+Utilisateur
+  │ clique "Analyser" dans OsvPanel
+  ▼
+OsvPanel._analyze()
+  │ construit les args depuis l'état local
+  ▼
+OsvRunner.run(...)   →   Process.start('osv-scanner', args)
+  │
+  │ Stream<OsvEvent>
+  ├── OsvOutputEvent(jsonOutput)  →  setState() → _vulns (OsvVuln[]), _jsonOutput
+  └── OsvDoneEvent(exitCode)      →  setState() → _isRunning=false
+      note: exitCode 1 = vulns trouvées (normal), >1 = erreur réelle
+----
+
+==== Analyse Trivy
+
+[source,text]
+----
+Utilisateur
+  │ clique "Analyser" dans TrivyPanel
+  ▼
+TrivyPanel._analyze()
+  │ construit les args depuis l'état local (severities, ignoreUnfixed…)
+  ▼
+TrivyRunner.run(...)   →   Process.start('trivy', ['sbom', '--format', 'json', ...])
+  │
+  │ Stream<TrivyEvent>
+  ├── TrivyOutputEvent(jsonOutput)  →  setState() → _vulns (TrivyVuln[]), _jsonOutput
+  └── TrivyDoneEvent(exitCode)      →  setState() → _isRunning=false
 ----
 
 == Concepts Flutter pour débutant
@@ -517,7 +771,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);  // ResultsPanel : 4 onglets
+    _tabs = TabController(length: 7, vsync: this);  // ResultsPanel : 7 onglets
   }
 
   @override
@@ -591,14 +845,14 @@ Stream<GrypeEvent> run({
 
 === Ajouter un onglet dans ResultsPanel
 
-Le `TabController` est actuellement à `length: 4` (Progression, Résultats,
-Grype, Aperçu). Pour en ajouter un cinquième :
+Le `TabController` est actuellement à `length: 7` (Progression, Résultats,
+Grype, OSV-Scanner, Trivy, Qualité SBOM, Aperçu). Pour en ajouter un huitième :
 
 . Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
 +
 [source,dart]
 ----
-_tabs = TabController(length: 5, vsync: this);  // était 4
+_tabs = TabController(length: 8, vsync: this);  // était 7
 ----
 
 . Ajouter un `Tab(...)` dans le `TabBar` :
@@ -638,6 +892,37 @@ Les sous-onglets de résultats Grype (Table / JSON / Template) sont gérés par
 . Ajouter le `Tab` dans le `TabBar` de résultats et le widget dans le `TabBarView`
 
 == Pièges & décisions techniques
+
+[[sec-keepalive]]
+=== Préserver l'état des onglets distants (AutomaticKeepAliveClientMixin)
+
+Par défaut, un `TabBarView` libère les widgets des onglets non visibles pour
+économiser la mémoire (comportement `PageView`). Quand l'utilisateur revient
+sur un onglet, son `State` est recréé depuis zéro — le fichier sélectionné,
+les options et les résultats sont perdus.
+
+La solution est `AutomaticKeepAliveClientMixin` sur le `State` de chaque panel :
+
+[source,dart]
+----
+class _GrypePanelState extends State<GrypePanel>
+    with AutomaticKeepAliveClientMixin {
+
+  @override
+  bool get wantKeepAlive => true;  // <1>
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);           // <2>
+    // ... reste du build
+  }
+}
+----
+<1> Déclarer que cet état doit être conservé
+<2> L'appel `super.build()` est obligatoire — il active le mécanisme keep-alive
+
+Ce mixin est appliqué à `_GrypePanelState`, `_OsvPanelState`, `_TrivyPanelState`
+et `_QualityPanelState`.
 
 [[sec-piege-tabcontroller]]
 === TabController.length est fixe
