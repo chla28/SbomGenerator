@@ -64,4 +64,46 @@ class SettingsService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_themeColorKey) ?? 0;
   }
+
+  // ── Profils de configuration ──────────────────────────────────────────────
+
+  static const _profileNamesKey = 'profile_names_v1';
+  static String _profileKey(String name) =>
+      'profile_v1_${Uri.encodeComponent(name)}';
+
+  static Future<List<String>> listProfiles() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_profileNamesKey);
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).cast<String>();
+  }
+
+  static Future<void> saveProfile(String name, SbomConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    final names = await listProfiles();
+    if (!names.contains(name)) {
+      names.add(name);
+      await prefs.setString(_profileNamesKey, jsonEncode(names));
+    }
+    await prefs.setString(_profileKey(name), jsonEncode(config.toJson()));
+  }
+
+  static Future<SbomConfig?> loadProfile(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    final str = prefs.getString(_profileKey(name));
+    if (str == null) return null;
+    try {
+      return SbomConfig.fromJson(jsonDecode(str) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> deleteProfile(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    final names = await listProfiles();
+    names.remove(name);
+    await prefs.setString(_profileNamesKey, jsonEncode(names));
+    await prefs.remove(_profileKey(name));
+  }
 }

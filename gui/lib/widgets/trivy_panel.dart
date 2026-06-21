@@ -581,6 +581,8 @@ class _ErrorBanner extends StatelessWidget {
 
 // ─── Tableau des vulnérabilités ───────────────────────────────────────────────
 
+enum _SortCol { severity, cveId, package }
+
 class _VulnTableView extends StatefulWidget {
   final List<TrivyVuln> vulns;
   const _VulnTableView({required this.vulns});
@@ -590,16 +592,60 @@ class _VulnTableView extends StatefulWidget {
 }
 
 class _VulnTableViewState extends State<_VulnTableView> {
-  static const _severityOrder = [
-    'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'
-  ];
-  Set<String> _activeFilters = {};
+  static const _severityOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
 
-  List<TrivyVuln> get _filtered => _activeFilters.isEmpty
-      ? widget.vulns
-      : widget.vulns
-          .where((v) => _activeFilters.contains(v.severity))
+  Set<String> _activeFilters = {};
+  final _searchCtrl = TextEditingController();
+  String _searchTerm = '';
+  _SortCol _sortCol = _SortCol.severity;
+  bool _sortAsc = false;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  static int _sevOrd(String s) => switch (s.toUpperCase()) {
+        'CRITICAL' => 0,
+        'HIGH' => 1,
+        'MEDIUM' => 2,
+        'LOW' => 3,
+        _ => 4,
+      };
+
+  void _onSort(_SortCol col) => setState(() {
+        if (_sortCol == col) {
+          _sortAsc = !_sortAsc;
+        } else {
+          _sortCol = col;
+          _sortAsc = col != _SortCol.severity;
+        }
+      });
+
+  List<TrivyVuln> get _filtered {
+    var list = _activeFilters.isEmpty
+        ? widget.vulns
+        : widget.vulns.where((v) => _activeFilters.contains(v.severity)).toList();
+    if (_searchTerm.isNotEmpty) {
+      final q = _searchTerm.toLowerCase();
+      list = list
+          .where((v) =>
+              v.packageName.toLowerCase().contains(q) ||
+              v.id.toLowerCase().contains(q))
           .toList();
+    }
+    list = List.of(list)
+      ..sort((a, b) {
+        final cmp = switch (_sortCol) {
+          _SortCol.severity => _sevOrd(a.severity).compareTo(_sevOrd(b.severity)),
+          _SortCol.cveId    => a.id.compareTo(b.id),
+          _SortCol.package  => a.packageName.compareTo(b.packageName),
+        };
+        return _sortAsc ? cmp : -cmp;
+      });
+    return list;
+  }
 
   static Color _fg(String s) => switch (s.toUpperCase()) {
         'CRITICAL' => const Color(0xFFB71C1C),
@@ -641,6 +687,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
 
     return Column(
       children: [
+        // ── Filtres + recherche ──
         Container(
           color: Theme.of(context).colorScheme.surfaceContainerLow,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -677,21 +724,82 @@ class _VulnTableViewState extends State<_VulnTableView> {
                       ActionChip(
                         label: const Text('Tout voir',
                             style: TextStyle(fontSize: 11)),
-                        onPressed: () =>
-                            setState(() => _activeFilters = {}),
+                        onPressed: () => setState(() => _activeFilters = {}),
                       ),
                   ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 200,
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _searchTerm = v),
+                  decoration: InputDecoration(
+                    hintText: 'Paquet ou CVE…',
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, size: 16),
+                    suffixIcon: _searchTerm.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 14),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchTerm = '');
+                            },
+                            padding: EdgeInsets.zero,
+                          )
+                        : null,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    border: const OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ],
           ),
         ),
+
+        // ── En-têtes de tri ──
+        Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          child: Row(
+            children: [
+              _SortHeader('SÉVÉRITÉ', _sortCol == _SortCol.severity, _sortAsc,
+                  () => _onSort(_SortCol.severity)),
+              const SizedBox(width: 16),
+              _SortHeader('CVE / ID', _sortCol == _SortCol.cveId, _sortAsc,
+                  () => _onSort(_SortCol.cveId)),
+              const SizedBox(width: 16),
+              _SortHeader('PAQUET', _sortCol == _SortCol.package, _sortAsc,
+                  () => _onSort(_SortCol.package)),
+            ],
+          ),
+        ),
+
+        // ── Liste ──
         Expanded(
           child: filtered.isEmpty
               ? Center(
-                  child: Text(
-                    'Aucun résultat pour ${_activeFilters.join(', ')}',
-                    style: const TextStyle(color: Colors.grey),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _searchTerm.isNotEmpty
+                            ? Icons.search_off
+                            : Icons.filter_alt_off_outlined,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _searchTerm.isNotEmpty
+                            ? 'Aucun résultat pour "$_searchTerm"'
+                            : 'Aucun résultat pour ${_activeFilters.join(', ')}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
                   ),
                 )
               : ListView.builder(
@@ -764,6 +872,45 @@ class _VulnTableViewState extends State<_VulnTableView> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+// ─── En-tête de colonne triable ───────────────────────────────────────────────
+
+class _SortHeader extends StatelessWidget {
+  final String label;
+  final bool active;
+  final bool ascending;
+  final VoidCallback onTap;
+
+  const _SortHeader(this.label, this.active, this.ascending, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        active ? Theme.of(context).colorScheme.primary : Colors.grey[600]!;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: color)),
+            if (active) ...[
+              const SizedBox(width: 2),
+              Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 11, color: color),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
