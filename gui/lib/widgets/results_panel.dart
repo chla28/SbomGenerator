@@ -6,9 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/sbom_result.dart';
+import 'dashboard_panel.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'quality_panel.dart';
+import 'sbom_diff_panel.dart';
+import 'sbom_tree_panel.dart';
 import 'trivy_panel.dart';
 
 class ResultsPanel extends StatefulWidget {
@@ -55,10 +58,15 @@ class _ResultsPanelState extends State<ResultsPanel>
   String? _previewContent;
   bool _previewLoading = false;
 
+  // Résultats des scanners (null = pas encore exécuté)
+  List<GrypeVuln>? _grypeVulns;
+  List<OsvVuln>? _osvVulns;
+  List<TrivyVuln>? _trivyVulns;
+
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 7, vsync: this);
+    _tabs = TabController(length: 10, vsync: this);
   }
 
   @override
@@ -226,6 +234,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(Icons.dashboard_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Tableau de bord'),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Icon(Icons.security_outlined, size: 16),
                     SizedBox(width: 6),
                     Text('Grype'),
@@ -259,6 +277,26 @@ class _ResultsPanelState extends State<ResultsPanel>
                     Icon(Icons.verified_outlined, size: 16),
                     SizedBox(width: 6),
                     Text('Qualité SBOM'),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.account_tree_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Arborescence'),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.compare_arrows, size: 16),
+                    SizedBox(width: 6),
+                    Text('Comparaison'),
                   ],
                 ),
               ),
@@ -318,19 +356,41 @@ class _ResultsPanelState extends State<ResultsPanel>
                 sbomqsOutput: widget.sbomqsOutput,
               ),
 
-              // Tab 2 : Grype
-              GrypePanel(outputFiles: widget.outputFiles),
+              // Tab 2 : Tableau de bord
+              DashboardPanel(
+                grypeVulns: _grypeVulns,
+                osvVulns: _osvVulns,
+                trivyVulns: _trivyVulns,
+              ),
 
-              // Tab 3 : OSV-Scanner
-              OsvPanel(outputFiles: widget.outputFiles),
+              // Tab 3 : Grype
+              GrypePanel(
+                outputFiles: widget.outputFiles,
+                onVulnsChanged: (v) => setState(() => _grypeVulns = v),
+              ),
 
-              // Tab 4 : Trivy
-              TrivyPanel(outputFiles: widget.outputFiles),
+              // Tab 4 : OSV-Scanner
+              OsvPanel(
+                outputFiles: widget.outputFiles,
+                onVulnsChanged: (v) => setState(() => _osvVulns = v),
+              ),
 
-              // Tab 5 : Qualité SBOM
+              // Tab 5 : Trivy
+              TrivyPanel(
+                outputFiles: widget.outputFiles,
+                onVulnsChanged: (v) => setState(() => _trivyVulns = v),
+              ),
+
+              // Tab 6 : Qualité SBOM
               QualityPanel(outputFiles: widget.outputFiles),
 
-              // Tab 6 : Aperçu SBOM
+              // Tab 7 : Arborescence SBOM
+              SbomTreePanel(outputFiles: widget.outputFiles),
+
+              // Tab 8 : Comparaison SBOM
+              SbomDiffPanel(outputFiles: widget.outputFiles),
+
+              // Tab 9 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,

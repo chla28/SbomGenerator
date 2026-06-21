@@ -117,7 +117,13 @@ class OsvVuln {
 
 class OsvPanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
-  const OsvPanel({super.key, required this.outputFiles});
+  final void Function(List<OsvVuln>)? onVulnsChanged;
+
+  const OsvPanel({
+    super.key,
+    required this.outputFiles,
+    this.onVulnsChanged,
+  });
 
   @override
   State<OsvPanel> createState() => _OsvPanelState();
@@ -229,6 +235,7 @@ class _OsvPanelState extends State<OsvPanel>
               _jsonOutput = jsonOutput;
               _vulns = OsvVuln.fromJson(jsonOutput);
             });
+            widget.onVulnsChanged?.call(_vulns);
           case OsvDoneEvent(:final exitCode, :final stderr):
             setState(() {
               _isRunning = false;
@@ -599,6 +606,44 @@ class _VulnTableViewState extends State<_VulnTableView> {
     return list;
   }
 
+  static String _csv(String s) {
+    if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
+  }
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final rows = _filtered;
+    final buf = StringBuffer();
+    buf.writeln('Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Écosystème');
+    for (final v in rows) {
+      buf.writeln([
+        _csv(v.severity),
+        _csv(v.id),
+        _csv(v.packageName),
+        _csv(v.installedVersion),
+        _csv(v.fixedVersion),
+        _csv(v.ecosystem),
+      ].join(','));
+    }
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Exporter les vulnérabilités OSV-Scanner',
+      fileName: 'osv_vulns.csv',
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (path == null || !context.mounted) return;
+    await File(path).writeAsString(buf.toString());
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text('${rows.length} vulnérabilité(s) exportée(s) → $path'),
+        duration: const Duration(seconds: 4),
+      ));
+    }
+  }
+
   static Color _fg(String s) => switch (s.toLowerCase()) {
         'critical' => const Color(0xFFB71C1C),
         'high' => const Color(0xFFBF360C),
@@ -707,6 +752,13 @@ class _VulnTableViewState extends State<_VulnTableView> {
                   ),
                   style: const TextStyle(fontSize: 12),
                 ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.download_outlined, size: 18),
+                tooltip: 'Exporter CSV',
+                onPressed:
+                    _filtered.isEmpty ? null : () => _exportCsv(context),
               ),
             ],
           ),

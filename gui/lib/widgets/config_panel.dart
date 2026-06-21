@@ -59,6 +59,38 @@ class _ConfigPanelState extends State<ConfigPanel> {
     super.dispose();
   }
 
+  void _loadProfileInto(SbomConfig loaded) {
+    final c = widget.config;
+    c.outputBase = loaded.outputBase;
+    c.formats = loaded.formats;
+    c.documentName = loaded.documentName;
+    c.rpmDir = loaded.rpmDir;
+    c.licenseMapFile = loaded.licenseMapFile;
+    c.concurrency = loaded.concurrency;
+    c.verbose = loaded.verbose;
+    c.generatePdf = loaded.generatePdf;
+    c.pdfOutputPath = loaded.pdfOutputPath;
+    c.enableSbomqs = loaded.enableSbomqs;
+    _outputCtrl.text = c.outputBase;
+    _nameCtrl.text = c.documentName;
+    _rpmDirCtrl.text = c.rpmDir;
+    _licenseMapCtrl.text = c.licenseMapFile;
+    _pdfCtrl.text = c.pdfOutputPath;
+    widget.onChanged?.call();
+    setState(() {});
+  }
+
+  void _showProfilesDialog(BuildContext context) {
+    _sync();
+    showDialog<void>(
+      context: context,
+      builder: (_) => _ProfilesDialog(
+        currentConfig: widget.config,
+        onLoad: _loadProfileInto,
+      ),
+    );
+  }
+
   void _sync() {
     final c = widget.config;
     c.inputFile = _inputCtrl.text.trim();
@@ -126,16 +158,30 @@ class _ConfigPanelState extends State<ConfigPanel> {
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.only(left: 16, right: 8, top: 10, bottom: 10),
               color: theme.colorScheme.primary,
               width: double.infinity,
-              child: Text(
-                'Configuration',
-                style: TextStyle(
-                  color: theme.colorScheme.onPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Configuration',
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.bookmarks_outlined,
+                        color: theme.colorScheme.onPrimary, size: 18),
+                    tooltip: 'Profils de configuration',
+                    onPressed: () => _showProfilesDialog(context),
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
             ),
 
@@ -704,6 +750,198 @@ class _OutputPreview extends StatelessWidget {
     );
   }
 }
+
+// ─── Dialog de gestion des profils ───────────────────────────────────────────
+
+class _ProfilesDialog extends StatefulWidget {
+  final SbomConfig currentConfig;
+  final ValueChanged<SbomConfig> onLoad;
+
+  const _ProfilesDialog({required this.currentConfig, required this.onLoad});
+
+  @override
+  State<_ProfilesDialog> createState() => _ProfilesDialogState();
+}
+
+class _ProfilesDialogState extends State<_ProfilesDialog> {
+  List<String> _names = [];
+  final _ctrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final names = await SettingsService.listProfiles();
+    if (mounted) setState(() => _names = names);
+  }
+
+  Future<void> _save() async {
+    final name = _ctrl.text.trim();
+    if (name.isEmpty) return;
+    await SettingsService.saveProfile(name, widget.currentConfig);
+    _ctrl.clear();
+    await _refresh();
+  }
+
+  Future<void> _load(String name) async {
+    final config = await SettingsService.loadProfile(name);
+    if (config != null && mounted) {
+      widget.onLoad(config);
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _delete(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer le profil'),
+        content: Text('Supprimer « $name » ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await SettingsService.deleteProfile(name);
+      await _refresh();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.bookmarks_outlined, size: 20),
+          SizedBox(width: 8),
+          Text('Profils de configuration'),
+        ],
+      ),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Enregistrer ──
+            Text('Enregistrer la configuration actuelle',
+                style: theme.textTheme.labelMedium),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ctrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Nom du profil…',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    onSubmitted: (_) => _save(),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  icon: const Icon(Icons.save_outlined, size: 16),
+                  label: const Text('Enregistrer'),
+                  onPressed: _save,
+                  style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10)),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // ── Liste des profils ──
+            Text('Profils enregistrés',
+                style: theme.textTheme.labelMedium),
+            const SizedBox(height: 6),
+
+            if (_names.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                alignment: Alignment.center,
+                child: const Text('Aucun profil enregistré.',
+                    style: TextStyle(color: Colors.grey)),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _names.length,
+                  itemBuilder: (_, i) {
+                    final name = _names[i];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.bookmark_outline, size: 18),
+                      title: Text(name,
+                          style: const TextStyle(fontSize: 13)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton(
+                            onPressed: () => _load(name),
+                            style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4)),
+                            child: const Text('Charger',
+                                style: TextStyle(fontSize: 12)),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 17),
+                            color: Colors.red[400],
+                            tooltip: 'Supprimer',
+                            onPressed: () => _delete(name),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fermer'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Légende des types d'entrée ───────────────────────────────────────────────
 
 class _InputTypeLegend extends StatelessWidget {
   @override

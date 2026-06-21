@@ -241,10 +241,12 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : sept onglets — Progression (avec export
-des logs et résumé), Résultats (fichiers + score sbomqs), Grype,
-OSV-Scanner et Trivy (analyses CVE), Qualité SBOM (sbomqs + sbom-scorecard),
-et Aperçu (prévisualisation du contenu SBOM).
+*Panneau droit — Résultats* : dix onglets — Progression (avec export
+des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
+(synthèse CVE multi-scanners), Grype, OSV-Scanner et Trivy (analyses CVE),
+Qualité SBOM (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
+composants du SBOM), Comparaison SBOM (diff de deux SBOM) et Aperçu
+(prévisualisation du contenu SBOM).
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
@@ -416,6 +418,50 @@ génération et *restaurés* au prochain démarrage de l'application.
 
 Les paramètres sauvegardés *ne comprennent pas* le fichier d'entrée (trop lié
 à un contexte particulier) ni le chemin du PDF.
+
+=== Profils de configuration
+
+Un *profil* regroupe tous les paramètres de configuration sous un nom
+personnalisé, et peut être rappelé en un clic pour basculer rapidement
+entre plusieurs configurations types (ex. : « RHEL 9 production », « Audit
+Python », « CI/CD minimal »).
+
+==== Accéder aux profils
+
+Cliquez sur l'icône 🔖 (signets) en haut à droite de l'en-tête du panneau
+Configuration.
+
+----
+  ┌─ Configuration ────────────────── [🔖] ─┐
+  │  ...                                     │
+----
+
+==== Fenêtre de gestion des profils
+
+----
+  ┌─ Profils de configuration ──────────────────────────────────┐
+  │                                                              │
+  │  Nom du profil : [ RHEL 9 production      ] [Enregistrer]  │
+  │                                                              │
+  │  ─────────────────────────────────────────────────────────  │
+  │  RHEL 9 production               [Charger] [Supprimer]      │
+  │  Audit Python                    [Charger] [Supprimer]      │
+  │  CI/CD minimal                   [Charger] [Supprimer]      │
+  │                                                              │
+  └──────────────────────────────────────────────────────────────┘
+----
+
+[cols="2,3"]
+|===
+|*Enregistrer* |Sauvegarde l'état actuel de tous les champs sous le nom saisi
+|*Charger* |Applique les valeurs du profil (sauf le fichier d'entrée)
+|*Supprimer* |Demande confirmation, puis supprime le profil
+|===
+
+NOTE: Le *fichier d'entrée* n'est pas inclus dans les profils — il est
+généralement propre à chaque contexte d'utilisation.
+
+TIP: Si un profil du même nom existe déjà, *Enregistrer* le met à jour.
 
 === Prévisualisation de la commande
 
@@ -799,18 +845,34 @@ Apparaît une fois l'analyse terminée, avant les onglets de résultats.
 ==== Vue Table
 
 [[sec-vue-table]]
-La vue Table affiche une barre de filtres par sévérité, puis la liste des
-vulnérabilités :
+La vue Table affiche une barre d'outils de recherche/tri, les filtres par
+sévérité, puis la liste des vulnérabilités :
 
 ----
+  [ Rechercher...                        ] [⬇]
   Filtre : [Critical (1)] [High (2)] [Medium (2)] [Low (0)]  [Tout voir]
 
-  ┌────────────┬──────────────────────────────────────┬───────────────┬──────┐
-  │ CRITICAL   │ openssl       1.1.1k → 1.1.1l       │ CVE-2021-3711 │ rpm  │
-  │ HIGH       │ bash          5.0.17  (no fix)       │ CVE-2021-3489 │ rpm  │
-  │ MEDIUM     │ zlib          1.2.11  → 1.2.12       │ CVE-2022-37434│ rpm  │
-  └────────────┴──────────────────────────────────────┴───────────────┴──────┘
+  ┌────────────┬──────────────────┬──────────────────┬───────────────┬──────┐
+  │ SÉVÉRITÉ ↕ │ PAQUET ↕         │ VERSION ↕        │ CVE/ID ↕      │ TYPE │
+  ├────────────┼──────────────────┼──────────────────┼───────────────┼──────┤
+  │ CRITICAL   │ openssl          │ 1.1.1k → 1.1.1l  │ CVE-2021-3711 │ rpm  │
+  │ HIGH       │ bash             │ 5.0.17  (no fix) │ CVE-2021-3489 │ rpm  │
+  │ MEDIUM     │ zlib             │ 1.2.11  → 1.2.12 │ CVE-2022-37434│ rpm  │
+  └────────────┴──────────────────┴──────────────────┴───────────────┴──────┘
 ----
+
+*Recherche* : le champ de recherche filtre en temps réel sur le nom du paquet,
+l'identifiant CVE, la version ou le type.
+
+*Tri* : cliquez sur l'en-tête d'une colonne (SÉVÉRITÉ, PAQUET, VERSION, CVE/ID)
+pour trier dans l'ordre croissant, cliquez à nouveau pour inverser. La flèche ↑↓
+indique la colonne et le sens de tri actifs. Par défaut, les résultats sont triés
+par sévérité décroissante (Critical en premier).
+
+*Export CSV* : le bouton ⬇ (téléchargement) exporte la liste filtrée en cours
+(tenant compte de la recherche et des filtres sévérité) dans un fichier `.csv`
+au format RFC 4180. Colonnes : Sévérité, CVE/ID, Paquet, Version installée,
+Version corrigée, Type.
 
 *Filtres par sévérité* : cliquez sur un ou plusieurs badges pour n'afficher que
 les vulnérabilités du niveau correspondant. Le bouton *Tout voir* efface les
@@ -825,8 +887,6 @@ Colonnes :
   La mention `(won't fix)` indique que le mainteneur ne prévoit pas de correction.
 * *CVE* : identifiant cliquable — un clic copie l'identifiant dans le presse-papiers
 * *Type* : type de paquet (`rpm`, `python`, `deb`…)
-
-Les résultats sont triés par sévérité décroissante (Critical en premier).
 
 ==== Vue JSON
 
@@ -901,8 +961,24 @@ Un code de retour 1 indique qu'au moins une vulnérabilité a été trouvée
 
 ==== Vue Vulnérabilités
 
-Même présentation que Grype : filtre par sévérité (FilterChips Critical /
-High / Medium / Low / Unknown), puis liste des vulnérabilités.
+Même interface que l'onglet Grype : barre de recherche + tri + export CSV,
+filtres par sévérité, puis liste des vulnérabilités.
+
+----
+  [ Rechercher...                        ] [⬇]
+  Filtre : [Critical (1)] [High (2)] [Medium (0)] [Low (0)]  [Tout voir]
+
+  ┌────────────┬────────────────────┬────────────────┬────────────────────────┐
+  │ SÉVÉRITÉ ↕ │ CVE/ID ↕           │ PAQUET ↕       │ VERSION CORRIGÉE ↕     │
+  ├────────────┼────────────────────┼────────────────┼────────────────────────┤
+  │ CRITICAL   │ CVE-2023-12345     │ requests 2.28  │ 2.31.0                 │
+  └────────────┴────────────────────┴────────────────┴────────────────────────┘
+----
+
+*Recherche et tri* : identiques à l'onglet Grype (voir <<sec-vue-table>>).
+
+*Export CSV* : le bouton ⬇ exporte la vue filtrée. Colonnes : Sévérité,
+CVE/ID, Paquet, Version installée, Version corrigée, Écosystème.
 
 Colonnes :
 
@@ -993,9 +1069,15 @@ trivy sbom --format json --quiet \
 
 === Résultats
 
-Même présentation que l'onglet OSV-Scanner.
-La colonne *Titre* est affichée en sous-titre de chaque entrée,
-directement depuis le champ `Title` du JSON Trivy.
+Même interface que les onglets Grype et OSV-Scanner : barre de recherche
++ tri + export CSV, filtres par sévérité, puis liste des vulnérabilités.
+
+*Export CSV* (bouton ⬇) : colonnes Sévérité, CVE/ID, Paquet, Version
+installée, Version corrigée, Titre.
+
+La colonne *Titre* correspond au champ `Title` du JSON Trivy (description
+courte de la CVE). Elle apparaît en sous-titre de chaque entrée dans la
+liste.
 
 == Onglet Qualité SBOM — Évaluation de la qualité
 
