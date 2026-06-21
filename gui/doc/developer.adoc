@@ -7,7 +7,7 @@
 :source-highlighter: rouge
 :rouge-style: monokai
 :experimental:
-:docdate: 2026-06-19
+:docdate: 2026-06-21
 
 == Introduction
 
@@ -100,19 +100,24 @@ flutter build linux --release
 ----
 gui/
 ├── lib/
-│   ├── main.dart                     # Point d'entrée — StatefulWidget, ThemeMode
-│   ├── home_screen.dart              # Écran principal — layout 2 colonnes
+│   ├── main.dart                     # Point d'entrée — StatefulWidget, ThemeMode + couleur
+│   ├── home_screen.dart              # Écran principal — layout 2 colonnes + palette thème
 │   ├── models/
-│   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson)
-│   │   └── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
+│   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson + toCommandLine)
+│   │   ├── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
+│   │   └── app_themes.dart           # Thèmes de couleur prédéfinis (kAppThemes, AppTheme)
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
 │   │   ├── grype_runner.dart         # Exécute grype, stream d'événements
-│   │   └── settings_service.dart     # Localisation binaire + persistance settings
+│   │   ├── osv_runner.dart           # Exécute osv-scanner, stream d'événements
+│   │   ├── trivy_runner.dart         # Exécute trivy, stream d'événements
+│   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
-│       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop
-│       ├── results_panel.dart        # Panneau droit : 4 onglets
-│       └── grype_panel.dart          # Contenu de l'onglet Grype (autonome)
+│       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
+│       ├── results_panel.dart        # Panneau droit : 6 onglets
+│       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
+│       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
+│       └── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
 ├── doc/
 │   ├── developer.adoc               # Ce document
 │   └── user.adoc                    # Guide utilisateur

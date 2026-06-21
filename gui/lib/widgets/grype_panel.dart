@@ -77,7 +77,9 @@ class GrypePanel extends StatefulWidget {
 }
 
 class _GrypePanelState extends State<GrypePanel>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   final _runner = GrypeRunner();
   final _fileCtrl = TextEditingController();
   final _configCtrl = TextEditingController();
@@ -152,10 +154,10 @@ class _GrypePanelState extends State<GrypePanel>
     if (file != null) setState(() => _fileCtrl.text = file.path);
   }
 
-  Future<void> _pickSbomFile() async {
+  Future<void> _pickSbomFile({bool filtered = true}) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json', 'jsonld'],
+      type: filtered ? FileType.custom : FileType.any,
+      allowedExtensions: filtered ? ['json', 'jsonld'] : null,
       dialogTitle: 'Choisir un fichier SBOM',
     );
     if (result?.files.single.path != null) {
@@ -163,10 +165,10 @@ class _GrypePanelState extends State<GrypePanel>
     }
   }
 
-  Future<void> _pickConfigFile() async {
+  Future<void> _pickConfigFile({bool filtered = true}) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['yaml', 'yml'],
+      type: filtered ? FileType.custom : FileType.any,
+      allowedExtensions: filtered ? ['yaml', 'yml'] : null,
       dialogTitle: 'Choisir grype.yaml',
     );
     if (result?.files.single.path != null) {
@@ -174,10 +176,10 @@ class _GrypePanelState extends State<GrypePanel>
     }
   }
 
-  Future<void> _pickTemplateFile() async {
+  Future<void> _pickTemplateFile({bool filtered = true}) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['tmpl', 'tpl', 'txt'],
+      type: filtered ? FileType.custom : FileType.any,
+      allowedExtensions: filtered ? ['tmpl', 'tpl', 'txt'] : null,
       dialogTitle: 'Choisir un fichier template Grype',
     );
     if (result?.files.single.path != null) {
@@ -263,6 +265,7 @@ class _GrypePanelState extends State<GrypePanel>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final showResults =
         _vulns.isNotEmpty || _jsonOutput.isNotEmpty || _templateOutput.isNotEmpty;
 
@@ -282,8 +285,11 @@ class _GrypePanelState extends State<GrypePanel>
           severities: _severities,
           isRunning: _isRunning,
           onPickSbom: _pickSbomFile,
+          onPickSbomAll: () => _pickSbomFile(filtered: false),
           onPickConfig: _pickConfigFile,
+          onPickConfigAll: () => _pickConfigFile(filtered: false),
           onPickTemplate: _pickTemplateFile,
+          onPickTemplateAll: () => _pickTemplateFile(filtered: false),
           onPlatformLinuxChanged: (v) =>
               setState(() => _platformLinux = v ?? true),
           onAddCpesIfNoneChanged: (v) =>
@@ -382,8 +388,11 @@ class _ConfigSection extends StatelessWidget {
   final List<String> severities;
   final bool isRunning;
   final VoidCallback onPickSbom;
+  final VoidCallback onPickSbomAll;
   final VoidCallback onPickConfig;
+  final VoidCallback onPickConfigAll;
   final VoidCallback onPickTemplate;
+  final VoidCallback onPickTemplateAll;
   final ValueChanged<bool?> onPlatformLinuxChanged;
   final ValueChanged<bool?> onAddCpesIfNoneChanged;
   final ValueChanged<bool?> onByCveChanged;
@@ -407,8 +416,11 @@ class _ConfigSection extends StatelessWidget {
     required this.severities,
     required this.isRunning,
     required this.onPickSbom,
+    required this.onPickSbomAll,
     required this.onPickConfig,
+    required this.onPickConfigAll,
     required this.onPickTemplate,
+    required this.onPickTemplateAll,
     required this.onPlatformLinuxChanged,
     required this.onAddCpesIfNoneChanged,
     required this.onByCveChanged,
@@ -443,10 +455,10 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: onPickSbom,
-                icon: const Icon(Icons.folder_open, size: 18),
-                label: const Text('Choisir'),
+              _SplitPickButton(
+                filterLabel: '.json .jsonld',
+                onPickFiltered: onPickSbom,
+                onPickAll: onPickSbomAll,
               ),
             ],
           ),
@@ -564,10 +576,10 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: onPickTemplate,
-                icon: const Icon(Icons.folder_open, size: 18),
-                label: const Text('Choisir'),
+              _SplitPickButton(
+                filterLabel: '.tmpl .tpl .txt',
+                onPickFiltered: onPickTemplate,
+                onPickAll: onPickTemplateAll,
               ),
             ],
           ),
@@ -590,10 +602,10 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: onPickConfig,
-                icon: const Icon(Icons.folder_open, size: 18),
-                label: const Text('Choisir'),
+              _SplitPickButton(
+                filterLabel: '.yaml .yml',
+                onPickFiltered: onPickConfig,
+                onPickAll: onPickConfigAll,
               ),
             ],
           ),
@@ -1198,3 +1210,62 @@ class _GrypeRunningHint extends StatelessWidget {
         ),
       );
 }
+
+// ─── Split-button pour sélection de fichier avec filtre ───────────────────────
+
+class _SplitPickButton extends StatefulWidget {
+  final String filterLabel;
+  final VoidCallback onPickFiltered;
+  final VoidCallback onPickAll;
+
+  const _SplitPickButton({
+    required this.filterLabel,
+    required this.onPickFiltered,
+    required this.onPickAll,
+  });
+
+  @override
+  State<_SplitPickButton> createState() => _SplitPickButtonState();
+}
+
+class _SplitPickButtonState extends State<_SplitPickButton> {
+  final MenuController _menu = MenuController();
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      controller: _menu,
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.filter_alt_outlined, size: 16),
+          onPressed: () {
+            _menu.close();
+            widget.onPickFiltered();
+          },
+          child: Text('Type filtré (${widget.filterLabel})'),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.folder_open, size: 16),
+          onPressed: () {
+            _menu.close();
+            widget.onPickAll();
+          },
+          child: const Text('Tous les fichiers'),
+        ),
+      ],
+      builder: (context, controller, _) => OutlinedButton.icon(
+        onPressed: controller.isOpen ? controller.close : controller.open,
+        icon: const Icon(Icons.folder_open, size: 18),
+        label: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Choisir'),
+            SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

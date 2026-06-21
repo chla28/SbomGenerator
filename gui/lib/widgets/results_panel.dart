@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/sbom_result.dart';
 import 'grype_panel.dart';
+import 'osv_panel.dart';
+import 'trivy_panel.dart';
 
 class ResultsPanel extends StatefulWidget {
   final List<String> logLines;
@@ -55,7 +57,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -229,6 +231,26 @@ class _ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.plagiarism_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('OSV-Scanner'),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Trivy'),
+                  ],
+                ),
+              ),
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -288,7 +310,13 @@ class _ResultsPanelState extends State<ResultsPanel>
               // Tab 2 : Grype
               GrypePanel(outputFiles: widget.outputFiles),
 
-              // Tab 3 : Aperçu SBOM
+              // Tab 3 : OSV-Scanner
+              OsvPanel(outputFiles: widget.outputFiles),
+
+              // Tab 4 : Trivy
+              TrivyPanel(outputFiles: widget.outputFiles),
+
+              // Tab 5 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,
@@ -550,6 +578,7 @@ class _LogView extends StatelessWidget {
   const _LogView({required this.lines, required this.scrollController});
 
   static Color? _lineColor(String line) {
+    if (line.startsWith('\$ ')) return Colors.cyan[300];
     if (line.startsWith('Error:')) return Colors.red[300];
     if (line.startsWith('Warning:') ||
         line.startsWith('⚠') ||

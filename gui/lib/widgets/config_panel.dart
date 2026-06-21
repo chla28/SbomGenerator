@@ -1,7 +1,9 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/sbom_config.dart';
+import '../services/settings_service.dart';
 
 class ConfigPanel extends StatefulWidget {
   final SbomConfig config;
@@ -175,10 +177,15 @@ class _ConfigPanelState extends State<ConfigPanel> {
                             hint: _isDragging
                                 ? 'Déposez le fichier ici…'
                                 : 'rpm.lst, requirements.txt, …',
-                            onPick: () => _pickFile(
+                            onPickFiltered: () => _pickFile(
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
                               extensions: ['lst', 'txt'],
+                            ),
+                            filterLabel: '.lst .txt',
+                            onPick: () => _pickFile(
+                              _inputCtrl,
+                              title: 'Sélectionner le fichier d\'entrée',
                             ),
                             onChanged: (_) => _sync(),
                             validator: (v) =>
@@ -327,10 +334,15 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         label: 'Override licences (--license-map)',
                         controller: _licenseMapCtrl,
                         hint: 'Fichier "paquet: SPDX-expression"',
-                        onPick: () => _pickFile(
+                        onPickFiltered: () => _pickFile(
                           _licenseMapCtrl,
                           title: 'Fichier de map licences',
                           extensions: ['txt', 'map'],
+                        ),
+                        filterLabel: '.txt .map',
+                        onPick: () => _pickFile(
+                          _licenseMapCtrl,
+                          title: 'Fichier de map licences',
                         ),
                         onChanged: (_) => _sync(),
                       ),
@@ -423,7 +435,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
 
             // Bouton Run / Stop
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: widget.isRunning
                   ? OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
@@ -447,6 +459,61 @@ class _ConfigPanelState extends State<ConfigPanel> {
                             fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
+            ),
+            _CommandPreview(
+              commandLine: widget.config.toCommandLine(SettingsService.cliBinary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Prévisualisation de la commande ──────────────────────────────────────────
+
+class _CommandPreview extends StatelessWidget {
+  final String commandLine;
+
+  const _CommandPreview({required this.commandLine});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFF2B2B2B),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SelectableText(
+                '\$ $commandLine',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  color: Color(0xFF80CBC4),
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message: 'Copier la commande',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: () => Clipboard.setData(ClipboardData(text: commandLine)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.copy, size: 14, color: Color(0xFF80CBC4)),
+                ),
+              ),
             ),
           ],
         ),
@@ -501,6 +568,8 @@ class _FileField extends StatelessWidget {
   final TextEditingController controller;
   final String? hint;
   final VoidCallback onPick;
+  final VoidCallback? onPickFiltered;
+  final String? filterLabel;
   final ValueChanged<String>? onChanged;
   final FormFieldValidator<String>? validator;
 
@@ -508,6 +577,8 @@ class _FileField extends StatelessWidget {
     required this.label,
     required this.controller,
     required this.onPick,
+    this.onPickFiltered,
+    this.filterLabel,
     this.hint,
     this.onChanged,
     this.validator,
@@ -521,11 +592,39 @@ class _FileField extends StatelessWidget {
           hintText: hint,
           border: const OutlineInputBorder(),
           isDense: true,
-          suffixIcon: IconButton(
-            icon: const Icon(Icons.folder_open, size: 18),
-            onPressed: onPick,
-            tooltip: 'Parcourir…',
-          ),
+          suffixIcon: onPickFiltered != null
+              ? PopupMenuButton<bool>(
+                  icon: const Icon(Icons.folder_open, size: 18),
+                  tooltip: 'Parcourir…',
+                  onSelected: (filtered) =>
+                      filtered ? onPickFiltered!() : onPick(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: true,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading:
+                            const Icon(Icons.filter_alt_outlined, size: 16),
+                        title: Text('Type filtré ($filterLabel)'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: false,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.folder_open, size: 16),
+                        title: Text('Tous les fichiers'),
+                      ),
+                    ),
+                  ],
+                )
+              : IconButton(
+                  icon: const Icon(Icons.folder_open, size: 18),
+                  onPressed: onPick,
+                  tooltip: 'Parcourir…',
+                ),
         ),
         style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
         onChanged: onChanged,

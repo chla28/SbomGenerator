@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'models/app_themes.dart';
 import 'models/sbom_config.dart';
 import 'models/sbom_result.dart';
 import 'services/sbom_runner.dart';
@@ -13,12 +14,16 @@ class HomeScreen extends StatefulWidget {
   final SbomConfig? initialConfig;
   final ThemeMode themeMode;
   final VoidCallback onThemeToggle;
+  final int themeIndex;
+  final ValueChanged<int> onThemeIndexChanged;
 
   const HomeScreen({
     super.key,
     this.initialConfig,
     required this.themeMode,
     required this.onThemeToggle,
+    required this.themeIndex,
+    required this.onThemeIndexChanged,
   });
 
   @override
@@ -54,10 +59,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _startScan() {
     _saveSettings();
+    final cmdLine = _config.toCommandLine(SettingsService.cliBinary);
     setState(() {
       _isRunning = true;
       _isPdfRunning = false;
-      _logLines = [];
+      _logLines = ['\$ $cmdLine'];
       _outputFiles = [];
       _warnings = [];
       _fatalError = null;
@@ -247,6 +253,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           IconButton(
+            icon: const Icon(Icons.palette_outlined),
+            tooltip: 'Couleur du thème',
+            onPressed: () => _showThemePicker(context),
+          ),
+          IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             tooltip: isDark ? 'Mode clair' : 'Mode sombre',
             onPressed: widget.onThemeToggle,
@@ -290,6 +301,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showThemePicker(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _ThemePickerDialog(
+        currentIndex: widget.themeIndex,
+        onSelected: (i) {
+          widget.onThemeIndexChanged(i);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
   void _showAbout(BuildContext context) {
     showAboutDialog(
       context: context,
@@ -305,6 +329,117 @@ class _HomeScreenState extends State<HomeScreen> {
           'JSON personnalisé, Markdown, AsciiDoc.',
         ),
       ],
+    );
+  }
+}
+
+// ─── Sélecteur de thème de couleur ───────────────────────────────────────────
+
+class _ThemePickerDialog extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onSelected;
+
+  const _ThemePickerDialog({
+    required this.currentIndex,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.palette_outlined, size: 20),
+          SizedBox(width: 8),
+          Text('Couleur du thème'),
+        ],
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+      content: SizedBox(
+        width: 320,
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (int i = 0; i < kAppThemes.length; i++)
+              _ThemeSwatch(
+                theme: kAppThemes[i],
+                selected: i == currentIndex,
+                onTap: () => onSelected(i),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Annuler'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ThemeSwatch extends StatelessWidget {
+  final AppTheme theme;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeSwatch({
+    required this.theme,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: theme.label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(32),
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: theme.color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected
+                      ? Theme.of(context).colorScheme.onSurface
+                      : Colors.transparent,
+                  width: 3,
+                ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: theme.color.withValues(alpha: 0.5),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: selected
+                  ? const Icon(Icons.check, color: Colors.white, size: 22)
+                  : null,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              theme.label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                    selected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

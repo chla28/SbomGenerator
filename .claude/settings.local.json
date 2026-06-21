@@ -15,7 +15,9 @@
       "Bash(echo \"PID: $!\")",
       "Bash(jobs -l)",
       "Bash(flutter pub *)",
-      "Bash(flutter build *)"
+      "Bash(flutter build *)",
+      "Bash(osv-scanner --version)",
+      "Bash(osv-scanner --help)"
     ]
   }
 }

@@ -5,7 +5,7 @@
 :sectnums:
 :icons: font
 :experimental:
-:docdate: 2026-06-19
+:docdate: 2026-06-21
 
 == Introduction
 
@@ -61,13 +61,19 @@ Niveaux de sévérité (du plus critique au plus bénin) :
 des outils en ligne de commande :
 
 * `sbom-generator` : génère des fichiers SBOM depuis une liste de paquets
-* `grype` : analyse les SBOM générés pour détecter les vulnérabilités CVE
+* `grype` : analyse les SBOM générés pour détecter les vulnérabilités CVE (Anchore)
+* `osv-scanner` : analyse les SBOM pour détecter les vulnérabilités CVE (Google)
+* `trivy` : analyse les SBOM pour détecter les vulnérabilités CVE (Aqua Security)
 * `sbomqs` : calcule un score de qualité SBOM (optionnel)
 * `asciidoctor-pdf` : convertit le rapport AsciiDoc en PDF (optionnel)
 
 L'interface permet de configurer les options, suivre l'exécution en temps réel,
 accéder aux fichiers produits, les prévisualiser, et lancer une analyse de
 vulnérabilités sans jamais ouvrir un terminal.
+
+Pour chaque lancement, la *ligne de commande équivalente* est affichée dans
+l'interface — sous le bouton *▶ Générer le SBOM* et comme première entrée du
+journal de progression.
 
 Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 
@@ -87,6 +93,14 @@ Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 |Non
 |Analyse des vulnérabilités CVE (onglet Grype)
 
+|`osv-scanner`
+|Non
+|Analyse des vulnérabilités CVE (onglet OSV-Scanner)
+
+|`trivy`
+|Non
+|Analyse des vulnérabilités CVE (onglet Trivy)
+
 |`asciidoctor-pdf`
 |Non
 |Conversion automatique du rapport AsciiDoc en PDF
@@ -102,6 +116,8 @@ Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 ----
 sbom-generator --version
 grype version
+osv-scanner --version
+trivy --version
 asciidoctor-pdf --version
 sbomqs version
 ----
@@ -116,6 +132,41 @@ curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
 
 # Vérifier
 grype version
+----
+
+==== Installer osv-scanner (optionnel)
+
+[source,bash]
+----
+# Script officiel Google
+curl -sSfL \
+  https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Ou via Go (si Go est installé)
+go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+# Vérifier
+osv-scanner --version
+----
+
+NOTE: `osv-scanner` doit être accessible dans le PATH au lancement du GUI.
+Si l'outil est installé via Go dans `~/go/bin`, ajoutez ce dossier au PATH
+de votre session graphique (`~/.profile` ou `~/.bash_profile`).
+
+==== Installer trivy (optionnel)
+
+[source,bash]
+----
+# Script officiel Aqua Security
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Ou via le gestionnaire de paquets (Fedora/RHEL)
+sudo rpm -ivh https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.rpm
+
+# Vérifier
+trivy --version
 ----
 
 ==== Installer asciidoctor-pdf (optionnel)
@@ -157,43 +208,47 @@ Si le binaire n'est pas dans le PATH, exécutez-le directement :
 L'interface est divisée en deux panneaux séparés par un séparateur vertical.
 
 ----
-┌────────────────────────────────────────────────────────────────────────┐
-│  🗒 SBOM Generator                          [🌙] [ℹ]                  │
-├──────────────────────┬─────────────────────────────────────────────────┤
-│                      │                                                  │
-│   Configuration      │ [Progression][Résultats (2)][Grype][Aperçu (2)] │
-│   ────────────────   │ ──────────────────────────────────────────────── │
-│   ENTRÉE             │                                                  │
-│   [fichier.lst 📂]   │   12 / 23  52%    bash-5.1.8-6.el9.x86_64       │
-│   (glisser-déposer)  │   ████████████████░░░░░░░░░░░░                  │
-│                      │                                                  │
-│   SORTIE             │   Generating CycloneDX…                         │
-│   [sbom       📂]    │   Resolved bash-5.1.8                           │
-│   [x] CycloneDX      │   SBOM written → sbom.cdx.json  (42.3 KB)       │
-│   [ ] SPDX 2.3       │                     [Copier] [Enregistrer]      │
-│   [ ] AsciiDoc       │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
-│   ...                │  ✔ 23 paquets  •  1 fichier SBOM                │
-│   OPTIONS            │                                                  │
-│   [Nom document ]    │                                                  │
-│   Concurrence: 4     │                                                  │
-│   [ ] Verbeux        │                                                  │
-│   [ ] Score sbomqs   │                                                  │
-│                      │                                                  │
-│  [▶ Générer SBOM]    │                                                  │
-│                      │                                                  │
-└──────────────────────┴─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│  🗒 SBOM Generator                         [🎨] [🌙] [ℹ]                 │
+├───────────────────────┬────────────────────────────────────────────────────┤
+│                       │                                                    │
+│   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Aperçu]│
+│   ─────────────────   │ ─────────────────────────────────────────────────  │
+│   ENTRÉE              │                                                    │
+│   [fichier.lst  📂▾]  │   12 / 23  52%    bash-5.1.8-6.el9.x86_64         │
+│   (glisser-déposer)   │   ████████████████░░░░░░░░░░░░                    │
+│                       │                                                    │
+│   SORTIE              │   $ sbom-generator --input …                      │
+│   [sbom        📂▾]   │   Generating CycloneDX…                           │
+│   [x] CycloneDX       │   Resolved bash-5.1.8                             │
+│   [ ] SPDX 2.3        │   SBOM written → sbom.cdx.json  (42.3 KB)         │
+│   [ ] AsciiDoc        │                      [Copier] [Enregistrer]       │
+│   ...                 │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │
+│   OPTIONS             │  ✔ 23 paquets  •  1 fichier SBOM                  │
+│   [Nom document ]     │                                                    │
+│   Concurrence: 4      │                                                    │
+│   [ ] Verbeux         │                                                    │
+│   [ ] Score sbomqs    │                                                    │
+│                       │                                                    │
+│  [▶ Générer SBOM]     │                                                    │
+│  $ sbom-generator …   │                                                    │
+│                       │                                                    │
+└───────────────────────┴────────────────────────────────────────────────────┘
 ----
 
 *Panneau gauche — Configuration* : réglage de toutes les options avant
 le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
-automatiquement à chaque démarrage.
+automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
+sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : quatre onglets — Progression (avec export
-des logs et résumé), Résultats (fichiers + score sbomqs), Grype (analyse
-CVE) et Aperçu (prévisualisation du contenu SBOM).
+*Panneau droit — Résultats* : six onglets — Progression (avec export
+des logs et résumé), Résultats (fichiers + score sbomqs), Grype,
+OSV-Scanner et Trivy (analyses CVE), et Aperçu (prévisualisation du
+contenu SBOM).
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
-mode clair. La préférence est sauvegardée.
+mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
+Les deux préférences sont sauvegardées.
 
 == Panneau Configuration
 
@@ -202,7 +257,13 @@ mode clair. La préférence est sauvegardée.
 ==== Fichier d'entrée (`--input`)
 
 Chemin vers le fichier contenant la liste des paquets à analyser.
-Cliquez sur l'icône 📂 pour ouvrir un sélecteur de fichiers.
+Le bouton 📂 à droite du champ propose un menu :
+
+[cols="2,3"]
+|===
+|*Type filtré (.lst, .txt…)* |N'affiche que les fichiers aux extensions courantes
+|*Tous les fichiers* |Affiche tous les fichiers du répertoire
+|===
 
 TIP: Vous pouvez également *glisser-déposer* un fichier depuis votre gestionnaire
 de fichiers (Nautilus, Thunar…) directement sur ce champ. Un liseré bleu indique
@@ -310,6 +371,8 @@ lorsque les paquets ne sont pas installés sur la machine courante.
 ==== Override de licences (`--license-map`)
 
 Fichier texte permettant de corriger ou préciser les licences de certains paquets.
+Le bouton à droite propose les mêmes options que le champ fichier d'entrée :
+type filtré (`.txt`, `.yaml`) ou tous les fichiers.
 Format : une règle par ligne : `nom-paquet: SPDX-expression`
 
 Exemple :
@@ -354,6 +417,20 @@ génération et *restaurés* au prochain démarrage de l'application.
 Les paramètres sauvegardés *ne comprennent pas* le fichier d'entrée (trop lié
 à un contexte particulier) ni le chemin du PDF.
 
+=== Prévisualisation de la commande
+
+Sous le bouton *▶ Générer le SBOM* s'affiche en permanence la ligne de commande
+shell équivalente à la configuration actuelle :
+
+----
+  $ sbom-generator --input /home/user/paquets.lst \
+    --output /home/user/sbom --format cyclonedx spdx
+----
+
+Cette prévisualisation se met à jour à chaque modification d'un champ.
+Un bouton 📋 permet de copier la commande dans le presse-papiers pour
+la rejouer depuis un terminal ou l'intégrer dans un script CI/CD.
+
 === Lancer et arrêter la génération
 
 Cliquez sur *▶ Générer le SBOM* pour démarrer.
@@ -369,6 +446,7 @@ L'onglet *Progression* s'active automatiquement au démarrage de la génération
   ████████████████████████████░░░░░░░░░░░░░░░
 
                                     [Copier] [Enregistrer]
+  $ sbom-generator --input /home/user/paquets.lst --output sbom …   ← cyan
   Generating CycloneDX 1.6 SBOM…
   Resolved bash-5.1.8-6.el9.x86_64
   Warning: licence inconnue pour 'mylib'
@@ -383,6 +461,9 @@ L'onglet *Progression* s'active automatiquement au démarrage de la génération
 [cols="2,3", options="header"]
 |===
 |Couleur |Signification
+
+|Cyan
+|Commande shell lancée (première ligne, préfixée par `$`)
 
 |Blanc (défaut)
 |Information générale
@@ -767,6 +848,206 @@ pas encore été lancée.
 
 Le bouton 📋 copie la sortie dans le presse-papiers.
 
+== Onglet OSV-Scanner — Analyse de vulnérabilités
+
+L'onglet *OSV-Scanner* utilise l'outil de Google pour rechercher les
+vulnérabilités à partir d'un fichier SBOM. Son interface est identique à
+celle de l'onglet Grype.
+
+----
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
+  │  Config toml  : [                               ] [Choisir ▾]   │
+  │                                                      [Analyser]  │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 3 vulnérabilité(s) : 1 Critical, 2 High                       │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnérabilités (3)]  │ [JSON brut]                               │
+  └───────────────────────┴───────────────────────────────────────────┘
+----
+
+=== Prérequis
+
+`osv-scanner` doit être installé et accessible dans le PATH
+(voir <<_installer_osv_scanner_optionnel>>).
+
+=== Sélection du fichier SBOM
+
+Même comportement que dans l'onglet Grype : le champ est pré-rempli avec
+le dernier fichier généré. Le bouton *Choisir* propose :
+
+* *Type filtré* : fichiers `.json` et `.jsonld`
+* *Tous les fichiers*
+
+=== Configuration optionnelle (toml)
+
+Chemin vers un fichier de configuration `osv-scanner.toml` permettant
+de définir des règles d'ignorance par ID de vulnérabilité. Ce paramètre
+est optionnel.
+
+=== Lancer l'analyse
+
+Cliquez sur *Analyser*. OSV-Scanner s'exécute avec les arguments :
+
+[source,bash]
+----
+osv-scanner --format json --sbom /chemin/vers/sbom.cdx.json
+----
+
+Un code de retour 1 indique qu'au moins une vulnérabilité a été trouvée
+(c'est normal, pas une erreur) ; un code supérieur à 1 indique une erreur.
+
+=== Résultats
+
+==== Vue Vulnérabilités
+
+Même présentation que Grype : filtre par sévérité (FilterChips Critical /
+High / Medium / Low / Unknown), puis liste des vulnérabilités.
+
+Colonnes :
+
+* Badge de sévérité coloré
+* Identifiant CVE (cliquable — copie dans le presse-papiers)
+* Nom et version du paquet affecté
+* Version corrigée (si disponible)
+
+La sévérité est déterminée depuis le champ `database_specific.severity`
+ou depuis les scores CVSS présents dans le JSON OSV.
+
+==== Vue JSON brut
+
+Affiche le JSON complet retourné par `osv-scanner`, utile pour inspecter
+les métadonnées détaillées de chaque vulnérabilité.
+
+== Onglet Trivy — Analyse de vulnérabilités
+
+L'onglet *Trivy* utilise l'outil d'Aqua Security. Il propose des options
+supplémentaires par rapport à OSV-Scanner et Grype.
+
+----
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
+  │                                                                   │
+  │  Sévérités : [CRITICAL] [HIGH] [MEDIUM] [LOW] [UNKNOWN]          │
+  │  [ ] --ignore-unfixed   [ ] --skip-db-update                     │
+  │  trivy.yaml   : [                               ] [Choisir ▾]   │
+  │                                                      [Analyser]  │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 4 vulnérabilité(s) : 1 CRITICAL, 3 HIGH                       │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnérabilités (4)]  │ [JSON brut]                               │
+  └───────────────────────┴───────────────────────────────────────────┘
+----
+
+=== Prérequis
+
+`trivy` doit être installé et accessible dans le PATH
+(voir <<_installer_trivy_optionnel>>).
+
+=== Sélection du fichier SBOM
+
+Même comportement que les autres onglets d'analyse CVE.
+
+=== Options de scan
+
+==== Filtre de sévérités (`--severity`)
+
+Cochez une ou plusieurs sévérités pour limiter l'analyse.
+Si aucune n'est cochée, toutes les sévérités sont analysées.
+
+Niveaux disponibles : *CRITICAL*, *HIGH*, *MEDIUM*, *LOW*, *UNKNOWN*.
+
+==== `--ignore-unfixed`
+
+N'affiche que les vulnérabilités pour lesquelles une version corrigée
+est disponible. Équivalent à `--only-fixed` dans Grype.
+
+==== `--skip-db-update`
+
+Empêche Trivy de mettre à jour sa base de données locale au démarrage.
+Utile en environnement hors-ligne ou pour des analyses répétées rapides
+lorsque la base est déjà à jour.
+
+==== Fichier de configuration (`trivy.yaml`)
+
+Chemin vers un fichier de configuration Trivy au format YAML.
+Permet de définir des règles d'ignorance, des proxies, des registres
+privés, etc.
+
+Ce paramètre est optionnel. Le bouton *Choisir* propose un filtre
+`.yaml` / `.yml` ou tous les fichiers.
+
+=== Commande équivalente
+
+Trivy est lancé avec les arguments :
+
+[source,bash]
+----
+trivy sbom --format json --quiet \
+  [--severity CRITICAL,HIGH,...] \
+  [--ignore-unfixed] \
+  [--skip-db-update] \
+  [--config trivy.yaml] \
+  /chemin/vers/sbom.cdx.json
+----
+
+=== Résultats
+
+Même présentation que l'onglet OSV-Scanner.
+La colonne *Titre* est affichée en sous-titre de chaque entrée,
+directement depuis le champ `Title` du JSON Trivy.
+
+== Personnalisation de l'apparence
+
+=== Sélecteur de thème de couleur
+
+Cliquez sur l'icône 🎨 dans la barre de titre pour ouvrir le sélecteur
+de couleurs. Dix thèmes prédéfinis sont proposés :
+
+[cols="2,2", options="header"]
+|===
+|Thème |Couleur principale
+
+|Indigo (défaut)
+|Indigo foncé (#1A237E)
+
+|Bleu
+|Bleu foncé (#1565C0)
+
+|Violet
+|Violet profond (#4A148C)
+
+|Teal
+|Vert-bleu foncé (#004D40)
+
+|Vert
+|Vert forêt (#1B5E20)
+
+|Orange
+|Orange brûlé (#BF360C)
+
+|Rouge
+|Rouge sang (#B71C1C)
+
+|Rose
+|Rose profond (#880E4F)
+
+|Ardoise
+|Gris ardoise (#37474F)
+
+|Marron
+|Marron (#4E342E)
+|===
+
+Le thème sélectionné est appliqué immédiatement et *sauvegardé* pour la
+prochaine session.
+
+=== Bascule clair / sombre
+
+Le bouton 🌙 / ☀ alterne entre mode sombre et mode clair. La couleur du
+thème reste identique dans les deux modes — seule la luminosité globale
+change. La préférence est également sauvegardée.
+
 == Flux de travail typiques
 
 === Scénario 1 — Générer un SBOM depuis une liste RPM
@@ -803,7 +1084,7 @@ Le bouton 📋 copie la sortie dans le presse-papiers.
 Utilisez ↗ pour ouvrir le fichier JSON généré.
 |===
 
-=== Scénario 2 — Générer un SBOM puis analyser les vulnérabilités
+=== Scénario 2 — Générer un SBOM puis analyser les vulnérabilités avec Grype
 
 Suite du scénario 1 :
 
@@ -835,6 +1116,37 @@ pour produire un export CSV
 |15
 |Consultez la vue *Table* pour un aperçu par sévérité, la vue *JSON* pour
 les détails techniques, et la vue *Template* pour l'export CSV
+|===
+
+=== Scénario 2b — Croiser les résultats OSV-Scanner et Trivy
+
+[cols="1,4"]
+|===
+|Étape |Action
+
+|1
+|Après une génération SBOM, passez sur l'onglet *OSV-Scanner*.
+Le champ *Fichier SBOM* est pré-rempli.
+
+|2
+|Cliquez sur *Analyser*. Consultez la vue *Vulnérabilités* avec les
+filtres par sévérité.
+
+|3
+|Passez sur l'onglet *Trivy*. Le champ *Fichier SBOM* est également
+pré-rempli (les onglets mémorisent leur état lors de la navigation).
+
+|4
+|Optionnel : cochez *--ignore-unfixed* pour ne voir que les
+vulnérabilités corrigeables.
+
+|5
+|Cliquez sur *Analyser*. Comparez les résultats Trivy avec ceux
+d'OSV-Scanner pour détecter d'éventuels faux-positifs ou faux-négatifs.
+
+|6
+|Consultez la vue *JSON brut* de chaque onglet pour accéder aux
+métadonnées détaillées (CVSS, références, packages affectés).
 |===
 
 === Scénario 3 — Évaluation de la qualité SBOM avec sbomqs
@@ -917,6 +1229,58 @@ est dans le PATH :
 ----
 which grype
 grype version
+----
+
+=== `osv-scanner` introuvable
+
+*Symptôme* : l'analyse OSV-Scanner échoue avec un message du type
+`osv-scanner: commande introuvable` ou le fichier SBOM n'est pas trouvé.
+
+*Solution* : vérifiez que `osv-scanner` est dans le PATH de votre session
+graphique (pas seulement dans le terminal) :
+
+[source,bash]
+----
+which osv-scanner
+osv-scanner --version
+----
+
+Si `osv-scanner` est installé via `go install` dans `~/go/bin`, ce dossier
+n'est souvent pas dans le PATH graphique. Ajoutez-le dans `~/.profile` :
+
+[source,bash]
+----
+export PATH="$HOME/go/bin:$PATH"
+----
+
+Puis reconnectez-vous ou relancez le GUI.
+
+=== `trivy` introuvable
+
+*Symptôme* : l'analyse Trivy échoue avec un message du type
+`trivy: commande introuvable`.
+
+*Solution* : vérifiez que `trivy` est dans le PATH :
+
+[source,bash]
+----
+which trivy
+trivy --version
+----
+
+Installez-le si nécessaire (voir <<_installer_trivy_optionnel>>).
+
+=== La base de données Trivy est obsolète
+
+*Symptôme* : Trivy affiche un avertissement sur l'âge de sa base de données.
+
+*Solution* : laissez *--skip-db-update* décoché (comportement par défaut)
+pour que Trivy mette à jour sa base automatiquement au lancement.
+En environnement hors-ligne, mettez à jour manuellement :
+
+[source,bash]
+----
+trivy image --download-db-only
 ----
 
 === Aucune vulnérabilité détectée malgré un SBOM chargé

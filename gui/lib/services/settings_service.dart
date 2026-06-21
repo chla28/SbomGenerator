@@ -10,6 +10,7 @@ import '../models/sbom_config.dart';
 class SettingsService {
   static const _configKey = 'sbom_config_v1';
   static const _themeKey = 'theme_mode';
+  static const _themeColorKey = 'theme_color_index';
 
   static String get cliBinary {
     final exeDir = p.dirname(Platform.resolvedExecutable);
@@ -52,5 +53,15 @@ class SettingsService {
       'light' => ThemeMode.light,
       _ => ThemeMode.system,
     };
+  }
+
+  static Future<void> saveThemeColorIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_themeColorKey, index);
+  }
+
+  static Future<int> loadThemeColorIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_themeColorKey) ?? 0;
   }
 }

@@ -93,6 +93,13 @@ class SbomConfig {
     return args;
   }
 
+  /// Ligne de commande équivalente (affichage uniquement).
+  String toCommandLine(String binary) {
+    return [binary, ...toArgs()]
+        .map((s) => s.contains(' ') ? '"$s"' : s)
+        .join(' ');
+  }
+
   /// Chemins de sortie attendus (prévisualisation avant exécution).
   List<String> expectedOutputPaths() {
     final base = outputBase.isEmpty ? 'sbom' : outputBase;
