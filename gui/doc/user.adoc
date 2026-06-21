@@ -1179,6 +1179,189 @@ Comme les autres onglets d'analyse, l'onglet *Qualité SBOM* mémorise son
 état lors de la navigation entre onglets : le fichier sélectionné et les
 résultats restent affichés même après avoir consulté un autre onglet.
 
+== Onglet Tableau de bord — Synthèse CVE
+
+L'onglet *Tableau de bord* présente une vue de synthèse qui agrège les
+résultats des trois scanners (Grype, OSV-Scanner, Trivy) sans avoir à
+naviguer entre chaque onglet. Il se peuple automatiquement après l'exécution
+des analyses.
+
+----
+  ┌─ Synthèse globale ────────────────────────────────────────────────────┐
+  │  3 scanners exécutés  •  87 CVE uniques  •  5 CVE communes (≥ 2)     │
+  └───────────────────────────────────────────────────────────────────────┘
+
+  ┌─ Grype (42) ───────────┐  ┌─ OSV-Scanner (31) ─────┐  ┌─ Trivy (38) ─────┐
+  │ CRITICAL  ██  5        │  │ CRITICAL  █   3         │  │ CRITICAL  ██  4   │
+  │ HIGH      ████ 18      │  │ HIGH      ████ 15       │  │ HIGH      ████ 16 │
+  │ MEDIUM    ███ 14       │  │ MEDIUM    ██  10        │  │ MEDIUM    ██  14  │
+  │ LOW       █   5        │  │ LOW       █   3         │  │ LOW       █   4   │
+  └────────────────────────┘  └────────────────────────┘  └──────────────────┘
+
+  ┌─ CVE présentes dans ≥ 2 scanners ────────────────────────────────────┐
+  │ CRITICAL  CVE-2021-3711   Grype ✓  OSV ✓  Trivy ✓                   │
+  │ HIGH      CVE-2023-38545  Grype ✓  OSV ✓  Trivy ✗                   │
+  └──────────────────────────────────────────────────────────────────────┘
+----
+
+=== Cartes par scanner
+
+Chaque scanner dispose d'une carte affichant :
+
+* La répartition par sévérité (barres empilées colorées)
+* Le nombre de vulnérabilités par niveau
+
+Les cartes des scanners non encore exécutés affichent un message d'invite.
+
+=== Synthèse globale
+
+La bandeau supérieur indique :
+
+* Le nombre de scanners ayant produit des résultats
+* Le nombre total de CVE uniques (union des identifiants de tous les scanners)
+* Le nombre de CVE communes à au moins deux scanners
+
+=== CVE communes multi-scanners
+
+Le tableau en bas liste les vulnérabilités détectées par au moins deux scanners,
+triées par sévérité décroissante. Une coche ✓ / ✗ indique la présence ou l'absence
+dans chaque scanner.
+
+NOTE: Le Tableau de bord se met à jour automatiquement chaque fois qu'une analyse
+est lancée dans un onglet scanner. Aucune action supplémentaire n'est requise.
+
+== Onglet Arborescence SBOM
+
+L'onglet *Arborescence SBOM* permet d'explorer les composants d'un fichier
+SBOM (CycloneDX ou SPDX) sans ouvrir un éditeur JSON.
+
+----
+  ┌─ Fichier : [ sbom.cdx.json ▼ ]  [📂 Ouvrir…]                      ─┐
+  │  CycloneDX 1.6  •  Mon Application 2.1.0  •  246 composants          │
+  ├─ Grouper par : [Aucun] [Type] [Licence]                               │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ ▶ rpm  (132)                                                           │
+  │ ▼ python  (89)                                                         │
+  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
+  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
+  │    ...                                                                 │
+  │ ▶ deb  (25)                                                            │
+  └────────────────────────────────────────────────────────────────────────┘
+----
+
+=== Sélection du fichier SBOM
+
+Le menu déroulant liste les fichiers SBOM générés dans la session courante.
+Le premier fichier `.cdx.json`, `.spdx.json` ou `.spdx3.jsonld` est
+sélectionné automatiquement.
+
+Le bouton *Ouvrir…* permet de charger n'importe quel fichier du système
+de fichiers.
+
+Formats supportés :
+
+* *CycloneDX 1.6* — `.cdx.json` (champ `components[]`)
+* *SPDX 2.x* — `.spdx.json` (champ `packages[]`)
+* *SPDX 3.0 JSON-LD* — `.spdx3.jsonld`
+
+=== Barre d'informations
+
+Après le chargement, une ligne de métadonnées s'affiche :
+
+* Format et version du SBOM
+* Nom du document / composant principal
+* Nombre total de composants
+
+=== Groupement
+
+Le sélecteur *Grouper par* propose trois modes :
+
+[cols="2,3"]
+|===
+|*Aucun* |Tous les composants dans une liste plate triée par nom
+|*Type* |Regroupement par type de paquet (rpm, python, deb…)
+|*Licence* |Regroupement par expression de licence SPDX
+|===
+
+Les groupes sont repliables. Cliquez sur l'en-tête d'un groupe pour
+l'ouvrir ou le fermer.
+
+=== Détails d'un composant
+
+Cliquez sur un composant pour afficher ses détails (champ expansible) :
+
+* *PURL* (Package URL) — cliquable pour copier dans le presse-papiers
+* *Version*
+* *Type*
+* *Licence*
+
+NOTE: Les composants sans PURL dans le SBOM n'affichent pas ce champ.
+
+=== Persistance de l'état
+
+L'onglet mémorise son état (fichier sélectionné, groupement, groupes
+ouverts/fermés) lors de la navigation entre onglets.
+
+== Onglet Comparaison SBOM
+
+L'onglet *Comparaison SBOM* met en évidence les différences entre deux
+fichiers SBOM (par exemple avant / après une mise à jour).
+
+----
+  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
+  │ [ /chemin/vers/avant.cdx.json ] [📂]  │  │ [ /chemin/vers/après.cdx.json ] [📂] │
+  └───────────────────────────────────────┘  └──────────────────────────────────────┘
+                                                                    [Comparer]
+
+  Ajoutés : 5  │  Supprimés : 3  │  Modifiés : 8  │  Inchangés : 230
+
+  Filtre : [✓ Ajoutés] [✓ Supprimés] [✓ Modifiés] [ Inchangés]
+  Recherche : [ openssl…                             ]
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
+  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
+  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+----
+
+=== Chargement des fichiers
+
+Sélectionnez un fichier dans chaque emplacement (SBOM A et SBOM B) via le
+bouton 📂 ou en saisissant un chemin. Les formats CycloneDX et SPDX sont
+supportés (mêmes formats que l'onglet Arborescence).
+
+Cliquez sur *Comparer* pour lancer la comparaison. Le bouton est actif
+uniquement si les deux fichiers sont sélectionnés.
+
+=== Barre de compteurs
+
+Affiche le nombre de composants dans chaque catégorie :
+
+[cols="1,1,3"]
+|===
+|+  (vert) |Ajoutés |Présents dans B, absents de A
+|−  (rouge) |Supprimés |Présents dans A, absents de B
+|~  (orange) |Modifiés |Présents dans A et B, mais avec version ou licence différente
+|=  (gris) |Inchangés |Identiques dans A et B
+|===
+
+=== Filtres et recherche
+
+Les puces de filtre permettent d'afficher ou masquer chaque catégorie.
+Par défaut, les composants *Inchangés* sont masqués pour se concentrer
+sur les différences.
+
+Le champ de recherche filtre sur le nom du composant en temps réel, en
+combinaison avec les filtres de catégorie.
+
+=== Colonne de différences
+
+Pour les composants *Modifiés* :
+
+* La *version* affiche l'ancienne valeur barrée et la nouvelle valeur en vert
+* La *licence* affiche l'ancienne valeur barrée et la nouvelle valeur en vert
+
 == Personnalisation de l'apparence
 
 === Sélecteur de thème de couleur

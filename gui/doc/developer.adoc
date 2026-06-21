@@ -114,11 +114,14 @@ gui/
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 6 onglets
+│       ├── results_panel.dart        # Panneau droit : 10 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
-│       └── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
+│       ├── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
+│       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
+│       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
+│       └── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
 ├── doc/
 │   ├── developer.adoc               # Ce document
 │   └── user.adoc                    # Guide utilisateur
@@ -411,10 +414,25 @@ Le service gère également la *persistance* via `shared_preferences` :
 
 |`loadThemeColorIndex()`
 |Retourne l'index sauvegardé, ou `0` (Indigo) par défaut
+
+|`listProfiles()`
+|Retourne la liste des noms de profils sauvegardés (clé `profile_names_v1`)
+
+|`saveProfile(String name, SbomConfig)`
+|Sérialise et stocke le profil sous la clé `profile_v1_<name encodé URI>`
+
+|`loadProfile(String name)`
+|Désérialise et retourne le `SbomConfig?` du profil nommé
+
+|`deleteProfile(String name)`
+|Supprime le profil et son nom de la liste
 |===
 
 La clé `sbom_config_v1` inclut un suffixe de version pour faciliter les
 migrations futures (ignorer les clés `v0` obsolètes, ajouter `v2`, etc.).
+
+Les noms de profils sont encodés avec `Uri.encodeComponent()` pour éviter
+les collisions entre noms contenant des caractères spéciaux.
 
 ==== `widgets/config_panel.dart` — Formulaire de configuration
 
@@ -430,11 +448,28 @@ migrations futures (ignorer les clés `v0` obsolètes, ajouter `v2`, etc.).
   gestionnaire de fichiers système — un booléen `_isDragging` déclenche un
   `AnimatedContainer` avec liseré bleu
 * propose la checkbox *Score qualité sbomqs* (pilote `SbomConfig.enableSbomqs`)
+* expose un bouton 🔖 dans l'en-tête pour la gestion des profils nommés
 
 Le paramètre `VoidCallback? onChanged` est appelé après chaque modification
 d'un champ (texte via `_sync()`, booléens directement dans leur `setState`).
 `HomeScreen` l'utilise pour déclencher `SettingsService.saveConfig()` sans
 attendre le prochain lancement.
+
+*Profils de configuration* : l'en-tête du panneau est un `Row` avec le titre
+à gauche et un `IconButton(Icons.bookmarks_outlined)` à droite. Ce bouton
+appelle `_showProfilesDialog(context)` qui ouvre `_ProfilesDialog`.
+
+`_ProfilesDialog` est un `StatefulWidget` défini en fin de fichier :
+
+* au `initState()`, charge la liste de profils via `SettingsService.listProfiles()`
+* affiche un `TextField` + bouton *Enregistrer* : appelle `_sync()` pour
+  s'assurer que `widget.config` est à jour, puis `SettingsService.saveProfile()`
+* pour chaque profil existant : bouton *Charger* (appelle `_loadProfileInto`)
+  et bouton *Supprimer* (dialog de confirmation, puis `SettingsService.deleteProfile()`)
+
+`_loadProfileInto(SbomConfig loaded)` copie tous les champs du profil dans les
+`TextEditingController` existants et appelle `_sync()` + `widget.onChanged?.call()`.
+Le champ `inputFile` est intentionnellement exclu du chargement.
 
 *Filtre de type de fichier* : le widget interne `_FileField` accepte
 deux callbacks optionnels — `onPick` (sélection standard filtrée) et
@@ -457,11 +492,26 @@ avec un bouton 📋 copie.
 `List<OutputFile> outputFiles` et pré-sélectionne automatiquement le premier
 fichier SBOM via `didUpdateWidget`.
 
+Paramètres :
+
+* `List<OutputFile> outputFiles` — liste des fichiers SBOM générés
+* `void Function(List<OsvVuln>)? onVulnsChanged` — callback déclenché après
+  chaque analyse réussie ; `ResultsPanel` l'utilise pour alimenter `DashboardPanel`
+
 Structure interne :
 
 * `_ConfigSection` — champs "Fichier SBOM" et "Config toml" (avec `_SplitPickButton`)
 * Bannière de résultat (vert / jaune / orange / rouge selon sévérités)
 * `TabController` à 2 onglets internes : *Vulnérabilités* et *JSON brut*
+
+`_VulnTableView` (sous-widget de l'onglet Vulnérabilités) maintient :
+
+* `_searchCtrl` / `_searchTerm` — champ de recherche plein-texte (200 px)
+* `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
+* Getter `_filtered` — applique filtres sévérité + recherche + tri
+* `_csv()` + `_exportCsv()` — export RFC 4180 avec `FilePicker.platform.saveFile()`
+* En-têtes de colonne cliquables (`_SortHeader`) sans paramètre `width`
+  (contrairement à Grype où la colonne sévérité a une largeur fixe)
 
 `OsvVuln` est un modèle de données parsé depuis le JSON OSV :
 `results[].packages[].vulnerabilities[]`. La sévérité est extraite depuis
@@ -476,6 +526,16 @@ La version corrigée est lue depuis `affected[].ranges[].events[].fixed`.
 * `CheckboxListTile` pour `--ignore-unfixed`
 * `CheckboxListTile` pour `--skip-db-update`
 * Champ "trivy.yaml" avec `_SplitPickButton`
+
+Paramètre additionnel :
+
+* `void Function(List<TrivyVuln>)? onVulnsChanged` — callback vers `ResultsPanel`
+  pour alimenter `DashboardPanel` (même pattern qu'`OsvPanel`)
+
+`_VulnTableView` — même structure que dans `osv_panel.dart` (recherche, tri,
+export CSV). Les colonnes CSV sont : Sévérité, CVE/ID, Paquet, Version installée,
+Version corrigée, Titre. Les chaînes de sévérité sont en majuscules
+(`CRITICAL`, `HIGH`…) contrairement à Grype (`Critical`, `High`…).
 
 `TrivyVuln` est parsé depuis `Results[].Vulnerabilities[]` du JSON Trivy.
 Le champ `Title` est affiché en sous-titre de chaque entrée.
@@ -514,9 +574,123 @@ Interface :
 * `_ScorecardSection` — en-tête avec `_ScoreBadge`, `_ScoreBar` pour chaque catégorie
   (LinearProgressIndicator coloré selon seuils 80 %/60 %), bouton bascule graphique/brut
 
+==== `widgets/dashboard_panel.dart` — Onglet Tableau de bord
+
+`DashboardPanel` est un `StatelessWidget`. Il reçoit les résultats des trois
+scanners en paramètre (valeur `null` = scanner pas encore exécuté) :
+
+[source,dart]
+----
+class DashboardPanel extends StatelessWidget {
+  final List<GrypeVuln>? grypeVulns;
+  final List<OsvVuln>?  osvVulns;
+  final List<TrivyVuln>? trivyVulns;
+}
+----
+
+Ces listes sont stockées dans l'état de `ResultsPanel` et transmises ici.
+Il n'y a pas de flutter state local : tout est calculé à chaque `build()`.
+
+Structure :
+
+* `_GlobalSummary` — bandeau : nombre de scanners actifs, union des CVE IDs,
+  nombre de CVE communes à ≥ 2 scanners
+* `_ScannerCard` × 3 — une carte par scanner avec `_SeverityBar` (barres
+  empilées `Expanded(flex: N)` colorées) et `_SevRow` (un rang par sévérité)
+* `_CrossScannerSection` — liste des CVE présentes dans ≥ 2 scanners, triées
+  par sévérité décroissante, colonnes : SÉVÉRITÉ / CVE ID / Grype ✓ / OSV ✓ / Trivy ✓
+
+La logique "CVE communes" est calculée dans `_CrossScannerSection.build()` :
+union des IDs par scanner → compter les scanners par ID → garder ceux avec count ≥ 2.
+
+NOTE: `DashboardPanel` ne lance aucun processus externe. C'est un widget de
+visualisation pure qui consomme les données déjà parsées par les autres panels.
+
+==== `widgets/sbom_tree_panel.dart` — Onglet Arborescence SBOM
+
+`SbomTreePanel` est un `StatefulWidget` avec `AutomaticKeepAliveClientMixin`.
+
+Modèles privés :
+
+* `_SbomComponent(name, version, type, license, purl)` — un composant SBOM
+* `_SbomInfo` — métadonnées + liste de composants, avec méthode `parse(String json)`:
+  ** `_parseCycloneDX()` — lit `components[]`, `licenses[0].expression`
+  ** `_parseSpdx()` — lit `packages[]`, `externalRefs[purl]`
+
+Patron "flat list virtuelle" (performance avec 800+ composants) :
+
+[source,dart]
+----
+sealed class _ListItem {}
+final class _GroupHeader extends _ListItem { final String key; final int count; }
+final class _CompItem    extends _ListItem { final _SbomComponent comp; }
+----
+
+`_buildItems()` construit une liste plate `List<_ListItem>` avec les en-têtes
+de groupe intercalés. Un seul `ListView.builder` affiche tous les éléments,
+évitant les `ExpansionTile` imbriqués et le rendu de 800+ widgets en une passe.
+
+L'ensemble `_collapsed` maintient les clés de groupes repliés.
+
+Sous-widgets :
+
+* `_FileBar` — `MenuAnchor` listant les `outputFiles` SBOM + bouton "Ouvrir…"
+* `_InfoBar` — chips de métadonnées (format, nom, nombre de composants)
+* `_GroupBySelector` — `SegmentedButton<_GroupBy>` (Aucun / Type / Licence)
+* `_GroupHeaderTile` — en-tête de groupe cliquable (expand/collapse)
+* `_ComponentTile` — une ligne expansible avec PURL copiable (`Clipboard.setData`),
+  version, type, licence en `SelectableText`
+
+NOTE: La récupération de `firstOrNull` utilise `.where(...).firstOrNull` (Dart 3
+intégré sur `Iterable`), *pas* `firstWhereOrNull` de `package:collection`.
+
+==== `widgets/sbom_diff_panel.dart` — Onglet Comparaison SBOM
+
+`SbomDiffPanel` est un `StatefulWidget` avec `AutomaticKeepAliveClientMixin`.
+
+Les modèles de parsing sont dupliqués depuis `sbom_tree_panel.dart` (privés `_`).
+Cette duplication est intentionnelle : les deux panels peuvent diverger dans
+leurs besoins de parsing, et évite une dépendance publique.
+
+Algorithme de comparaison (`_computeDiff`) :
+
+[source,dart]
+----
+List<_DiffEntry> _computeDiff(_SbomInfo a, _SbomInfo b) {
+  // clé = name.toLowerCase()
+  // construit mapA / mapB
+  // union des clés → pour chaque clé :
+  //   absente de A → added
+  //   absente de B → removed
+  //   version ou licence différente → changed
+  //   sinon → unchanged
+  // trie : added/removed/changed avant unchanged, puis par nom
+}
+----
+
+Statuts :
+
+[source,dart]
+----
+enum _Status { added, removed, changed, unchanged }
+----
+
+Sous-widgets :
+
+* `_FileSelectorBar` — deux `_FileSlot` (champ + 📂) + bouton *Comparer*
+  (actif uniquement si les deux fichiers sont chargés)
+* `_SummaryBar` — 4 compteurs colorés (vert ajoutés / rouge supprimés /
+  orange modifiés / gris inchangés)
+* `_FilterBar` — `_FilterChip2` toggle par statut + champ de recherche ;
+  les composants *Inchangés* sont masqués par défaut
+* `_DiffHeader` — en-têtes de colonnes
+* `_DiffRow` — fond et bordure gauche colorés selon statut ;
+  pour les composants modifiés : version et licence affichés avec
+  `TextDecoration.lineThrough` (ancienne valeur) + texte vert (nouvelle valeur)
+
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **6 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **10 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -531,25 +705,46 @@ Interface :
 |`_ResultsView` — fichiers générés, score sbomqs, avertissements, erreur fatale
 
 |2
-|Grype
-|`GrypePanel` — panneau d'analyse grype autonome
+|Tableau de bord
+|`DashboardPanel` — synthèse CVE multi-scanners
 
 |3
-|OSV-Scanner
-|`OsvPanel` — panneau d'analyse osv-scanner autonome
+|Grype
+|`GrypePanel(onVulnsChanged: ...)` — panneau d'analyse grype autonome
 
 |4
-|Trivy
-|`TrivyPanel` — panneau d'analyse trivy autonome
+|OSV-Scanner
+|`OsvPanel(onVulnsChanged: ...)` — panneau d'analyse osv-scanner autonome
 
 |5
+|Trivy
+|`TrivyPanel(onVulnsChanged: ...)` — panneau d'analyse trivy autonome
+
+|6
 |Qualité SBOM
 |`QualityPanel` — sbomqs + sbom-scorecard en parallèle
 
-|6
+|7
+|Arborescence
+|`SbomTreePanel` — exploration des composants du SBOM
+
+|8
+|Comparaison
+|`SbomDiffPanel` — diff entre deux fichiers SBOM
+
+|9
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===
+
+État local de `_ResultsPanelState` :
+
+* `List<GrypeVuln>? _grypeVulns` — alimenté par `GrypePanel.onVulnsChanged`
+* `List<OsvVuln>? _osvVulns` — alimenté par `OsvPanel.onVulnsChanged`
+* `List<TrivyVuln>? _trivyVulns` — alimenté par `TrivyPanel.onVulnsChanged`
+
+Ces listes `null` signifient "scanner pas encore exécuté" et sont transmises
+à `DashboardPanel` qui affiche un message d'invite pour chaque scanner absent.
 
 Comportement automatique du `TabController` :
 
@@ -578,9 +773,12 @@ Le paramètre `String? sbomqsOutput` est propagé depuis `HomeScreen`.
 onglets — voir <<sec-keepalive>>). Il gère son propre état (fichier SBOM,
 options, résultats) sans passer par `HomeScreen`.
 
-Il reçoit un seul paramètre du parent : `List<OutputFile> outputFiles`.
-Quand cette liste change, `didUpdateWidget` met à jour automatiquement le
-champ fichier SBOM si celui-ci est encore vide.
+Paramètres :
+
+* `List<OutputFile> outputFiles` — pré-sélectionne automatiquement le premier
+  fichier SBOM via `didUpdateWidget` si le champ est encore vide
+* `void Function(List<GrypeVuln>)? onVulnsChanged` — callback déclenché après
+  chaque analyse réussie ; `ResultsPanel` l'utilise pour alimenter `DashboardPanel`
 
 Les boutons de sélection de fichier utilisent `_SplitPickButton` (basé sur
 `MenuAnchor`) pour proposer "Type filtré" / "Tous les fichiers" en split-button.
@@ -593,7 +791,7 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 
 |0
 |Table (N)
-|`_VulnTableView` — filtre par sévérité + cartes colorées
+|`_VulnTableView` — recherche + tri + filtres sévérité + export CSV
 
 |1
 |JSON
@@ -604,10 +802,16 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 |`_TemplateView` — sortie brute du fichier template
 |===
 
-`_VulnTableView` est un `StatefulWidget` depuis la version courante.
-Il maintient un `Set<String> _activeFilters` (vide = tout afficher) et
-affiche une barre de `FilterChip` pour les sévérités présentes dans les résultats.
-La propriété calculée `_filtered` applique le filtre à la liste complète `widget.vulns`.
+`_VulnTableView` est un `StatefulWidget` qui maintient :
+
+* `_searchCtrl` / `_searchTerm` — champ de recherche 200 px
+* `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
+* `_activeFilters` (`Set<String>`) — filtres sévérité actifs (vide = tout afficher)
+* Getter `_filtered` — applique filtres sévérité + recherche + tri
+* `_csv()` + `_exportCsv()` — export RFC 4180 via `FilePicker.platform.saveFile()`
+  Colonnes : Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Type
+* En-têtes de colonne `_SortHeader` avec paramètre optionnel `width` pour la
+  colonne sévérité (largeur fixe 120 px, contrairement à OSV et Trivy)
 
 === Flux de données
 
@@ -649,6 +853,9 @@ GrypeRunner.run(...)   →   Process.start('grype', args)
   │
   │ Stream<GrypeEvent>
   ├── GrypeOutputEvent(json)    →  setState() → _vulns (parsés), _jsonOutput
+  │                                widget.onVulnsChanged?.call(_vulns)
+  │                                → ResultsPanel.setState() → _grypeVulns
+  │                                  → DashboardPanel reçoit grypeVulns
   ├── GrypeTemplateEvent(text)  →  setState() → _templateOutput, bascule tab 2
   └── GrypeDoneEvent(code)      →  setState() → _isRunning=false, _exitCode
 ----
@@ -667,6 +874,8 @@ OsvRunner.run(...)   →   Process.start('osv-scanner', args)
   │
   │ Stream<OsvEvent>
   ├── OsvOutputEvent(jsonOutput)  →  setState() → _vulns (OsvVuln[]), _jsonOutput
+  │                                   widget.onVulnsChanged?.call(_vulns)
+  │                                   → ResultsPanel.setState() → _osvVulns
   └── OsvDoneEvent(exitCode)      →  setState() → _isRunning=false
       note: exitCode 1 = vulns trouvées (normal), >1 = erreur réelle
 ----
@@ -685,6 +894,8 @@ TrivyRunner.run(...)   →   Process.start('trivy', ['sbom', '--format', 'json',
   │
   │ Stream<TrivyEvent>
   ├── TrivyOutputEvent(jsonOutput)  →  setState() → _vulns (TrivyVuln[]), _jsonOutput
+  │                                     widget.onVulnsChanged?.call(_vulns)
+  │                                     → ResultsPanel.setState() → _trivyVulns
   └── TrivyDoneEvent(exitCode)      →  setState() → _isRunning=false
 ----
 
@@ -771,7 +982,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 7, vsync: this);  // ResultsPanel : 7 onglets
+    _tabs = TabController(length: 10, vsync: this);  // ResultsPanel : 10 onglets
   }
 
   @override
@@ -845,14 +1056,15 @@ Stream<GrypeEvent> run({
 
 === Ajouter un onglet dans ResultsPanel
 
-Le `TabController` est actuellement à `length: 7` (Progression, Résultats,
-Grype, OSV-Scanner, Trivy, Qualité SBOM, Aperçu). Pour en ajouter un huitième :
+Le `TabController` est actuellement à `length: 10` (Progression, Résultats,
+Tableau de bord, Grype, OSV-Scanner, Trivy, Qualité SBOM, Arborescence,
+Comparaison, Aperçu). Pour en ajouter un onzième :
 
 . Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
 +
 [source,dart]
 ----
-_tabs = TabController(length: 8, vsync: this);  // était 7
+_tabs = TabController(length: 11, vsync: this);  // était 10
 ----
 
 . Ajouter un `Tab(...)` dans le `TabBar` :
@@ -921,8 +1133,8 @@ class _GrypePanelState extends State<GrypePanel>
 <1> Déclarer que cet état doit être conservé
 <2> L'appel `super.build()` est obligatoire — il active le mécanisme keep-alive
 
-Ce mixin est appliqué à `_GrypePanelState`, `_OsvPanelState`, `_TrivyPanelState`
-et `_QualityPanelState`.
+Ce mixin est appliqué à `_GrypePanelState`, `_OsvPanelState`, `_TrivyPanelState`,
+`_QualityPanelState`, `_SbomTreePanelState` et `_SbomDiffPanelState`.
 
 [[sec-piege-tabcontroller]]
 === TabController.length est fixe
