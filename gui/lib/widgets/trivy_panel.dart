@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/trivy_runner.dart';
+import '../services/version_service.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
 
@@ -116,11 +117,15 @@ class _TrivyPanelState extends State<TrivyPanel>
   String? _error;
   int? _exitCode;
 
+  ToolVersionInfo? _versionInfo;
+
   @override
   void initState() {
     super.initState();
     _resultTabs = TabController(length: 2, vsync: this);
     _updateAutoFile();
+    VersionService.checkTrivy()
+        .then((info) { if (mounted) setState(() => _versionInfo = info); });
   }
 
   @override
@@ -267,6 +272,7 @@ class _TrivyPanelState extends State<TrivyPanel>
               setState(() => _skipDbUpdate = v ?? false),
           onRun: _analyze,
           onStop: _stop,
+          versionInfo: _versionInfo,
         ),
         if (hasDone && _error != null)
           _ErrorBanner(message: _error!),
@@ -343,6 +349,7 @@ class _ConfigSection extends StatelessWidget {
   final ValueChanged<bool?> onSkipDbUpdateChanged;
   final VoidCallback onRun;
   final VoidCallback onStop;
+  final ToolVersionInfo? versionInfo;
 
   static const _severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
 
@@ -370,6 +377,7 @@ class _ConfigSection extends StatelessWidget {
     required this.onSkipDbUpdateChanged,
     required this.onRun,
     required this.onStop,
+    this.versionInfo,
   });
 
   @override
@@ -379,6 +387,21 @@ class _ConfigSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Version ──
+          Row(
+            children: [
+              Text('trivy',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5))),
+              const SizedBox(width: 8),
+              ToolVersionBadge(info: versionInfo),
+            ],
+          ),
+          const SizedBox(height: 10),
           // Fichier SBOM
           Row(
             children: [
@@ -641,7 +664,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
   _SortCol _sortCol = _SortCol.severity;
-  bool _sortAsc = false;
+  bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
 
   @override
   void dispose() {
@@ -662,7 +685,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
           _sortAsc = !_sortAsc;
         } else {
           _sortCol = col;
-          _sortAsc = col != _SortCol.severity;
+          _sortAsc = col == _SortCol.severity;
         }
       });
 

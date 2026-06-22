@@ -112,6 +112,7 @@ gui/
 │   │   ├── grype_runner.dart         # Exécute grype, stream d'événements
 │   │   ├── osv_runner.dart           # Exécute osv-scanner, stream d'événements
 │   │   ├── trivy_runner.dart         # Exécute trivy, stream d'événements
+│   │   ├── version_service.dart      # Détection version installée + dernière release GitHub
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
@@ -410,6 +411,62 @@ trivy sbom --format json --quiet \
   <sbomFile>
 ----
 
+[[sec-version-service]]
+==== `services/version_service.dart` — Version installée + mise à jour GitHub
+
+Ce fichier regroupe trois éléments indépendants.
+
+*`ToolVersionInfo`* — modèle immuable :
+
+[source,dart]
+----
+class ToolVersionInfo {
+  final String? installed;   // '0.87.0', null = non installé
+  final String? latest;      // '0.88.1', null = API inaccessible
+  final String? releaseUrl;  // URL page GitHub release
+  bool get isInstalled => installed != null;
+  bool get hasUpdate { ... } // compare installed < latest (semver)
+}
+----
+
+*`VersionService`* — trois méthodes statiques asynchrones :
+
+[source,dart]
+----
+VersionService.checkGrype()   // grype version
+VersionService.checkOsv()     // osv-scanner --version
+VersionService.checkTrivy()   // trivy --version
+----
+
+Chaque appel exécute la commande via `Process.run()`, extrait le premier
+motif `\d+\.\d+\.\d+` dans stdout+stderr, puis interroge
+`https://api.github.com/repos/<owner>/<repo>/releases/latest` (timeout 5 s)
+pour récupérer `tag_name` et `html_url`.
+
+*`ToolVersionBadge`* — widget `StatelessWidget` affiché en haut de
+`_ConfigSection` dans chaque panel :
+
+[cols="1,3", options="header"]
+|===
+|État |Rendu
+
+|`info == null`
+|Rien (vérification en cours)
+
+|Non installé
+|Icône rouge + « non installé »
+
+|À jour
+|Icône verte + « v{installed} »
+
+|Mise à jour disponible
+|Icône orange + « v{installed} → v{latest} » (cliquable → release GitHub)
+|===
+
+Le badge utilise `url_launcher` pour ouvrir la page de release dans le
+navigateur. Il est initialisé dans `initState()` de chaque panel avec
+`.then((info) { if (mounted) setState(...) })` pour ne pas bloquer le rendu.
+
 [[sec-settings-service]]
 ==== `services/settings_service.dart` — Résolution du binaire + persistance
 
@@ -540,14 +597,19 @@ Paramètres :
 
 Structure interne :
 
-* `_ConfigSection` — champs "Fichier SBOM" et "Config toml" (avec `_SplitPickButton`)
+* `_ConfigSection` — `ToolVersionBadge` (voir <<sec-version-service>>) +
+  champs "Fichier SBOM" et "Config toml" (avec `_SplitPickButton`)
 * Bannière de résultat (vert / jaune / orange / rouge selon sévérités)
 * `TabController` à 2 onglets internes : *Vulnérabilités* et *JSON brut*
+
+`_OsvPanelState` appelle `VersionService.checkOsv()` dans `initState()`,
+identique au pattern Grype.
 
 `_VulnTableView` (sous-widget de l'onglet Vulnérabilités) maintient :
 
 * `_searchCtrl` / `_searchTerm` — champ de recherche plein-texte (200 px)
 * `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
+  — valeur initiale : `_sortAsc = true` (Critical en premier, même convention que Grype et Trivy)
 * Getter `_filtered` — applique filtres sévérité + recherche + filtre date + tri
 * `_csv()` + `_exportCsv()` — export RFC 4180 avec `FilePicker.platform.saveFile()`
 * En-têtes de colonne cliquables (`_SortHeader`) sans paramètre `width`
@@ -563,10 +625,39 @@ Les champs de date :
 * `publishedDate` (`DateTime?`) — depuis `v['published']` (ISO 8601 → UTC)
 * `modifiedDate` (`DateTime?`) — depuis `v['modified']`
 
+La méthode statique `_normalizeSeverity(String s)` normalise les libellés
+de sévérité hétérogènes retournés par les différentes bases de données OSV :
+
+[cols="1,1", options="header"]
+|===
+|Valeur brute (exemples) |Valeur normalisée
+
+|`CRITICAL`
+|`Critical`
+
+|`HIGH`
+|`High`
+
+|`MEDIUM`, `MODERATE` (GitHub Advisory, npm)
+|`Medium`
+
+|`LOW`, `NONE`
+|`Low`
+
+|Tout autre valeur
+|`Unknown`
+|===
+
+Sans cette normalisation, `MODERATE` apparaissait tel quel dans le tableau
+et les chips de filtrage par sévérité étaient absentes (clé introuvable dans
+`_severityOrder` en titre case).
+
 ==== `widgets/trivy_panel.dart` — Onglet Trivy
 
 `TrivyPanel` — même architecture que `OsvPanel` avec les options supplémentaires :
 
+* `ToolVersionBadge` (voir <<sec-version-service>>) en haut de `_ConfigSection`,
+  alimenté par `VersionService.checkTrivy()` appelé dans `initState()`
 * 5 `FilterChip` pour `--severity` (CRITICAL / HIGH / MEDIUM / LOW / UNKNOWN)
 * `CheckboxListTile` pour `--ignore-unfixed`
 * `CheckboxListTile` pour `--skip-db-update`
@@ -649,11 +740,13 @@ Structure :
   nombre de CVE communes à ≥ 2 scanners
 * `_ScannerCard` × 3 — une carte par scanner avec `_SeverityBar` (barres
   empilées `Expanded(flex: N)` colorées) et `_SevRow` (un rang par sévérité)
-* `_CrossScannerSection` — liste des CVE présentes dans ≥ 2 scanners, triées
-  par sévérité décroissante, colonnes : SÉVÉRITÉ / CVE ID / Grype ✓ / OSV ✓ / Trivy ✓
+* `_CrossScannerSection` — liste complète des CVE présentes dans ≥ 2 scanners,
+  triées par sévérité décroissante, colonnes : SÉVÉRITÉ / CVE ID / Grype ✓ / OSV ✓ / Trivy ✓
 
 La logique "CVE communes" est calculée dans `_CrossScannerSection.build()` :
 union des IDs par scanner → compter les scanners par ID → garder ceux avec count ≥ 2.
+Toutes les entrées sont affichées via un `for` loop dans un `Column` ; le défilement
+est assuré par le `SingleChildScrollView` qui enveloppe l'ensemble du `DashboardPanel`.
 
 NOTE: `DashboardPanel` ne lance aucun processus externe. C'est un widget de
 visualisation pure qui consomme les données déjà parsées par les autres panels.
@@ -850,6 +943,11 @@ Paramètres :
 Les boutons de sélection de fichier utilisent `_SplitPickButton` (basé sur
 `MenuAnchor`) pour proposer "Type filtré" / "Tous les fichiers" en split-button.
 
+`_GrypePanelState` appelle `VersionService.checkGrype()` dans `initState()` et
+stocke le résultat dans `ToolVersionInfo? _versionInfo`. Ce champ est transmis
+à `_ConfigSection` qui affiche un `ToolVersionBadge` en haut du formulaire
+(voir <<sec-version-service>>).
+
 Les résultats sont affichés dans un second `TabController` à 3 onglets internes :
 
 [cols="1,1,2", options="header"]
@@ -879,6 +977,7 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 
 * `_searchCtrl` / `_searchTerm` — champ de recherche 200 px
 * `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
+  — valeur initiale : `_sortAsc = true` (ascendant par `_sevOrd`, Critical=0 en premier)
 * `_activeFilters` (`Set<String>`) — filtres sévérité actifs (vide = tout afficher)
 * Getter `_filtered` — applique filtres sévérité + recherche + filtre date + tri
 * `_csv()` + `_exportCsv()` — export RFC 4180 via `FilePicker.platform.saveFile()`
@@ -1286,6 +1385,30 @@ class _GrypePanelState extends State<GrypePanel>
 
 Ce mixin est appliqué à `_GrypePanelState`, `_OsvPanelState`, `_TrivyPanelState`,
 `_QualityPanelState`, `_SbomTreePanelState` et `_SbomDiffPanelState`.
+
+[[sec-piege-osv-severity]]
+=== Hétérogénéité des libellés de sévérité OSV
+
+Le JSON retourné par `osv-scanner` peut contenir des valeurs de sévérité
+issues de bases de données différentes, sans normalisation :
+
+* NVD/CVE : `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`
+* GitHub Security Advisory : `CRITICAL`, `HIGH`, `MODERATE`, `LOW`
+* npm Advisory : `CRITICAL`, `HIGH`, `MODERATE`, `LOW`, `INFO`
+* PyPI : `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`
+
+Sans traitement, deux problèmes surgissent :
+
+. Les chips de filtrage par sévérité disparaissent car `_severityOrder`
+  utilise du titre case (`'Medium'`) mais les clés dans `counts` sont en
+  majuscules (`'MODERATE'`, `'MEDIUM'`…) → `counts.containsKey('Medium') = false`.
+. Les libellés `'MODERATE'` apparaissent tels quels dans le tableau au lieu
+  de `'Medium'`.
+
+La solution est `OsvVuln._normalizeSeverity()`, appliquée à la réception du
+JSON (pas à l'affichage), qui mappe toutes les variantes vers les cinq
+valeurs canoniques utilisées dans l'application :
+`Critical`, `High`, `Medium`, `Low`, `Unknown`.
 
 [[sec-piege-tabcontroller]]
 === TabController.length est fixe

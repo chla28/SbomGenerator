@@ -52,8 +52,13 @@ Niveaux de sévérité (du plus critique au plus bénin) :
 
 |Negligible
 |Gris
-|Impact théorique, généralement non exploitable en pratique
+|Impact théorique, généralement non exploitable en pratique (Grype uniquement)
 |===
+
+NOTE: Les bases de données utilisées par OSV-Scanner emploient parfois le
+libellé `MODERATE` (GitHub Advisory, npm) à la place de `MEDIUM`. L'application
+les unifie automatiquement : toute sévérité `MODERATE` est affichée comme
+`Medium` dans le tableau et les filtres.
 
 === Présentation de l'outil
 
@@ -703,6 +708,21 @@ indépendamment d'une génération SBOM récente.
   └───────────────────────────────────────────────────────────────────┘
 ----
 
+=== Indicateur de version
+
+En haut du panneau de configuration, l'application affiche la version de
+`grype` installée ainsi que l'état de mise à jour, vérifiés en arrière-plan
+au démarrage :
+
+* *✔ v0.87.0* (vert) — `grype` est installé et à jour.
+* *↑ v0.87.0 → v0.88.1* (orange, cliquable) — une nouvelle version est
+  disponible sur GitHub. Cliquez pour ouvrir la page de release dans
+  le navigateur.
+* *non installé* (rouge) — `grype` n'est pas trouvé dans le PATH.
+
+NOTE: La vérification interroge l'API GitHub. En l'absence de connexion
+réseau, seule la version installée est affichée, sans comparaison.
+
 === Sélection du fichier SBOM
 
 Le champ *Fichier SBOM* est pré-rempli automatiquement avec le dernier fichier
@@ -952,6 +972,12 @@ celle de l'onglet Grype.
   └───────────────────────┴───────────────────────────────────────────┘
 ----
 
+=== Indicateur de version
+
+Même comportement que dans l'onglet Grype (voir <<_indicateur_de_version>>),
+appliqué à `osv-scanner`. Le badge est affiché en haut du panneau de
+configuration dès que la vérification de démarrage est terminée.
+
 === Prérequis
 
 `osv-scanner` doit être installé et accessible dans le PATH
@@ -1045,6 +1071,12 @@ supplémentaires par rapport à OSV-Scanner et Grype.
   │ [Vulnérabilités (4)]  │ [JSON brut]                               │
   └───────────────────────┴───────────────────────────────────────────┘
 ----
+
+=== Indicateur de version
+
+Même comportement que dans l'onglet Grype (voir <<_indicateur_de_version>>),
+appliqué à `trivy`. Le badge est affiché en haut du panneau de configuration
+dès que la vérification de démarrage est terminée.
 
 === Prérequis
 
@@ -1259,9 +1291,13 @@ La bandeau supérieur indique :
 
 === CVE communes multi-scanners
 
-Le tableau en bas liste les vulnérabilités détectées par au moins deux scanners,
-triées par sévérité décroissante. Une coche ✓ / ✗ indique la présence ou l'absence
-dans chaque scanner.
+Le tableau en bas liste *toutes* les vulnérabilités détectées par au moins deux
+scanners, triées par sévérité décroissante. Une coche ✓ / ✗ indique la présence
+ou l'absence dans chaque scanner.
+
+Si la liste dépasse la hauteur disponible, l'ascenseur vertical de l'onglet
+permet de tout parcourir — faites défiler vers le bas à l'intérieur de l'onglet
+Tableau de bord.
 
 NOTE: Le Tableau de bord se met à jour automatiquement chaque fois qu'une analyse
 est lancée dans un onglet scanner. Aucune action supplémentaire n'est requise.

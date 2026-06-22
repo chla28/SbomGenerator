@@ -524,8 +524,6 @@ class _CrossScannerSection extends StatelessWidget {
       return sa.compareTo(sb);
     });
 
-    final shown = crossIds.take(20).toList();
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -578,22 +576,14 @@ class _CrossScannerSection extends StatelessWidget {
                 ],
               ),
             ),
-            // Lignes
-            for (final id in shown)
+            // Lignes — toutes affichées, le SingleChildScrollView parent gère le défilement
+            for (final id in crossIds)
               _CrossRow(
                 id: id,
                 inGrype: grypeIds.contains(id),
                 inOsv: osvIds.contains(id),
                 inTrivy: trivyIds.contains(id),
                 severity: grypeMap[id] ?? osvMap[id] ?? trivyMap[id] ?? '',
-              ),
-            if (crossIds.length > 20)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  '… et ${crossIds.length - 20} autre(s)',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
               ),
           ],
         ),

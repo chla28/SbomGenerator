@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/osv_runner.dart';
+import '../services/version_service.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,16 @@ class OsvVuln {
     this.publishedDate,
     this.modifiedDate,
   });
+
+  static String _normalizeSeverity(String s) {
+    return switch (s.toLowerCase()) {
+      'critical' => 'Critical',
+      'high' => 'High',
+      'medium' || 'moderate' => 'Medium',
+      'low' || 'none' => 'Low',
+      _ => 'Unknown',
+    };
+  }
 
   static int _order(String s) => switch (s.toLowerCase()) {
         'critical' => 0,
@@ -88,11 +99,14 @@ class OsvVuln {
             final displayId = cve.isNotEmpty ? cve : osvId;
 
             // Sévérité : database_specific > max_severity CVSS > inconnu
+            // database_specific.severity est en majuscules dans le JSON OSV
+            // (_cvssToSeverity retourne déjà du titre case)
             final dbSev =
                 (v['database_specific'] as Map?)?['severity'] as String?;
-            final severity = (dbSev?.isNotEmpty == true)
+            final rawSev = (dbSev?.isNotEmpty == true)
                 ? dbSev!
                 : _cvssToSeverity(groupSev[osvId]);
+            final severity = _normalizeSeverity(rawSev);
 
             // Version corrigée depuis affected[].ranges[].events
             String fixedVersion = '';
@@ -166,11 +180,15 @@ class _OsvPanelState extends State<OsvPanel>
   String? _error;
   int? _exitCode;
 
+  ToolVersionInfo? _versionInfo;
+
   @override
   void initState() {
     super.initState();
     _resultTabs = TabController(length: 2, vsync: this);
     _updateAutoFile();
+    VersionService.checkOsv()
+        .then((info) { if (mounted) setState(() => _versionInfo = info); });
   }
 
   @override
@@ -300,6 +318,7 @@ class _OsvPanelState extends State<OsvPanel>
           onPickConfigAll: () => _pickConfigFile(filtered: false),
           onRun: _analyze,
           onStop: _stop,
+          versionInfo: _versionInfo,
         ),
         if (hasDone && _error != null)
           _ErrorBanner(message: _error!),
@@ -370,6 +389,7 @@ class _ConfigSection extends StatelessWidget {
   final VoidCallback onPickConfigAll;
   final VoidCallback onRun;
   final VoidCallback onStop;
+  final ToolVersionInfo? versionInfo;
 
   const _ConfigSection({
     required this.fileCtrl,
@@ -381,6 +401,7 @@ class _ConfigSection extends StatelessWidget {
     required this.onPickConfigAll,
     required this.onRun,
     required this.onStop,
+    this.versionInfo,
   });
 
   @override
@@ -390,6 +411,21 @@ class _ConfigSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Version ──
+          Row(
+            children: [
+              Text('osv-scanner',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5))),
+              const SizedBox(width: 8),
+              ToolVersionBadge(info: versionInfo),
+            ],
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -593,7 +629,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
   _SortCol _sortCol = _SortCol.severity;
-  bool _sortAsc = false;
+  bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
 
   @override
   void dispose() {
@@ -614,7 +650,9 @@ class _VulnTableViewState extends State<_VulnTableView> {
           _sortAsc = !_sortAsc;
         } else {
           _sortCol = col;
-          _sortAsc = col != _SortCol.severity;
+          // Sévérité : ascendant par _sevOrd = Critical en premier
+          // Texte (CVE, paquet) : ascendant alphabétique
+          _sortAsc = col == _SortCol.severity;
         }
       });
 

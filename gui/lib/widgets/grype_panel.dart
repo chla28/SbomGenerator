@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/grype_runner.dart';
+import '../services/version_service.dart';
 
 // ─── Modèle de vulnérabilité ──────────────────────────────────────────────────
 
@@ -132,6 +133,9 @@ class _GrypePanelState extends State<GrypePanel>
   String? _error;
   int? _exitCode;
 
+  // Version outil
+  ToolVersionInfo? _versionInfo;
+
   static const _severities = [
     '',
     'negligible',
@@ -148,6 +152,8 @@ class _GrypePanelState extends State<GrypePanel>
     super.initState();
     _resultTabs = TabController(length: 3, vsync: this);
     _updateAutoFile();
+    VersionService.checkGrype()
+        .then((info) { if (mounted) setState(() => _versionInfo = info); });
   }
 
   @override
@@ -330,6 +336,7 @@ class _GrypePanelState extends State<GrypePanel>
               setState(() => _onlyFixed = v ?? false),
           onRun: _analyze,
           onStop: _stop,
+          versionInfo: _versionInfo,
         ),
         const Divider(height: 1),
         if (_isRunning) const LinearProgressIndicator(minHeight: 3),
@@ -434,6 +441,7 @@ class _ConfigSection extends StatelessWidget {
   final ValueChanged<bool?> onOnlyFixedChanged;
   final VoidCallback onRun;
   final VoidCallback onStop;
+  final ToolVersionInfo? versionInfo;
 
   const _ConfigSection({
     required this.fileCtrl,
@@ -462,6 +470,7 @@ class _ConfigSection extends StatelessWidget {
     required this.onOnlyFixedChanged,
     required this.onRun,
     required this.onStop,
+    this.versionInfo,
   });
 
   @override
@@ -471,6 +480,21 @@ class _ConfigSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Version ──
+          Row(
+            children: [
+              Text('grype',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5))),
+              const SizedBox(width: 8),
+              ToolVersionBadge(info: versionInfo),
+            ],
+          ),
+          const SizedBox(height: 10),
           // ── Fichier SBOM ──
           Row(
             children: [
@@ -848,7 +872,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
   _SortCol _sortCol = _SortCol.severity;
-  bool _sortAsc = false; // false = Critical en premier
+  bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
 
   @override
   void dispose() {
@@ -871,7 +895,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
         _sortAsc = !_sortAsc;
       } else {
         _sortCol = col;
-        _sortAsc = col != _SortCol.severity;
+        _sortAsc = col == _SortCol.severity;
       }
     });
   }
