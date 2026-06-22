@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import 'dashboard_panel.dart';
 import 'grype_panel.dart';
@@ -62,6 +63,11 @@ class _ResultsPanelState extends State<ResultsPanel>
   List<GrypeVuln>? _grypeVulns;
   List<OsvVuln>? _osvVulns;
   List<TrivyVuln>? _trivyVulns;
+
+  // Filtres date indépendants par scanner
+  CveDateFilter _grypeFilter = CveDateFilter.empty;
+  CveDateFilter _osvFilter = CveDateFilter.empty;
+  CveDateFilter _trivyFilter = CveDateFilter.empty;
 
   @override
   void initState() {
@@ -367,18 +373,36 @@ class _ResultsPanelState extends State<ResultsPanel>
               GrypePanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _grypeVulns = v),
+                dateFilter: _grypeFilter,
+                onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
+                onPropagate: (f) => setState(() {
+                  _osvFilter = f;
+                  _trivyFilter = f;
+                }),
               ),
 
               // Tab 4 : OSV-Scanner
               OsvPanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _osvVulns = v),
+                dateFilter: _osvFilter,
+                onDateFilterChanged: (f) => setState(() => _osvFilter = f),
+                onPropagate: (f) => setState(() {
+                  _grypeFilter = f;
+                  _trivyFilter = f;
+                }),
               ),
 
               // Tab 5 : Trivy
               TrivyPanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _trivyVulns = v),
+                dateFilter: _trivyFilter,
+                onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
+                onPropagate: (f) => setState(() {
+                  _grypeFilter = f;
+                  _osvFilter = f;
+                }),
               ),
 
               // Tab 6 : Qualité SBOM

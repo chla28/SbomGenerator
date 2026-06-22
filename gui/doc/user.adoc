@@ -879,6 +879,32 @@ les vulnérabilités du niveau correspondant. Le bouton *Tout voir* efface les
 filtres actifs. Seuls les badges correspondant à des sévérités présentes dans
 les résultats sont affichés.
 
+*Filtre par date* : une barre de filtrage temporel se trouve au-dessus de la
+table. Elle permet d'afficher uniquement les CVE publiées ou modifiées dans
+une plage de dates donnée :
+
+----
+  📅 Date CVE : [Publication] [Modification] [La plus récente]
+     Après le : [2024-01-01 ×]   Avant le : [2024-12-31 ×]
+     [✓] Sans date    [Propager aux autres onglets]
+----
+
+* *Champ de date* : sélecteur à trois valeurs — *Publication* (date initiale
+  de publication du CVE), *Modification* (dernière mise à jour), *La plus
+  récente* (la plus tardive des deux dates disponibles).
+* *Après le / Avant le* : chips cliquables ouvrant un calendrier. Un ×
+  permet d'effacer chaque borne indépendamment.
+* *Sans date* : case à cocher pour inclure les CVE dont le champ de date
+  sélectionné est absent ou non renseigné dans les données du scanner. Par
+  défaut, ces CVE sont exclues lorsqu'un filtre est actif.
+* *Propager aux autres onglets* : copie le filtre en cours vers les deux
+  autres onglets CVE (OSV-Scanner et Trivy). Les analyses elles-mêmes ne
+  sont pas relancées ; seul l'affichage est filtré.
+
+NOTE: Le filtre par date s'applique en post-traitement sur le JSON retourné
+par Grype. Il est indépendant des options de ligne de commande Grype et
+cumulable avec les filtres par sévérité et par recherche textuelle.
+
 Colonnes :
 
 * *Badge de sévérité* : libellé coloré (CRITICAL / HIGH / MEDIUM / LOW / NEGLIGIBLE)
@@ -980,6 +1006,11 @@ filtres par sévérité, puis liste des vulnérabilités.
 *Export CSV* : le bouton ⬇ exporte la vue filtrée. Colonnes : Sévérité,
 CVE/ID, Paquet, Version installée, Version corrigée, Écosystème.
 
+*Filtre par date* : même barre que l'onglet Grype (voir <<sec-vue-table>>).
+Le champ *Publication* correspond à `published` du JSON OSV, le champ
+*Modification* à `modified`. L'option *Propager* copie le filtre vers
+les onglets Grype et Trivy.
+
 Colonnes :
 
 * Badge de sévérité coloré
@@ -1078,6 +1109,11 @@ installée, Version corrigée, Titre.
 La colonne *Titre* correspond au champ `Title` du JSON Trivy (description
 courte de la CVE). Elle apparaît en sous-titre de chaque entrée dans la
 liste.
+
+*Filtre par date* : même barre que l'onglet Grype (voir <<sec-vue-table>>).
+Le champ *Publication* correspond à `PublishedDate` du JSON Trivy, le
+champ *Modification* à `LastModifiedDate`. L'option *Propager* copie le
+filtre vers les onglets Grype et OSV-Scanner.
 
 == Onglet Qualité SBOM — Évaluation de la qualité
 
@@ -1514,6 +1550,43 @@ d'OSV-Scanner pour détecter d'éventuels faux-positifs ou faux-négatifs.
 métadonnées détaillées (CVSS, références, packages affectés).
 |===
 
+=== Scénario 2c — Filtrer les CVE par période de publication
+
+[cols="1,4"]
+|===
+|Étape |Action
+
+|1
+|Après avoir lancé une analyse Grype (ou OSV-Scanner / Trivy), consultez
+l'onglet correspondant. La barre de filtre par date est visible au-dessus
+du tableau.
+
+|2
+|Pour n'afficher que les CVE publiées depuis le 1er janvier 2024, cliquez
+sur la chip *Après le…* et sélectionnez `2024-01-01` dans le calendrier.
+Le tableau se met à jour instantanément.
+
+|3
+|Pour ajouter une borne haute, cliquez sur *Avant le…* et sélectionnez
+la date de fin souhaitée.
+
+|4
+|Si vous souhaitez filtrer sur la dernière mise à jour plutôt que sur la
+date de publication initiale, changez le sélecteur *Publication* en
+*Modification* ou *La plus récente*.
+
+|5
+|Cochez *Sans date* pour inclure dans les résultats les CVE dont la date
+est absente des données du scanner (champ vide dans le JSON).
+
+|6
+|Cliquez sur *Propager aux autres onglets* pour appliquer le même filtre
+aux onglets OSV-Scanner et Trivy sans avoir à les re-configurer.
+
+|7
+|Pour effacer une borne, cliquez sur le × de la chip correspondante.
+|===
+
 === Scénario 3 — Évaluation de la qualité SBOM avec sbomqs
 
 [cols="1,4"]
@@ -1558,6 +1631,95 @@ dans un encadré indigo sous la liste des fichiers
 |5
 |Les deux fichiers (`.adoc` et `.pdf`) apparaissent dans l'onglet *Résultats*
 |===
+
+== Sous-commande `scan` — Analyse CVE en ligne de commande
+
+La sous-commande `scan` permet d'exécuter les mêmes analyses CVE que le GUI
+directement depuis le terminal, avec filtrage par date intégré. Elle ne
+nécessite pas d'interface graphique.
+
+[source,bash]
+----
+sbom-generator scan --sbom <fichier.cdx.json> [options]
+----
+
+=== Options
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Défaut |Description
+
+|`--sbom <chemin>` (ou `-s`)
+|_obligatoire_
+|Fichier SBOM à analyser (CycloneDX, SPDX…)
+
+|`--scanner <nom>` (ou `-S`)
+|`grype`
+|Scanner à utiliser : `grype`, `osv`, `trivy`, ou `all` (les trois)
+
+|`--cve-after <YYYY-MM-DD>`
+|_aucun_
+|N'afficher que les CVE dont la date est postérieure à cette valeur (inclusive)
+
+|`--cve-before <YYYY-MM-DD>`
+|_aucun_
+|N'afficher que les CVE dont la date est antérieure à cette valeur (inclusive,
+fin de journée)
+
+|`--cve-date-field <champ>`
+|`published`
+|Champ de date utilisé : `published`, `modified`, ou `latest` (la plus récente
+des deux)
+
+|`--include-undated`
+|_désactivé_
+|Inclure les CVE dont le champ de date est absent des données du scanner
+
+|`--help` (ou `-h`)
+|—
+|Afficher l'aide de la sous-commande
+|===
+
+=== Codes de retour
+
+* *0* — aucune CVE dans la plage demandée (ou aucune CVE trouvée du tout)
+* *1* — au moins une CVE trouvée dans la plage, ou erreur d'un scanner
+
+=== Exemples
+
+[source,bash]
+----
+# Toutes les CVE Grype depuis le 1er janvier 2024
+sbom-generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# CVE OSV-Scanner entre deux dates
+sbom-generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# Tous les scanners, date de modification, CVE sans date incluses
+sbom-generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Utiliser dans un script CI (retour 1 si CVE récentes détectées)
+sbom-generator scan --sbom sbom.cdx.json \
+  --cve-after "$(date -d '90 days ago' +%F)" && echo "OK" || echo "CVE récentes !"
+----
+
+=== Format de sortie
+
+La commande affiche pour chaque scanner une table textuelle triée par
+sévérité décroissante :
+
+----
+── Grype ──────────────────────────────────────────
+  3 CVE(s) trouvée(s)  Filtre : champ=published  après=2024-01-01
+
+SÉVÉRITÉ      CVE / ID              PAQUET
+------------  --------------------  ------------------------------------
+Critical      CVE-2024-1234         openssl@1.1.1k
+High          CVE-2024-5678         bash@5.0.17
+Medium        CVE-2024-9012         zlib@1.2.11
+----
 
 == Problèmes courants
 

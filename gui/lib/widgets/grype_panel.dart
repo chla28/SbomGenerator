@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/grype_runner.dart';
 
@@ -17,6 +18,8 @@ class GrypeVuln {
   final String installedVersion;
   final String fixedVersion;
   final String packageType;
+  final DateTime? publishedDate;
+  final DateTime? modifiedDate;
 
   const GrypeVuln({
     required this.id,
@@ -25,6 +28,8 @@ class GrypeVuln {
     required this.installedVersion,
     required this.fixedVersion,
     required this.packageType,
+    this.publishedDate,
+    this.modifiedDate,
   });
 
   static int _order(String s) => switch (s.toLowerCase()) {
@@ -35,6 +40,15 @@ class GrypeVuln {
         'negligible' => 4,
         _ => 5,
       };
+
+  static DateTime? _parseDate(String? s) {
+    if (s == null || s.isEmpty) return null;
+    try {
+      return DateTime.parse(s).toUtc();
+    } catch (_) {
+      return null;
+    }
+  }
 
   static List<GrypeVuln> fromJson(String raw) {
     try {
@@ -55,6 +69,8 @@ class GrypeVuln {
           fixedVersion:
               fixVersions.isNotEmpty ? fixVersions.first : fixState,
           packageType: artifact['type'] as String? ?? '',
+          publishedDate: _parseDate(vuln['publishedDate'] as String?),
+          modifiedDate: _parseDate(vuln['lastModifiedDate'] as String?),
         );
       }).toList();
       vulns.sort((a, b) => _order(a.severity).compareTo(_order(b.severity)));
@@ -70,11 +86,17 @@ class GrypeVuln {
 class GrypePanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
   final void Function(List<GrypeVuln>)? onVulnsChanged;
+  final CveDateFilter dateFilter;
+  final void Function(CveDateFilter)? onDateFilterChanged;
+  final void Function(CveDateFilter)? onPropagate;
 
   const GrypePanel({
     super.key,
     required this.outputFiles,
     this.onVulnsChanged,
+    this.dateFilter = CveDateFilter.empty,
+    this.onDateFilterChanged,
+    this.onPropagate,
   });
 
   @override
@@ -360,7 +382,12 @@ class _GrypePanelState extends State<GrypePanel>
             child: TabBarView(
               controller: _resultTabs,
               children: [
-                _VulnTableView(vulns: _vulns),
+                _VulnTableView(
+                  vulns: _vulns,
+                  dateFilter: widget.dateFilter,
+                  onDateFilterChanged: widget.onDateFilterChanged,
+                  onPropagate: widget.onPropagate,
+                ),
                 _JsonView(json: _jsonOutput),
                 _TemplateView(
                   content: _templateOutput,
@@ -797,7 +824,16 @@ enum _SortCol { severity, package, cveId }
 
 class _VulnTableView extends StatefulWidget {
   final List<GrypeVuln> vulns;
-  const _VulnTableView({required this.vulns});
+  final CveDateFilter dateFilter;
+  final void Function(CveDateFilter)? onDateFilterChanged;
+  final void Function(CveDateFilter)? onPropagate;
+
+  const _VulnTableView({
+    required this.vulns,
+    this.dateFilter = CveDateFilter.empty,
+    this.onDateFilterChanged,
+    this.onPropagate,
+  });
 
   @override
   State<_VulnTableView> createState() => _VulnTableViewState();
@@ -850,6 +886,11 @@ class _VulnTableViewState extends State<_VulnTableView> {
           .where((v) =>
               v.packageName.toLowerCase().contains(q) ||
               v.id.toLowerCase().contains(q))
+          .toList();
+    }
+    if (widget.dateFilter.hasConstraints) {
+      list = list
+          .where((v) => widget.dateFilter.matches(v.publishedDate, v.modifiedDate))
           .toList();
     }
     list = List.of(list)
@@ -1029,6 +1070,13 @@ class _VulnTableViewState extends State<_VulnTableView> {
               ),
             ],
           ),
+        ),
+
+        // ── Filtre date ──
+        _DateFilterBar(
+          filter: widget.dateFilter,
+          onChanged: widget.onDateFilterChanged,
+          onPropagate: widget.onPropagate,
         ),
 
         // ── En-têtes de tri ──
@@ -1414,6 +1462,204 @@ class _GrypeRunningHint extends StatelessWidget {
           ],
         ),
       );
+}
+
+// ─── Barre de filtre par date CVE ─────────────────────────────────────────────
+
+class _DateFilterBar extends StatelessWidget {
+  final CveDateFilter filter;
+  final void Function(CveDateFilter)? onChanged;
+  final void Function(CveDateFilter)? onPropagate;
+
+  const _DateFilterBar({
+    required this.filter,
+    this.onChanged,
+    this.onPropagate,
+  });
+
+  Future<void> _pickDate(
+    BuildContext context,
+    DateTime? current,
+    void Function(DateTime?) onPicked,
+  ) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? now,
+      firstDate: DateTime(1999),
+      lastDate: now,
+    );
+    if (picked != null) onPicked(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fmt = _fmtDate;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_today_outlined, size: 14),
+          const SizedBox(width: 6),
+          const Text('Date CVE :', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 6),
+          // Champ de date (published / modified / latest)
+          SegmentedButton<CveDateField>(
+            segments: const [
+              ButtonSegment(
+                  value: CveDateField.published,
+                  label: Text('Publication', style: TextStyle(fontSize: 10))),
+              ButtonSegment(
+                  value: CveDateField.modified,
+                  label: Text('Modification', style: TextStyle(fontSize: 10))),
+              ButtonSegment(
+                  value: CveDateField.latest,
+                  label: Text('La plus récente', style: TextStyle(fontSize: 10))),
+            ],
+            selected: {filter.field},
+            onSelectionChanged: (s) =>
+                onChanged?.call(filter.copyWith(field: s.first)),
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: WidgetStateProperty.all(
+                  const TextStyle(fontSize: 10)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Après le
+          _DateChip(
+            label: filter.after == null ? 'Après le…' : 'Après : ${fmt(filter.after!)}',
+            active: filter.after != null,
+            onTap: () => _pickDate(context, filter.after,
+                (d) => onChanged?.call(filter.copyWith(after: d))),
+            onClear: filter.after == null
+                ? null
+                : () => onChanged?.call(filter.copyWith(after: null)),
+          ),
+          const SizedBox(width: 4),
+          // Avant le
+          _DateChip(
+            label: filter.before == null ? 'Avant le…' : 'Avant : ${fmt(filter.before!)}',
+            active: filter.before != null,
+            onTap: () => _pickDate(context, filter.before,
+                (d) => onChanged?.call(filter.copyWith(before: d))),
+            onClear: filter.before == null
+                ? null
+                : () => onChanged?.call(filter.copyWith(before: null)),
+          ),
+          const SizedBox(width: 10),
+          // Inclure CVE sans date
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: Checkbox(
+                  value: filter.includeUndated,
+                  onChanged: (v) =>
+                      onChanged?.call(filter.copyWith(includeUndated: v ?? false)),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Text('Sans date', style: TextStyle(fontSize: 11)),
+            ],
+          ),
+          const Spacer(),
+          // Bouton Propager
+          if (onPropagate != null)
+            TextButton.icon(
+              icon: const Icon(Icons.sync_alt, size: 14),
+              label: const Text('Propager aux autres onglets',
+                  style: TextStyle(fontSize: 11)),
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () => onPropagate!(filter),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _fmtDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+}
+
+class _DateChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  const _DateChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: active
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: active
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: active
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (onClear != null) ...[
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: onClear,
+                child: Icon(Icons.close, size: 12,
+                    color: theme.colorScheme.onPrimaryContainer),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Split-button pour sélection de fichier avec filtre ───────────────────────

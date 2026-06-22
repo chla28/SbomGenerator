@@ -18,7 +18,9 @@
       "Bash(flutter build *)",
       "Bash(osv-scanner --version)",
       "Bash(osv-scanner --help)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash)",
+      "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash pop)"
     ]
   }
 }

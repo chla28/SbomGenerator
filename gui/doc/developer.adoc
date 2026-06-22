@@ -105,7 +105,8 @@ gui/
 │   ├── models/
 │   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson + toCommandLine)
 │   │   ├── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
-│   │   └── app_themes.dart           # Thèmes de couleur prédéfinis (kAppThemes, AppTheme)
+│   │   ├── app_themes.dart           # Thèmes de couleur prédéfinis (kAppThemes, AppTheme)
+│   │   └── cve_date_filter.dart      # Filtre temporel CVE (CveDateFilter, CveDateField)
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
 │   │   ├── grype_runner.dart         # Exécute grype, stream d'événements
@@ -246,6 +247,42 @@ ce qui génère automatiquement toute la palette thème (primaires, surfaces, é
 Contient `OutputFile` (chemin + taille formatée) et `SbomResult` (agrégat de
 sortie). `SbomResult` n'est pas utilisé directement dans l'UI — les champs
 sont remontés un à un via les événements du stream (voir <<sec-stream>>).
+
+==== `models/cve_date_filter.dart` — Filtre temporel CVE
+
+Modèle immuable partagé entre les trois panneaux scanner (Grype, OSV, Trivy)
+et la CLI `scan`.
+
+[source,dart]
+----
+enum CveDateField { published, modified, latest }
+
+class CveDateFilter {
+  final DateTime? after;
+  final DateTime? before;
+  final CveDateField field;   // champ de date utilisé pour le filtrage
+  final bool includeUndated;  // inclure les CVE sans date
+
+  static const CveDateFilter empty = CveDateFilter();
+  bool get hasConstraints => after != null || before != null;
+
+  bool matches(DateTime? published, DateTime? modified) { … }
+  CveDateFilter copyWith({…}) { … }
+}
+----
+
+Points notables :
+
+* `hasConstraints` retourne `false` quand `after` et `before` sont tous deux
+  nuls — `matches()` court-circuite alors sans calcul.
+* `CveDateField.latest` utilise `_latest(a, b)` qui retourne la date la plus
+  tardive des deux (gère les cas où l'une est nulle).
+* `copyWith()` applique le *sentinel pattern* (`static const Object _sentinel`)
+  pour distinguer "paramètre non fourni" de "paramètre explicitement `null`"
+  sur les champs `DateTime?` — le pattern `?? this.field` n'étant pas
+  utilisable pour effacer une date nullable.
+* `CveDateFilter.empty` (constante) est utilisé comme valeur initiale dans
+  `ResultsPanel` pour les trois filtres, évitant les vérifications de nullité.
 
 ==== `services/sbom_runner.dart` — Exécution SBOM
 
@@ -497,6 +534,9 @@ Paramètres :
 * `List<OutputFile> outputFiles` — liste des fichiers SBOM générés
 * `void Function(List<OsvVuln>)? onVulnsChanged` — callback déclenché après
   chaque analyse réussie ; `ResultsPanel` l'utilise pour alimenter `DashboardPanel`
+* `CveDateFilter dateFilter` — filtre temporel courant, transmis depuis `ResultsPanel`
+* `void Function(CveDateFilter)? onDateFilterChanged` — callback à chaque modification
+* `void Function(CveDateFilter)? onPropagate` — copie le filtre vers Grype et Trivy
 
 Structure interne :
 
@@ -508,15 +548,20 @@ Structure interne :
 
 * `_searchCtrl` / `_searchTerm` — champ de recherche plein-texte (200 px)
 * `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
-* Getter `_filtered` — applique filtres sévérité + recherche + tri
+* Getter `_filtered` — applique filtres sévérité + recherche + filtre date + tri
 * `_csv()` + `_exportCsv()` — export RFC 4180 avec `FilePicker.platform.saveFile()`
 * En-têtes de colonne cliquables (`_SortHeader`) sans paramètre `width`
   (contrairement à Grype où la colonne sévérité a une largeur fixe)
+* `_DateFilterBar` + `_DateChip` — même structure que `grype_panel.dart`
 
 `OsvVuln` est un modèle de données parsé depuis le JSON OSV :
 `results[].packages[].vulnerabilities[]`. La sévérité est extraite depuis
 `database_specific.severity` ou calculée depuis les scores CVSS v2/v3.
 La version corrigée est lue depuis `affected[].ranges[].events[].fixed`.
+Les champs de date :
+
+* `publishedDate` (`DateTime?`) — depuis `v['published']` (ISO 8601 → UTC)
+* `modifiedDate` (`DateTime?`) — depuis `v['modified']`
 
 ==== `widgets/trivy_panel.dart` — Onglet Trivy
 
@@ -527,18 +572,25 @@ La version corrigée est lue depuis `affected[].ranges[].events[].fixed`.
 * `CheckboxListTile` pour `--skip-db-update`
 * Champ "trivy.yaml" avec `_SplitPickButton`
 
-Paramètre additionnel :
+Paramètres :
 
 * `void Function(List<TrivyVuln>)? onVulnsChanged` — callback vers `ResultsPanel`
   pour alimenter `DashboardPanel` (même pattern qu'`OsvPanel`)
+* `CveDateFilter dateFilter` — filtre temporel courant, transmis depuis `ResultsPanel`
+* `void Function(CveDateFilter)? onDateFilterChanged` — callback à chaque modification
+* `void Function(CveDateFilter)? onPropagate` — copie le filtre vers Grype et OSV
 
 `_VulnTableView` — même structure que dans `osv_panel.dart` (recherche, tri,
-export CSV). Les colonnes CSV sont : Sévérité, CVE/ID, Paquet, Version installée,
-Version corrigée, Titre. Les chaînes de sévérité sont en majuscules
-(`CRITICAL`, `HIGH`…) contrairement à Grype (`Critical`, `High`…).
+export CSV, `_DateFilterBar`). Les colonnes CSV sont : Sévérité, CVE/ID, Paquet,
+Version installée, Version corrigée, Titre. Les chaînes de sévérité sont en
+majuscules (`CRITICAL`, `HIGH`…) contrairement à Grype (`Critical`, `High`…).
 
 `TrivyVuln` est parsé depuis `Results[].Vulnerabilities[]` du JSON Trivy.
 Le champ `Title` est affiché en sous-titre de chaque entrée.
+Les champs de date (PascalCase, convention Trivy) :
+
+* `publishedDate` (`DateTime?`) — depuis `v['PublishedDate']` (ISO 8601 → UTC)
+* `modifiedDate` (`DateTime?`) — depuis `v['LastModifiedDate']`
 
 NOTE: `_SplitPickButton` est défini localement (privé `_`) dans chaque panel.
 C'est une duplication intentionnelle pour éviter de créer un fichier partagé.
@@ -742,9 +794,18 @@ Sous-widgets :
 * `List<GrypeVuln>? _grypeVulns` — alimenté par `GrypePanel.onVulnsChanged`
 * `List<OsvVuln>? _osvVulns` — alimenté par `OsvPanel.onVulnsChanged`
 * `List<TrivyVuln>? _trivyVulns` — alimenté par `TrivyPanel.onVulnsChanged`
+* `CveDateFilter _grypeFilter` — filtre date transmis à `GrypePanel`
+* `CveDateFilter _osvFilter` — filtre date transmis à `OsvPanel`
+* `CveDateFilter _trivyFilter` — filtre date transmis à `TrivyPanel`
 
-Ces listes `null` signifient "scanner pas encore exécuté" et sont transmises
+Les listes `null` signifient "scanner pas encore exécuté" et sont transmises
 à `DashboardPanel` qui affiche un message d'invite pour chaque scanner absent.
+
+La propagation du filtre fonctionne par *lift-and-broadcast* : l'état des
+filtres vit dans `ResultsPanel`, pas dans les panneaux enfants. Quand
+`GrypePanel.onPropagate(f)` est appelé, `ResultsPanel` écrase `_osvFilter`
+et `_trivyFilter` avec `f`, ce qui reconstruit les deux panneaux via leurs
+paramètres — sans `GlobalKey` ni appel de méthode sur un `State` enfant.
 
 Comportement automatique du `TabController` :
 
@@ -779,6 +840,12 @@ Paramètres :
   fichier SBOM via `didUpdateWidget` si le champ est encore vide
 * `void Function(List<GrypeVuln>)? onVulnsChanged` — callback déclenché après
   chaque analyse réussie ; `ResultsPanel` l'utilise pour alimenter `DashboardPanel`
+* `CveDateFilter dateFilter` — filtre temporel courant, transmis depuis `ResultsPanel`
+* `void Function(CveDateFilter)? onDateFilterChanged` — callback appelé à chaque
+  modification du filtre dans la barre `_DateFilterBar`
+* `void Function(CveDateFilter)? onPropagate` — callback appelé par le bouton
+  "Propager aux autres onglets" ; `ResultsPanel` l'utilise pour écraser les
+  filtres des deux autres panneaux
 
 Les boutons de sélection de fichier utilisent `_SplitPickButton` (basé sur
 `MenuAnchor`) pour proposer "Type filtré" / "Tous les fichiers" en split-button.
@@ -791,7 +858,7 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 
 |0
 |Table (N)
-|`_VulnTableView` — recherche + tri + filtres sévérité + export CSV
+|`_VulnTableView` — `_DateFilterBar` + recherche + tri + filtres sévérité + export CSV
 
 |1
 |JSON
@@ -802,16 +869,31 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 |`_TemplateView` — sortie brute du fichier template
 |===
 
+`GrypeVuln` (modèle parsé depuis le JSON Grype) expose :
+
+* `publishedDate` (`DateTime?`) — depuis `vuln['publishedDate']` (ISO 8601 → UTC)
+* `modifiedDate` (`DateTime?`) — depuis `vuln['lastModifiedDate']`
+* Les deux champs sont absents de nombreux résultats Grype : `null` est normal.
+
 `_VulnTableView` est un `StatefulWidget` qui maintient :
 
 * `_searchCtrl` / `_searchTerm` — champ de recherche 200 px
 * `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
 * `_activeFilters` (`Set<String>`) — filtres sévérité actifs (vide = tout afficher)
-* Getter `_filtered` — applique filtres sévérité + recherche + tri
+* Getter `_filtered` — applique filtres sévérité + recherche + filtre date + tri
 * `_csv()` + `_exportCsv()` — export RFC 4180 via `FilePicker.platform.saveFile()`
   Colonnes : Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Type
 * En-têtes de colonne `_SortHeader` avec paramètre optionnel `width` pour la
   colonne sévérité (largeur fixe 120 px, contrairement à OSV et Trivy)
+
+`_DateFilterBar` (widget interne défini en bas du fichier) :
+
+* `Row` avec : icône calendrier, label "Date CVE :", `SegmentedButton<CveDateField>`
+  (Publication / Modification / La plus récente), deux `_DateChip` (Après le… /
+  Avant le…), checkbox "Sans date", `Spacer`, `TextButton` "Propager aux autres onglets"
+* `_DateChip` est un `InkWell` avec bordure arrondie ; un clic ouvre `showDatePicker`
+  (`firstDate: 1999`, `lastDate: DateTime.now()`) ; le × intégré efface la borne
+* Tout changement appelle `widget.onDateFilterChanged` via `CveDateFilter.copyWith()`
 
 === Flux de données
 
@@ -852,12 +934,26 @@ GrypePanel._analyze()
 GrypeRunner.run(...)   →   Process.start('grype', args)
   │
   │ Stream<GrypeEvent>
-  ├── GrypeOutputEvent(json)    →  setState() → _vulns (parsés), _jsonOutput
+  ├── GrypeOutputEvent(json)    →  setState() → _vulns (GrypeVuln[]) avec publishedDate/modifiedDate
   │                                widget.onVulnsChanged?.call(_vulns)
   │                                → ResultsPanel.setState() → _grypeVulns
   │                                  → DashboardPanel reçoit grypeVulns
   ├── GrypeTemplateEvent(text)  →  setState() → _templateOutput, bascule tab 2
   └── GrypeDoneEvent(code)      →  setState() → _isRunning=false, _exitCode
+
+_VulnTableView.build()
+  │ widget.dateFilter (CveDateFilter transmis depuis ResultsPanel)
+  ▼
+getter _filtered
+  ├── filtre sévérité (_activeFilters)
+  ├── filtre recherche (_searchTerm)
+  ├── filtre date (dateFilter.matches(v.publishedDate, v.modifiedDate))
+  └── tri (_sortCol, _sortAsc)
+
+_DateFilterBar (interaction utilisateur)
+  │ onDateFilterChanged → ResultsPanel.setState() → _grypeFilter mis à jour
+  │   → GrypePanel reçoit le nouveau dateFilter → _VulnTableView se reconstruit
+  └── onPropagate → ResultsPanel.setState() → _osvFilter = _trivyFilter = filtre Grype
 ----
 
 ==== Analyse OSV-Scanner
@@ -1092,6 +1188,61 @@ MonNouveauWidget(outputFiles: widget.outputFiles),
 
 . Si le nouvel onglet reçoit des données de `HomeScreen`, ajouter le
   paramètre correspondant à `ResultsPanel` et le propager depuis `home_screen.dart`.
+
+=== Ajouter un filtre au modèle `CveDateFilter`
+
+`CveDateFilter` est immuable — tout ajout se fait par champ supplémentaire
+et extension de `copyWith()`.
+
+. Ajouter le champ dans `CveDateFilter` (ex. `final String? severity`)
+. Étendre le *sentinel* pattern dans `copyWith()` si le champ est nullable
+. Mettre à jour `matches()` avec la logique de filtrage
+. Propager le nouveau champ depuis `_DateFilterBar` (chaque panneau)
+  via `widget.onDateFilterChanged(widget.dateFilter.copyWith(…))`
+. Mettre à jour `_filterByDate()` dans `bin/sbom_generator.dart` pour
+  répliquer la même logique côté CLI
+
+=== Étendre la sous-commande `scan` CLI
+
+La sous-commande `scan` est implémentée dans `bin/sbom_generator.dart`
+par la fonction `_runScan(List<String> args)` et ses helpers.
+
+Architecture interne :
+
+[cols="1,3", options="header"]
+|===
+|Fonction |Rôle
+
+|`_runScan()`
+|Parse les arguments via `ArgParser`, orchestre les scanners
+
+|`_runScanner()`
+|Dispatch vers `_runGrype()`, `_runOsv()`, `_runTrivy()`
+
+|`_runGrype()` / `_runOsv()` / `_runTrivy()`
+|Lance le scanner via `Process.run()`, parse le JSON,
+retourne `List<Map<String, dynamic>>` normalisé :
+`{id, severity, package, published, modified}`
+
+|`_filterByDate()`
+|Applique `after` / `before` / `includeUndated` — même logique que
+`CveDateFilter.matches()` mais sans dépendance Flutter
+
+|`_printScanResults()`
+|Affiche le tableau textuel trié par sévérité
+
+|`_printScanUsage()`
+|Affiche l'aide avec exemples
+|===
+
+Pour ajouter un nouveau scanner :
+
+. Ajouter son nom dans la constante `_validScanners`
+. Créer une fonction `_runMonScanner()` qui :
+  * Lance le binaire via `Process.run()`
+  * Parse le JSON en `List<Map<String, dynamic>>` avec les clés
+    `id`, `severity`, `package`, `published`, `modified`
+. Ajouter un `case` dans `_runScanner()`
 
 === Ajouter un sous-onglet dans GrypePanel
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:sbom_generator/models.dart';
@@ -18,8 +19,16 @@ import 'package:sbom_generator/asciidoc_generator.dart';
 const _version = '1.0.0';
 
 const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc'};
+const _validScanners = {'grype', 'osv', 'trivy', 'all'};
+const _validDateFields = {'published', 'modified', 'latest'};
 
 Future<void> main(List<String> arguments) async {
+  // Sous-commande `scan` : analyse CVE avec filtre date
+  if (arguments.isNotEmpty && arguments.first == 'scan') {
+    await _runScan(arguments.sublist(1));
+    return;
+  }
+
   final parser = ArgParser()
     ..addOption(
       'input',
@@ -547,6 +556,320 @@ Map<String, String> _parseLicenseMap(String path) {
     if (name.isNotEmpty && license.isNotEmpty) result[name] = license;
   }
   return result;
+}
+
+// ── Sous-commande scan ────────────────────────────────────────────────────────
+
+Future<void> _runScan(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('sbom',
+        abbr: 's',
+        mandatory: true,
+        help: 'Chemin vers le fichier SBOM à analyser (.cdx.json, .spdx.json…)')
+    ..addOption('scanner',
+        abbr: 'S',
+        defaultsTo: 'grype',
+        help: 'Scanner(s) à utiliser.\n'
+            '  grype   Anchore Grype\n'
+            '  osv     Google OSV-Scanner\n'
+            '  trivy   Aqua Security Trivy\n'
+            '  all     Les trois scanners')
+    ..addOption('cve-after',
+        help: 'N\'afficher que les CVE publiées/modifiées après cette date (YYYY-MM-DD)')
+    ..addOption('cve-before',
+        help: 'N\'afficher que les CVE publiées/modifiées avant cette date (YYYY-MM-DD)')
+    ..addOption('cve-date-field',
+        defaultsTo: 'published',
+        help: 'Champ de date à utiliser pour le filtre.\n'
+            '  published   Date de publication (défaut)\n'
+            '  modified    Date de dernière modification\n'
+            '  latest      La plus récente des deux')
+    ..addFlag('include-undated',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Inclure les CVE sans date dans les résultats filtrés')
+    ..addFlag('help',
+        abbr: 'h',
+        negatable: false,
+        help: 'Afficher l\'aide de la sous-commande scan');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('scan: ${e.message}');
+    _printScanUsage(parser);
+    exit(1);
+  }
+
+  if (args['help'] as bool) {
+    _printScanUsage(parser);
+    exit(0);
+  }
+
+  final sbomFile = args['sbom'] as String;
+  final scanner = args['scanner'] as String;
+  final dateField = args['cve-date-field'] as String;
+  final includeUndated = args['include-undated'] as bool;
+
+  if (!_validScanners.contains(scanner)) {
+    stderr.writeln('scan: scanner invalide "$scanner". Valides : ${_validScanners.join(', ')}');
+    exit(1);
+  }
+  if (!_validDateFields.contains(dateField)) {
+    stderr.writeln('scan: cve-date-field invalide "$dateField". Valides : ${_validDateFields.join(', ')}');
+    exit(1);
+  }
+  if (!await File(sbomFile).exists()) {
+    stderr.writeln('scan: fichier SBOM introuvable : $sbomFile');
+    exit(1);
+  }
+
+  DateTime? after, before;
+  final rawAfter = args['cve-after'] as String?;
+  final rawBefore = args['cve-before'] as String?;
+  if (rawAfter != null) {
+    after = DateTime.tryParse(rawAfter);
+    if (after == null) {
+      stderr.writeln('scan: format de date invalide pour --cve-after : "$rawAfter" (attendu YYYY-MM-DD)');
+      exit(1);
+    }
+  }
+  if (rawBefore != null) {
+    before = DateTime.tryParse(rawBefore);
+    if (before == null) {
+      stderr.writeln('scan: format de date invalide pour --cve-before : "$rawBefore" (attendu YYYY-MM-DD)');
+      exit(1);
+    }
+    // La date "avant" est inclusive en fin de journée
+    before = before.add(const Duration(hours: 23, minutes: 59, seconds: 59));
+  }
+
+  final scanners = scanner == 'all'
+      ? ['grype', 'osv', 'trivy']
+      : [scanner];
+
+  int totalShown = 0;
+  for (final s in scanners) {
+    final vulns = await _runScanner(s, sbomFile);
+    if (vulns == null) continue;
+
+    final filtered = _filterByDate(vulns, dateField, after, before, includeUndated);
+    _printScanResults(s, filtered, after, before, dateField);
+    totalShown += filtered.length;
+  }
+
+  exit(totalShown > 0 ? 1 : 0);
+}
+
+// Retourne la liste brute [{id, severity, package, published, modified}] ou null si erreur.
+Future<List<Map<String, dynamic>>?>  _runScanner(String scanner, String sbomFile) async {
+  switch (scanner) {
+    case 'grype':
+      return _runGrype(sbomFile);
+    case 'osv':
+      return _runOsv(sbomFile);
+    case 'trivy':
+      return _runTrivy(sbomFile);
+    default:
+      return null;
+  }
+}
+
+Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile) async {
+  stdout.writeln('\n── Grype ──────────────────────────────────────────');
+  final result = await Process.run('grype', [sbomFile, '--output', 'json']);
+  if (result.exitCode > 1) {
+    stderr.writeln('grype: erreur (code ${result.exitCode}): ${result.stderr}');
+    return null;
+  }
+  try {
+    final data = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+    final matches = data['matches'] as List? ?? [];
+    return matches.map<Map<String, dynamic>>((m) {
+      final vuln = m['vulnerability'] as Map<String, dynamic>? ?? {};
+      final artifact = m['artifact'] as Map<String, dynamic>? ?? {};
+      return {
+        'id': vuln['id'] ?? '',
+        'severity': vuln['severity'] ?? 'Unknown',
+        'package': '${artifact['name'] ?? ''}@${artifact['version'] ?? ''}',
+        'published': vuln['publishedDate'],
+        'modified': vuln['lastModifiedDate'],
+      };
+    }).toList();
+  } catch (e) {
+    stderr.writeln('grype: impossible de parser le JSON: $e');
+    return null;
+  }
+}
+
+Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile) async {
+  stdout.writeln('\n── OSV-Scanner ─────────────────────────────────────');
+  final result = await Process.run('osv-scanner', ['--format', 'json', '--sbom', sbomFile]);
+  if (result.exitCode > 1) {
+    stderr.writeln('osv-scanner: erreur (code ${result.exitCode}): ${result.stderr}');
+    return null;
+  }
+  try {
+    final data = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+    final out = <Map<String, dynamic>>[];
+    for (final res in (data['results'] as List? ?? [])) {
+      for (final pkg in (res['packages'] as List? ?? [])) {
+        final pkgInfo = (pkg['package'] as Map?) ?? {};
+        final name = pkgInfo['name'] ?? '';
+        final version = pkgInfo['version'] ?? '';
+        for (final v in (pkg['vulnerabilities'] as List? ?? [])) {
+          final aliases = (v['aliases'] as List?)?.cast<String>() ?? [];
+          final cve = aliases.firstWhere((a) => a.startsWith('CVE-'), orElse: () => '');
+          final dbSev = (v['database_specific'] as Map?)?['severity'] as String? ?? '';
+          out.add({
+            'id': cve.isNotEmpty ? cve : v['id'] ?? '',
+            'severity': dbSev.isNotEmpty ? dbSev : 'Unknown',
+            'package': '$name@$version',
+            'published': v['published'],
+            'modified': v['modified'],
+          });
+        }
+      }
+    }
+    return out;
+  } catch (e) {
+    stderr.writeln('osv-scanner: impossible de parser le JSON: $e');
+    return null;
+  }
+}
+
+Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile) async {
+  stdout.writeln('\n── Trivy ───────────────────────────────────────────');
+  final result = await Process.run('trivy', ['sbom', '--format', 'json', '--quiet', sbomFile]);
+  if (result.exitCode > 1) {
+    stderr.writeln('trivy: erreur (code ${result.exitCode}): ${result.stderr}');
+    return null;
+  }
+  try {
+    final data = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+    final out = <Map<String, dynamic>>[];
+    for (final res in (data['Results'] as List? ?? [])) {
+      for (final v in (res['Vulnerabilities'] as List? ?? [])) {
+        out.add({
+          'id': v['VulnerabilityID'] ?? '',
+          'severity': v['Severity'] ?? 'Unknown',
+          'package': '${v['PkgName'] ?? ''}@${v['InstalledVersion'] ?? ''}',
+          'published': v['PublishedDate'],
+          'modified': v['LastModifiedDate'],
+        });
+      }
+    }
+    return out;
+  } catch (e) {
+    stderr.writeln('trivy: impossible de parser le JSON: $e');
+    return null;
+  }
+}
+
+List<Map<String, dynamic>> _filterByDate(
+  List<Map<String, dynamic>> vulns,
+  String field,
+  DateTime? after,
+  DateTime? before,
+  bool includeUndated,
+) {
+  if (after == null && before == null) return vulns;
+  return vulns.where((v) {
+    final pub = _parseDate(v['published'] as String?);
+    final mod = _parseDate(v['modified'] as String?);
+    final date = switch (field) {
+      'published' => pub,
+      'modified' => mod,
+      'latest' => _latestDate(pub, mod),
+      _ => pub,
+    };
+    if (date == null) return includeUndated;
+    if (after != null && date.isBefore(after)) return false;
+    if (before != null && date.isAfter(before)) return false;
+    return true;
+  }).toList();
+}
+
+DateTime? _parseDate(String? s) {
+  if (s == null || s.isEmpty) return null;
+  try {
+    return DateTime.parse(s).toUtc();
+  } catch (_) {
+    return null;
+  }
+}
+
+DateTime? _latestDate(DateTime? a, DateTime? b) {
+  if (a == null) return b;
+  if (b == null) return a;
+  return b.isAfter(a) ? b : a;
+}
+
+void _printScanResults(
+  String scanner,
+  List<Map<String, dynamic>> vulns,
+  DateTime? after,
+  DateTime? before,
+  String field,
+) {
+  final sevOrder = {'Critical': 0, 'CRITICAL': 0, 'High': 1, 'HIGH': 1,
+      'Medium': 2, 'MEDIUM': 2, 'Low': 3, 'LOW': 3, 'Unknown': 4, 'UNKNOWN': 4};
+  vulns.sort((a, b) =>
+      (sevOrder[a['severity']] ?? 5).compareTo(sevOrder[b['severity']] ?? 5));
+
+  final filterDesc = StringBuffer();
+  if (after != null || before != null) {
+    filterDesc.write('  Filtre : champ=$field');
+    if (after != null) filterDesc.write('  après=${_formatDate(after)}');
+    if (before != null) filterDesc.write('  avant=${_formatDate(before)}');
+  }
+  stdout.writeln('  ${vulns.length} CVE(s) trouvée(s)$filterDesc');
+
+  if (vulns.isEmpty) return;
+
+  const w0 = 12, w1 = 20, w2 = 36;
+  stdout.writeln(
+      '${'SÉVÉRITÉ'.padRight(w0)}  ${'CVE / ID'.padRight(w1)}  PAQUET');
+  stdout.writeln('${'-' * w0}  ${'-' * w1}  ${'-' * w2}');
+  for (final v in vulns) {
+    final sev = (v['severity'] as String).padRight(w0);
+    final id = (v['id'] as String).padRight(w1);
+    final pkg = v['package'] as String;
+    stdout.writeln('$sev  $id  $pkg');
+  }
+}
+
+String _formatDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+void _printScanUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator scan – Analyser les CVE d'un fichier SBOM avec filtre par date.
+
+Usage:
+  sbom-generator scan --sbom <fichier.cdx.json> [options]
+
+${parser.usage}
+
+Exemples:
+  # Toutes les CVE grype depuis 2024
+  sbom-generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+  # CVE OSV-Scanner entre deux dates
+  sbom-generator scan --sbom sbom.cdx.json --scanner osv \\
+    --cve-after 2023-06-01 --cve-before 2024-01-01
+
+  # Tous les scanners, champ modification, CVE sans date incluses
+  sbom-generator scan --sbom sbom.cdx.json --scanner all \\
+    --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+Codes de retour:
+  0  Aucune CVE dans la plage demandée
+  1  Au moins une CVE trouvée (ou erreur de scanner)
+''');
 }
 
 /// Returns a new list with license overrides applied by package name.
