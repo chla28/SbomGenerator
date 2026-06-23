@@ -20,7 +20,8 @@
       "Bash(osv-scanner --help)",
       "Bash(python3 *)",
       "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash)",
-      "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash pop)"
+      "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash pop)",
+      "Bash(sbomqs score *)"
     ]
   }
 }

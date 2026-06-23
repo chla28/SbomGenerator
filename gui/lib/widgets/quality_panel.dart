@@ -15,6 +15,7 @@ class _SbomqsCheck {
   final double score;
   final double maxScore;
   final String description;
+  final bool isRequired;
 
   const _SbomqsCheck({
     required this.category,
@@ -22,6 +23,7 @@ class _SbomqsCheck {
     required this.score,
     required this.maxScore,
     required this.description,
+    this.isRequired = false,
   });
 
   bool get passed => score >= maxScore;
@@ -32,12 +34,43 @@ class _SbomqsCheck {
     return double.tryParse(v.toString()) ?? 0;
   }
 
-  static _SbomqsCheck fromJson(Map<String, dynamic> j) => _SbomqsCheck(
-        category: (j['check_category'] ?? j['category'] ?? '').toString().trim(),
-        name: (j['check_name'] ?? j['name'] ?? '').toString().trim(),
-        score: _num(j['current_score'] ?? j['score']),
-        maxScore: _num(j['max_score']),
-        description: (j['check_result'] ?? j['description'] ?? '').toString().trim(),
+  static _SbomqsCheck _fromFeature(String category, Map<String, dynamic> feat) =>
+      _SbomqsCheck(
+        category: category,
+        name: (feat['key'] ?? '').toString(),
+        score: _num(feat['score']),
+        maxScore: 10,
+        description: (feat['description'] ?? '').toString().trim(),
+        isRequired: feat['required'] as bool? ?? false,
+      );
+}
+
+class _SbomqsProfile {
+  final String name;
+  final double score;
+  final String grade;
+  final String message;
+  final List<_SbomqsCheck> features; // vide quand non demandé via --profile
+
+  const _SbomqsProfile({
+    required this.name,
+    required this.score,
+    required this.grade,
+    required this.message,
+    required this.features,
+  });
+
+  bool get hasFeatures => features.isNotEmpty;
+
+  static _SbomqsProfile fromJson(Map<String, dynamic> p) => _SbomqsProfile(
+        name: (p['profile'] ?? '').toString(),
+        score: _SbomqsCheck._num(p['score']),
+        grade: (p['grade'] ?? '').toString(),
+        message: (p['message'] ?? '').toString(),
+        features: (p['features'] as List? ?? [])
+            .map((f) =>
+                _SbomqsCheck._fromFeature('', f as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -48,6 +81,7 @@ class _SbomqsResult {
   final double score;
   final double maxScore;
   final List<_SbomqsCheck> checks;
+  final List<_SbomqsProfile> profiles;
 
   const _SbomqsResult({
     required this.spec,
@@ -56,6 +90,7 @@ class _SbomqsResult {
     required this.score,
     required this.maxScore,
     required this.checks,
+    required this.profiles,
   });
 
   static _SbomqsResult? fromJson(Map<String, dynamic> root) {
@@ -64,28 +99,30 @@ class _SbomqsResult {
       if (files == null || files.isEmpty) return null;
       final f = files.first as Map<String, dynamic>;
 
-      // Score peut être dans un sous-objet "score" ou directement à la racine du fichier
-      final scoreMap = (f['score'] is Map)
-          ? f['score'] as Map<String, dynamic>
-          : f;
+      // Aplatir comprehenssive[*].features[] en liste de checks
+      final cats = f['comprehenssive'] as List? ?? [];
+      final checks = <_SbomqsCheck>[];
+      for (final cat in cats) {
+        final c = cat as Map<String, dynamic>;
+        final catName = (c['category'] ?? '').toString();
+        for (final feat in (c['features'] as List? ?? [])) {
+          checks.add(_SbomqsCheck._fromFeature(
+              catName, feat as Map<String, dynamic>));
+        }
+      }
 
-      final rawChecks = (scoreMap['checks'] ??
-              (f['score'] is Map ? null : f['checks'])) as List?;
-      final checks = rawChecks
-              ?.map((c) => _SbomqsCheck.fromJson(c as Map<String, dynamic>))
-              .toList() ??
-          [];
+      final profiles = (f['profiles'] as List? ?? [])
+          .map((p) => _SbomqsProfile.fromJson(p as Map<String, dynamic>))
+          .toList();
 
       return _SbomqsResult(
         spec: (f['spec'] as String? ?? '').toUpperCase(),
-        specVersion:
-            (f['spec_version'] ?? f['specVersion'] ?? '').toString(),
+        specVersion: (f['spec_version'] ?? '').toString(),
         numComponents: (f['num_components'] as int?) ?? 0,
-        score: _SbomqsCheck._num(
-            scoreMap['avg_score'] ?? scoreMap['score'] ?? f['avg_score']),
-        maxScore:
-            _SbomqsCheck._num(scoreMap['max_score'] ?? f['max_score'] ?? 10),
+        score: _SbomqsCheck._num(f['sbom_quality_score']),
+        maxScore: 10,
         checks: checks,
+        profiles: profiles,
       );
     } catch (_) {
       return null;
@@ -182,6 +219,7 @@ class _QualityPanelState extends State<QualityPanel>
     with AutomaticKeepAliveClientMixin {
   final _fileCtrl = TextEditingController();
   bool _isRunning = false;
+  final _selectedProfiles = <String>{};
 
   _SbomqsResult? _sbomqsResult;
   String? _sbomqsRaw;
@@ -249,8 +287,12 @@ class _QualityPanelState extends State<QualityPanel>
 
   Future<void> _runSbomqs(String path) async {
     try {
-      final result =
-          await Process.run('sbomqs', ['score', '-f', 'json', path]);
+      final args = ['score', '--json'];
+      if (_selectedProfiles.isNotEmpty) {
+        args.addAll(['--profile', _selectedProfiles.join(',')]);
+      }
+      args.add(path);
+      final result = await Process.run('sbomqs', args);
       final stdout = (result.stdout as String).trim();
       if (!mounted) return;
       if (result.exitCode == 0 || result.exitCode == 1) {
@@ -326,6 +368,14 @@ class _QualityPanelState extends State<QualityPanel>
           isRunning: _isRunning,
           onPick: _pickFile,
           onAnalyze: _analyze,
+          selectedProfiles: _selectedProfiles,
+          onProfileToggle: (key) => setState(() {
+            if (_selectedProfiles.contains(key)) {
+              _selectedProfiles.remove(key);
+            } else {
+              _selectedProfiles.add(key);
+            }
+          }),
         ),
         if (_isRunning) const LinearProgressIndicator(),
         Expanded(
@@ -344,6 +394,11 @@ class _QualityPanelState extends State<QualityPanel>
                     rawOutput: _sbomqsRaw,
                     error: _sbomqsError,
                   ),
+                if (_sbomqsResult != null &&
+                    _sbomqsResult!.profiles.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _ProfilesCard(profiles: _sbomqsResult!.profiles),
+                ],
                 if ((_sbomqsRaw != null || _sbomqsError != null) &&
                     (_scorecardRaw != null || _scorecardError != null))
                   const SizedBox(height: 16),
@@ -369,36 +424,82 @@ class _ConfigSection extends StatelessWidget {
   final bool isRunning;
   final void Function({bool filtered}) onPick;
   final VoidCallback onAnalyze;
+  final Set<String> selectedProfiles;
+  final void Function(String) onProfileToggle;
+
+  static const _profiles = [
+    ('ntia', 'NTIA 2021'),
+    ('ntia-2025', 'NTIA 2025'),
+    ('fsct', 'FSCT'),
+    ('bsi', 'BSI'),
+    ('bsi-v1.1', 'BSI v1.1'),
+    ('bsi-v2.0', 'BSI v2.0'),
+    ('bsi-v2.1', 'BSI v2.1'),
+    ('oct-v1.1', 'OpenChain v1.1'),
+    ('interlynk', 'Interlynk'),
+  ];
 
   const _ConfigSection({
     required this.fileCtrl,
     required this.isRunning,
     required this.onPick,
     required this.onAnalyze,
+    required this.selectedProfiles,
+    required this.onProfileToggle,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextFormField(
-              controller: fileCtrl,
-              decoration: InputDecoration(
-                labelText: 'Fichier SBOM',
-                isDense: true,
-                suffixIcon: _SplitPickButton(onPick: onPick),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: fileCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Fichier SBOM',
+                    isDense: true,
+                    suffixIcon: _SplitPickButton(onPick: onPick),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: isRunning ? null : onAnalyze,
+                icon: const Icon(Icons.analytics_outlined, size: 18),
+                label: const Text('Analyser'),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: isRunning ? null : onAnalyze,
-            icon: const Icon(Icons.analytics_outlined, size: 18),
-            label: const Text('Analyser'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Profils :',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
+              ),
+              for (final (key, label) in _profiles)
+                FilterChip(
+                  label: Text(label, style: const TextStyle(fontSize: 11)),
+                  selected: selectedProfiles.contains(key),
+                  onSelected: (_) => onProfileToggle(key),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
           ),
         ],
       ),
@@ -913,6 +1014,213 @@ class _RawOutput extends StatelessWidget {
           style: const TextStyle(
               fontFamily: 'monospace', fontSize: 12, color: Colors.white70),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Badge grade (A/B/C/D/F) ─────────────────────────────────────────────────
+
+class _GradeBadge extends StatelessWidget {
+  final String grade;
+  const _GradeBadge({required this.grade});
+
+  Color _color() => switch (grade) {
+        'A' => Colors.green[700]!,
+        'B' => Colors.lightGreen[700]!,
+        'C' => Colors.orange[700]!,
+        'D' => Colors.deepOrange[700]!,
+        _ => Colors.red[700]!,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _color(),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        grade.isEmpty ? '?' : grade[0],
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Carte Profils d'industrie ────────────────────────────────────────────────
+
+class _ProfilesCard extends StatelessWidget {
+  final List<_SbomqsProfile> profiles;
+  const _ProfilesCard({required this.profiles});
+
+  Color _gradeColor(String grade) => switch (grade) {
+        'A' => Colors.green[700]!,
+        'B' => Colors.lightGreen[700]!,
+        'C' => Colors.orange[700]!,
+        'D' => Colors.deepOrange[700]!,
+        _ => Colors.red[700]!,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasAnyFeatures = profiles.any((p) => p.hasFeatures);
+    final hasRequired = profiles.any((p) => p.features.any((f) => f.isRequired));
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // En-tête
+          Container(
+            color: theme.colorScheme.tertiaryContainer,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.workspace_premium_outlined,
+                    size: 20,
+                    color: theme.colorScheme.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Text(
+                  'Profils d\'industrie',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+                if (!hasAnyFeatures) ...[
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message:
+                        'Sélectionnez des profils dans la barre de configuration\n'
+                        'pour afficher le détail des critères',
+                    child: Icon(Icons.info_outline,
+                        size: 14,
+                        color: theme.colorScheme.onTertiaryContainer
+                            .withValues(alpha: 0.6)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Liste des profils
+          for (int i = 0; i < profiles.length; i++) ...[
+            if (i > 0) const Divider(height: 1, indent: 16),
+            _ProfileTile(
+              profile: profiles[i],
+              gradeColor: _gradeColor(profiles[i].grade),
+              hasRequired: hasRequired,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileTile extends StatelessWidget {
+  final _SbomqsProfile profile;
+  final Color gradeColor;
+  final bool hasRequired;
+
+  const _ProfileTile({
+    required this.profile,
+    required this.gradeColor,
+    required this.hasRequired,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!profile.hasFeatures) {
+      return ListTile(
+        dense: true,
+        leading: _GradeBadge(grade: profile.grade),
+        title: Text(profile.name, style: const TextStyle(fontSize: 13)),
+        subtitle: Text(profile.message,
+            style: const TextStyle(fontSize: 11),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
+        trailing: Text(
+          '${profile.score.toStringAsFixed(1)}/10',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: gradeColor,
+          ),
+        ),
+      );
+    }
+
+    final passed = profile.features.where((f) => f.passed).length;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        leading: _GradeBadge(grade: profile.grade),
+        title: Text(profile.name,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        subtitle: Text(
+          '${profile.score.toStringAsFixed(1)}/10  ·  $passed/${profile.features.length} critères',
+          style: const TextStyle(fontSize: 11),
+        ),
+        children: [
+          for (final feat in profile.features)
+            ListTile(
+              dense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
+              leading: Icon(
+                feat.passed
+                    ? Icons.check_circle_outline
+                    : Icons.cancel_outlined,
+                color: feat.passed ? Colors.green[600] : Colors.red[400],
+                size: 18,
+              ),
+              title: Text(
+                feat.name + (feat.isRequired ? ' *' : ''),
+                style: const TextStyle(fontSize: 12),
+              ),
+              subtitle: feat.description.isNotEmpty
+                  ? Text(feat.description,
+                      style: const TextStyle(fontSize: 11),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis)
+                  : null,
+              trailing: Text(
+                '${feat.score.toStringAsFixed(0)}/10',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: feat.passed ? Colors.green[700] : Colors.red[400],
+                ),
+              ),
+            ),
+          if (hasRequired)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 10),
+              child: Text(
+                '* critère obligatoire',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

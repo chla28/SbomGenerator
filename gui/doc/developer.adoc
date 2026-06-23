@@ -697,25 +697,65 @@ Il lance deux outils en parallèle via `Future.wait` :
 |Outil |Commande
 
 |`sbomqs`
-|`sbomqs score -f json <sbomFile>`
+|`sbomqs score --json [--profile p1,p2,...] <sbomFile>`
 
 |`sbom-scorecard`
 |`sbom-scorecard score <sbomFile>`
 |===
 
-Les modèles privés `_SbomqsResult` / `_SbomqsCheck` parsent le JSON de sbomqs
-(champ `files[0].score.checks`). `_ScorecardResult` parse la sortie texte
-(regex) ou JSON de sbom-scorecard.
+L'état `_selectedProfiles` (`Set<String>`) de `_QualityPanelState` contient
+les profils cochés par l'utilisateur. Quand il est non vide, `_runSbomqs`
+construit la liste d'args avec `--profile _selectedProfiles.join(',')`.
+
+*Modèles sbomqs* — tous privés dans `quality_panel.dart` :
+
+`_SbomqsCheck` — un critère individuel, parsé depuis `files[0].comprehenssive[i].features[j]` :
+
+* `category` — depuis le parent `comprehenssive[i].category`
+* `name` — depuis `features[j].key`
+* `score`, `maxScore` (fixe = 10) — `features[j].score`
+* `description` — `features[j].description`
+* `isRequired` (bool) — `features[j].required` ; présent uniquement dans les features de profil
+
+`_SbomqsProfile` — un profil d'industrie, parsé depuis `files[0].profiles[i]` :
+
+* `name` — `profiles[i].profile`
+* `score`, `grade`, `message`
+* `features` (`List<_SbomqsCheck>`) — non vide uniquement quand le profil a été
+  demandé via `--profile` ; sinon la liste est vide (`hasFeatures == false`)
+
+`_SbomqsResult` — racine du résultat :
+
+* `spec`, `specVersion` — `files[0].spec` (UPPERCASE), `files[0].spec_version`
+* `numComponents` — `files[0].num_components`
+* `score` — `files[0].sbom_quality_score`
+* `checks` — aplatissement de `comprehenssive[*].features[]` (toujours présent)
+* `profiles` — liste de `_SbomqsProfile` (toujours présent, features vides sans `--profile`)
+
+NOTE: Le champ JSON est `comprehenssive` (double s) — faute de frappe dans sbomqs.
+
+`_ScorecardResult` parse la sortie texte (regex) ou JSON de sbom-scorecard.
 
 Si un outil n'est pas installé, `Process.run` lève `ProcessException` → section
 affiche `_ErrorBanner` sans bloquer l'autre. Les deux outils sont indépendants.
 
-Interface :
+*Interface* :
 
-* `_SbomqsSection` — en-tête avec `_ScoreBadge`, `_CategoryFilter` (FilterChips),
-  `_SbomqsTable` (ListView avec icônes ✔/✘), bouton bascule tableau/JSON brut
-* `_ScorecardSection` — en-tête avec `_ScoreBadge`, `_ScoreBar` pour chaque catégorie
-  (LinearProgressIndicator coloré selon seuils 80 %/60 %), bouton bascule graphique/brut
+* `_ConfigSection` — champ SBOM + `_SplitPickButton` + `Wrap` de `FilterChip`
+  pour les 9 profils (`static const _profiles`) ; `onProfileToggle` met à jour
+  `_selectedProfiles` dans `_QualityPanelState`
+* `_SbomqsSection` — en-tête avec `_ScoreBadge`, `_CategoryFilter` (FilterChips
+  par catégorie comprehensive), `_SbomqsTable` (ListView avec ✔/✘),
+  bouton bascule tableau/JSON brut
+* `_ProfilesCard` — carte "Profils d'industrie", toujours affichée quand
+  `result.profiles.isNotEmpty` :
+  ** Sans features : `ListTile` compact (grade badge + score)
+  ** Avec features : `ExpansionTile` via `_ProfileTile` ; marqueur `*` pour
+     critères `isRequired` ; compteur "N/M critères" dans le sous-titre
+* `_GradeBadge` — Container 28×28 coloré (A=vert → F=rouge)
+* `_ScorecardSection` — en-tête avec `_ScoreBadge`, `_ScoreBar` pour chaque
+  catégorie (LinearProgressIndicator coloré selon seuils 80 %/60 %),
+  bouton bascule graphique/brut
 
 ==== `widgets/dashboard_panel.dart` — Onglet Tableau de bord
 
@@ -1017,7 +1057,8 @@ SbomRunner.run(args: args)   →   Process.start('sbom-generator', args)
                             si exitCode==0 && generatePdf → _generatePdf()
                             si exitCode==0 && enableSbomqs → _runSbomqs()
                               └── Process.run('sbomqs', ['score', path])
-                                  setState() → _sbomqsOutput
+                                  setState() → _sbomqsOutput (score intégré)
+                                  (distinct de QualityPanel._runSbomqs qui passe --json [--profile ...])
 ----
 
 ==== Analyse Grype

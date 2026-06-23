@@ -1154,28 +1154,35 @@ complémentaires : *sbomqs* (Interlynk) et *sbom-scorecard* (eBay). Un seul
 clic sur *Analyser* lance les deux en parallèle.
 
 ----
-  ┌─────────────────────────────────────────────────────────────────┐
-  │  Fichier SBOM : [ /projet/sbom.cdx.json     ] [📂▾]  [Analyser]│
-  ├─────────────────────────────────────────────────────────────────┤
-  │ ┌─ sbomqs ─────────────────────────────────────── 8.3 / 10 ──┐ │
-  │ │ Filtre : [NTIA-minimum] [Quality] [Semantic] [Sharing]      │ │
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Fichier SBOM : [ /projet/sbom.cdx.json      ] [📂▾]  [Analyser]│
+  │  Profils : [NTIA 2021] [NTIA 2025] [FSCT] [BSI] [BSI v1.1]     │
+  │            [BSI v2.0] [BSI v2.1] [OpenChain v1.1] [Interlynk]  │
+  ├──────────────────────────────────────────────────────────────────┤
+  │ ┌─ sbomqs ──────────────────────────────────────── 5.8 / 10 ──┐ │
+  │ │ Filtre : [Identification] [Provenance] [Integrity] ...       │ │
   │ │                                                              │ │
-  │ │  ✔ Has creation timestamp          NTIA-minimum   1/1       │ │
-  │ │  ✔ Has component licenses          Quality        1/1       │ │
-  │ │  ✘ Has SBOM version                NTIA-minimum   0/1       │ │
+  │ │  ✔ comp_with_name           Identification   10/10           │ │
+  │ │  ✔ comp_with_version        Identification   10/10           │ │
+  │ │  ✘ sbom_authors             Provenance        0/10           │ │
+  │ │  ✘ comp_with_strong_checksums  Integrity      0/10           │ │
   │ │  ...                                                         │ │
   │ └──────────────────────────────────────────────────────────────┘ │
   │                                                                   │
-  │ ┌─ sbom-scorecard ─────────────────────────────── 69 / 100 ──┐ │
+  │ ┌─ Profils d'industrie ────────────────────────────────────────┐ │
+  │ │  [A] NTIA Minimum Elements (2021)       10.0/10  ▶ détails  │ │
+  │ │  [C] Interlynk                           7.2/10  ▶ détails  │ │
+  │ │  [D] BSI TR-03183-2 v1.1                6.7/10  ▶ détails  │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ sbom-scorecard ──────────────────────────────── 69 / 100 ──┐ │
   │ │  Spec          ████████████████████████████████████  100    │ │
   │ │  Quality       ████████████████████████░░░░░░░░░░░░   63    │ │
   │ │  NTIA-minimum  ████████████████████████████████░░░░   88    │ │
-  │ │  Semantic      ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░   25    │ │
-  │ │  Sharing       ████████████████░░░░░░░░░░░░░░░░░░░░   44    │ │
-  │ │  ─────────────────────────────────────────────────── Total  │ │
   │ │  Total         ██████████████████████████░░░░░░░░░░   69    │ │
   │ └──────────────────────────────────────────────────────────────┘ │
-  └─────────────────────────────────────────────────────────────────┘
+  └──────────────────────────────────────────────────────────────────┘
 ----
 
 === Prérequis
@@ -1186,7 +1193,7 @@ clic sur *Analyser* lance les deux en parallèle.
 
 |`sbomqs`
 |Interlynk
-|Score de qualité par critère NTIA, Quality, Semantic, Sharing
+|Score global + critères détaillés par catégorie (Identification, Provenance, Integrity…) et profils d'industrie
 
 |`sbom-scorecard`
 |eBay
@@ -1210,16 +1217,82 @@ go install github.com/eBay/sbom-scorecard@latest
 sbom-scorecard --version
 ----
 
+=== Sélection des profils
+
+La ligne *Profils* sous le sélecteur de fichier contient neuf `FilterChip`
+sélectionnables indépendamment :
+
+[cols="1,2", options="header"]
+|===
+|Chip |Profil sbomqs
+
+|NTIA 2021
+|NTIA Minimum Elements (2021)
+
+|NTIA 2025
+|NTIA Minimum Elements (2025) — RFC
+
+|FSCT
+|Framing Software Component Transparency (3rd Edition)
+
+|BSI
+|BSI TR-03183-2 (dernière version, alias de bsi-v2.1)
+
+|BSI v1.1
+|BSI TR-03183-2 v1.1
+
+|BSI v2.0
+|BSI TR-03183-2 v2.0
+
+|BSI v2.1
+|BSI TR-03183-2 v2.1
+
+|OpenChain v1.1
+|OpenChain Telco SBOM Guide v1.1
+
+|Interlynk
+|Interlynk Scoring Profile
+|===
+
+Sans sélection, sbomqs effectue uniquement l'analyse complète (*Comprehensive*).
+Avec un ou plusieurs profils cochés, sbomqs reçoit `--profile p1,p2,...` et
+le détail des critères par profil est affiché dans la carte *Profils d'industrie*.
+
+NOTE: Le choix des profils ne remplace pas l'analyse complète — les deux
+sections sont toujours affichées simultanément.
+
 === Section sbomqs
 
-Affiche un tableau de critères de qualité, regroupés par catégorie.
-Une icône ✔ (vert) / ✘ (rouge) indique si chaque critère est satisfait.
+Affiche un tableau de critères de qualité par catégorie (Identification,
+Provenance, Integrity, Completeness, Licensing, Vulnerability, Structural,
+Component Quality). Une icône ✔ (vert) / ✘ (rouge) indique si le critère
+est atteint (score = 10/10).
 
-*Filtres par catégorie* : les FilterChips permettent d'afficher uniquement
-les critères d'une catégorie (NTIA-minimum, Quality, Semantic, Sharing…).
+*Filtres par catégorie* : les FilterChips en haut du tableau permettent
+d'afficher uniquement les critères d'une ou plusieurs catégories.
 
-Le bouton 📋 copie le JSON brut dans le presse-papiers.
 Le bouton `{ }` / ≡ bascule entre le tableau et le JSON brut.
+Le bouton 📋 copie le JSON brut dans le presse-papiers.
+
+=== Section Profils d'industrie
+
+Toujours présente après une analyse réussie. Elle affiche pour chaque profil
+disponible :
+
+* Un badge coloré avec la note (A / B / C / D / F)
+* Le nom complet du profil
+* Le score sur 10
+
+Si des profils ont été sélectionnés dans la barre de configuration avant
+l'analyse, chaque profil dispose d'un bouton d'expansion (▶) qui révèle la
+liste de ses critères avec :
+
+* Icône ✔/✘, nom du critère, description courte, score
+* Compteur "N / M critères" dans le sous-titre
+* Marqueur `*` pour les critères *obligatoires* (required) du profil
+
+TIP: Quand aucun profil n'est sélectionné, l'en-tête de la section affiche
+une info-bulle ⓘ rappelant comment activer le détail.
 
 === Section sbom-scorecard
 
