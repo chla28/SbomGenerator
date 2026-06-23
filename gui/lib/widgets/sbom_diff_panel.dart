@@ -242,12 +242,12 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
     }
   }
 
-  Future<void> _pickFile(bool isA) async {
+  Future<void> _pickFile(bool isA, {bool filtered = true}) async {
     final r = await FilePicker.platform.pickFiles(
       dialogTitle:
           'Sélectionner SBOM ${isA ? "A (référence)" : "B (comparé)"}',
-      type: FileType.custom,
-      allowedExtensions: ['json', 'jsonld'],
+      type: filtered ? FileType.custom : FileType.any,
+      allowedExtensions: filtered ? ['json', 'jsonld'] : null,
     );
     if (r?.files.single.path != null) {
       if (isA) {
@@ -309,8 +309,8 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
           errorB: _errorB,
           sbomFiles: _sbomFiles,
           canCompare: _infoA != null && _infoB != null,
-          onPickA: () => _pickFile(true),
-          onPickB: () => _pickFile(false),
+          onPickA: ({bool filtered = true}) => _pickFile(true, filtered: filtered),
+          onPickB: ({bool filtered = true}) => _pickFile(false, filtered: filtered),
           onSelectA: _loadA,
           onSelectB: _loadB,
           onCompare: _compare,
@@ -397,8 +397,8 @@ class _FileSelectorBar extends StatelessWidget {
   final String? errorB;
   final List<OutputFile> sbomFiles;
   final bool canCompare;
-  final VoidCallback onPickA;
-  final VoidCallback onPickB;
+  final void Function({bool filtered}) onPickA;
+  final void Function({bool filtered}) onPickB;
   final ValueChanged<String> onSelectA;
   final ValueChanged<String> onSelectB;
   final VoidCallback onCompare;
@@ -494,7 +494,7 @@ class _FileSlot extends StatelessWidget {
   final String? error;
   final List<OutputFile> sbomFiles;
   final Color color;
-  final VoidCallback onPick;
+  final void Function({bool filtered}) onPick;
   final ValueChanged<String> onSelect;
 
   const _FileSlot({
@@ -578,13 +578,7 @@ class _FileSlot extends StatelessWidget {
                       ),
                   ],
                 ),
-              IconButton(
-                icon: const Icon(Icons.file_open_outlined, size: 16),
-                tooltip: 'Ouvrir un fichier…',
-                onPressed: onPick,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
+              _FilePickButton(onPick: onPick),
             ],
           ),
           if (info != null)
@@ -593,6 +587,52 @@ class _FileSlot extends StatelessWidget {
               style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8)),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Bouton sélection fichier (filtré / tous) ─────────────────────────────────
+
+class _FilePickButton extends StatefulWidget {
+  final void Function({bool filtered}) onPick;
+  const _FilePickButton({required this.onPick});
+
+  @override
+  State<_FilePickButton> createState() => _FilePickButtonState();
+}
+
+class _FilePickButtonState extends State<_FilePickButton> {
+  final _menu = MenuController();
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      controller: _menu,
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.filter_alt_outlined, size: 16),
+          onPressed: () {
+            _menu.close();
+            widget.onPick(filtered: true);
+          },
+          child: const Text('.json / .jsonld'),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.folder_open, size: 16),
+          onPressed: () {
+            _menu.close();
+            widget.onPick(filtered: false);
+          },
+          child: const Text('Tous les fichiers'),
+        ),
+      ],
+      builder: (context, ctrl, _) => IconButton(
+        icon: const Icon(Icons.file_open_outlined, size: 16),
+        tooltip: 'Ouvrir un fichier…',
+        onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
       ),
     );
   }
