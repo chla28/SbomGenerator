@@ -16,6 +16,9 @@ import 'package:sbom_generator/simple_json_generator.dart';
 import 'package:sbom_generator/markdown_generator.dart';
 import 'package:sbom_generator/asciidoc_generator.dart';
 import 'package:sbom_generator/oci_parser.dart';
+import 'package:sbom_generator/sbom_diff.dart';
+import 'package:sbom_generator/sbom_merger.dart';
+import 'package:sbom_generator/policy_checker.dart';
 
 const _version = '1.0.0';
 
@@ -28,6 +31,18 @@ Future<void> main(List<String> arguments) async {
   // Sous-commande `scan` : analyse CVE avec filtre date
   if (arguments.isNotEmpty && arguments.first == 'scan') {
     await _runScan(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `diff` : compare deux fichiers SBOM
+  if (arguments.isNotEmpty && arguments.first == 'diff') {
+    await _runDiff(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `merge` : fusionne plusieurs fichiers SBOM
+  if (arguments.isNotEmpty && arguments.first == 'merge') {
+    await _runMerge(arguments.sublist(1));
     return;
   }
 
@@ -118,6 +133,24 @@ Future<void> main(List<String> arguments) async {
           'Lines starting with # are ignored.\n'
           'Overrides the detected license for matching package names.',
     )
+    ..addMultiOption(
+      'deny-license',
+      help: 'Fait échouer la génération si un paquet a cette licence.\n'
+          'Peut être répété. Supporte les expressions SPDX partielles.\n'
+          'Exemple : --deny-license GPL-3.0 --deny-license AGPL-3.0',
+    )
+    ..addOption(
+      'min-quality-score',
+      help: 'Score sbomqs minimum (0-10). Échoue si le score est inférieur.\n'
+          'Requiert que sbomqs soit installé.',
+    )
+    ..addFlag(
+      'sign',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Signe le SBOM généré avec cosign (requiert cosign installé).\n'
+          'La clé est lue depuis les variables d\'environnement cosign standard.',
+    )
     ..addFlag(
       'version',
       defaultsTo: false,
@@ -199,6 +232,9 @@ Future<void> main(List<String> arguments) async {
   final licenseMapPath = args['license-map'] as String?;
   final licenseOverrides =
       licenseMapPath != null ? _parseLicenseMap(licenseMapPath) : <String, String>{};
+  final denyLicenses = args['deny-license'] as List<String>;
+  final minQualityScore = args['min-quality-score'] as String?;
+  final signSbom = args['sign'] as bool;
   if (verbose && licenseOverrides.isNotEmpty) {
     print('License overrides: ${licenseOverrides.length} entr(ée(s)) chargée(s).');
   }
@@ -519,6 +555,207 @@ Future<void> main(List<String> arguments) async {
     }
     final sz = await File(outPath).length();
     print('SBOM written → $outPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
+  }
+
+  // ── Vérification des politiques ──────────────────────────────────────────
+  final checker = PolicyChecker();
+  int policyFailures = 0;
+
+  if (denyLicenses.isNotEmpty) {
+    final violations = checker.checkDenyLicenses(uniquePackages, denyLicenses);
+    if (violations.isNotEmpty) {
+      stderr.writeln('\nPolitique licence : ${violations.length} violation(s) :');
+      for (final v in violations) {
+        stderr.writeln('  [DENY] ${v.packageName} ${v.version} — ${v.license}');
+      }
+      policyFailures += violations.length;
+    } else if (verbose) {
+      print('Politiques licences : OK');
+    }
+  }
+
+  if (minQualityScore != null) {
+    final threshold = double.tryParse(minQualityScore);
+    if (threshold == null) {
+      stderr.writeln('--min-quality-score : valeur invalide "$minQualityScore"');
+      exit(1);
+    }
+    final primaryOut = formats.length == 1
+        ? outputPath
+        : '${_basePath(outputPath)}${_formatExtension(formats.first)}';
+    final score = await checker.runSbomqs(primaryOut, verbose: verbose);
+    if (score != null) {
+      if (score < threshold) {
+        stderr.writeln(
+            '\nPolitique qualité : score=$score < seuil=$threshold → ÉCHEC');
+        policyFailures++;
+      } else if (verbose) {
+        print('Politique qualité : score=$score >= seuil=$threshold → OK');
+      }
+    }
+  }
+
+  // ── Signature cosign ─────────────────────────────────────────────────────
+  if (signSbom) {
+    final primaryOut = formats.length == 1
+        ? outputPath
+        : '${_basePath(outputPath)}${_formatExtension(formats.first)}';
+    await _signWithCosign(primaryOut, verbose: verbose);
+  }
+
+  if (policyFailures > 0) {
+    stderr.writeln('\n$policyFailures politique(s) violée(s) — code retour 2');
+    exit(2);
+  }
+}
+
+// ── Sous-commande diff ────────────────────────────────────────────────────────
+
+Future<void> _runDiff(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('output', abbr: 'o',
+        help: 'Fichier de sortie (JSON). Défaut : affichage console.')
+    ..addFlag('json', defaultsTo: false, negatable: false,
+        help: 'Sortie au format JSON structuré.')
+    ..addFlag('no-color', defaultsTo: false, negatable: false,
+        help: 'Désactive la coloration ANSI.')
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('diff: ${e.message}');
+    _printDiffUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) { _printDiffUsage(parser); exit(0); }
+
+  final rest = args.rest;
+  if (rest.length != 2) {
+    stderr.writeln('diff: deux fichiers SBOM requis.');
+    _printDiffUsage(parser);
+    exit(1);
+  }
+
+  final Map<String, dynamic> before, after;
+  try {
+    before = await SbomDiffer.loadFile(rest[0]);
+    after = await SbomDiffer.loadFile(rest[1]);
+  } catch (e) {
+    stderr.writeln('diff: $e');
+    exit(1);
+  }
+
+  final differ = SbomDiffer();
+  final result = differ.diff(before, after);
+
+  if (args['json'] as bool || (args['output'] as String?) != null) {
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(differ.toJson(result));
+    final outPath = args['output'] as String?;
+    if (outPath != null) {
+      await File(outPath).writeAsString(jsonStr);
+      print('Diff écrit → $outPath');
+    } else {
+      print(jsonStr);
+    }
+  } else {
+    differ.printDiff(result, color: !(args['no-color'] as bool));
+  }
+
+  exit(result.isEmpty ? 0 : 1);
+}
+
+void _printDiffUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator diff – Compare deux fichiers SBOM et affiche les changements.
+
+Usage:
+  sbom_generator diff <avant.cdx.json> <après.cdx.json> [options]
+
+${parser.usage}
+
+Codes de retour:
+  0  Aucun changement
+  1  Des changements ont été détectés
+''');
+}
+
+// ── Sous-commande merge ───────────────────────────────────────────────────────
+
+Future<void> _runMerge(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('output', abbr: 'o', mandatory: true,
+        help: 'Fichier SBOM fusionné de sortie (.cdx.json).')
+    ..addOption('name', abbr: 'n', help: 'Nom du document SBOM fusionné.')
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('merge: ${e.message}');
+    _printMergeUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) { _printMergeUsage(parser); exit(0); }
+
+  final files = args.rest;
+  if (files.length < 2) {
+    stderr.writeln('merge: au moins deux fichiers SBOM requis.');
+    _printMergeUsage(parser);
+    exit(1);
+  }
+
+  final sboms = <Map<String, dynamic>>[];
+  for (final f in files) {
+    try {
+      sboms.add(await SbomDiffer.loadFile(f));
+    } catch (e) {
+      stderr.writeln('merge: $e');
+      exit(1);
+    }
+  }
+
+  final merger = SbomMerger();
+  final merged = merger.merge(sboms, documentName: args['name'] as String?);
+  final outPath = args['output'] as String;
+  await File(outPath).writeAsString(
+      const JsonEncoder.withIndent('  ').convert(merged));
+  final total = (merged['components'] as List).length;
+  print('Fusion de ${files.length} SBOMs → $total composant(s) → $outPath');
+}
+
+void _printMergeUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator merge – Fusionne plusieurs fichiers SBOM en un seul.
+
+Usage:
+  sbom_generator merge <a.cdx.json> <b.cdx.json> [...] -o merged.cdx.json
+
+${parser.usage}
+''');
+}
+
+// ── Signature cosign ──────────────────────────────────────────────────────────
+
+Future<void> _signWithCosign(String sbomPath, {bool verbose = false}) async {
+  final check = await Process.run('cosign', ['version']);
+  if (check.exitCode != 0) {
+    stderr.writeln('sign: cosign introuvable — signature ignorée.');
+    return;
+  }
+  if (verbose) print('cosign : signature de $sbomPath…');
+  final result = await Process.run('cosign', [
+    'sign-blob',
+    '--yes',
+    '--bundle', '$sbomPath.bundle',
+    sbomPath,
+  ]);
+  if (result.exitCode != 0) {
+    stderr.writeln('cosign: échec (code ${result.exitCode}) : ${result.stderr}');
+  } else {
+    print('Signature → $sbomPath.bundle');
   }
 }
 
