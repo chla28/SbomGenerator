@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/trivy_runner.dart';
+import 'help_icon.dart';
 import '../services/version_service.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
@@ -429,8 +430,19 @@ class _ConfigSection extends StatelessWidget {
           const SizedBox(height: 10),
 
           // --severity checkboxes
-          const Text('--severity (laisser vide = tout)',
-              style: TextStyle(fontSize: 11, color: Colors.grey)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('--severity (laisser vide = tout)',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+              SizedBox(width: 4),
+              HelpIcon(
+                'Filtres de sévérité. Seules les vulnérabilités\n'
+                'dont la sévérité est cochée sont affichées.\n'
+                'Laisser vide = toutes les sévérités.',
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
           Wrap(
             spacing: 4,
@@ -461,8 +473,19 @@ class _ConfigSection extends StatelessWidget {
                 child: CheckboxListTile.adaptive(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('--ignore-unfixed',
-                      style: TextStyle(fontSize: 12)),
+                  title: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Text('--ignore-unfixed',
+                          style: TextStyle(fontSize: 12)),
+                      SizedBox(width: 4),
+                      HelpIcon(
+                        'Masque les vulnérabilités sans version\n'
+                        'corrigée disponible. Réduit le bruit\n'
+                        'dans les résultats.',
+                      ),
+                    ],
+                  ),
                   value: ignoreUnfixed,
                   onChanged: onIgnoreUnfixedChanged,
                   controlAffinity: ListTileControlAffinity.leading,
@@ -472,8 +495,19 @@ class _ConfigSection extends StatelessWidget {
                 child: CheckboxListTile.adaptive(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('--skip-db-update',
-                      style: TextStyle(fontSize: 12)),
+                  title: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Text('--skip-db-update',
+                          style: TextStyle(fontSize: 12)),
+                      SizedBox(width: 4),
+                      HelpIcon(
+                        'Utilise la base CVE locale sans la mettre\n'
+                        'à jour. Accélère les analyses successives,\n'
+                        'mais la base peut être obsolète.',
+                      ),
+                    ],
+                  ),
                   value: skipDbUpdate,
                   onChanged: onSkipDbUpdateChanged,
                   controlAffinity: ListTileControlAffinity.leading,
@@ -489,7 +523,12 @@ class _ConfigSection extends StatelessWidget {
                 child: TextField(
                   controller: configCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'trivy.yaml (optionnel)',
+                    label: HelpLabel(
+                      'trivy.yaml (optionnel)',
+                      'Fichier de configuration Trivy (YAML).\n'
+                          'Permet de définir des politiques, des\n'
+                          'exceptions ou des sources personnalisées.',
+                    ),
                     hintText: '/chemin/vers/trivy.yaml',
                     border: OutlineInputBorder(),
                     isDense: true,

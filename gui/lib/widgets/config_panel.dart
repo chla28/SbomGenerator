@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/sbom_config.dart';
 import '../services/settings_service.dart';
+import 'help_icon.dart';
 
 class ConfigPanel extends StatefulWidget {
   final SbomConfig config;
@@ -229,6 +230,10 @@ class _ConfigPanelState extends State<ConfigPanel> {
                             hint: _isDragging
                                 ? 'Déposez le fichier ici…'
                                 : 'rpm.lst, requirements.txt, …',
+                            helpText:
+                                'Fichier texte listant les paquets à analyser.\n'
+                                'Formats acceptés : rpm.lst (rpm -qa),\n'
+                                'requirements.txt, package.json, go.mod, …',
                             onPickFiltered: () => _pickFile(
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
@@ -338,6 +343,10 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         label: 'Chemin de base (--output)',
                         controller: _outputCtrl,
                         hint: 'sbom  →  sbom.cdx.json, sbom.spdx.json…',
+                        helpText:
+                            'Préfixe du chemin de sortie. Le suffixe de\n'
+                            'format est ajouté automatiquement.\n'
+                            'Ex : sbom → sbom.cdx.json, sbom.spdx.json…',
                         onPick: () => _saveFile(
                           _outputCtrl,
                           title: 'Chemin de base du SBOM',
@@ -348,10 +357,21 @@ class _ConfigPanelState extends State<ConfigPanel> {
                       const SizedBox(height: 12),
 
                       // Format checkboxes
-                      const Text(
-                        'Formats (--format)',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Formats (--format)',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(width: 4),
+                          const HelpIcon(
+                            'Sélectionnez un ou plusieurs formats de sortie.\n'
+                            'CycloneDX 1.6 et SPDX sont les standards industrie.\n'
+                            'Markdown et AsciiDoc sont lisibles directement.',
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       for (final fmt in allFormats)
@@ -425,7 +445,12 @@ class _ConfigPanelState extends State<ConfigPanel> {
                       TextFormField(
                         controller: _nameCtrl,
                         decoration: const InputDecoration(
-                          labelText: 'Nom du document SBOM (--name)',
+                          label: HelpLabel(
+                            'Nom du document SBOM (--name)',
+                            'Nom logique du document SBOM\n'
+                                '(champ metadata.component.name).\n'
+                                'Ex : "Mon Application 1.0"',
+                          ),
                           hintText: 'Mon Application 1.0',
                           border: OutlineInputBorder(),
                           isDense: true,
@@ -439,6 +464,10 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         label: 'Répertoire RPM local (--rpm-dir)',
                         controller: _rpmDirCtrl,
                         hint: 'Dossier contenant des fichiers .rpm',
+                        helpText:
+                            'Dossier contenant des fichiers .rpm.\n'
+                            'sbom_generator extrait les métadonnées\n'
+                            'sans installer les paquets (rpm -qp).',
                         onPick: () => _pickDir(
                           _rpmDirCtrl,
                           title: 'Répertoire de fichiers RPM',
@@ -452,6 +481,10 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         label: 'Override licences (--license-map)',
                         controller: _licenseMapCtrl,
                         hint: 'Fichier "paquet: SPDX-expression"',
+                        helpText:
+                            'Fichier de substitution de licences,\n'
+                            'format "paquet: SPDX-expression" par ligne.\n'
+                            'Ex : mon-paquet-interne: MIT',
                         onPickFiltered: () => _pickFile(
                           _licenseMapCtrl,
                           title: 'Fichier de map licences',
@@ -473,6 +506,13 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           const SizedBox(width: 6),
                           const Text('Concurrence (--concurrency)',
                               style: TextStyle(fontSize: 12)),
+                          const SizedBox(width: 4),
+                          const HelpIcon(
+                            'Nombre de paquets analysés simultanément.\n'
+                            '0 = illimité (tous en parallèle).\n'
+                            'Réduire si les outils externes nécessitent\n'
+                            'des accès exclusifs ou si la machine est lente.',
+                          ),
                           const Spacer(),
                           Text(
                             c.concurrency == 0
@@ -519,6 +559,12 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           'Affiche les outils détectés et les statistiques',
                           style: TextStyle(fontSize: 11),
                         ),
+                        secondary: const HelpIcon(
+                          'Affiche pour chaque paquet : outil utilisé,\n'
+                          'version, durée de traitement.\n'
+                          'Utile pour déboguer les paquets dont la\n'
+                          'licence n\'est pas reconnue.',
+                        ),
                         value: c.verbose,
                         onChanged: (v) => setState(() {
                           c.verbose = v ?? false;
@@ -530,8 +576,19 @@ class _ConfigPanelState extends State<ConfigPanel> {
 
                       CheckboxListTile.adaptive(
                         dense: true,
-                        title: const Text('Score qualité sbomqs',
-                            style: TextStyle(fontSize: 13)),
+                        title: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text('Score qualité sbomqs',
+                                style: TextStyle(fontSize: 13)),
+                            SizedBox(width: 4),
+                            HelpIcon(
+                              'Exécute sbomqs (Interlynk) sur le SBOM généré\n'
+                              'pour calculer un score de conformité (0–10).\n'
+                              'Requiert que sbomqs soit installé dans le PATH.',
+                            ),
+                          ],
+                        ),
                         subtitle: const Text(
                           'Analyse le SBOM généré avec sbomqs après génération',
                           style: TextStyle(fontSize: 11),
@@ -685,6 +742,7 @@ class _FileField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final String? hint;
+  final String? helpText;
   final VoidCallback onPick;
   final VoidCallback? onPickFiltered;
   final String? filterLabel;
@@ -698,6 +756,7 @@ class _FileField extends StatelessWidget {
     this.onPickFiltered,
     this.filterLabel,
     this.hint,
+    this.helpText,
     this.onChanged,
     this.validator,
   });
@@ -706,7 +765,14 @@ class _FileField extends StatelessWidget {
   Widget build(BuildContext context) => TextFormField(
         controller: controller,
         decoration: InputDecoration(
-          labelText: label,
+          label: helpText != null
+              ? Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(label),
+                  const SizedBox(width: 4),
+                  HelpIcon(helpText!),
+                ])
+              : null,
+          labelText: helpText == null ? label : null,
           hintText: hint,
           border: const OutlineInputBorder(),
           isDense: true,
@@ -1033,7 +1099,13 @@ class _OciImageField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        labelText: 'Image OCI (--image)',
+        label: const HelpLabel(
+          'Image OCI (--image)',
+          'Référence d\'une image conteneur à analyser.\n'
+          '• Registre : nginx:latest, ghcr.io/org/app:v1\n'
+          '• Archive tar : ./image.tar (docker save)\n'
+          '• Répertoire OCI layout : ./oci/ (index.json)',
+        ),
         hintText: 'nginx:latest  •  ./image.tar  •  ./oci_dir/',
         border: const OutlineInputBorder(),
         isDense: true,
@@ -1105,6 +1177,13 @@ class _OciToolSelector extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: theme.colorScheme.secondary,
               ),
+            ),
+            const SizedBox(width: 4),
+            const HelpIcon(
+              'Outil utilisé pour extraire les paquets de l\'image :\n'
+              '• Syft (Anchore) — le plus complet, tous écosystèmes\n'
+              '• Trivy (Aqua) — rapide, CVE intégrées\n'
+              '• Skopeo — extraction manuelle dpkg/rpm/apk',
             ),
           ],
         ),

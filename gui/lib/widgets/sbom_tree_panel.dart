@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/sbom_result.dart';
+import 'help_icon.dart';
 
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
@@ -587,6 +588,13 @@ class _GroupBySelector extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text('Grouper :', style: TextStyle(fontSize: 11)),
+        const SizedBox(width: 2),
+        const HelpIcon(
+          'Mode de regroupement des composants.\n'
+          '• Aucun : liste à plat alphabétique\n'
+          '• Type : groupé par écosystème (rpm, pypi…)\n'
+          '• Licence : groupé par expression SPDX',
+        ),
         const SizedBox(width: 4),
         SegmentedButton<_GroupBy>(
           segments: const [

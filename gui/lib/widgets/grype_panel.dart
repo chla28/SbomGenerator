@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'help_icon.dart';
 import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
@@ -531,18 +532,30 @@ class _ConfigSection extends StatelessWidget {
                 value: platformLinux,
                 enabled: !isRunning,
                 onChanged: onPlatformLinuxChanged,
+                helpText:
+                    'Fixe la plateforme cible à linux/amd64.\n'
+                    'À activer si Grype ne détecte pas\n'
+                    'automatiquement la plateforme de l\'image.',
               ),
               _CheckOption(
                 label: '--add-cpes-if-none',
                 value: addCpesIfNone,
                 enabled: !isRunning,
                 onChanged: onAddCpesIfNoneChanged,
+                helpText:
+                    'Génère des CPE (Common Platform Enumeration)\n'
+                    'pour les paquets qui n\'en ont pas.\n'
+                    'Améliore le taux de correspondance CVE.',
               ),
               _CheckOption(
                 label: '--by-cve',
                 value: byCve,
                 enabled: !isRunning,
                 onChanged: onByCveChanged,
+                helpText:
+                    'Groupe les résultats par CVE plutôt que par\n'
+                    'paquet. Évite les doublons quand plusieurs\n'
+                    'paquets sont touchés par la même CVE.',
               ),
             ],
           ),
@@ -567,6 +580,10 @@ class _ConfigSection extends StatelessWidget {
                     .toList(),
                 enabled: !isRunning,
                 onChanged: (v) => onDistroVersionChanged(v ?? ''),
+                helpText:
+                    'Distribution cible pour l\'évaluation des CVE.\n'
+                    'Si vide, Grype tente de la détecter\n'
+                    'automatiquement depuis le SBOM.',
               ),
               const SizedBox(width: 16),
 
@@ -585,6 +602,10 @@ class _ConfigSection extends StatelessWidget {
                     .toList(),
                 enabled: !isRunning,
                 onChanged: (v) => onFailOnChanged(v ?? ''),
+                helpText:
+                    'Sévérité minimum pour que Grype retourne\n'
+                    'un code d\'erreur 1 (utile en CI/CD).\n'
+                    'Si vide, Grype retourne toujours 0.',
               ),
               const SizedBox(width: 8),
 
@@ -594,6 +615,9 @@ class _ConfigSection extends StatelessWidget {
                 value: onlyFixed,
                 enabled: !isRunning,
                 onChanged: onOnlyFixedChanged,
+                helpText:
+                    'N\'affiche que les vulnérabilités pour lesquelles\n'
+                    'une version corrigée est disponible.',
               ),
 
               const Spacer(),
@@ -623,7 +647,12 @@ class _ConfigSection extends StatelessWidget {
                 child: TextField(
                   controller: templateCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Template (-t)',
+                    label: HelpLabel(
+                      'Template (-t)',
+                      'Modèle Go pour formater la sortie de Grype.\n'
+                          'Ex : ./grype_csv.tmpl pour un export CSV.\n'
+                          'Voir la doc Grype pour la syntaxe des templates.',
+                    ),
                     hintText: './grype_csv.tmpl',
                     border: OutlineInputBorder(),
                     isDense: true,
@@ -649,7 +678,12 @@ class _ConfigSection extends StatelessWidget {
                 child: TextField(
                   controller: configCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'grype.yaml (optionnel)',
+                    label: HelpLabel(
+                      'grype.yaml (optionnel)',
+                      'Fichier de configuration Grype (YAML).\n'
+                          'Permet de définir des exceptions, des sources\n'
+                          'de données, ou de personnaliser le comportement.',
+                    ),
                     hintText: '/chemin/vers/grype.yaml',
                     border: OutlineInputBorder(),
                     isDense: true,
@@ -679,12 +713,14 @@ class _CheckOption extends StatelessWidget {
   final bool value;
   final bool enabled;
   final ValueChanged<bool?> onChanged;
+  final String? helpText;
 
   const _CheckOption({
     required this.label,
     required this.value,
     required this.enabled,
     required this.onChanged,
+    this.helpText,
   });
 
   @override
@@ -703,6 +739,10 @@ class _CheckOption extends StatelessWidget {
                 fontSize: 12,
                 fontFamily: 'monospace',
                 color: enabled ? null : Colors.grey)),
+        if (helpText != null) ...[
+          const SizedBox(width: 4),
+          HelpIcon(helpText!),
+        ],
       ],
     );
   }
@@ -714,6 +754,7 @@ class _LabeledDropdown<T> extends StatelessWidget {
   final List<DropdownMenuItem<T>> items;
   final bool enabled;
   final ValueChanged<T?> onChanged;
+  final String? helpText;
 
   const _LabeledDropdown({
     required this.label,
@@ -721,6 +762,7 @@ class _LabeledDropdown<T> extends StatelessWidget {
     required this.items,
     required this.enabled,
     required this.onChanged,
+    this.helpText,
   });
 
   @override
@@ -729,9 +771,18 @@ class _LabeledDropdown<T> extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w500)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w500)),
+            if (helpText != null) ...[
+              const SizedBox(width: 4),
+              HelpIcon(helpText!),
+            ],
+          ],
+        ),
         const SizedBox(height: 2),
         DropdownButton<T>(
           value: value,

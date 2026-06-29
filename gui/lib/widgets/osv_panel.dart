@@ -9,6 +9,7 @@ import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/osv_runner.dart';
 import '../services/version_service.dart';
+import 'help_icon.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
 
@@ -455,7 +456,12 @@ class _ConfigSection extends StatelessWidget {
                 child: TextField(
                   controller: configCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Fichier de config (optionnel)',
+                    label: HelpLabel(
+                      'Fichier de config (optionnel)',
+                      'Fichier TOML de configuration osv-scanner.\n'
+                          'Permet d\'exclure des CVE, de configurer\n'
+                          'des sources ou de définir des politiques.',
+                    ),
                     hintText: 'osv-scanner.toml',
                     border: OutlineInputBorder(),
                     isDense: true,

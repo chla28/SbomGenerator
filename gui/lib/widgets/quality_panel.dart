@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/sbom_result.dart';
+import 'help_icon.dart';
 
 // ─── Modèles sbomqs ──────────────────────────────────────────────────────────
 
@@ -482,15 +483,27 @@ class _ConfigSection extends StatelessWidget {
             runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(
-                'Profils :',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Profils :',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const HelpIcon(
+                    'Profils de conformité SBOM évalués par sbomqs.\n'
+                    'Chaque profil vérifie un ensemble de critères\n'
+                    'spécifiques (NTIA, BSI, OpenChain, Interlynk…).\n'
+                    'Aucun profil sélectionné = tous évalués.',
+                  ),
+                ],
               ),
               for (final (key, label) in _profiles)
                 FilterChip(
