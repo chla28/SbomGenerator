@@ -48,10 +48,10 @@ Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSO
 |`--image` avec `--oci-tool trivy`
 |Analyse d'images OCI — tous types de paquets
 
-|`skopeo` + `tar`
+|`skopeo` + `tar` + `unzip`
 |—
 |`--image` avec `--oci-tool skopeo`
-|Analyse d'images OCI — dpkg, RPM et APK
+|Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python packages et npm
 |===
 
 Vérification :
@@ -65,6 +65,7 @@ dpkg-deb --version
 syft version      # si --oci-tool syft
 trivy --version   # si --oci-tool trivy
 skopeo --version  # si --oci-tool skopeo
+unzip --version   # si --oci-tool skopeo (extraction pom.properties des JARs)
 ----
 
 == Installation
@@ -94,6 +95,8 @@ Le binaire `sbom_generator` est autonome, aucun SDK Dart requis pour l'exécuter
 sbom_generator -i <fichier> [options]
 sbom_generator -I <image-oci> [options]
 sbom_generator -i <fichier> -I <image-oci> [options]
+sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
+sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 ....
 
 === Options
@@ -146,6 +149,24 @@ sbom_generator -i <fichier> -I <image-oci> [options]
 |`-l`
 |—
 |Fichier de substitution de licences (`nom: SPDX-expression` par ligne)
+
+|`--deny-license <motif>`
+|—
+|—
+|Refuser les composants dont la licence correspond au motif SPDX (correspondance partielle,
+répétable). Code retour 2 si au moins une violation est détectée.
+
+|`--min-quality-score <score>`
+|—
+|—
+|Score sbomqs minimum requis (ex. `7.5`). Lance `sbomqs score` après génération et
+retourne le code 2 si le score est insuffisant.
+
+|`--sign`
+|—
+|désactivé
+|Signer les fichiers SBOM avec `cosign sign-blob` après génération (requiert `cosign` dans le PATH).
+Un fichier `<sbom>.bundle` est créé à côté de chaque fichier signé.
 
 |`--verbose`
 |`-v`
@@ -204,6 +225,13 @@ sbom_generator -i <fichier> -I <image-oci> [options]
 |—
 |`.adoc`
 |Tableau AsciiDoc des paquets et licences.
+
+|`html`
+|—
+|—
+|`.html`
+|Rapport HTML autonome (aucune dépendance externe) : statistiques,
+graphiques par écosystème et licence (top 10/15), tableau filtrable et triable.
 |===
 
 En mode multi-format (`-f cyclonedx,spdx,markdown`), `--output` est traité comme
@@ -392,6 +420,57 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 ----
 ./sbom_generator -I nginx:latest -i extra_pkgs.txt -f cyclonedx,spdx -o sbom
 # Génère : sbom.cdx.json + sbom.spdx.json
+----
+
+=== Rapport HTML interactif
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f html -n "Mon Application" -o sbom.html
+# → sbom.html : rapport autonome, aucune dépendance externe
+----
+
+=== Pipeline CI/CD avec contrôle de licences et qualité
+
+[source,bash]
+----
+# Refuser GPL et AGPL, exiger un score sbomqs ≥ 7.0
+./sbom_generator -i packages.txt -f cyclonedx -o sbom.cdx.json \
+  --deny-license GPL --deny-license AGPL \
+  --min-quality-score 7.0
+# Code retour 0 = OK, 2 = violation politique
+----
+
+=== Signature cosign
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f cyclonedx,spdx -o sbom --sign
+# Génère : sbom.cdx.json + sbom.cdx.json.bundle (signature cosign)
+#          sbom.spdx.json + sbom.spdx.json.bundle
+----
+
+=== Comparaison de deux SBOMs (`diff`)
+
+[source,bash]
+----
+# Diff coloré sur le terminal
+./sbom_generator diff avant.cdx.json après.cdx.json
+
+# Diff en JSON (pour automatisation)
+./sbom_generator diff avant.cdx.json après.cdx.json --json -o diff.json
+----
+
+=== Fusion de SBOMs (`merge`)
+
+[source,bash]
+----
+# Fusionner deux SBOMs (déduplication par PURL)
+./sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json
+
+# Fusionner plusieurs SBOMs avec nom de document
+./sbom_generator merge a.cdx.json b.cdx.json c.cdx.json \
+  -o merged.cdx.json -n "Système complet"
 ----
 
 === Pipeline complet : génération + validation qualité

@@ -238,7 +238,7 @@ L'interface est divisée en deux panneaux séparés par un séparateur vertical.
 │  🗒 SBOM Generator                         [🎨] [🌙] [ℹ]                 │
 ├───────────────────────┬────────────────────────────────────────────────────┤
 │                       │                                                    │
-│   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Aperçu]│
+│   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Visionneuse][Aperçu]│
 │   ─────────────────   │ ─────────────────────────────────────────────────  │
 │   ENTRÉE              │                                                    │
 │   [fichier.lst  📂▾]  │   12 / 23  52%    bash-5.1.8-6.el9.x86_64         │
@@ -267,11 +267,12 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : dix onglets — Progression (avec export
+*Panneau droit — Résultats* : onze onglets — Progression (avec export
 des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
 (synthèse CVE multi-scanners), Grype, OSV-Scanner et Trivy (analyses CVE),
 Qualité SBOM (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
-composants du SBOM), Comparaison SBOM (diff de deux SBOM) et Aperçu
+composants du SBOM), Comparaison SBOM (diff de deux SBOM), Visionneuse SBOM
+(exploration interactive d'un fichier SBOM externe) et Aperçu
 (prévisualisation du contenu SBOM).
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
@@ -1520,6 +1521,83 @@ NOTE: Les composants sans PURL dans le SBOM n'affichent pas ce champ.
 
 L'onglet mémorise son état (fichier sélectionné, groupement, groupes
 ouverts/fermés) lors de la navigation entre onglets.
+
+== Onglet Visionneuse SBOM
+
+L'onglet *Visionneuse SBOM* permet d'ouvrir et d'explorer n'importe quel
+fichier SBOM CycloneDX ou SPDX depuis le système de fichiers, indépendamment
+d'une génération en cours.
+
+----
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  [📂 Ouvrir un fichier SBOM…]                                           │
+  │  CycloneDX 1.6  •  Keycloak 26.0.0  •  453 composants                  │
+  │                                                                         │
+  │  [ Rechercher nom, version, licence… ]  [ Tous les types ▼ ]           │
+  │                                                                         │
+  │  Nom ▲          Version        Type    Licence           PURL           │
+  │  ─────────────────────────────────────────────────────────────────────  │
+  │  snakeyaml      2.0            java    Apache-2.0        pkg:maven/…    │
+  │  requests       2.31.0         pypi    Apache-2.0        pkg:pypi/…     │
+  │  bash           5.1.8-6.el9    rpm     GPL-3.0-or-later  pkg:rpm/…      │
+  │  ...                                                                    │
+  │                               ┌─ Détails ────────────────────────────┐  │
+  │                               │  Nom      snakeyaml                  │  │
+  │                               │  Version  2.0                        │  │
+  │                               │  Type     java                       │  │
+  │                               │  Licence  Apache-2.0                 │  │
+  │                               │  PURL     pkg:maven/org.yaml/…       │  │
+  │                               └──────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────────────┘
+----
+
+=== Ouverture d'un fichier
+
+Cliquez sur *📂 Ouvrir un fichier SBOM…* pour parcourir le système de fichiers.
+Le sélecteur propose les extensions `.json`, `.jsonld`, `.cdx.json`, `.spdx.json`.
+
+Formats supportés :
+
+* *CycloneDX 1.6* — `components[]` avec champs `name`, `version`, `type`, `purl`,
+  `licenses`, `description`
+* *SPDX 2.x* — `packages[]` avec champs `name`, `versionInfo`, `licenseConcluded`,
+  `summary`, `externalRefs[purl]`
+
+La barre d'informations affiche le format détecté, le nom du document et le
+nombre total de composants chargés.
+
+=== Filtre et recherche
+
+Le champ de recherche filtre les composants en temps réel sur :
+
+* le nom du paquet
+* la version
+* la licence
+* le PURL
+
+Le menu déroulant *Tous les types* filtre par type d'écosystème (`rpm`, `java`,
+`pypi`, `npm`, `deb`, `apk`…). Les deux filtres se combinent.
+
+=== Tableau des composants
+
+Le tableau affiche les colonnes *Nom*, *Version*, *Type*, *Licence* et *PURL*.
+Cliquez sur un en-tête de colonne pour trier par ordre croissant, cliquez à
+nouveau pour inverser l'ordre.
+
+=== Panneau de détails
+
+Cliquez sur une ligne du tableau pour afficher un panneau de détails sur la
+droite, récapitulant tous les champs du composant sélectionné : nom, version,
+type, licence, description et PURL.
+
+=== Persistance
+
+Le fichier ouvert et les filtres actifs sont mémorisés lors de la navigation
+entre onglets. Le fichier n'est pas rechargé automatiquement si son contenu
+change sur disque.
+
+NOTE: La Visionneuse SBOM est un onglet autonome — il peut être utilisé avec
+n'importe quel fichier SBOM, pas uniquement ceux générés par sbom_generator.
 
 == Onglet Comparaison SBOM
 

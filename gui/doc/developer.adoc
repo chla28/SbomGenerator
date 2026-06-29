@@ -116,14 +116,15 @@ gui/
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 10 onglets
+│       ├── results_panel.dart        # Panneau droit : 11 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
 │       ├── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
 │       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
-│       └── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
+│       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
+│       └── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
 ├── doc/
 │   ├── developer.adoc               # Ce document
 │   └── user.adoc                    # Guide utilisateur
@@ -918,9 +919,54 @@ Sous-widgets :
   pour les composants modifiés : version et licence affichés avec
   `TextDecoration.lineThrough` (ancienne valeur) + texte vert (nouvelle valeur)
 
+==== `widgets/sbom_viewer_panel.dart` — Onglet Visionneuse SBOM
+
+`SbomViewerPanel` est un `StatefulWidget` const permettant d'ouvrir et d'explorer
+n'importe quel fichier SBOM depuis le système de fichiers.
+
+Modèles internes :
+
+[source,dart]
+----
+class _Component {
+  final String name, version, type, license, summary, purl;
+
+  factory _Component.fromSbom(Map<String, dynamic> raw, String format) {
+    // CycloneDX : champs name, version, type, licenses[0].license.id, description, purl
+    // SPDX     : champs name, versionInfo, licenseConcluded, summary, externalRefs[purl]
+  }
+}
+----
+
+État géré par `_SbomViewerPanelState` :
+
+* `_all` — liste complète après chargement
+* `_filtered` — liste après application des filtres
+* `_selected` — composant sélectionné (affiche le panneau de détails)
+* `_docName`, `_format` — métadonnées du document
+* `_search`, `_typeFilter`, `_sortCol`, `_sortAsc` — état des filtres
+
+Méthodes clés :
+
+* `_loadFile()` — `FilePicker.platform.pickFiles()` → JSON parse → `_Component.fromSbom()`
+* `_applyFilter()` — filtre `_all` sur `_search` (nom/version/licence/purl) et `_typeFilter`
+* `_sort(col)` — tri `_filtered` in-place par colonne
+
+Sous-widgets privés :
+
+* `_StatBadge` — badge "N composants"
+* `_TypeBadge` — badge coloré pour le type d'écosystème
+* `_Header(label, col)` — en-tête de colonne triable (icône ▲/▼/↕)
+* `_DetailRow(label, value)` — ligne `label: valeur` dans le panneau de détails
+
+[NOTE]
+====
+`_DetailRow` utilise `label` (pas `key`) pour éviter le conflit avec `Widget.key`.
+====
+
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **10 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **11 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -963,6 +1009,10 @@ Sous-widgets :
 |`SbomDiffPanel` — diff entre deux fichiers SBOM
 
 |9
+|Visionneuse
+|`SbomViewerPanel` — exploration interactive d'un fichier SBOM externe
+
+|10
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===

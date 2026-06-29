@@ -38,6 +38,8 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 | `spdx3` | SPDX 3.0 JSON-LD | graphe `@graph` (éléments, relations, organisations) |
 | `json` | JSON personnalisé | métadonnées complètes + graphe de dépendances résolu |
 | `markdown` | Tableau Markdown | tableau `Paquet / Version / Architecture / Licence` |
+| `asciidoc` | Tableau AsciiDoc | idem Markdown, format AsciiDoc |
+| `html` | Rapport HTML | rapport autonome filtrable et triable, graphiques par écosystème et licence |
 
 ---
 
@@ -62,21 +64,40 @@ dart compile exe bin/sbom_generator.dart -o sbom_generator
 
 ```
 sbom_generator --input <fichier> [options]
+sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
+sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 
 Options :
-  -i, --input        Fichier d'entrée (requis)
-  -o, --output       Fichier de sortie (défaut : sbom.json)
-                     Avec plusieurs formats, utilisé comme base de nom
-  -f, --format       Format(s), virgule-séparés : cyclonedx | spdx | spdx3 | json | markdown
-                     Exemple : -f cyclonedx,spdx,markdown
-  -n, --name         Nom du document SBOM / composant racine
-  -d, --rpm-dir      Dossier racine où chercher les fichiers .rpm
-                     (résout les noms RPM nus ; ne s'applique pas aux .whl/.tar)
-  -c, --concurrency  Nombre de tâches traitées en parallèle (0 = illimité, défaut : 4)
-  -l, --license-map  Fichier d'override de licences (une ligne "nom: SPDX-expression")
-  -v, --verbose      Afficher les détails
-      --version      Afficher la version
-  -h, --help         Afficher l'aide
+  -i, --input              Fichier d'entrée (requis)
+  -o, --output             Fichier de sortie (défaut : sbom.json)
+                           Avec plusieurs formats, utilisé comme base de nom
+  -f, --format             Format(s), virgule-séparés :
+                             cyclonedx | spdx | spdx3 | json | markdown | asciidoc | html
+                           Exemple : -f cyclonedx,spdx,html
+  -n, --name               Nom du document SBOM / composant racine
+  -d, --rpm-dir            Dossier racine où chercher les fichiers .rpm
+                           (résout les noms RPM nus ; ne s'applique pas aux .whl/.tar)
+  -c, --concurrency        Nombre de tâches traitées en parallèle (0 = illimité, défaut : 4)
+  -l, --license-map        Fichier d'override de licences (une ligne "nom: SPDX-expression")
+      --deny-license       Refuser les composants dont la licence correspond au motif
+                           (répétable, correspondance SPDX partielle) — code retour 2 si violation
+      --min-quality-score  Score sbomqs minimum requis (ex. : 7.5) — code retour 2 si insuffisant
+      --sign               Signer les fichiers SBOM avec cosign après génération
+  -v, --verbose            Afficher les détails
+      --version            Afficher la version
+  -h, --help               Afficher l'aide
+```
+
+### Sous-commandes
+
+```bash
+# Comparer deux SBOMs (ajouts, suppressions, mises à jour de version)
+sbom_generator diff avant.cdx.json après.cdx.json
+sbom_generator diff avant.cdx.json après.cdx.json --json -o diff.json
+
+# Fusionner plusieurs SBOMs en un seul (déduplication par PURL)
+sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json
+sbom_generator merge a.cdx.json b.cdx.json c.cdx.json -o merged.cdx.json -n "Système complet"
 ```
 
 ### Exemples
@@ -97,6 +118,12 @@ Options :
 # Tableau Markdown des licences
 ./sbom_generator -i packages.txt -f markdown -o licences.md
 
+# Rapport HTML interactif
+./sbom_generator -i packages.txt -f html -n "Mon Application" -o sbom.html
+
+# Générer CycloneDX + SPDX + HTML en une seule passe
+./sbom_generator -i packages.txt -f cyclonedx,spdx,html -o sbom
+
 # Résoudre les noms RPM depuis un dossier local (pas de rpm installé requis)
 ./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
 
@@ -106,11 +133,24 @@ Options :
 # Désactiver la limite de parallélisme (toutes les entrées simultanées)
 ./sbom_generator -i packages.txt -c 0 -o sbom.cdx.json
 
-# Générer CycloneDX + SPDX + Markdown en une seule passe (→ sbom.cdx.json, sbom.spdx.json, sbom.md)
-./sbom_generator -i packages.txt -f cyclonedx,spdx,markdown -o sbom
-
 # Override de licences (fichier texte : une ligne "nom: SPDX-expression")
 ./sbom_generator -i packages.txt -l overrides.txt -o sbom.cdx.json
+
+# Politiques CI/CD : refuser GPL et AGPL, exiger un score sbomqs ≥ 7.0
+./sbom_generator -i packages.txt -o sbom.cdx.json \
+  --deny-license GPL --deny-license AGPL \
+  --min-quality-score 7.0
+# Code retour 2 si violation ; 0 si OK
+
+# Signer les SBOMs avec cosign après génération
+./sbom_generator -i packages.txt -f cyclonedx,spdx -o sbom --sign
+
+# Comparer deux SBOMs
+./sbom_generator diff ancien.cdx.json nouveau.cdx.json
+./sbom_generator diff ancien.cdx.json nouveau.cdx.json --json -o diff.json
+
+# Fusionner plusieurs SBOMs
+./sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json -n "Système complet"
 ```
 
 ### Exemple de fichier d'override de licences (`overrides.txt`)
@@ -188,7 +228,7 @@ mongosh-2.5.6-linux-x64               → nom=mongosh           ver=2.5.6    arc
 ```
 sbom_generator/
 ├── bin/
-│   └── sbom_generator.dart      # Point d'entrée CLI (--concurrency, _Semaphore)
+│   └── sbom_generator.dart      # Point d'entrée CLI + sous-commandes diff/merge
 ├── lib/
 │   ├── models.dart              # Package, RpmPackage, WheelPackage, DebPackage,
 │   │                            #   PackageDependency, generateUuidV4()
@@ -198,21 +238,29 @@ sbom_generator/
 │   ├── zip_parser.dart          # Lecture des .zip génériques
 │   ├── deb_parser.dart          # Lecture des .deb (dpkg-deb -f)
 │   ├── requirements_parser.dart # Parsing requirements.txt Python (pur Dart)
+│   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo)
+│   │                            #   skopeo : RPM, dpkg, APK, Maven JARs, PyPI, npm
 │   ├── archive_helpers.dart     # Helpers partagés tar/zip (parseFilename, identifyLicense)
 │   ├── license_normalizer.dart  # Normalisation SPDX centralisée (LicenseNormalizer)
+│   ├── sbom_diff.dart           # Comparaison de SBOMs (SbomDiffer)
+│   ├── sbom_merger.dart         # Fusion de SBOMs (SbomMerger)
+│   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
 │   ├── cyclonedx_generator.dart # Format CycloneDX 1.6 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
 │   ├── spdx3_generator.dart     # Format SPDX 3.0 JSON-LD
 │   ├── simple_json_generator.dart  # Format JSON personnalisé
-│   └── markdown_generator.dart  # Tableau Markdown des licences
+│   ├── markdown_generator.dart  # Tableau Markdown des licences
+│   ├── asciidoc_generator.dart  # Tableau AsciiDoc des licences
+│   └── html_generator.dart      # Rapport HTML interactif (filtrable, triable)
 ├── test/
 │   ├── unit/
 │   │   ├── license_normalizer_test.dart  # 23 tests
 │   │   ├── archive_helpers_test.dart     # 18 tests
-│   │   ├── rpm_parser_test.dart          # 8 tests (buildDependencies)
+│   │   ├── rpm_parser_test.dart          # 9 tests (buildDependencies)
 │   │   └── requirements_parser_test.dart # 10 tests
 │   └── integration/
-│       └── tar_integration_test.dart     # 8 tests (archives réelles)
+│       ├── tar_integration_test.dart     # 8 tests (archives réelles)
+│       └── oci_skopeo_test.dart          # tests skopeo (RPM + java)
 ├── example/
 │   └── 3PP/                     # Exemples d'archives tierces
 ├── pubspec.yaml
@@ -226,6 +274,8 @@ sbom_generator/
 | Type | PURL | Exemple |
 |------|------|---------|
 | RPM | `pkg:rpm/<name>@<ver>?arch=<arch>` | `pkg:rpm/bash@5.1.8-6.el9?arch=x86_64` |
-| Python (wheel / sdist / requirements.txt) | `pkg:pypi/<name>@<ver>` | `pkg:pypi/requests@2.28.2` |
+| Python (wheel / sdist / requirements.txt / OCI) | `pkg:pypi/<name>@<ver>` | `pkg:pypi/requests@2.28.2` |
 | Archive tar/zip générique | `pkg:generic/<name>@<ver>` | `pkg:generic/apache-tomcat@10.1.44` |
 | Paquet Debian | `pkg:deb/<name>@<ver>?arch=<arch>` | `pkg:deb/libssl3@3.0.1?arch=amd64` |
+| Java Maven (OCI via skopeo) | `pkg:maven/<groupId>/<artifactId>@<ver>` | `pkg:maven/org.yaml/snakeyaml@2.0` |
+| npm (OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |

@@ -46,6 +46,11 @@ Parser Parser Parser Parser Parser             Parser
        LicenseNormalizer ◄─── importé par tous les générateurs
               │
               ▼
+   PolicyChecker ◄── --deny-license, --min-quality-score
+   SbomDiffer  ◄── sous-commande diff
+   SbomMerger  ◄── sous-commande merge
+              │
+              ▼
 ┌─────────────────────────────────────────────┐
 │  cyclonedx_generator.dart                   │
 │  spdx_generator.dart              (choix    │
@@ -53,6 +58,7 @@ Parser Parser Parser Parser Parser             Parser
 │  simple_json_generator.dart                 │
 │  markdown_generator.dart                    │
 │  asciidoc_generator.dart                    │
+│  html_generator.dart                        │
 └─────────────────────────────────────────────┘
               │
               ▼
@@ -843,6 +849,19 @@ Lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et le normalise via
   ** `var/lib/dpkg/status` → `_parseDpkgStatus()` (RFC 822 ligne par ligne)
   ** `var/lib/rpm` → `_parseRpmRoot()` (`rpm --root <dir> -qa --queryformat …`)
   ** `lib/apk/db/installed` → `_parseApkInstalled()` (format clé:valeur APK)
+. Détection des packages applicatifs dans le rootfs :
+  ** `_parseMavenJars(rootDir)` : cherche `*.jar` dans tout le rootfs, extrait
+     `META-INF/maven/*/*/pom.properties` via `unzip -p`, reconstruit le PURL
+     `pkg:maven/<groupId>/<artifactId>@<version>`. Fallback : parsing du nom de
+     fichier avec la convention Quarkus/Red Hat (`<groupId>.<artifactId>-<ver>.jar`).
+     Déduplication par `groupId:artifactId:version`.
+  ** `_parsePythonPackages(rootDir)` : cherche `*.dist-info/METADATA` et
+     `*.egg-info/PKG-INFO` via `find`, parse les en-têtes RFC 822 jusqu'à la
+     première ligne vide. Champs extraits : `Name`, `Version`, `Summary`,
+     `License`, `Home-page`. PURL `pkg:pypi/<name>@<version>`.
+  ** `_parseNpmPackages(rootDir)` : cherche `node_modules/*/package.json`
+     (premier niveau uniquement, ignore les `node_modules` imbriqués). Saute les
+     paquets avec `"private": true`. PURL `pkg:npm/<name>@<version>`.
 . Suppression du répertoire temporaire (`chmod -R u+rwX` avant `rm -rf`
   pour les fichiers avec permissions restrictives dans certains layers)
 
@@ -850,7 +869,180 @@ Lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et le normalise via
 ====
 Seuls les paquets au statut `installed` dans `dpkg/status` sont inclus.
 Les entrées `gpg-pubkey` du registre RPM sont ignorées.
+Les 44 paquets que syft trouve en plus que skopeo (pour Keycloak 26) proviennent
+de la lecture du `MANIFEST.MF` par syft, qui produit des groupIds heuristiques
+non standard (`common/`, `jrt-fs/`, etc.). Ce gap est documenté et accepté.
 ====
+
+== `lib/sbom_diff.dart` — Comparaison de SBOMs
+
+=== `SbomDiffer`
+
+Classe principale exposant trois méthodes statiques :
+
+[cols="2,2,2", options="header"]
+|===
+|Méthode |Entrée |Sortie
+
+|`diff(Map a, Map b)`
+|Deux SBOMs CycloneDX JSON parsés
+|`SbomDiffResult`
+
+|`printDiff(result)`
+|`SbomDiffResult`
+|Sortie ANSI colorée sur stdout (vert=ajout, rouge=suppression, jaune=mise à jour)
+
+|`toJson(result)`
+|`SbomDiffResult`
+|`Map<String, dynamic>` avec section `summary`
+
+|`loadFile(path)`
+|Chemin fichier
+|`Future<Map<String, dynamic>>`
+|===
+
+=== `SbomDiffResult`
+
+[source,dart]
+----
+class SbomDiffResult {
+  final List<SbomComponent> added;
+  final List<SbomComponent> removed;
+  final List<SbomComponentUpdate> updated;
+}
+----
+
+=== Algorithme de comparaison
+
+. Indexation par `_componentKey()` : `purl.substring(0, purl.lastIndexOf('@'))` si le PURL
+  contient un `@`, sinon `name:type` (clé sans version).
+. Comparaison des index : absent de A = ajout, absent de B = suppression, présent dans
+  les deux avec version différente = mise à jour.
+
+[NOTE]
+====
+La sous-commande `diff` est accessible via `sbom_generator diff <a> <b> [--json] [-o <out>]`.
+====
+
+== `lib/sbom_merger.dart` — Fusion de SBOMs
+
+=== `SbomMerger`
+
+[source,dart]
+----
+class SbomMerger {
+  static Map<String, dynamic> merge(
+    List<Map<String, dynamic>> sboms, {
+    String? documentName,
+  });
+}
+----
+
+=== Algorithme de fusion
+
+. Premier SBOM comme base (préserve `metadata`).
+. Parcours de tous les SBOMs suivants :
+  - Déduplication des `components` par `purl` (puis par `bom-ref` si PURL absent).
+  - Déduplication des `dependencies` par `ref`.
+. Nouveau `serialNumber` UUID v4 généré via `_generateUuid()`.
+. `documentName` écrase `metadata.component.name` si fourni.
+
+[NOTE]
+====
+Seul le format CycloneDX JSON est supporté en entrée et en sortie pour `merge`.
+====
+
+== `lib/policy_checker.dart` — Contrôle de politiques CI/CD
+
+=== `PolicyChecker`
+
+[cols="2,2,2", options="header"]
+|===
+|Méthode |Paramètres |Retour
+
+|`checkDenyLicenses`
+|`List<Package> packages, List<String> denyPatterns`
+|`List<LicenseViolation>`
+
+|`runSbomqs`
+|`String sbomPath`
+|`Future<double?>` — score ou `null` si sbomqs absent
+|===
+
+=== `LicenseViolation`
+
+[source,dart]
+----
+class LicenseViolation {
+  final String packageName;
+  final String version;
+  final String license;
+  final String deniedPattern;
+}
+----
+
+=== Correspondance de licences
+
+`_licenseMatches(license, pattern)` : correspondance exacte (insensible à la casse)
+ou correspondance partielle (`license.contains(pattern)`). Cela signifie que
+`--deny-license GPL` bloque `GPL-2.0-only`, `GPL-3.0-or-later`, `LGPL-2.1-only`, etc.
+
+=== Intégration CLI
+
+Après génération, si des flags politiques sont présents :
+. `checkDenyLicenses` est appelé sur tous les packages uniques.
+. `runSbomqs` est appelé si `--min-quality-score` est spécifié.
+. En cas de violation(s), le détail est imprimé sur stderr et le processus
+  quitte avec le code `2` (distinct de `1` = erreur d'analyse).
+
+== `lib/html_generator.dart` — Rapport HTML interactif
+
+=== `HtmlGenerator`
+
+[source,dart]
+----
+class HtmlGenerator {
+  Future<void> writeToFile(
+    List<Package> packages,
+    String outputPath, {
+    String? documentName,
+  }) async;
+}
+----
+
+=== Structure du rapport HTML
+
+Le fichier produit est *entièrement autonome* : CSS et JavaScript inline,
+aucune dépendance externe ni réseau requis.
+
+[cols="1,3", options="header"]
+|===
+|Section |Contenu
+
+|En-tête
+|Titre, date de génération, nombre de composants
+
+|Cartes de statistiques
+|Total composants, nombre d'écosystèmes, licences distinctes, composants sans licence
+
+|Graphiques (CSS-only)
+|Barres horizontales proportionnelles pour les top-10 écosystèmes et top-15 licences
+
+|Tableau filtrable
+|Champ de recherche texte (nom/version/licence/PURL) + filtre par type, triable par colonne
+
+|Pied de page
+|Mention `sbom_generator`
+|===
+
+=== Tri et filtrage (JavaScript vanilla)
+
+* `filterTable()` : filtre la liste par texte et par type, met à jour le compteur visible.
+* `sortTable(col)` : tri croissant/décroissant par clic sur l'en-tête de colonne.
+
+=== `_esc(String s)`
+
+Échappe `&`, `<`, `>`, `"` pour insertion sécurisée dans le HTML.
 
 == `lib/requirements_parser.dart` — Parsing requirements.txt Python
 
@@ -948,7 +1140,7 @@ Backend d'analyse OCI, utilisé en conjonction avec `--image`. Valeurs valides :
 |Aqua Trivy — tous types de paquets
 
 |`skopeo`
-|Skopeo + extraction manuelle des layers — dpkg, RPM et APK uniquement
+|Skopeo + extraction manuelle des layers — dpkg, RPM, APK, Maven JARs, PyPI packages et npm
 |===
 
 === Option `--rpm-dir` / `-d`
@@ -1025,6 +1217,9 @@ un fichier de sortie distinct.
 
 |`asciidoc`
 |`.adoc`
+
+|`html`
+|`.html`
 |===
 
 `_basePath(output)` retire les extensions connues du nom passé à `--output`
@@ -1035,6 +1230,49 @@ pas les valeurs composites.
 La boucle de résolution de dépendances est skippée si *tous* les formats
 demandés sont `markdown` ou `asciidoc` (les deux formats tabulaires ne
 nécessitent pas les relations de dépendances).
+
+=== Sous-commandes `diff` et `merge` _(nouveau)_
+
+Routage avant le parsing principal :
+
+[source,dart]
+----
+if (arguments.first == 'diff')  { await _runDiff(arguments.sublist(1));  return; }
+if (arguments.first == 'merge') { await _runMerge(arguments.sublist(1)); return; }
+----
+
+*`_runDiff(args)`* : valide 2 arguments positionnels, charge les fichiers via
+`SbomDiffer.loadFile()`, appelle `SbomDiffer.diff()`, puis soit `printDiff()`
+(défaut, ANSI) soit `toJson()` (si `--json`). Si `--output` est spécifié,
+écrit dans le fichier plutôt que sur stdout.
+
+*`_runMerge(args)`* : valide N ≥ 2 arguments positionnels + `-o <sortie>`.
+Charge chaque SBOM, appelle `SbomMerger.merge()`, écrit le JSON résultant.
+
+=== Options CI/CD _(nouveau)_
+
+*`--deny-license <motif>`* (multi-option, répétable) : après génération,
+`PolicyChecker.checkDenyLicenses()` est appelé. Les violations sont listées
+sur stderr. Code retour `2` si au moins une violation.
+
+*`--min-quality-score <score>`* : après génération, `PolicyChecker.runSbomqs()`
+est appelé sur le premier fichier JSON généré. Code retour `2` si le score est
+inférieur au seuil. L'absence de `sbomqs` provoque une erreur fatale (non ignorée).
+
+*`--sign`* : après génération et vérification des politiques, `_signWithCosign(path)`
+est appelé pour chaque fichier SBOM généré :
+
+[source,dart]
+----
+Future<void> _signWithCosign(String path) async {
+  final result = await Process.run(
+    'cosign', ['sign-blob', '--yes', '--bundle', '$path.bundle', path]);
+  // Avertissement non fatal si cosign échoue
+}
+----
+
+La boucle de résolution de dépendances est skippée si le format est `html`
+(en plus de `markdown` et `asciidoc`), car HTML n'expose pas les relations.
 
 === Option `--license-map` / `-l` _(nouveau)_
 
@@ -1272,8 +1510,8 @@ if (pkg is RpmPackage) {
 == `lib/markdown_generator.dart` — Tableau Markdown
 
 Signature : `List<Package>`. Génère un tableau trié alphabétiquement par nom.
-La résolution des dépendances est skippée en amont (formats `markdown` et
-`asciidoc`). Affiche `(inconnue)` si `pkg.license` est vide.
+La résolution des dépendances est skippée en amont (formats `markdown`, `asciidoc`
+et `html`). Affiche `(inconnue)` si `pkg.license` est vide.
 
 == `lib/asciidoc_generator.dart` — Tableau AsciiDoc
 
