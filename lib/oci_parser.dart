@@ -600,3 +600,10 @@ class OciParser {
     return packages;
   }
 }
+
+// ── Helpers exposés pour les tests du paquet ──────────────────────────────────
+
+/// Appelle [OciParser._parseRpmRoot] depuis les tests sans passer par skopeo.
+Future<List<Package>> ociParserParseRpmRoot(
+        String rootDir, String imageRef, {bool verbose = false}) =>
+    OciParser()._parseRpmRoot(rootDir, imageRef, verbose: verbose);
