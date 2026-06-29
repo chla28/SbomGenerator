@@ -258,6 +258,100 @@ class DebPackage extends Package {
   String toString() => '$name $version ($arch)';
 }
 
+// ── OCI container image package ──────────────────────────────────────────────
+
+/// Represents a package found inside an OCI container image.
+///
+/// [packageType] reflects the ecosystem : 'rpm', 'deb', 'apk', 'pypi', 'npm',
+/// 'go', 'java', 'generic', etc.
+/// [purlOverride] is taken directly from the analysis tool (syft/trivy) when
+/// provided; otherwise a PURL is constructed from [packageType], [name] and
+/// [version].
+class OciPackage extends Package {
+  @override
+  final String name;
+  @override
+  final String version;
+  @override
+  final String license;
+  @override
+  final String vendor;
+  @override
+  final String url;
+  @override
+  final String summary;
+  @override
+  final String arch;
+  @override
+  final String sourceRef;
+  @override
+  final String sha256Header;
+  @override
+  final List<String> requires;
+  @override
+  final List<String> provides;
+
+  final String _packageType;
+
+  /// PURL as reported by the analysis tool; empty means auto-constructed.
+  final String purlOverride;
+
+  /// Original OCI image reference (registry ref, tar path, or layout dir).
+  final String imageRef;
+
+  OciPackage({
+    required this.name,
+    required this.version,
+    required this.license,
+    required this.vendor,
+    required this.url,
+    required this.summary,
+    required this.arch,
+    required this.sourceRef,
+    required this.imageRef,
+    this.sha256Header = '',
+    required this.requires,
+    required this.provides,
+    String packageType = 'generic',
+    this.purlOverride = '',
+  }) : _packageType = packageType;
+
+  @override
+  String get packageType => _packageType;
+
+  @override
+  String get fullVersion => version;
+
+  @override
+  String get purl {
+    if (purlOverride.isNotEmpty) return purlOverride;
+    final n = Uri.encodeComponent(name.toLowerCase());
+    final v = Uri.encodeComponent(version);
+    final a = arch.isNotEmpty ? '?arch=${Uri.encodeComponent(arch)}' : '';
+    return switch (_packageType) {
+      'rpm' => 'pkg:rpm/$n@$v$a',
+      'deb' => 'pkg:deb/$n@$v$a',
+      'apk' => 'pkg:apk/alpine/$n@$v$a',
+      'pypi' => 'pkg:pypi/$n@$v',
+      'npm' => 'pkg:npm/$n@$v',
+      'go' => 'pkg:golang/$n@$v',
+      'java' => 'pkg:maven/$n@$v',
+      _ => version.isNotEmpty ? 'pkg:generic/$n@$v' : 'pkg:generic/$n',
+    };
+  }
+
+  @override
+  String get bomRef =>
+      'pkg-oci-${_safeId(_packageType)}-${_safeId(name)}-${_safeId(version)}';
+
+  @override
+  String get spdxId =>
+      'SPDXRef-oci-${_safeId(name)}-${_safeId(version)}';
+
+  @override
+  String toString() => '$name $version ($arch) [$_packageType]';
+}
+
 // ── Dependency record ────────────────────────────────────────────────────────
 
 class PackageDependency {

@@ -33,6 +33,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
   late TextEditingController _rpmDirCtrl;
   late TextEditingController _licenseMapCtrl;
   late TextEditingController _pdfCtrl;
+  late TextEditingController _imageCtrl;
 
   bool _isDragging = false;
 
@@ -46,13 +47,14 @@ class _ConfigPanelState extends State<ConfigPanel> {
     _rpmDirCtrl = TextEditingController(text: c.rpmDir);
     _licenseMapCtrl = TextEditingController(text: c.licenseMapFile);
     _pdfCtrl = TextEditingController(text: c.pdfOutputPath);
+    _imageCtrl = TextEditingController(text: c.imageRef);
   }
 
   @override
   void dispose() {
     for (final c in [
       _inputCtrl, _outputCtrl, _nameCtrl, _rpmDirCtrl,
-      _licenseMapCtrl, _pdfCtrl,
+      _licenseMapCtrl, _pdfCtrl, _imageCtrl,
     ]) {
       c.dispose();
     }
@@ -71,11 +73,14 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.generatePdf = loaded.generatePdf;
     c.pdfOutputPath = loaded.pdfOutputPath;
     c.enableSbomqs = loaded.enableSbomqs;
+    c.imageRef = loaded.imageRef;
+    c.ociTool = loaded.ociTool;
     _outputCtrl.text = c.outputBase;
     _nameCtrl.text = c.documentName;
     _rpmDirCtrl.text = c.rpmDir;
     _licenseMapCtrl.text = c.licenseMapFile;
     _pdfCtrl.text = c.pdfOutputPath;
+    _imageCtrl.text = c.imageRef;
     widget.onChanged?.call();
     setState(() {});
   }
@@ -99,6 +104,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.rpmDir = _rpmDirCtrl.text.trim();
     c.licenseMapFile = _licenseMapCtrl.text.trim();
     c.pdfOutputPath = _pdfCtrl.text.trim();
+    c.imageRef = _imageCtrl.text.trim();
     widget.onChanged?.call();
   }
 
@@ -218,7 +224,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
                                 )
                               : const BoxDecoration(),
                           child: _FileField(
-                            label: 'Fichier d\'entrée (--input)',
+                            label: 'Fichier de paquets (--input)',
                             controller: _inputCtrl,
                             hint: _isDragging
                                 ? 'Déposez le fichier ici…'
@@ -233,10 +239,15 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
                             ),
-                            onChanged: (_) => _sync(),
+                            onChanged: (_) {
+                              _sync();
+                              setState(() {});
+                            },
+                            // Requis seulement si aucune image OCI fournie
                             validator: (v) =>
-                                (v == null || v.trim().isEmpty)
-                                    ? 'Requis'
+                                (v == null || v.trim().isEmpty) &&
+                                        _imageCtrl.text.trim().isEmpty
+                                    ? 'Requis (ou spécifiez une image OCI)'
                                     : null,
                           ),
                         ),
@@ -251,6 +262,67 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           fontStyle: FontStyle.italic,
                         ),
                       ),
+
+                      // ── Séparateur OU ──
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                'OU',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.4),
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Image OCI ──
+                      _OciImageField(
+                        controller: _imageCtrl,
+                        onPickTar: () => _pickFile(
+                          _imageCtrl,
+                          title: 'Sélectionner une archive tar',
+                          extensions: ['tar'],
+                        ),
+                        onPickDir: () =>
+                            _pickDir(_imageCtrl, title: 'Sélectionner un répertoire OCI layout', onDone: _sync),
+                        onChanged: (_) {
+                          _sync();
+                          setState(() {});
+                        },
+                      ),
+
+                      // ── Outil OCI ──
+                      if (c.imageRef.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _OciToolSelector(
+                          selected: c.ociTool,
+                          onChanged: (tool) => setState(() {
+                            c.ociTool = tool;
+                            widget.onChanged?.call();
+                          }),
+                        ),
+                      ],
+
                       const SizedBox(height: 8),
                       _InputTypeLegend(),
                     ],
@@ -941,6 +1013,149 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
   }
 }
 
+// ─── Champ image OCI ─────────────────────────────────────────────────────────
+
+class _OciImageField extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback onPickTar;
+  final VoidCallback onPickDir;
+  final ValueChanged<String>? onChanged;
+
+  const _OciImageField({
+    required this.controller,
+    required this.onPickTar,
+    required this.onPickDir,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: 'Image OCI (--image)',
+        hintText: 'nginx:latest  •  ./image.tar  •  ./oci_dir/',
+        border: const OutlineInputBorder(),
+        isDense: true,
+        prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18),
+        suffixIcon: PopupMenuButton<String>(
+          icon: const Icon(Icons.folder_open, size: 18),
+          tooltip: 'Parcourir…',
+          onSelected: (v) {
+            if (v == 'tar') {
+              onPickTar();
+            } else {
+              onPickDir();
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'tar',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.archive_outlined, size: 16),
+                title: Text('Archive tar (.tar)'),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'dir',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.folder_outlined, size: 16),
+                title: Text('Répertoire OCI layout'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+      onChanged: onChanged,
+    );
+  }
+}
+
+// ─── Sélecteur d'outil OCI ────────────────────────────────────────────────────
+
+class _OciToolSelector extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _OciToolSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.build_outlined,
+                size: 14, color: theme.colorScheme.secondary),
+            const SizedBox(width: 6),
+            Text(
+              'Backend OCI (--oci-tool)',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.secondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SegmentedButton<String>(
+          style: SegmentedButton.styleFrom(
+            textStyle: const TextStyle(fontSize: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            minimumSize: const Size(0, 32),
+          ),
+          segments: const [
+            ButtonSegment(
+              value: 'syft',
+              label: Text('Syft'),
+              icon: Icon(Icons.search, size: 14),
+              tooltip: 'Anchore Syft — tous écosystèmes',
+            ),
+            ButtonSegment(
+              value: 'trivy',
+              label: Text('Trivy'),
+              icon: Icon(Icons.security, size: 14),
+              tooltip: 'Aqua Trivy — tous écosystèmes',
+            ),
+            ButtonSegment(
+              value: 'skopeo',
+              label: Text('Skopeo'),
+              icon: Icon(Icons.layers_outlined, size: 14),
+              tooltip: 'Skopeo + extraction manuelle (dpkg/rpm/apk)',
+            ),
+          ],
+          selected: {selected},
+          onSelectionChanged: (s) => onChanged(s.first),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          selected == 'syft'
+              ? 'Syft (recommandé) — supporte tous les écosystèmes'
+              : selected == 'trivy'
+                  ? 'Trivy — tous écosystèmes, déjà utilisé pour les CVE'
+                  : 'Skopeo — extraction manuelle dpkg / rpm / apk',
+          style: TextStyle(
+            fontSize: 10,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ─── Légende des types d'entrée ───────────────────────────────────────────────
 
 class _InputTypeLegend extends StatelessWidget {
@@ -957,7 +1172,7 @@ class _InputTypeLegend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Types acceptés (un par ligne) :',
+            'Types acceptés dans le fichier (un par ligne) :',
             style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -986,6 +1201,46 @@ class _InputTypeLegend extends StatelessWidget {
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme.primary),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      item.$2,
+                      style: const TextStyle(
+                          fontSize: 10, fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6),
+          const Divider(height: 8),
+          Text(
+            'Image OCI (champ --image) :',
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+          ),
+          const SizedBox(height: 4),
+          for (final item in const [
+            ('Registre', 'nginx:latest  •  ubuntu@sha256:…'),
+            ('Archive tar', '/path/image.tar  (docker save)'),
+            ('OCI layout', '/path/oci_dir/  (index.json présent)'),
+          ])
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      item.$1,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.secondary),
                     ),
                   ),
                   Expanded(

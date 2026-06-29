@@ -15,11 +15,13 @@ import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
 import 'package:sbom_generator/markdown_generator.dart';
 import 'package:sbom_generator/asciidoc_generator.dart';
+import 'package:sbom_generator/oci_parser.dart';
 
 const _version = '1.0.0';
 
 const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
+const _validOciTools = {'syft', 'trivy', 'skopeo'};
 const _validDateFields = {'published', 'modified', 'latest'};
 
 Future<void> main(List<String> arguments) async {
@@ -39,7 +41,26 @@ Future<void> main(List<String> arguments) async {
           '  • a path to a Debian .deb file\n'
           '  • a path to a Python .whl file\n'
           '  • a path to a requirements.txt file\n'
-          '  • a path to a .tar / .tar.gz / .tgz / .zip archive',
+          '  • a path to a .tar / .tar.gz / .tgz / .zip archive\n'
+          'Optional when --image is provided.',
+    )
+    ..addOption(
+      'image',
+      abbr: 'I',
+      help: 'OCI container image to analyse.\n'
+          'Accepted formats :\n'
+          '  • Registre  : nginx:latest  ubuntu@sha256:…\n'
+          '  • Archive   : /path/image.tar  (docker save)\n'
+          '  • OCI layout: /path/to/oci_dir/  (index.json present)\n'
+          'Combine with --oci-tool pour choisir le backend.',
+    )
+    ..addOption(
+      'oci-tool',
+      defaultsTo: 'syft',
+      help: 'Backend d\'analyse OCI (utilisé avec --image).\n'
+          '  syft    Anchore Syft (défaut) — tous types de paquets\n'
+          '  trivy   Aqua Trivy — tous types de paquets\n'
+          '  skopeo  Skopeo + extraction manuelle (dpkg/rpm/apk)',
     )
     ..addOption(
       'output',
@@ -129,13 +150,15 @@ Future<void> main(List<String> arguments) async {
     exit(0);
   }
 
-  if (!args.wasParsed('input')) {
-    _err('Missing required option --input.');
+  if (!args.wasParsed('input') && !args.wasParsed('image')) {
+    _err('Au moins une source est requise : --input ou --image.');
     _printUsage(parser);
     exit(1);
   }
 
-  final inputPath = args['input'] as String;
+  final inputPath = args['input'] as String?;
+  final imageRef = args['image'] as String?;
+  final ociTool = args['oci-tool'] as String;
   final outputPath = args['output'] as String;
   final docName = args['name'] as String?;
   final verbose = args['verbose'] as bool;
@@ -166,6 +189,12 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
+  // Validation --oci-tool
+  if (!_validOciTools.contains(ociTool)) {
+    _err('Outil OCI inconnu "$ociTool". Valides : ${_validOciTools.join(', ')}');
+    exit(1);
+  }
+
   // Load license overrides
   final licenseMapPath = args['license-map'] as String?;
   final licenseOverrides =
@@ -174,23 +203,28 @@ Future<void> main(List<String> arguments) async {
     print('License overrides: ${licenseOverrides.length} entr(ée(s)) chargée(s).');
   }
 
-  final inputFile = File(inputPath);
-  if (!await inputFile.exists()) {
-    _err('Input file not found: $inputPath');
-    exit(1);
+  if (inputPath != null) {
+    final inputFile = File(inputPath);
+    if (!await inputFile.exists()) {
+      _err('Input file not found: $inputPath');
+      exit(1);
+    }
   }
 
-  // --- Read package list ---
-  final lines = await inputFile.readAsLines();
-  final packageRefs = lines
-      .map((l) => l.trim())
-      .where((l) => l.isNotEmpty && !l.startsWith('#'))
-      .toList();
+  // --- Read package list (optionnel si --image est fourni) ---
+  List<String> packageRefs = [];
+  if (inputPath != null) {
+    final lines = await File(inputPath).readAsLines();
+    packageRefs = lines
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty && !l.startsWith('#'))
+        .toList();
 
-  if (packageRefs.isEmpty) {
-    _err('No packages found in $inputPath '
-        '(empty file or all lines are comments).');
-    exit(1);
+    if (packageRefs.isEmpty && imageRef == null) {
+      _err('No packages found in $inputPath '
+          '(empty file or all lines are comments).');
+      exit(1);
+    }
   }
 
   // --- Build RPM file index from --rpm-dir ---
@@ -230,6 +264,37 @@ Future<void> main(List<String> arguments) async {
     }
   }
   final mainRefs = filteredRefs;
+
+  // --- Analyse OCI image ---
+  final ociPackages = <Package>[];
+  if (imageRef != null) {
+    // Vérifier la disponibilité de l'outil OCI
+    final ociCheck = await Process.run(ociTool, ['--version']);
+    if (ociCheck.exitCode != 0) {
+      _err('$ociTool introuvable ou non fonctionnel — requis pour --image.');
+      exit(1);
+    }
+    if (verbose) {
+      print('$ociTool : ${(ociCheck.stdout as String).split('\n').first.trim()}');
+    }
+
+    final refType = OciParser.detectRefType(imageRef);
+    final refTypeLabel = switch (refType) {
+      OciRefType.registry => 'registre',
+      OciRefType.tar => 'archive tar',
+      OciRefType.ociLayout => 'OCI layout',
+    };
+    print('Analyse de l\'image OCI ($refTypeLabel) via $ociTool : $imageRef…');
+
+    try {
+      ociPackages.addAll(
+          await OciParser().parseImage(imageRef, ociTool, verbose: verbose));
+      print('${ociPackages.length} paquet(s) trouvé(s) dans l\'image.');
+    } catch (e) {
+      _err('Échec de l\'analyse OCI : $e');
+      exit(1);
+    }
+  }
 
   // --- Detect tool availability ---
   final hasRpm = mainRefs.any((r) =>
@@ -272,10 +337,14 @@ Future<void> main(List<String> arguments) async {
   }
 
   // --- Parse packages ---
-  final total = mainRefs.length + (preloadedPackages.isNotEmpty ? 1 : 0);
+  final total = mainRefs.length +
+      (preloadedPackages.isNotEmpty ? 1 : 0) +
+      ociPackages.length;
   final conLabel = concurrencyN == 0 ? 'illimité' : '$concurrencyN';
-  print('Querying ${mainRefs.length} package(s) — concurrence : $conLabel'
-      '${preloadedPackages.isNotEmpty ? " (+ ${preloadedPackages.length} depuis requirements)" : ""}…');
+  if (mainRefs.isNotEmpty) {
+    print('Querying ${mainRefs.length} package(s) — concurrence : $conLabel'
+        '${preloadedPackages.isNotEmpty ? " (+ ${preloadedPackages.length} depuis requirements)" : ""}…');
+  }
 
   final rpmParser = RpmParser();
   final whlParser = WheelParser();
@@ -338,7 +407,7 @@ Future<void> main(List<String> arguments) async {
     }),
   );
 
-  stdout.writeln();
+  if (mainTotal > 0) stdout.writeln();
 
   final packages = <Package>[];
   final failedRefs = <String>[];
@@ -352,6 +421,7 @@ Future<void> main(List<String> arguments) async {
   }
   final failed = failedRefs.length;
   packages.addAll(preloadedPackages);
+  packages.addAll(ociPackages);
 
   // --- Deduplicate ---
   final seenRefs = <String>{};
@@ -929,58 +999,72 @@ List<Package> _applyLicenseOverrides(
         provides: pkg.provides,
       );
     }
+    if (pkg is OciPackage) {
+      return OciPackage(
+        name: pkg.name,
+        version: pkg.version,
+        license: lic,
+        vendor: pkg.vendor,
+        url: pkg.url,
+        summary: pkg.summary,
+        arch: pkg.arch,
+        sourceRef: pkg.sourceRef,
+        imageRef: pkg.imageRef,
+        sha256Header: pkg.sha256Header,
+        requires: pkg.requires,
+        provides: pkg.provides,
+        packageType: pkg.packageType,
+        purlOverride: pkg.purlOverride,
+      );
+    }
     return pkg;
   }).toList();
 }
 
 void _printUsage(ArgParser parser) {
   stdout.writeln('''
-sbom_generator – Generate an SBOM from a list of RPM and/or Python wheel packages.
+sbom_generator – Generate an SBOM from a list of packages or an OCI container image.
 
 Usage:
   dart run bin/sbom_generator.dart --input <file> [options]
-  dart compile exe bin/sbom_generator.dart -o sbom_generator && ./sbom_generator --input <file>
+  dart run bin/sbom_generator.dart --image <ref>  [options]
+  dart run bin/sbom_generator.dart --image <ref> --input <file> [options]
 
 ${parser.usage}
 
-Input file format:
+Input file format (--input) :
   One package reference per line. Lines starting with # are ignored.
   References can be mixed:
     • RPM: installed package name/NEVRA, or path to a .rpm file
     • Python wheel: path to a .whl file
     • Source archive: path to a .tar, .tar.gz or .tgz file
         - Python sdist (PKG-INFO present) → PURL pkg:pypi/…
-        - Generic archive (no metadata)   → PURL pkg:generic/…, name/version
-                                            derived from the filename
+        - Generic archive (no metadata)   → PURL pkg:generic/…
+    • Debian: path to a .deb file
+    • requirements.txt: path to a pip requirements file
 
-  Example input.txt:
-    # RPM packages (bare name resolved via --rpm-dir, or queried from installed DB)
-    bash
-    glibc
-    /tmp/mypkg-1.0-1.el9.x86_64.rpm
-    # Python wheel
-    /opt/wheels/requests-2.28.0-py3-none-any.whl
-    # Python sdist / generic archives
-    /opt/src/Django-4.2.tar.gz
-    /opt/src/libfoo-1.2.3.tar.gz
+OCI image formats (--image) :
+    • Registre  : nginx:latest  ubuntu:22.04  myregistry.io/app@sha256:…
+    • Archive   : /path/image.tar          (docker save / skopeo docker-archive)
+    • OCI layout: /path/to/oci_dir/        (directory containing index.json)
 
 Examples:
-  # CycloneDX (default)
+  # CycloneDX depuis une image Docker Hub (via syft, défaut)
+  dart run bin/sbom_generator.dart --image nginx:latest -o nginx.cdx.json
+
+  # SPDX 2.3 depuis une archive tar, backend trivy
+  dart run bin/sbom_generator.dart --image ./ubuntu.tar --oci-tool trivy -f spdx -o sbom.spdx.json
+
+  # OCI layout directory, backend skopeo
+  dart run bin/sbom_generator.dart --image ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
+
+  # Combiner image OCI + liste de paquets supplémentaires
+  dart run bin/sbom_generator.dart --image nginx:latest -i extra_pkgs.txt -o sbom.cdx.json
+
+  # Multi-format en un seul passage
+  dart run bin/sbom_generator.dart --image nginx:latest -f cyclonedx,spdx,markdown -o sbom
+
+  # Depuis un fichier de paquets (mode classique)
   dart run bin/sbom_generator.dart -i packages.txt -o sbom.cdx.json
-
-  # SPDX 2.3
-  dart run bin/sbom_generator.dart -i packages.txt -f spdx -o sbom.spdx.json
-
-  # Multi-format en un seul passage (génère sbom.cdx.json + sbom.spdx.json + sbom.md)
-  dart run bin/sbom_generator.dart -i packages.txt -f cyclonedx,spdx,markdown -o sbom
-
-  # 8 paquets en parallèle
-  dart run bin/sbom_generator.dart -i packages.txt -c 8 -o sbom.cdx.json
-
-  # Override de licences
-  dart run bin/sbom_generator.dart -i packages.txt -l overrides.txt -o sbom.cdx.json
-
-  # Résoudre les noms RPM nus depuis un dossier local
-  dart run bin/sbom_generator.dart -i packages.txt -d /mnt/repo -o sbom.cdx.json
 ''');
 }
