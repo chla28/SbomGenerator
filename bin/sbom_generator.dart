@@ -15,6 +15,7 @@ import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
 import 'package:sbom_generator/markdown_generator.dart';
 import 'package:sbom_generator/asciidoc_generator.dart';
+import 'package:sbom_generator/html_generator.dart';
 import 'package:sbom_generator/oci_parser.dart';
 import 'package:sbom_generator/sbom_diff.dart';
 import 'package:sbom_generator/sbom_merger.dart';
@@ -22,7 +23,7 @@ import 'package:sbom_generator/policy_checker.dart';
 
 const _version = '1.0.0';
 
-const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc'};
+const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
 const _validOciTools = {'syft', 'trivy', 'skopeo'};
 const _validDateFields = {'published', 'modified', 'latest'};
@@ -97,6 +98,7 @@ Future<void> main(List<String> arguments) async {
           '  json       Custom human-friendly JSON\n'
           '  markdown   Tableau Markdown des licences\n'
           '  asciidoc   Tableau AsciiDoc des licences\n'
+          '  html       Rapport HTML interactif (tableau filtrable)\n'
           'Example: -f cyclonedx,spdx,markdown',
     )
     ..addOption(
@@ -503,7 +505,7 @@ Future<void> main(List<String> arguments) async {
 
   // --- Build dependency graph (skipped when all formats are markdown) ---
   final dependencies = <PackageDependency>[];
-  if (formats.any((f) => f != 'markdown' && f != 'asciidoc')) {
+  if (formats.any((f) => f != 'markdown' && f != 'asciidoc' && f != 'html')) {
     print('Resolving dependencies…');
     dependencies.addAll(rpmParser.buildDependencies(uniquePackages));
     final relCount =
@@ -546,6 +548,9 @@ Future<void> main(List<String> arguments) async {
               .writeToFile(uniquePackages, outPath, documentName: docName);
         case 'asciidoc':
           await AsciidocGenerator()
+              .writeToFile(uniquePackages, outPath, documentName: docName);
+        case 'html':
+          await HtmlGenerator()
               .writeToFile(uniquePackages, outPath, documentName: docName);
       }
     } catch (e, st) {
@@ -820,6 +825,7 @@ String _formatExtension(String format) => switch (format) {
       'json' => '.custom.json',
       'markdown' => '.md',
       'asciidoc' => '.adoc',
+      'html' => '.html',
       _ => '.json',
     };
 
