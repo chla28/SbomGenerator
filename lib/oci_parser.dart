@@ -323,6 +323,12 @@ class OciParser {
       final mavenPkgs = await _parseMavenJars(fsDir, imageRef, verbose: verbose);
       packages.addAll(mavenPkgs);
 
+      final pyPkgs = await _parsePythonPackages(fsDir, imageRef, verbose: verbose);
+      packages.addAll(pyPkgs);
+
+      final npmPkgs = await _parseNpmPackages(fsDir, imageRef, verbose: verbose);
+      packages.addAll(npmPkgs);
+
       if (packages.isEmpty && verbose) {
         stderr.writeln(
             'skopeo : aucune base de paquets reconnue dans les layers.');
@@ -653,6 +659,154 @@ class OciParser {
 
     if (verbose && packages.isNotEmpty) {
       print('skopeo : ${packages.length} paquets Maven extraits');
+    }
+    return packages;
+  }
+
+  Future<List<Package>> _parsePythonPackages(String rootDir, String imageRef,
+      {bool verbose = false}) async {
+    final findResult = await Process.run('find', [
+      rootDir, '-type', 'f',
+      '(', '-path', '*.dist-info/METADATA', '-o', '-path', '*.egg-info/PKG-INFO', ')',
+    ]);
+    if (findResult.exitCode != 0) return [];
+
+    final metaFiles = (findResult.stdout as String)
+        .split('\n')
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (metaFiles.isEmpty) return [];
+
+    if (verbose) print('skopeo : ${metaFiles.length} métadonnées Python trouvées…');
+
+    final packages = <Package>[];
+    final seen = <String>{};
+
+    for (final filePath in metaFiles) {
+      String content;
+      try {
+        content = await File(filePath).readAsString();
+      } catch (_) {
+        continue;
+      }
+
+      String? name, version, summary, license_, url;
+      for (final rawLine in content.split('\n')) {
+        if (rawLine.isEmpty) break; // En-têtes RFC 822 — fin à la première ligne vide
+        final colon = rawLine.indexOf(':');
+        if (colon <= 0) continue;
+        final key = rawLine.substring(0, colon).trim().toLowerCase();
+        final value = rawLine.substring(colon + 1).trim();
+        switch (key) {
+          case 'name': name = value;
+          case 'version': version = value;
+          case 'summary': summary = value;
+          case 'license': license_ = value;
+          case 'home-page': url = value;
+        }
+      }
+
+      if (name == null || name.isEmpty || version == null || version.isEmpty) continue;
+      final normName = name.toLowerCase().replaceAll(RegExp(r'[-_.]+'), '-');
+      if (!seen.add('pypi:$normName:$version')) continue;
+
+      packages.add(OciPackage(
+        name: name,
+        version: version,
+        license: license_ ?? '',
+        vendor: '',
+        url: url ?? '',
+        summary: summary ?? '',
+        arch: '',
+        sourceRef: imageRef,
+        imageRef: imageRef,
+        requires: [],
+        provides: [name],
+        packageType: 'pypi',
+      ));
+    }
+
+    if (verbose && packages.isNotEmpty) {
+      print('skopeo : ${packages.length} paquets Python extraits');
+    }
+    return packages;
+  }
+
+  Future<List<Package>> _parseNpmPackages(String rootDir, String imageRef,
+      {bool verbose = false}) async {
+    // Cherche package.json dans node_modules, un seul niveau de profondeur
+    // (évite les node_modules imbriqués qui sont des dépendances de dépendances).
+    final findResult = await Process.run('find', [
+      rootDir, '-type', 'f', '-name', 'package.json',
+      '-path', '*/node_modules/*',
+      '-not', '-path', '*/node_modules/*/node_modules/*',
+    ]);
+    if (findResult.exitCode != 0) return [];
+
+    final pkgFiles = (findResult.stdout as String)
+        .split('\n')
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (pkgFiles.isEmpty) return [];
+
+    if (verbose) print('skopeo : ${pkgFiles.length} package.json npm trouvés…');
+
+    final packages = <Package>[];
+    final seen = <String>{};
+
+    for (final filePath in pkgFiles) {
+      String content;
+      try {
+        content = await File(filePath).readAsString();
+      } catch (_) {
+        continue;
+      }
+
+      Map<String, dynamic> json;
+      try {
+        json = jsonDecode(content) as Map<String, dynamic>;
+      } catch (_) {
+        continue;
+      }
+
+      final name = (json['name'] as String?) ?? '';
+      final version = (json['version'] as String?) ?? '';
+      if (name.isEmpty || version.isEmpty) continue;
+      if (json['private'] == true) continue;
+
+      if (!seen.add('npm:$name:$version')) continue;
+
+      final license_ = switch (json['license']) {
+        final String s => s,
+        final Map<dynamic, dynamic> m => (m['type'] as String?) ?? '',
+        _ => '',
+      };
+      final description = (json['description'] as String?) ?? '';
+      final homepage = (json['homepage'] as String?) ?? '';
+      final author = switch (json['author']) {
+        final String s => s,
+        final Map<dynamic, dynamic> m => (m['name'] as String?) ?? '',
+        _ => '',
+      };
+
+      packages.add(OciPackage(
+        name: name,
+        version: version,
+        license: license_,
+        vendor: author,
+        url: homepage,
+        summary: description,
+        arch: '',
+        sourceRef: imageRef,
+        imageRef: imageRef,
+        requires: [],
+        provides: [name],
+        packageType: 'npm',
+      ));
+    }
+
+    if (verbose && packages.isNotEmpty) {
+      print('skopeo : ${packages.length} paquets npm extraits');
     }
     return packages;
   }
