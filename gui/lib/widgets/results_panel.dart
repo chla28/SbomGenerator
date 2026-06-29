@@ -203,6 +203,8 @@ class _ResultsPanelState extends State<ResultsPanel>
           color: theme.colorScheme.surfaceContainerLow,
           child: TabBar(
             controller: _tabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(
                 child: Row(
