@@ -207,12 +207,22 @@ void main() {
 
       final pkgs = await OciParser().parseImage(_keycloakTar, 'skopeo');
 
-      expect(pkgs.length, greaterThan(5));
-      expect(pkgs.every((p) => p.packageType == 'rpm'), isTrue);
+      // Keycloak = paquets RPM (OS) + paquets Java/Maven (application)
+      expect(pkgs.length, greaterThan(40));
 
-      final names = pkgs.map((p) => p.name).toSet();
-      expect(names, containsAll(['setup', 'filesystem', 'basesystem']));
-      expect(names, isNot(contains('gpg-pubkey')));
+      final rpmPkgs = pkgs.where((p) => p.packageType == 'rpm').toList();
+      final javaPkgs =
+          pkgs.where((p) => p.packageType == 'java').toList();
+      expect(rpmPkgs, isNotEmpty, reason: 'Paquets RPM UBI 9 attendus');
+      expect(javaPkgs, isNotEmpty, reason: 'JARs Keycloak attendus');
+
+      final rpmNames = rpmPkgs.map((p) => p.name).toSet();
+      expect(rpmNames, containsAll(['setup', 'filesystem', 'basesystem']));
+      expect(rpmNames, isNot(contains('gpg-pubkey')));
+
+      // Quelques artefacts Maven attendus
+      final javaNames = javaPkgs.map((p) => p.name).toSet();
+      expect(javaNames, contains('snakeyaml'));
     });
   });
 }

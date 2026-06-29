@@ -320,6 +320,9 @@ class OciParser {
         packages.addAll(await _parseApkInstalled(apkDb, imageRef));
       }
 
+      final mavenPkgs = await _parseMavenJars(fsDir, imageRef, verbose: verbose);
+      packages.addAll(mavenPkgs);
+
       if (packages.isEmpty && verbose) {
         stderr.writeln(
             'skopeo : aucune base de paquets reconnue dans les layers.');
@@ -525,6 +528,131 @@ class OciParser {
         provides: [name],
         packageType: 'rpm',
       ));
+    }
+    return packages;
+  }
+
+  Future<List<Package>> _parseMavenJars(String rootDir, String imageRef,
+      {bool verbose = false}) async {
+    final findResult =
+        await Process.run('find', [rootDir, '-name', '*.jar', '-type', 'f']);
+    if (findResult.exitCode != 0) return [];
+
+    final jarFiles = (findResult.stdout as String)
+        .split('\n')
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (jarFiles.isEmpty) return [];
+
+    if (verbose) {
+      print('skopeo : ${jarFiles.length} JARs trouvés, extraction Maven…');
+    }
+
+    final packages = <Package>[];
+    final seen = <String>{};
+
+    // Regex : premier tiret suivi d'un chiffre dans le nom de fichier → début de version.
+    // Format Quarkus/Red Hat : <groupId>.<artifactId>-<version>.jar
+    final _versionSep = RegExp(r'-(\d)');
+
+    for (final jarPath in jarFiles) {
+      bool foundViaPom = false;
+
+      final result = await Process.run(
+          'unzip', ['-p', jarPath, 'META-INF/maven/*/*/pom.properties']);
+
+      if (result.exitCode == 0) {
+        final content = result.stdout as String;
+        if (content.trim().isNotEmpty) {
+          foundViaPom = true;
+          String? groupId, artifactId, version;
+
+          void flush() {
+            if (groupId == null || artifactId == null || version == null) return;
+            if (groupId!.isEmpty || artifactId!.isEmpty || version!.isEmpty) return;
+            final key = '$groupId:$artifactId:$version';
+            if (!seen.add(key)) return;
+            packages.add(OciPackage(
+              name: artifactId!,
+              version: version!,
+              license: '',
+              vendor: '',
+              url: '',
+              summary: '',
+              arch: '',
+              sourceRef: imageRef,
+              imageRef: imageRef,
+              requires: [],
+              provides: [artifactId!],
+              packageType: 'java',
+              purlOverride:
+                  'pkg:maven/${Uri.encodeComponent(groupId!)}/${Uri.encodeComponent(artifactId!)}@${Uri.encodeComponent(version!)}',
+            ));
+            groupId = artifactId = version = null;
+          }
+
+          for (final rawLine in content.split('\n')) {
+            final line = rawLine.trim();
+            if (line.startsWith('#')) continue;
+            if (line.isEmpty) {
+              flush();
+              continue;
+            }
+            final eq = line.indexOf('=');
+            if (eq <= 0) continue;
+            final key = line.substring(0, eq).trim();
+            final value = line.substring(eq + 1).trim();
+            switch (key) {
+              case 'groupId':
+                groupId = value;
+              case 'artifactId':
+                artifactId = value;
+              case 'version':
+                version = value;
+            }
+          }
+          flush();
+        }
+      }
+
+      // Fallback : pas de pom.properties → déduire les coordonnées depuis le nom
+      // de fichier (convention <groupId>.<artifactId>-<version>.jar).
+      if (!foundViaPom) {
+        final basename = jarPath.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
+        final match = _versionSep.firstMatch(basename);
+        if (match != null) {
+          final prefix = basename.substring(0, match.start);
+          final version = basename.substring(match.start + 1);
+          final lastDot = prefix.lastIndexOf('.');
+          if (lastDot > 0) {
+            final groupId = prefix.substring(0, lastDot);
+            final artifactId = prefix.substring(lastDot + 1);
+            final key = '$groupId:$artifactId:$version';
+            if (seen.add(key)) {
+              packages.add(OciPackage(
+                name: artifactId,
+                version: version,
+                license: '',
+                vendor: '',
+                url: '',
+                summary: '',
+                arch: '',
+                sourceRef: imageRef,
+                imageRef: imageRef,
+                requires: [],
+                provides: [artifactId],
+                packageType: 'java',
+                purlOverride:
+                    'pkg:maven/${Uri.encodeComponent(groupId)}/${Uri.encodeComponent(artifactId)}@${Uri.encodeComponent(version)}',
+              ));
+            }
+          }
+        }
+      }
+    }
+
+    if (verbose && packages.isNotEmpty) {
+      print('skopeo : ${packages.length} paquets Maven extraits');
     }
     return packages;
   }
