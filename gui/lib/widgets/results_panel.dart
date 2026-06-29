@@ -13,6 +13,7 @@ import 'osv_panel.dart';
 import 'quality_panel.dart';
 import 'sbom_diff_panel.dart';
 import 'sbom_tree_panel.dart';
+import 'sbom_viewer_panel.dart';
 import 'trivy_panel.dart';
 
 class ResultsPanel extends StatefulWidget {
@@ -72,7 +73,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 10, vsync: this);
+    _tabs = TabController(length: 11, vsync: this);
   }
 
   @override
@@ -308,6 +309,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.manage_search_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Visionneuse'),
+                  ],
+                ),
+              ),
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -416,7 +427,10 @@ class _ResultsPanelState extends State<ResultsPanel>
               // Tab 8 : Comparaison SBOM
               SbomDiffPanel(outputFiles: widget.outputFiles),
 
-              // Tab 9 : Aperçu SBOM
+              // Tab 9 : Visionneuse SBOM
+              const SbomViewerPanel(),
+
+              // Tab 10 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,
