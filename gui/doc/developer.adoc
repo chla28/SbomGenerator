@@ -7,7 +7,7 @@
 :source-highlighter: rouge
 :rouge-style: monokai
 :experimental:
-:docdate: 2026-06-21
+:docdate: 2026-06-29
 
 == Introduction
 
@@ -215,9 +215,33 @@ via `SettingsService`. Les champs *non* persistés (trop contextuels) sont
 Champ ajouté : `bool enableSbomqs` (défaut : `false`) — active l'analyse
 qualité automatique après génération.
 
-Les constantes `allFormats`, `formatLabels` et `_formatExtensions` sont
-définies ici : elles servent à générer dynamiquement les checkboxes de format
-dans `ConfigPanel`.
+Champs ajoutés pour OCI :
+
+* `String imageRef` (défaut : `''`) — référence à une image OCI (`--image`) ;
+  vide signifie que l'analyse OCI est désactivée.
+* `String ociTool` (défaut : `'syft'`) — backend OCI choisi (`--oci-tool`).
+  Valeurs : `'syft'`, `'trivy'`, `'skopeo'`.
+
+Ces deux champs sont inclus dans `toJson()` / `fromJson()` (clés `'imageRef'`
+et `'ociTool'`) et donc persistés entre sessions. Ils sont chargés par
+`_loadProfileInto()` dans `_ProfilesDialog`.
+
+Dans `toArgs()` :
+
+[source,dart]
+----
+if (imageRef.isNotEmpty) {
+  args.addAll(['--image', imageRef]);
+  args.addAll(['--oci-tool', ociTool]);
+}
+----
+
+Constantes exposées :
+
+* `allFormats`, `formatLabels`, `_formatExtensions` — checkboxes de format
+* `allOciTools` (`['syft', 'trivy', 'skopeo']`) — liste des backends OCI
+* `ociToolLabels` (`{'syft': 'Syft', 'trivy': 'Trivy', 'skopeo': 'Skopeo'}`) —
+  libellés des boutons radio du sélecteur d'outil OCI
 
 ==== `models/app_themes.dart` — Thèmes de couleur
 
@@ -572,6 +596,27 @@ est remplacée par un `PopupMenuButton<bool>` qui propose :
 
 * *Type filtré (extensions)* — appelle `onPick`
 * *Tous les fichiers* — appelle `onPickAll`
+
+*Section Image OCI* : insérée entre le champ fichier d'entrée et la section
+Sortie. Elle comprend deux éléments :
+
+. *Champ Image OCI* — `_imageCtrl` / `TextEditingController` lié à `c.imageRef`.
+  Le bouton 📂 à droite appelle `_pickDir()` pour sélectionner un répertoire OCI
+  layout (le type `registry` et `tar` sont saisis manuellement).
+. *Sélecteur d'outil OCI* — `_OciToolSelector` (widget privé) affiché uniquement
+  si `c.imageRef.isNotEmpty`. Propose trois `RadioListTile` (`syft`, `trivy`,
+  `skopeo`) et met à jour `c.ociTool` via `setState`.
+
+La validation du champ fichier d'entrée (`--input`) est assouplie : l'erreur
+"Requis" ne s'affiche que si `imageRef` est vide :
+
+[source,dart]
+----
+validator: (v) => (v == null || v.trim().isEmpty) &&
+    _imageCtrl.text.trim().isEmpty
+        ? 'Requis (ou spécifiez une image OCI)'
+        : null,
+----
 
 *Prévisualisation de la commande* : le widget `_CommandPreview` est inséré
 entre le bouton *▶ Générer le SBOM* et la fin du formulaire. Il lit

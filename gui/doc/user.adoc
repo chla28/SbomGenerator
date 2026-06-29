@@ -5,7 +5,7 @@
 :sectnums:
 :icons: font
 :experimental:
-:docdate: 2026-06-21
+:docdate: 2026-06-29
 
 == Introduction
 
@@ -65,7 +65,7 @@ les unifie automatiquement : toute sévérité `MODERATE` est affichée comme
 *SBOM Generator GUI* est une interface graphique de bureau Linux qui orchestre
 des outils en ligne de commande :
 
-* `sbom-generator` : génère des fichiers SBOM depuis une liste de paquets
+* `sbom-generator` : génère des fichiers SBOM depuis une liste de paquets ou une image OCI
 * `grype` : analyse les SBOM générés pour détecter les vulnérabilités CVE (Anchore)
 * `osv-scanner` : analyse les SBOM pour détecter les vulnérabilités CVE (Google)
 * `trivy` : analyse les SBOM pour détecter les vulnérabilités CVE (Aqua Security)
@@ -94,6 +94,14 @@ Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 |Oui
 |Génération des fichiers SBOM
 
+|`syft`
+|Non
+|Analyse d'images OCI (onglet Configuration — outil OCI par défaut)
+
+|`trivy` (analyse CVE)
+|Non
+|Analyse des vulnérabilités CVE (onglet Trivy)
+
 |`grype`
 |Non
 |Analyse des vulnérabilités CVE (onglet Grype)
@@ -120,11 +128,24 @@ Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 [source,bash]
 ----
 sbom-generator --version
+syft version
 grype version
 osv-scanner --version
 trivy --version
 asciidoctor-pdf --version
 sbomqs version
+----
+
+==== Installer syft (optionnel)
+
+[source,bash]
+----
+# Script officiel Anchore
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Vérifier
+syft version
 ----
 
 ==== Installer grype
@@ -305,6 +326,59 @@ Le fichier doit contenir *un élément par ligne*. Les types acceptés sont :
 |===
 
 Un seul fichier d'entrée peut contenir des lignes de types différents.
+
+NOTE: Le champ *Fichier d'entrée* devient optionnel si une *Image OCI* est
+spécifiée dans la section suivante — les deux sources peuvent être combinées.
+
+=== Section Image OCI
+
+==== Image OCI (`--image`)
+
+Référence à une image OCI à analyser. Trois formats sont acceptés :
+
+[cols="2,3,2", options="header"]
+|===
+|Format |Description |Exemple
+
+|Registre
+|Image Docker Hub ou registre privé
+|`nginx:latest`
+
+|Archive tar
+|Export `docker save` ou `skopeo copy docker-archive:`
+|`/path/ubuntu.tar`
+
+|OCI layout
+|Répertoire contenant `index.json`
+|`/path/oci_dir/`
+|===
+
+Le bouton 📂 à droite du champ permet de sélectionner un *répertoire OCI layout*.
+Pour les images de registre ou les archives tar, saisissez la référence manuellement.
+
+Si le champ est vide, l'analyse OCI est désactivée.
+
+==== Outil OCI (`--oci-tool`)
+
+Visible uniquement lorsque le champ *Image OCI* est rempli. Sélectionnez le
+backend d'analyse :
+
+[cols="1,2,2", options="header"]
+|===
+|Outil |Description |Prérequis
+
+|Syft (défaut)
+|Anchore Syft — tous types de paquets (deb, rpm, apk, pypi, npm, go, java…)
+|`syft` dans le PATH
+
+|Trivy
+|Aqua Trivy — tous types de paquets
+|`trivy` dans le PATH
+
+|Skopeo
+|Extraction manuelle des layers — dpkg, RPM et APK uniquement
+|`skopeo` et `tar` dans le PATH
+|===
 
 === Section Sortie
 
@@ -1594,6 +1668,39 @@ change. La préférence est également sauvegardée.
 Utilisez ↗ pour ouvrir le fichier JSON généré.
 |===
 
+=== Scénario 1b — Générer un SBOM depuis une image OCI
+
+[cols="1,4"]
+|===
+|Étape |Action
+
+|1
+|Assurez-vous que `syft` (ou `trivy` / `skopeo`) est installé
+(voir <<_installer_syft_optionnel>>)
+
+|2
+|Dans le champ *Image OCI*, saisissez la référence : `nginx:latest`,
+`/path/ubuntu.tar`, ou sélectionnez un répertoire OCI layout via 📂
+
+|3
+|Sélectionnez le backend OCI si nécessaire (Syft est le défaut)
+
+|4
+|Dans le champ *Chemin de base*, saisissez le chemin de sortie : `sbom`
+
+|5
+|Cochez le(s) format(s) souhaité(s) (CycloneDX recommandé)
+
+|6
+|Cliquez sur *▶ Générer le SBOM*. L'interface affiche d'abord le message
+`Analyse de l'image OCI…` pendant que l'outil analyse l'image, puis lance
+la génération du SBOM.
+
+|7
+|À la fin, l'onglet *Résultats* s'ouvre. Continuez avec Grype pour analyser
+les vulnérabilités (onglet Grype — le fichier SBOM est pré-rempli).
+|===
+
 === Scénario 2 — Générer un SBOM puis analyser les vulnérabilités avec Grype
 
 Suite du scénario 1 :
@@ -1852,6 +1959,38 @@ un dossier du PATH ou créez un lien symbolique :
 ----
 ln -s /chemin/vers/sbom-generator /usr/local/bin/sbom-generator
 ----
+
+=== `syft` / `skopeo` introuvable
+
+*Symptôme* : la génération échoue avec le message
+`syft introuvable ou non fonctionnel — requis pour --image.`
+
+*Solution* : installez l'outil manquant et vérifiez qu'il est dans le PATH :
+
+[source,bash]
+----
+# Syft
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+syft version
+
+# Skopeo (Fedora/RHEL)
+sudo dnf install skopeo
+skopeo --version
+----
+
+=== Échec de l'analyse OCI
+
+*Symptôme* : `Échec de l'analyse OCI : …` dans le journal.
+
+*Causes possibles et solutions :*
+
+* *Image de registre inaccessible* : vérifiez la connexion réseau et
+  l'authentification (`docker login` ou `skopeo login`).
+* *Archive tar corrompue ou format non reconnu* : regénérez l'archive
+  avec `docker save <image> -o /path/image.tar`.
+* *Répertoire OCI layout invalide* : vérifiez que `index.json` est présent
+  à la racine du répertoire.
 
 === `grype` introuvable
 

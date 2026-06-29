@@ -6,7 +6,7 @@
 :icons: font
 :source-highlighter: rouge
 :rouge-style: monokai
-:docdate: 2026-06-19
+:docdate: 2026-06-29
 
 Ce document explique le fonctionnement interne du code pour une prise en main rapide.
 
@@ -15,27 +15,30 @@ Ce document explique le fonctionnement interne du code pour une prise en main ra
 Le programme suit un pipeline concurrent :
 
 ....
-Fichier d'entrée (.txt)
-        │
+Fichier d'entrée (.txt)           Image OCI (--image)
+        │                                  │
         ├─ lignes .txt ──► RequirementsParser (pur Dart, pré-expansion)
-        │
-        ▼
-┌────────────────────────────────────────────┐
-│  bin/sbom_generator.dart                   │  1. Lecture + validation CLI
-│  (main + _Semaphore + _printProgress)      │  2. Détection du type par extension
-│                                            │  3. Dispatch concurrent (--concurrency N)
-│                                            │  4. Déduplication par bomRef
-└──┬──────┬──────┬──────┬──────┬─────────────┘
-   │      │      │      │      │
-   ▼      ▼      ▼      ▼      ▼
-  Rpm   Wheel   Tar   Zip   Deb
-Parser Parser Parser Parser Parser
+        │                                  │
+        ▼                                  ▼
+┌────────────────────────────────────────────────────────────┐
+│  bin/sbom_generator.dart                                   │
+│  (main + _Semaphore + _printProgress)                      │
+│  1. Lecture + validation CLI (--input et/ou --image)       │
+│  2. Analyse OCI si --image (OciParser via syft/trivy/skopeo│
+│  3. Détection du type par extension                        │
+│  4. Dispatch concurrent (--concurrency N)                  │
+│  5. Déduplication par bomRef                               │
+└──┬──────┬──────┬──────┬──────┬──────────────────┬──────────┘
+   │      │      │      │      │                  │
+   ▼      ▼      ▼      ▼      ▼                  ▼
+  Rpm   Wheel   Tar   Zip   Deb                 Oci
+Parser Parser Parser Parser Parser             Parser
                └──┬───┘
                   ▼
           archive_helpers.dart
     (parseArchiveFilename, identifyArchiveLicense)
 
-              │  List<Package>  (RpmPackage | WheelPackage | DebPackage)
+              │  List<Package>  (RpmPackage | WheelPackage | DebPackage | OciPackage)
               ▼
    RpmParser.buildDependencies()
               │  List<PackageDependency>
@@ -57,7 +60,7 @@ Parser Parser Parser Parser Parser
 ....
 
 Tous les générateurs travaillent sur `List<Package>` — la classe abstraite
-commune à `RpmPackage`, `WheelPackage` et `DebPackage`.
+commune à `RpmPackage`, `WheelPackage`, `DebPackage` et `OciPackage`.
 
 == `lib/models.dart` — Hiérarchie de types
 
@@ -93,7 +96,7 @@ abstract class Package {
 
 La fonction utilitaire de bibliothèque `_safeId(String s)` remplace tout
 caractère hors `[a-zA-Z0-9._-]` par `-`. Elle est utilisée dans les
-implémentations de `bomRef` et `spdxId`.
+implémentations de `bomRef` et `spdxId` de tous les types de paquets.
 
 === `RpmPackage extends Package`
 
@@ -228,6 +231,72 @@ Identifiants calculés :
 |`packageType`
 |`'deb'`
 |===
+
+=== `OciPackage extends Package`
+
+Représente un paquet extrait d'une image OCI par `OciParser`.
+Le champ `packageType` reflète l'écosystème détecté par l'outil d'analyse :
+
+[cols="1,2", options="header"]
+|===
+|`packageType` |Écosystème
+
+|`'rpm'`
+|Paquet RPM (image Red Hat / Fedora)
+
+|`'deb'`
+|Paquet Debian (image Ubuntu / Debian)
+
+|`'apk'`
+|Paquet APK (image Alpine)
+
+|`'pypi'`
+|Paquet Python
+
+|`'npm'`
+|Paquet Node.js
+
+|`'go'`
+|Module Go
+
+|`'java'`
+|Archive Java (JAR/Maven)
+
+|`'nuget'`
+|Paquet .NET
+
+|`'cargo'`
+|Crate Rust
+
+|`'generic'`
+|Tout autre type
+|===
+
+Champ supplémentaire `purlOverride` : PURL fourni directement par l'outil
+d'analyse (syft/trivy) ; si non vide, utilisé tel quel sans reconstruction.
+
+Identifiants calculés :
+
+[cols="1,2", options="header"]
+|===
+|Getter |Exemple
+
+|`purl`
+|`purlOverride` si non vide, sinon construit selon `packageType`
+(`pkg:rpm/<name>@<ver>?arch=<arch>`, `pkg:apk/alpine/<name>@<ver>`, etc.)
+
+|`bomRef`
+|`pkg-oci-<type>-<name>-<version>`
+
+|`spdxId`
+|`SPDXRef-oci-<name>-<version>`
+
+|`fullVersion`
+|`version` brut (pas de release ni epoch)
+|===
+
+Le champ `imageRef` conserve la référence OCI originale (registre, chemin tar,
+ou répertoire layout) pour traçabilité.
 
 === `PackageDependency`
 
@@ -685,6 +754,104 @@ Découpe sur `,` puis sur `|` (alternatives), retire les contraintes de version
 `(>= …)`, normalise les espaces. Exemple : `"libc6 (>= 2.17) | libc6-amd64"`
 → `["libc6", "libc6-amd64"]`.
 
+== `lib/oci_parser.dart` — Analyse d'images OCI
+
+=== `OciRefType` (enum)
+
+[source,dart]
+----
+enum OciRefType { registry, tar, ociLayout }
+----
+
+Détecté automatiquement par `OciParser.detectRefType(String ref)` :
+
+[cols="1,2,2", options="header"]
+|===
+|Valeur |Condition de détection |Exemple
+
+|`registry`
+|(par défaut)
+|`nginx:latest`, `ubuntu@sha256:…`
+
+|`tar`
+|extension `.tar` ou `.tar.gz`
+|`/path/ubuntu.tar`
+
+|`ociLayout`
+|répertoire contenant `index.json`
+|`/path/oci_dir/`
+|===
+
+=== `OciParser`
+
+Point d'entrée : `Future<List<Package>> parseImage(String imageRef, String tool, {bool verbose})`
+
+Dispatch vers l'un des trois backends selon `tool` :
+
+[cols="1,3", options="header"]
+|===
+|Backend |Mécanisme
+
+|`'syft'`
+|`syft <ref> --output json` ; lit `artifacts[].{name, version, type, purl, licenses, metadata}`
+
+|`'trivy'`
+|`trivy image --format json --quiet --list-all-pkgs <ref>` ;
+lit `Results[].{Type, Packages[]}` ; réessai sans `--list-all-pkgs` si version ancienne
+
+|`'skopeo'`
+|Copie via `skopeo copy` en OCI layout → extraction des layers tar →
+détection de la base de paquets (dpkg/status, rpm --root, lib/apk/db/installed)
+|===
+
+=== Backend Syft (`_parseSyft`)
+
+La référence est adaptée selon `OciRefType` :
+
+[cols="1,2", options="header"]
+|===
+|Type |Référence passée à syft
+
+|`tar`
+|`docker-archive:<path>`
+
+|`ociLayout`
+|`oci-dir:<path>`
+
+|`registry`
+|référence telle quelle
+|===
+
+Les licences syft sont des objets `{spdxExpression, value}` — `spdxExpression`
+est préféré si non vide, sinon `value`. Plusieurs licences sont jointes par
+`' AND '`.
+
+=== Backend Trivy (`_parseTrivy`)
+
+Lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et le normalise via
+`_normalizeTrivyType()` vers les écosystèmes de `packageType` (`deb`, `rpm`,
+`pypi`, etc.). Le PURL est lu depuis `Identifier.PURL` (trivy ≥ 0.38).
+
+=== Backend Skopeo (`_parseSkopeo`)
+
+*Phases :*
+
+. `skopeo copy <src> oci:<tmpDir>:image` (sauf si `ociLayout` déjà présent)
+. `_extractOciLayers()` : lit `index.json` → premier manifest → liste des
+  layers → `tar --extract` séquentiel dans `rootfs/`
+. Détection de la base de paquets installée :
+  ** `var/lib/dpkg/status` → `_parseDpkgStatus()` (RFC 822 ligne par ligne)
+  ** `var/lib/rpm` → `_parseRpmRoot()` (`rpm --root <dir> -qa --queryformat …`)
+  ** `lib/apk/db/installed` → `_parseApkInstalled()` (format clé:valeur APK)
+. Suppression du répertoire temporaire (`chmod -R u+rwX` avant `rm -rf`
+  pour les fichiers avec permissions restrictives dans certains layers)
+
+[NOTE]
+====
+Seuls les paquets au statut `installed` dans `dpkg/status` sont inclus.
+Les entrées `gpg-pubkey` du registre RPM sont ignorées.
+====
+
 == `lib/requirements_parser.dart` — Parsing requirements.txt Python
 
 Parser *pur Dart*, sans subprocess. Retourne `List<WheelPackage>`.
@@ -737,6 +904,52 @@ packages.addAll(preloadedPackages);
 ====
 
 == `bin/sbom_generator.dart` — Point d'entrée
+
+=== Option `--image` / `-I` _(nouveau)_
+
+Référence à une image OCI à analyser. Trois formats acceptés :
+
+[cols="1,2,2", options="header"]
+|===
+|Format |Description |Exemple
+
+|Registre
+|Image Docker Hub ou registre privé
+|`nginx:latest`, `ubuntu@sha256:…`
+
+|Archive tar
+|Export `docker save` ou `skopeo copy docker-archive:`
+|`/path/ubuntu.tar`
+
+|OCI layout
+|Répertoire contenant `index.json`
+|`/path/oci_dir/`
+|===
+
+*`--input` devient optionnel* lorsque `--image` est fourni. Les deux sources
+peuvent être combinées : les paquets OCI et les paquets de la liste sont
+fusionnés avant déduplication et génération.
+
+L'outil OCI est vérifié au démarrage (`<tool> --version`) ; l'erreur est
+fatale si l'outil est absent.
+
+=== Option `--oci-tool` _(nouveau)_
+
+Backend d'analyse OCI, utilisé en conjonction avec `--image`. Valeurs valides :
+
+[cols="1,3", options="header"]
+|===
+|Valeur |Description
+
+|`syft` _(défaut)_
+|Anchore Syft — tous types de paquets (deb, rpm, apk, pypi, npm, go, java…)
+
+|`trivy`
+|Aqua Trivy — tous types de paquets
+
+|`skopeo`
+|Skopeo + extraction manuelle des layers — dpkg, RPM et APK uniquement
+|===
 
 === Option `--rpm-dir` / `-d`
 
@@ -912,6 +1125,13 @@ Les lignes `.txt` sont extraites de la liste principale avant la boucle
 concurrente et pré-parsées par `RequirementsParser`. Leurs paquets sont
 accumulés dans `preloadedPackages` et ajoutés après la boucle.
 
+=== Analyse OCI (avant le dispatch par extension)
+
+Si `--image` est fourni, `OciParser().parseImage(imageRef, ociTool)` est appelé
+*en dehors* de la boucle concurrente (bloquant mais unique). Les `OciPackage`
+produits sont ajoutés à `ociPackages` et fusionnés avec les paquets de la liste
+après la boucle, avant la déduplication.
+
 === Dispatch par extension _(étendu)_
 
 [source,dart]
@@ -931,6 +1151,7 @@ if (ref.endsWith('.whl')) {
 
 === Vérification des outils
 
+* `syft` / `trivy` / `skopeo` : vérifié (`<tool> --version`) si `--image` est fourni
 * `rpm` : vérifié si la liste contient au moins une référence non-`.whl`, non-tar,
   non-`.zip`, non-`.deb`
 * `python3` : vérifié si la liste contient au moins un `.whl`, tar ou `.zip`
@@ -1165,6 +1386,20 @@ ambiguïté avec les séparateurs de cellules AsciiDoc.
                                                   packageType="pypi")
 4. _parseLine("flask") → WheelPackage(name="flask", version="", packageType="pypi")
 5. Résultats ajoutés à preloadedPackages (puis packages après boucle principale)
+....
+
+=== Image OCI : `nginx:latest` via syft
+
+....
+1. Détection OCI : --image nginx:latest (OciRefType.registry)
+2. Process.run('syft', ['nginx:latest', '--output', 'json'])
+3. _parseSyft() parcourt artifacts[] :
+   ex. {name: "bash", version: "5.1.8", type: "rpm", purl: "pkg:rpm/rhel/bash@5.1.8",
+        licenses: [{spdxExpression: "GPL-3.0-or-later"}], metadata: {Arch: "x86_64"}}
+4. OciPackage(name="bash", version="5.1.8", packageType="rpm",
+              purlOverride="pkg:rpm/rhel/bash@5.1.8",
+              bomRef="pkg-oci-rpm-bash-5.1.8")
+5. Résultats ajoutés à ociPackages → fusionnés dans packages avant déduplication
 ....
 
 == Étendre le code
@@ -1447,7 +1682,26 @@ Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` et
 |Requirements.txt
 |0 subprocess
 |< 1 ms
+
+|Image OCI via `syft`
+|1 × `syft` (toute l'image en une passe)
+|1–30 s selon l'image
+
+|Image OCI via `trivy`
+|1 × `trivy image`
+|1–30 s (+ mise à jour BDD si nécessaire)
+
+|Image OCI via `skopeo`
+|1 × `skopeo copy` + N × `tar` (layers) + 1 × `rpm`/`dpkg`/`apk`
+|5–120 s selon la taille de l'image
 |===
+
+[NOTE]
+====
+L'analyse OCI se fait *en dehors* de la boucle concurrente `_Semaphore` :
+c'est un appel bloquant unique. Le `--concurrency` ne s'applique qu'aux
+paquets du fichier `--input`.
+====
 
 La boucle est parallélisée via `Future.wait()` + `_Semaphore(--concurrency)`.
 Avec `--concurrency 4` (défaut) sur une grande liste, le gain est ~4× par rapport
@@ -1495,20 +1749,31 @@ entrées sont lancées simultanément.
 * *Pas de vérification d'existence des fichiers* : si un chemin `.whl`, `.tar.gz`,
   `.zip` ou `.deb` n'existe pas, le subprocess échoue et le paquet est compté comme
   échec.
+* *Licences absentes dans les images OCI (skopeo)* : `_parseDpkgStatus` ne lit pas
+  les fichiers `copyright` ; `_parseRpmRoot` ne dispose que des champs `%{LICENSE}`
+  du registre RPM — même lacune qu'avec `DebPackage`.
+* *Analyse OCI non parallélisée* : l'appel `OciParser.parseImage()` est séquentiel
+  et bloquant ; `--concurrency` ne s'applique qu'aux entrées de `--input`.
 
 == Flux d'appel (call graph simplifié)
 
 ....
 main()
   ├── ArgParser.parse()                       (--concurrency validé ≥ 0)
-  ├── File.readAsLines()
+  ├── File.readAsLines()                      [si --input fourni]
   ├── [pré-expansion .txt]
   │     └── RequirementsParser.parseFile() → preloadedPackages
   ├── [indexation --rpm-dir]                  [si --rpm-dir spécifié]
   │     └── dir.list(recursive: true) → rpmExactIndex + rpmNameIndex
-  ├── Process.run('rpm', ['--version'])       [si RPM présents]
-  ├── Process.run('python3', ['--version'])   [si .whl, tar ou .zip présents]
-  ├── Process.run('dpkg-deb', ['--version'])  [si .deb présents]
+  ├── Process.run('<ociTool>', ['--version'])  [si --image fourni]
+  ├── OciParser().parseImage(imageRef, ociTool)  [si --image fourni]
+  │     ├── _parseSyft()   → Process.run('syft', [ref, '--output', 'json'])
+  │     ├── _parseTrivy()  → Process.run('trivy', ['image', '--format', 'json', …])
+  │     └── _parseSkopeo() → Process.run('skopeo', ['copy', …])
+  │                          + _extractOciLayers() + _parseDpkgStatus/RpmRoot/ApkInstalled()
+  ├── Process.run('rpm', ['--version'])       [si RPM dans --input]
+  ├── Process.run('python3', ['--version'])   [si .whl, tar ou .zip dans --input]
+  ├── Process.run('dpkg-deb', ['--version'])  [si .deb dans --input]
   ├── Future.wait(List.generate(N)) via _Semaphore(--concurrency)
   │     ├── RpmParser.parsePackage()          [si RPM]
   │     │     └── Future.wait([rpm-queryformat, rpm-requires, rpm-provides])
@@ -1523,6 +1788,7 @@ main()
   │     └── DebParser.parseDebFile()          [si .deb]
   │           └── Process.run('dpkg-deb', ['-f', path])
   ├── packages.addAll(preloadedPackages)
+  ├── packages.addAll(ociPackages)
   ├── [déduplication par bomRef]
   ├── RpmParser.buildDependencies(List<Package>)
   └── <Generator>.writeToFile(List<Package>, …)
@@ -1531,6 +1797,7 @@ main()
         │     ├── if (pkg is RpmPackage) { … RPM-specific … }
         │     ├── else if (pkg is WheelPackage) { … Python/source … }
         │     └── else if (pkg is DebPackage) { … deb-specific … }
+        │         [OciPackage : champs communs Package, pas de branche spécifique]
         └── File.writeAsString()
 ....
 
@@ -1586,7 +1853,7 @@ automatiquement si `python3` est absent.
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
 * [ ] `dart test` — tous les 68 tests verts
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
-* [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + requirements.txt
+* [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + requirements.txt + `--image`
 * [ ] Si modification de `--rpm-dir` : vérifier résolution exacte (NEVRA), résolution
   par nom, avertissement multi-match, fallback `rpm -q` si absent
 * [ ] Le SBOM CycloneDX passe `sbom_schema_valid: 10.0` dans sbomqs
@@ -1601,6 +1868,8 @@ automatiquement si `python3` est absent.
   `python3dist(lxml)`
 * [ ] Si ajout d'un type de paquet : mettre à jour `models.dart`, tous les générateurs
   (`if (pkg is …)`), `bin/sbom_generator.dart` (dispatch + outil check) et ce document
+* [ ] Si modification de `OciParser` ou `--image`/`--oci-tool` : tester les trois backends
+  (syft, trivy, skopeo) avec registre, tar et OCI layout
 
 == Dépendances externes
 
@@ -1634,6 +1903,15 @@ Outils système requis à l'exécution :
 
 |`dpkg-deb`
 |paquets Debian `.deb`
+
+|`syft`
+|images OCI avec `--oci-tool syft` (défaut)
+
+|`trivy`
+|images OCI avec `--oci-tool trivy`
+
+|`skopeo` + `tar`
+|images OCI avec `--oci-tool skopeo`
 |===
 
 == Compilation et déploiement

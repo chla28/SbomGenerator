@@ -6,10 +6,10 @@
 :icons: font
 :source-highlighter: rouge
 :rouge-style: monokai
-:docdate: 2026-06-19
+:docdate: 2026-06-29
 
-Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets.
-Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian* et *requirements.txt*.
+Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *requirements.txt* et *images OCI* (via syft, trivy ou skopeo).
 Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown* et *AsciiDoc*.
 
 == Prérequis
@@ -37,6 +37,21 @@ Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSO
 |—
 |`.deb`
 |Lecture des métadonnées des paquets Debian
+
+|`syft`
+|—
+|`--image` avec `--oci-tool syft` (défaut)
+|Analyse d'images OCI — tous types de paquets
+
+|`trivy`
+|—
+|`--image` avec `--oci-tool trivy`
+|Analyse d'images OCI — tous types de paquets
+
+|`skopeo` + `tar`
+|—
+|`--image` avec `--oci-tool skopeo`
+|Analyse d'images OCI — dpkg, RPM et APK
 |===
 
 Vérification :
@@ -47,6 +62,9 @@ dart --version
 rpm --version
 python3 --version
 dpkg-deb --version
+syft version      # si --oci-tool syft
+trivy --version   # si --oci-tool trivy
+skopeo --version  # si --oci-tool skopeo
 ----
 
 == Installation
@@ -74,6 +92,8 @@ Le binaire `sbom_generator` est autonome, aucun SDK Dart requis pour l'exécuter
 
 ....
 sbom_generator -i <fichier> [options]
+sbom_generator -I <image-oci> [options]
+sbom_generator -i <fichier> -I <image-oci> [options]
 ....
 
 === Options
@@ -84,8 +104,18 @@ sbom_generator -i <fichier> [options]
 
 |`--input <fichier>`
 |`-i`
-|_(requis)_
+|_(requis si pas de --image)_
 |Fichier contenant la liste des paquets/archives (une référence par ligne)
+
+|`--image <référence>`
+|`-I`
+|_(requis si pas de --input)_
+|Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/oci_dir/`
+
+|`--oci-tool <outil>`
+|—
+|`syft`
+|Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo`
 
 |`--output <fichier>`
 |`-o`
@@ -335,6 +365,35 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 ./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
 ----
 
+=== Analyse d'une image OCI (via syft, défaut)
+
+[source,bash]
+----
+./sbom_generator -I nginx:latest -f cyclonedx -n "nginx" -o nginx.cdx.json
+----
+
+=== Analyse d'une archive tar exportée avec docker save
+
+[source,bash]
+----
+./sbom_generator -I ./ubuntu.tar --oci-tool trivy -f spdx -o ubuntu.spdx.json
+----
+
+=== Analyse d'un OCI layout directory via skopeo
+
+[source,bash]
+----
+./sbom_generator -I ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
+----
+
+=== Combiner image OCI et liste de paquets supplémentaires
+
+[source,bash]
+----
+./sbom_generator -I nginx:latest -i extra_pkgs.txt -f cyclonedx,spdx -o sbom
+# Génère : sbom.cdx.json + sbom.spdx.json
+----
+
 === Pipeline complet : génération + validation qualité
 
 [source,bash]
@@ -528,13 +587,14 @@ sbom_generator/
 ├── bin/
 │   └── sbom_generator.dart        # Point d'entrée CLI
 ├── lib/
-│   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, PackageDependency
+│   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
 │   ├── rpm_parser.dart            # Interrogation rpm + résolution dépendances
 │   ├── wheel_parser.dart          # Lecture wheels .whl (python3 zipfile)
 │   ├── tar_parser.dart            # Lecture archives .tar/.tar.gz/.tgz
 │   ├── zip_parser.dart            # Lecture archives .zip
 │   ├── deb_parser.dart            # Lecture paquets .deb (dpkg-deb)
 │   ├── requirements_parser.dart   # Lecture requirements.txt (pur Dart)
+│   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo)
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée
 │   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6
@@ -607,7 +667,25 @@ Si le même paquet (même NEVRA) apparaît plusieurs fois (par ex. présent dans
 et AppStream), il n'est inclus qu'une seule fois dans le SBOM. Un message
 `($N doublon(s) supprimé(s))` l'indique.
 
+=== `syft / trivy / skopeo: command not found`
+
+L'outil OCI demandé n'est pas installé ou n'est pas dans le PATH.
+
+Installez l'outil via son script officiel ou le gestionnaire de paquets du système.
+Vérifiez avec `which syft`, `which trivy` ou `which skopeo`.
+
+=== `Échec de l'analyse OCI : …`
+
+Si l'analyse OCI échoue (image inaccessible, registre privé, permissions réseau) :
+
+* Vérifiez que la référence est accessible : `docker pull <image>` ou `skopeo inspect docker://<image>`
+* Pour un registre privé, authentifiez-vous au préalable : `docker login`, `skopeo login`
+* Pour une archive tar locale, vérifiez que le fichier existe : `ls -lh /path/image.tar`
+
 === Fichier SBOM très volumineux
 
 Les propriétés `rpm:requires` peuvent représenter 50 à 150 entrées par paquet.
 Sur 779 paquets, le fichier CycloneDX peut atteindre 3 Mo. C'est normal.
+
+Les images OCI peuvent contenir plusieurs centaines de paquets (images de base
+Ubuntu : ~100, images applicatives complexes : 300–800).
