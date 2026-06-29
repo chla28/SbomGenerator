@@ -304,8 +304,11 @@ class OciParser {
         packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef));
       }
 
+      // Vérifier les deux emplacements RPM : traditionnel (/var/lib/rpm) et
+      // nouveau (/usr/lib/sysimage/rpm, RHEL 8.4+ / Fedora 33+).
       final rpmDb = Directory('$fsDir/var/lib/rpm');
-      if (await rpmDb.exists()) {
+      final rpmDbNew = Directory('$fsDir/usr/lib/sysimage/rpm');
+      if (await rpmDb.exists() || await rpmDbNew.exists()) {
         if (verbose) print('skopeo : base RPM trouvée');
         packages.addAll(
             await _parseRpmRoot(fsDir, imageRef, verbose: verbose));
@@ -467,18 +470,38 @@ class OciParser {
     const queryFormat =
         r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{SUMMARY}\n';
 
+    // Détecter l'emplacement exact de la base RPM.
+    // IMPORTANT : rpm --root + --dbpath absolu combine les deux chemins (bug),
+    // donc on utilise uniquement --dbpath avec le chemin absolu complet.
+    String? dbPath;
+    for (final candidate in ['var/lib/rpm', 'usr/lib/sysimage/rpm']) {
+      final dir = Directory('$rootDir/$candidate');
+      if (!await dir.exists()) continue;
+      if (await File('$rootDir/$candidate/rpmdb.sqlite').exists() ||
+          await File('$rootDir/$candidate/Packages').exists()) {
+        dbPath = '$rootDir/$candidate';
+        break;
+      }
+    }
+    if (dbPath == null) {
+      if (verbose) {
+        stderr.writeln('skopeo/rpm : base RPM trouvée mais vide dans $rootDir');
+      }
+      return [];
+    }
+
+    if (verbose) print('skopeo : requête RPM sur $dbPath');
+
     final result = await Process.run('rpm', [
-      '--root', rootDir,
+      '--dbpath', dbPath,
       '-qa',
       '--queryformat', queryFormat,
     ]);
 
     if (result.exitCode != 0) {
-      if (verbose) {
-        stderr.writeln(
-            'skopeo/rpm : échec de la requête RPM : '
-            '${(result.stderr as String).split('\n').first.trim()}');
-      }
+      stderr.writeln(
+          'skopeo/rpm : échec (code ${result.exitCode}) : '
+          '${(result.stderr as String).split('\n').first.trim()}');
       return [];
     }
 
