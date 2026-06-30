@@ -305,8 +305,8 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         controller: _imageCtrl,
                         onPickTar: () => _pickFile(
                           _imageCtrl,
-                          title: 'Sélectionner une archive tar',
-                          extensions: ['tar'],
+                          title: 'Sélectionner une archive OCI',
+                          extensions: ['tar', 'gz', 'tgz'],
                         ),
                         onPickDir: () =>
                             _pickDir(_imageCtrl, title: 'Sélectionner un répertoire OCI layout', onDone: _sync),
@@ -1103,10 +1103,10 @@ class _OciImageField extends StatelessWidget {
           'Image OCI (--image)',
           'Référence d\'une image conteneur à analyser.\n'
           '• Registre : nginx:latest, ghcr.io/org/app:v1\n'
-          '• Archive tar : ./image.tar (docker save)\n'
+          '• Archive tar : ./image.tar / .tar.gz / .tgz (docker save)\n'
           '• Répertoire OCI layout : ./oci/ (index.json)',
         ),
-        hintText: 'nginx:latest  •  ./image.tar  •  ./oci_dir/',
+        hintText: 'nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/',
         border: const OutlineInputBorder(),
         isDense: true,
         prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18),
@@ -1127,7 +1127,7 @@ class _OciImageField extends StatelessWidget {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.archive_outlined, size: 16),
-                title: Text('Archive tar (.tar)'),
+                title: Text('Archive tar (.tar / .tar.gz / .tgz)'),
               ),
             ),
             PopupMenuItem(

@@ -19,7 +19,8 @@ class OciParser {
   // ── Détection automatique du format ─────────────────────────────────────────
 
   static OciRefType detectRefType(String ref) {
-    if (ref.endsWith('.tar') || ref.endsWith('.tar.gz')) return OciRefType.tar;
+    if (ref.endsWith('.tar') || ref.endsWith('.tar.gz') || ref.endsWith('.tgz'))
+      return OciRefType.tar;
     if (Directory(ref).existsSync() && File('$ref/index.json').existsSync()) {
       return OciRefType.ociLayout;
     }
