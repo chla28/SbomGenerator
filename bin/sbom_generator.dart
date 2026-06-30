@@ -20,10 +20,16 @@ import 'package:sbom_generator/oci_parser.dart';
 import 'package:sbom_generator/sbom_diff.dart';
 import 'package:sbom_generator/sbom_merger.dart';
 import 'package:sbom_generator/policy_checker.dart';
+import 'package:sbom_generator/go_parser.dart';
+import 'package:sbom_generator/npm_parser.dart';
+import 'package:sbom_generator/yarn_parser.dart';
+import 'package:sbom_generator/maven_parser.dart';
+import 'package:sbom_generator/csv_generator.dart';
+import 'package:sbom_generator/sbom_reader.dart';
 
 const _version = '1.0.0';
 
-const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html'};
+const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
 const _validOciTools = {'syft', 'trivy', 'skopeo'};
 const _validDateFields = {'published', 'modified', 'latest'};
@@ -47,6 +53,18 @@ Future<void> main(List<String> arguments) async {
     return;
   }
 
+  // Sous-commande `convert` : convertit entre formats SBOM
+  if (arguments.isNotEmpty && arguments.first == 'convert') {
+    await _runConvert(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `validate` : valide la structure d'un fichier SBOM
+  if (arguments.isNotEmpty && arguments.first == 'validate') {
+    await _runValidate(arguments.sublist(1));
+    return;
+  }
+
   final parser = ArgParser()
     ..addOption(
       'input',
@@ -58,6 +76,9 @@ Future<void> main(List<String> arguments) async {
           '  • a path to a Python .whl file\n'
           '  • a path to a requirements.txt file\n'
           '  • a path to a .tar / .tar.gz / .tgz / .zip archive\n'
+          '  • a path to a go.sum or go.mod file\n'
+          '  • a path to a package-lock.json or yarn.lock file\n'
+          '  • a path to a pom.xml file\n'
           'Optional when --image is provided.',
     )
     ..addOption(
@@ -99,7 +120,8 @@ Future<void> main(List<String> arguments) async {
           '  markdown   Tableau Markdown des licences\n'
           '  asciidoc   Tableau AsciiDoc des licences\n'
           '  html       Rapport HTML interactif (tableau filtrable)\n'
-          'Example: -f cyclonedx,spdx,markdown',
+          '  csv        Fichier CSV (une ligne par paquet)\n'
+          'Example: -f cyclonedx,spdx,csv',
     )
     ..addOption(
       'name',
@@ -290,13 +312,27 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
-  // --- Expand requirements.txt files (preprocess before the main loop) ---
+  // --- Expand manifest/lockfiles (preprocess before the main loop) ---
   final reqParser = RequirementsParser();
+  final goParser = GoParser();
+  final npmParser = NpmParser();
+  final yarnParser = YarnParser();
+  final mavenParser = MavenParser();
   final preloadedPackages = <Package>[];
   final filteredRefs = <String>[];
   for (final ref in packageRefs) {
     if (_isRequirements(ref)) {
       preloadedPackages.addAll(reqParser.parseFile(ref));
+    } else if (_isGoSum(ref)) {
+      preloadedPackages.addAll(goParser.parseGoSum(ref));
+    } else if (_isGoMod(ref)) {
+      preloadedPackages.addAll(goParser.parseGoMod(ref));
+    } else if (_isPackageLock(ref)) {
+      preloadedPackages.addAll(npmParser.parsePackageLock(ref));
+    } else if (_isYarnLock(ref)) {
+      preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
+    } else if (_isPomXml(ref)) {
+      preloadedPackages.addAll(mavenParser.parsePomXml(ref));
     } else {
       filteredRefs.add(ref);
     }
@@ -552,6 +588,9 @@ Future<void> main(List<String> arguments) async {
         case 'html':
           await HtmlGenerator()
               .writeToFile(uniquePackages, outPath, documentName: docName);
+        case 'csv':
+          await CsvGenerator()
+              .writeToFile(uniquePackages, outPath, documentName: docName);
       }
     } catch (e, st) {
       _err('Failed to write SBOM ($fmt): $e');
@@ -770,6 +809,12 @@ bool _isTar(String ref) =>
 bool _isRequirements(String ref) =>
     ref.endsWith('.txt') && !ref.endsWith('.whl');
 
+bool _isGoSum(String ref) => ref.endsWith('go.sum');
+bool _isGoMod(String ref) => ref.endsWith('go.mod');
+bool _isPackageLock(String ref) => ref.endsWith('package-lock.json');
+bool _isYarnLock(String ref) => ref.endsWith('yarn.lock');
+bool _isPomXml(String ref) => ref.endsWith('pom.xml');
+
 void _err(String msg) => stderr.writeln('Error: $msg');
 
 void _printProgress(int current, int total, String label) {
@@ -826,6 +871,7 @@ String _formatExtension(String format) => switch (format) {
       'markdown' => '.md',
       'asciidoc' => '.adoc',
       'html' => '.html',
+      'csv' => '.csv',
       _ => '.json',
     };
 
@@ -840,6 +886,7 @@ String _basePath(String output) {
     '.json',
     '.md',
     '.adoc',
+    '.csv',
   ];
   for (final ext in exts) {
     if (output.endsWith(ext)) {
@@ -1262,6 +1309,331 @@ List<Package> _applyLicenseOverrides(
     }
     return pkg;
   }).toList();
+}
+
+// ── Sous-commande convert ─────────────────────────────────────────────────────
+
+Future<void> _runConvert(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('input', abbr: 'i', mandatory: true,
+        help: 'Fichier SBOM source (CycloneDX JSON ou SPDX JSON/JSON-LD).')
+    ..addOption('output', abbr: 'o', mandatory: true,
+        help: 'Fichier de sortie. Avec plusieurs formats (-f a,b) : chemin de base.')
+    ..addOption('format', abbr: 'f', defaultsTo: 'cyclonedx',
+        help: 'Format(s) cible(s), virgule-séparés.\n'
+            '  cyclonedx  spdx  spdx3  json  markdown  asciidoc  html  csv')
+    ..addOption('name', abbr: 'n',
+        help: 'Nom du document SBOM de sortie (remplace celui du fichier source).')
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('convert: ${e.message}');
+    _printConvertUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) { _printConvertUsage(parser); exit(0); }
+
+  final inputPath = args['input'] as String;
+  final outputPath = args['output'] as String;
+  final docName = args['name'] as String?;
+
+  final formats = (args['format'] as String)
+      .split(',')
+      .map((f) => f.trim())
+      .where((f) => f.isNotEmpty)
+      .toList();
+  for (final f in formats) {
+    if (!_validFormats.contains(f)) {
+      stderr.writeln('convert: format inconnu "$f". Valides : ${_validFormats.join(', ')}');
+      exit(1);
+    }
+  }
+
+  if (!await File(inputPath).exists()) {
+    stderr.writeln('convert: fichier introuvable : $inputPath');
+    exit(1);
+  }
+
+  final Map<String, dynamic> json;
+  try {
+    json = await SbomReader.loadJson(inputPath);
+  } catch (e) {
+    stderr.writeln('convert: impossible de lire le JSON : $e');
+    exit(1);
+  }
+
+  final reader = SbomReader();
+  final format = SbomReader.detectFormat(json);
+  if (format == SbomFormat.unknown) {
+    stderr.writeln('convert: format SBOM non reconnu dans $inputPath');
+    stderr.writeln('  Formats supportés : CycloneDX JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD');
+    exit(1);
+  }
+
+  final List<Package> packages;
+  try {
+    packages = reader.read(json);
+  } catch (e) {
+    stderr.writeln('convert: erreur de lecture : $e');
+    exit(1);
+  }
+
+  final name = docName ?? reader.documentName(json);
+  final formatLabel = switch (format) {
+    SbomFormat.cyclonedx => 'CycloneDX',
+    SbomFormat.spdx2 => 'SPDX 2.x',
+    SbomFormat.spdx3 => 'SPDX 3.0',
+    SbomFormat.unknown => '?',
+  };
+  print('Conversion : $inputPath ($formatLabel, ${packages.length} composant(s))');
+
+  final outputBase = formats.length > 1 ? _basePath(outputPath) : null;
+  for (final fmt in formats) {
+    final outPath =
+        outputBase != null ? '$outputBase${_formatExtension(fmt)}' : outputPath;
+    try {
+      switch (fmt) {
+        case 'cyclonedx':
+          await CycloneDxGenerator()
+              .writeToFile(packages, [], outPath, documentName: name);
+        case 'spdx':
+          await SpdxGenerator()
+              .writeToFile(packages, [], outPath, documentName: name);
+        case 'spdx3':
+          await Spdx3Generator()
+              .writeToFile(packages, [], outPath, documentName: name);
+        case 'json':
+          await SimpleJsonGenerator()
+              .writeToFile(packages, [], outPath, documentName: name);
+        case 'markdown':
+          await MarkdownGenerator()
+              .writeToFile(packages, outPath, documentName: name);
+        case 'asciidoc':
+          await AsciidocGenerator()
+              .writeToFile(packages, outPath, documentName: name);
+        case 'html':
+          await HtmlGenerator()
+              .writeToFile(packages, outPath, documentName: name);
+        case 'csv':
+          await CsvGenerator()
+              .writeToFile(packages, outPath, documentName: name);
+      }
+    } catch (e) {
+      stderr.writeln('convert: échec de l\'écriture ($fmt) : $e');
+      exit(1);
+    }
+    final sz = await File(outPath).length();
+    print('→ $outPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
+  }
+}
+
+void _printConvertUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator convert – Convertit un fichier SBOM vers un ou plusieurs formats.
+
+Usage:
+  sbom_generator convert -i source.cdx.json -f spdx -o output.spdx.json
+  sbom_generator convert -i source.spdx.json -f cyclonedx,csv -o output
+
+Formats source supportés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD
+Formats cible supportés  : cyclonedx, spdx, spdx3, json, markdown, asciidoc, html, csv
+
+${parser.usage}
+''');
+}
+
+// ── Sous-commande validate ────────────────────────────────────────────────────
+
+Future<void> _runValidate(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addFlag('strict', defaultsTo: false, negatable: false,
+        help: 'En mode strict, les champs recommandés (mais non obligatoires) '
+            'génèrent aussi des erreurs.')
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('validate: ${e.message}');
+    _printValidateUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) { _printValidateUsage(parser); exit(0); }
+
+  final files = args.rest;
+  if (files.isEmpty) {
+    stderr.writeln('validate: au moins un fichier SBOM requis.');
+    _printValidateUsage(parser);
+    exit(1);
+  }
+
+  final strict = args['strict'] as bool;
+  int totalErrors = 0;
+
+  for (final path in files) {
+    if (!await File(path).exists()) {
+      print('$path : ERREUR — fichier introuvable');
+      totalErrors++;
+      continue;
+    }
+
+    final Map<String, dynamic> json;
+    try {
+      json = await SbomReader.loadJson(path);
+    } catch (e) {
+      print('$path : ERREUR — JSON invalide : $e');
+      totalErrors++;
+      continue;
+    }
+
+    final errors = _validateSbom(json, strict: strict);
+    final format = SbomReader.detectFormat(json);
+    final label = switch (format) {
+      SbomFormat.cyclonedx => 'CycloneDX ${json['specVersion'] ?? ''}',
+      SbomFormat.spdx2 => 'SPDX ${json['spdxVersion'] ?? ''}',
+      SbomFormat.spdx3 => 'SPDX 3.0 JSON-LD',
+      SbomFormat.unknown => 'format inconnu',
+    };
+
+    if (errors.isEmpty) {
+      print('$path : OK ($label)');
+    } else {
+      print('$path : $label — ${errors.length} erreur(s) :');
+      for (final e in errors) {
+        print('  ✗ $e');
+      }
+      totalErrors += errors.length;
+    }
+  }
+
+  exit(totalErrors == 0 ? 0 : 1);
+}
+
+/// Returns a list of validation error messages for [json].
+List<String> _validateSbom(Map<String, dynamic> json, {bool strict = false}) {
+  final errors = <String>[];
+  final format = SbomReader.detectFormat(json);
+
+  switch (format) {
+    case SbomFormat.cyclonedx:
+      _validateCycloneDx(json, errors, strict: strict);
+    case SbomFormat.spdx2:
+      _validateSpdx2(json, errors, strict: strict);
+    case SbomFormat.spdx3:
+      _validateSpdx3(json, errors, strict: strict);
+    case SbomFormat.unknown:
+      errors.add(
+          'Aucun indicateur de format reconnu. '
+          'Attendu : bomFormat="CycloneDX", spdxVersion ou @context/@graph.');
+  }
+  return errors;
+}
+
+void _validateCycloneDx(
+    Map<String, dynamic> json, List<String> errors, {bool strict = false}) {
+  if (json['bomFormat'] != 'CycloneDX') {
+    errors.add('bomFormat doit être "CycloneDX"');
+  }
+  if (json['specVersion'] == null) errors.add('specVersion manquant');
+  if (json['version'] == null && strict) errors.add('[strict] version manquant');
+  if (json['serialNumber'] == null && strict) {
+    errors.add('[strict] serialNumber manquant');
+  }
+
+  final components = json['components'];
+  if (components != null && components is! List) {
+    errors.add('components doit être un tableau JSON');
+  } else if (components is List) {
+    for (int i = 0; i < components.length; i++) {
+      final c = components[i];
+      if (c is! Map) continue;
+      if (c['name'] == null || (c['name'] as String).isEmpty) {
+        errors.add('composant[$i] : champ name manquant ou vide');
+      }
+      if (c['type'] == null) {
+        errors.add('composant[$i] (${c['name'] ?? '?'}) : champ type manquant');
+      }
+      if (strict && c['version'] == null) {
+        errors.add('[strict] composant[$i] (${c['name'] ?? '?'}) : version manquante');
+      }
+    }
+  }
+}
+
+void _validateSpdx2(
+    Map<String, dynamic> json, List<String> errors, {bool strict = false}) {
+  final ver = json['spdxVersion'] as String?;
+  if (ver == null || !ver.startsWith('SPDX-')) {
+    errors.add('spdxVersion manquant ou invalide (attendu : SPDX-2.x)');
+  }
+  if (json['SPDXID'] != 'SPDXRef-DOCUMENT') {
+    errors.add('SPDXID doit être "SPDXRef-DOCUMENT"');
+  }
+  if (json['name'] == null) errors.add('name manquant');
+  if (json['dataLicense'] == null) errors.add('dataLicense manquant');
+  if (strict && json['creationInfo'] == null) {
+    errors.add('[strict] creationInfo manquant');
+  }
+
+  final packages = json['packages'];
+  if (packages is List) {
+    for (int i = 0; i < packages.length; i++) {
+      final p = packages[i] as Map?;
+      if (p == null) continue;
+      if (p['SPDXID'] == null) errors.add('packages[$i] : SPDXID manquant');
+      if (p['name'] == null) errors.add('packages[$i] : name manquant');
+      if (p['versionInfo'] == null && strict) {
+        errors.add('[strict] packages[$i] (${p['name'] ?? '?'}) : versionInfo manquant');
+      }
+    }
+  }
+}
+
+void _validateSpdx3(
+    Map<String, dynamic> json, List<String> errors, {bool strict = false}) {
+  if (json['@context'] == null) errors.add('@context manquant');
+  final graph = json['@graph'];
+  if (graph == null) {
+    errors.add('@graph manquant');
+    return;
+  }
+  if (graph is! List) {
+    errors.add('@graph doit être un tableau JSON');
+    return;
+  }
+  final hasDoc = graph.any((node) =>
+      node is Map && (node['type'] as String?) == 'SpdxDocument');
+  if (!hasDoc) {
+    errors.add('@graph ne contient pas d\'élément SpdxDocument');
+  }
+  for (int i = 0; i < graph.length; i++) {
+    final node = graph[i] as Map?;
+    if (node == null) continue;
+    if (node['spdxId'] == null && strict) {
+      errors.add('[strict] @graph[$i] : spdxId manquant');
+    }
+  }
+}
+
+void _printValidateUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator validate – Vérifie la structure d'un ou plusieurs fichiers SBOM.
+
+Usage:
+  sbom_generator validate <fichier1.cdx.json> [fichier2.spdx.json ...]
+
+Formats supportés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD
+
+${parser.usage}
+
+Codes de retour:
+  0  Tous les fichiers sont valides
+  1  Au moins un fichier est invalide ou introuvable
+''');
 }
 
 void _printUsage(ArgParser parser) {

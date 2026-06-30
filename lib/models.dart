@@ -164,27 +164,57 @@ class WheelPackage extends Package {
 
   @override
   String get purl {
+    final v = Uri.encodeComponent(version);
     if (_packageType == 'pypi') {
       final n = Uri.encodeComponent(_normalizePyName(name));
-      final v = Uri.encodeComponent(version);
       return 'pkg:pypi/$n@$v';
     }
-    // Generic source archive — use pkg:generic PURL type
+    if (_packageType == 'maven') {
+      // name stored as "groupId:artifactId"
+      final parts = name.split(':');
+      if (parts.length == 2) {
+        final ns = Uri.encodeComponent(parts[0]);
+        final nm = Uri.encodeComponent(parts[1]);
+        return version.isNotEmpty ? 'pkg:maven/$ns/$nm@$v' : 'pkg:maven/$ns/$nm';
+      }
+    }
+    if (_packageType == 'golang') {
+      // Go module paths contain '/' that must NOT be percent-encoded in PURLs
+      final gn = name.toLowerCase();
+      return version.isNotEmpty ? 'pkg:golang/$gn@$v' : 'pkg:golang/$gn';
+    }
     final n = Uri.encodeComponent(name.toLowerCase());
-    return version.isNotEmpty
-        ? 'pkg:generic/$n@${Uri.encodeComponent(version)}'
-        : 'pkg:generic/$n';
+    return switch (_packageType) {
+      'npm' => version.isNotEmpty ? 'pkg:npm/$n@$v' : 'pkg:npm/$n',
+      'cargo' => version.isNotEmpty ? 'pkg:cargo/$n@$v' : 'pkg:cargo/$n',
+      'apk' => version.isNotEmpty ? 'pkg:apk/alpine/$n@$v' : 'pkg:apk/alpine/$n',
+      _ => version.isNotEmpty ? 'pkg:generic/$n@$v' : 'pkg:generic/$n',
+    };
   }
 
   @override
   String get bomRef {
-    final prefix = _packageType == 'pypi' ? 'pkg-pypi' : 'pkg-src';
+    final prefix = switch (_packageType) {
+      'pypi' => 'pkg-pypi',
+      'golang' => 'pkg-golang',
+      'npm' => 'pkg-npm',
+      'maven' => 'pkg-maven',
+      'cargo' => 'pkg-cargo',
+      _ => 'pkg-src',
+    };
     return '$prefix-${_safeId(name)}-${_safeId(version)}';
   }
 
   @override
   String get spdxId {
-    final prefix = _packageType == 'pypi' ? 'SPDXRef-pypi' : 'SPDXRef-src';
+    final prefix = switch (_packageType) {
+      'pypi' => 'SPDXRef-pypi',
+      'golang' => 'SPDXRef-golang',
+      'npm' => 'SPDXRef-npm',
+      'maven' => 'SPDXRef-maven',
+      'cargo' => 'SPDXRef-cargo',
+      _ => 'SPDXRef-src',
+    };
     return '$prefix-${_safeId(name)}-${_safeId(version)}';
   }
 
