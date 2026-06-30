@@ -602,8 +602,10 @@ est remplacée par un `PopupMenuButton<bool>` qui propose :
 Sortie. Elle comprend deux éléments :
 
 . *Champ Image OCI* — `_imageCtrl` / `TextEditingController` lié à `c.imageRef`.
-  Le bouton 📂 à droite appelle `_pickDir()` pour sélectionner un répertoire OCI
-  layout (le type `registry` et `tar` sont saisis manuellement).
+  Le bouton 📂 à droite ouvre un `PopupMenuButton` avec deux options :
+  `_pickFile(extensions: ['tar', 'gz', 'tgz'])` pour les archives compressées
+  ou non, et `_pickDir()` pour les répertoires OCI layout.
+  Le type `registry` est toujours saisi manuellement.
 . *Sélecteur d'outil OCI* — `_OciToolSelector` (widget privé) affiché uniquement
   si `c.imageRef.isNotEmpty`. Propose trois `RadioListTile` (`syft`, `trivy`,
   `skopeo`) et met à jour `c.ociTool` via `setState`.

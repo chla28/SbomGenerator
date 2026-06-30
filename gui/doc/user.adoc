@@ -346,16 +346,20 @@ Référence à une image OCI à analyser. Trois formats sont acceptés :
 |`nginx:latest`
 
 |Archive tar
-|Export `docker save` ou `skopeo copy docker-archive:`
-|`/path/ubuntu.tar`
+|Export `docker save` ou `skopeo copy docker-archive:` (.tar, .tar.gz, .tgz)
+|`/path/ubuntu.tar`, `/path/image.tar.gz`
 
 |OCI layout
 |Répertoire contenant `index.json`
 |`/path/oci_dir/`
 |===
 
-Le bouton 📂 à droite du champ permet de sélectionner un *répertoire OCI layout*.
-Pour les images de registre ou les archives tar, saisissez la référence manuellement.
+Le bouton 📂 à droite du champ ouvre un menu contextuel :
+
+* *Archive tar (.tar / .tar.gz / .tgz)* — sélecteur de fichier filtré sur ces trois extensions
+* *Répertoire OCI layout* — sélecteur de répertoire
+
+Pour les images de registre, saisissez la référence manuellement.
 
 Si le champ est vide, l'analyse OCI est désactivée.
 
@@ -1758,7 +1762,8 @@ Utilisez ↗ pour ouvrir le fichier JSON généré.
 
 |2
 |Dans le champ *Image OCI*, saisissez la référence : `nginx:latest`,
-`/path/ubuntu.tar`, ou sélectionnez un répertoire OCI layout via 📂
+`/path/ubuntu.tar` (ou `.tar.gz` / `.tgz`), ou utilisez 📂 pour parcourir
+(archives tar ou répertoire OCI layout)
 
 |3
 |Sélectionnez le backend OCI si nécessaire (Syft est le défaut)
@@ -2066,7 +2071,9 @@ skopeo --version
 * *Image de registre inaccessible* : vérifiez la connexion réseau et
   l'authentification (`docker login` ou `skopeo login`).
 * *Archive tar corrompue ou format non reconnu* : regénérez l'archive
-  avec `docker save <image> -o /path/image.tar`.
+  avec `docker save <image> -o /path/image.tar` (ou compressée :
+  `docker save <image> | gzip > /path/image.tar.gz`).
+  Les formats `.tar`, `.tar.gz` et `.tgz` sont supportés.
 * *Répertoire OCI layout invalide* : vérifiez que `index.json` est présent
   à la racine du répertoire.
 

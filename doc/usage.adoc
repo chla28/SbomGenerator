@@ -113,7 +113,7 @@ sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 |`--image <référence>`
 |`-I`
 |_(requis si pas de --input)_
-|Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/oci_dir/`
+|Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/image.tar.gz`, `/path/image.tgz`, `/path/oci_dir/`
 
 |`--oci-tool <outil>`
 |—
@@ -402,9 +402,14 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 
 === Analyse d'une archive tar exportée avec docker save
 
+Les formats `.tar`, `.tar.gz` et `.tgz` sont détectés automatiquement.
+
 [source,bash]
 ----
 ./sbom_generator -I ./ubuntu.tar --oci-tool trivy -f spdx -o ubuntu.spdx.json
+
+# Archive compressée (docker save ubuntu | gzip > ubuntu.tar.gz)
+./sbom_generator -I ./ubuntu.tar.gz --oci-tool syft -f cyclonedx -o ubuntu.cdx.json
 ----
 
 === Analyse d'un OCI layout directory via skopeo
@@ -759,7 +764,7 @@ Si l'analyse OCI échoue (image inaccessible, registre privé, permissions rése
 
 * Vérifiez que la référence est accessible : `docker pull <image>` ou `skopeo inspect docker://<image>`
 * Pour un registre privé, authentifiez-vous au préalable : `docker login`, `skopeo login`
-* Pour une archive tar locale, vérifiez que le fichier existe : `ls -lh /path/image.tar`
+* Pour une archive locale, vérifiez que le fichier existe : `ls -lh /path/image.tar` (les formats `.tar`, `.tar.gz` et `.tgz` sont supportés)
 
 === Fichier SBOM très volumineux
 

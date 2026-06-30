@@ -780,8 +780,8 @@ Détecté automatiquement par `OciParser.detectRefType(String ref)` :
 |`nginx:latest`, `ubuntu@sha256:…`
 
 |`tar`
-|extension `.tar` ou `.tar.gz`
-|`/path/ubuntu.tar`
+|extension `.tar`, `.tar.gz` ou `.tgz`
+|`/path/ubuntu.tar`, `/path/image.tar.gz`
 
 |`ociLayout`
 |répertoire contenant `index.json`
@@ -1110,8 +1110,8 @@ Référence à une image OCI à analyser. Trois formats acceptés :
 |`nginx:latest`, `ubuntu@sha256:…`
 
 |Archive tar
-|Export `docker save` ou `skopeo copy docker-archive:`
-|`/path/ubuntu.tar`
+|Export `docker save` ou `skopeo copy docker-archive:` (.tar, .tar.gz, .tgz)
+|`/path/ubuntu.tar`, `/path/image.tar.gz`
 
 |OCI layout
 |Répertoire contenant `index.json`
@@ -2043,8 +2043,8 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (68 au total)
-dart test test/unit/                 # tests unitaires seuls (60)
+dart test                            # tous les tests (72 au total)
+dart test test/unit/                 # tests unitaires seuls (64)
 dart test test/integration/          # tests d'intégration (8, requiert python3)
 ----
 
@@ -2069,6 +2069,10 @@ dart test test/integration/          # tests d'intégration (8, requiert python3
 |`test/unit/requirements_parser_test.dart`
 |10
 |parsing RFC, PEP 503, extras, marqueurs, directives
+
+|`test/unit/oci_parser_test.dart`
+|4
+|`OciParser.detectRefType` — `.tar`, `.tar.gz`, `.tgz`, référence registre
 |===
 
 === Suite d'intégration
