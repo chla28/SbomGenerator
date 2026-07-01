@@ -34,16 +34,102 @@ class OciParser {
     String tool, {
     bool verbose = false,
   }) async {
-    switch (tool) {
-      case 'syft':
-        return _parseSyft(imageRef, verbose: verbose);
-      case 'trivy':
-        return _parseTrivy(imageRef, verbose: verbose);
-      case 'skopeo':
-        return _parseSkopeo(imageRef, verbose: verbose);
-      default:
-        throw ArgumentError('Outil OCI inconnu : $tool');
+    // Les trois backends (syft, trivy, skopeo) n'acceptent que des .tar non
+    // compressés en format docker-archive. Si l'entrée est .tar.gz ou .tgz,
+    // on la décompresse dans un répertoire temporaire avant de continuer.
+    Directory? decompDir;
+    String resolvedRef = imageRef;
+
+    final isCompressed =
+        imageRef.endsWith('.tar.gz') || imageRef.endsWith('.tgz');
+    if (isCompressed) {
+      decompDir = await Directory.systemTemp.createTemp('sbom_oci_decomp_');
+      try {
+        resolvedRef = await _decompressDockerArchive(
+            imageRef, decompDir.path,
+            verbose: verbose);
+      } catch (e) {
+        await Process.run('rm', ['-rf', decompDir.path]);
+        rethrow;
+      }
     }
+
+    try {
+      // await obligatoire : sans lui, le finally s'exécuterait dès le retour
+      // de la Future, avant que le backend ait pu lire le fichier décompressé.
+      switch (tool) {
+        case 'syft':
+          return await _parseSyft(resolvedRef, verbose: verbose);
+        case 'trivy':
+          return await _parseTrivy(resolvedRef, verbose: verbose);
+        case 'skopeo':
+          return await _parseSkopeo(resolvedRef, verbose: verbose);
+        default:
+          throw ArgumentError('Outil OCI inconnu : $tool');
+      }
+    } finally {
+      if (decompDir != null) {
+        await Process.run('rm', ['-rf', decompDir.path]);
+      }
+    }
+  }
+
+  // ── Décompression archive .tar.gz / .tgz ─────────────────────────────────────
+  //
+  // Gère deux variantes :
+  //  • gzip direct  : docker save redis | gzip > redis.tar.gz
+  //    → manifest.json présent à la racine du tar décompressé
+  //  • tar-de-tar   : tar czf image.tgz image.tar
+  //    → le tar décompressé contient un seul .tar qui est le vrai docker-archive
+
+  Future<String> _decompressDockerArchive(
+    String imageRef,
+    String workDir, {
+    bool verbose = false,
+  }) async {
+    if (verbose) print('OCI : décompression de $imageRef…');
+
+    final step1 = '$workDir/image.tar';
+    final zcatRes = await Process.run(
+        'sh', ['-c', 'zcat "\$1" > "\$2"', '--', imageRef, step1]);
+    if (zcatRes.exitCode != 0) {
+      throw Exception('Décompression de $imageRef échouée : ${zcatRes.stderr}');
+    }
+
+    // Cas 1 : gzip direct → manifest.json est à la racine
+    final listRes = await Process.run('tar', ['-tf', step1]);
+    final entries = (listRes.stdout as String)
+        .split('\n')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+
+    if (entries.contains('manifest.json')) {
+      if (verbose) print('OCI : gzip direct détecté, utilisation de $step1');
+      return step1;
+    }
+
+    // Cas 2 : tar-de-tar → chercher un .tar à la racine
+    final inner = entries.firstWhere(
+      (e) => e.endsWith('.tar') && !e.contains('/'),
+      orElse: () => '',
+    );
+    if (inner.isEmpty) {
+      throw Exception(
+          'Format .tgz non reconnu : manifest.json absent et aucun .tar '
+          'imbriqué trouvé. Contenu : ${entries.take(5).join(', ')}');
+    }
+
+    if (verbose) print('OCI : tar-de-tar détecté, extraction de $inner…');
+    final step2 = '$workDir/inner.tar';
+    final extractRes = await Process.run(
+        'sh', ['-c', 'tar -xOf "\$1" "\$2" > "\$3"', '--', step1, inner, step2]);
+    if (extractRes.exitCode != 0) {
+      throw Exception(
+          'Extraction du tar imbriqué ($inner) échouée : ${extractRes.stderr}');
+    }
+
+    return step2;
   }
 
   // ── Backend Syft ─────────────────────────────────────────────────────────────

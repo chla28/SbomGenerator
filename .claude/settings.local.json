@@ -21,7 +21,20 @@
       "Bash(python3 *)",
       "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash)",
       "Bash(git -C /data/clafaill/IA/cyber/projets/dart/sbom_generator stash pop)",
-      "Bash(sbomqs score *)"
+      "Bash(sbomqs score *)",
+      "Read(//data/clafaill/IA/cyber/projets/dart/**)",
+      "Bash(tar -tf /data/clafaill/IA/cyber/projets/dart/sbom_generator/keycloak_26.tar)",
+      "Bash(tar -xOf /data/clafaill/IA/cyber/projets/dart/sbom_generator/keycloak_26.tar manifest.json)",
+      "Bash(python3 -m json.tool)",
+      "Bash(dart run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(zcat /home/clafaill/IA/cyber/projets/dart/sbom_generator/redisimg.tgz)",
+      "Bash(tar -xO redisimg.tar)",
+      "Bash(tar -t)",
+      "Bash(cat)",
+      "Bash(echo \"/tmp/test_go.sum\")"
     ]
   }
 }

@@ -37,7 +37,7 @@ cd "$PROJECT_DIR"
 
 # ── Vérification des outils ──────────────────────────────────────────────────
 echo "╔══════════════════════════════════════════╗"
-echo "║  SBOM Generator — Build distribution    ║"
+echo "║  SBOM Generator — Build distribution     ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 echo "Version : ${VERSION}"

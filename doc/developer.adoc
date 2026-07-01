@@ -6,7 +6,7 @@
 :icons: font
 :source-highlighter: rouge
 :rouge-style: monokai
-:docdate: 2026-06-29
+:docdate: 2026-06-30
 
 Ce document explique le fonctionnement interne du code pour une prise en main rapide.
 
@@ -18,16 +18,22 @@ Le programme suit un pipeline concurrent :
 Fichier d'entrée (.txt)           Image OCI (--image)
         │                                  │
         ├─ lignes .txt ──► RequirementsParser (pur Dart, pré-expansion)
+        ├─ go.sum/go.mod ─► GoParser        (pur Dart, pré-expansion)
+        ├─ package-lock  ─► NpmParser       (pur Dart, pré-expansion)
+        ├─ yarn.lock     ─► YarnParser      (pur Dart, pré-expansion)
+        ├─ pom.xml       ─► MavenParser     (pur Dart, pré-expansion)
         │                                  │
         ▼                                  ▼
 ┌────────────────────────────────────────────────────────────┐
 │  bin/sbom_generator.dart                                   │
 │  (main + _Semaphore + _printProgress)                      │
 │  1. Lecture + validation CLI (--input et/ou --image)       │
-│  2. Analyse OCI si --image (OciParser via syft/trivy/skopeo│
-│  3. Détection du type par extension                        │
-│  4. Dispatch concurrent (--concurrency N)                  │
-│  5. Déduplication par bomRef                               │
+│  2. Pré-expansion des manifestes (requirements, go, npm…)  │
+│  3. Analyse OCI si --image (OciParser via syft/trivy/skopeo│
+│  4. Détection du type par extension                        │
+│  5. Dispatch concurrent (--concurrency N)                  │
+│  6. Déduplication par bomRef                               │
+│  7. Sous-commandes : diff, merge, convert, validate        │
 └──┬──────┬──────┬──────┬──────┬──────────────────┬──────────┘
    │      │      │      │      │                  │
    ▼      ▼      ▼      ▼      ▼                  ▼
@@ -49,6 +55,7 @@ Parser Parser Parser Parser Parser             Parser
    PolicyChecker ◄── --deny-license, --min-quality-score
    SbomDiffer  ◄── sous-commande diff
    SbomMerger  ◄── sous-commande merge
+   SbomReader  ◄── sous-commande convert (source SBOM → List<Package>)
               │
               ▼
 ┌─────────────────────────────────────────────┐
@@ -59,14 +66,17 @@ Parser Parser Parser Parser Parser             Parser
 │  markdown_generator.dart                    │
 │  asciidoc_generator.dart                    │
 │  html_generator.dart                        │
+│  csv_generator.dart                         │
 └─────────────────────────────────────────────┘
               │
               ▼
-   Fichier SBOM (.json / .jsonld / .md / .adoc)
+   Fichier SBOM (.json / .jsonld / .md / .adoc / .html / .csv)
 ....
 
 Tous les générateurs travaillent sur `List<Package>` — la classe abstraite
 commune à `RpmPackage`, `WheelPackage`, `DebPackage` et `OciPackage`.
+`WheelPackage` est également réutilisé pour Go, npm, yarn et Maven via le
+champ `packageType`.
 
 == `lib/models.dart` — Hiérarchie de types
 
@@ -178,10 +188,41 @@ Le comportement dépend de `packageType` :
 |`pkg:generic/<name>@<ver>`
 |`pkg-src-`
 |`SPDXRef-src-`
+
+|`'golang'`
+|`go.sum` ou `go.mod` (via `GoParser`)
+|`pkg:golang/<module-path>@<ver>` (slashes non encodés)
+|`pkg-golang-`
+|`SPDXRef-golang-`
+
+|`'npm'`
+|`package-lock.json` ou `yarn.lock` (via `NpmParser` / `YarnParser`)
+|`pkg:npm/<name>@<ver>`
+|`pkg-npm-`
+|`SPDXRef-npm-`
+
+|`'maven'`
+|`pom.xml` (via `MavenParser`) — name = `groupId:artifactId`
+|`pkg:maven/<groupId>/<artifactId>@<ver>`
+|`pkg-maven-`
+|`SPDXRef-maven-`
+
+|`'cargo'`
+|OCI / lockfiles Rust
+|`pkg:cargo/<name>@<ver>`
+|`pkg-src-`
+|`SPDXRef-src-`
 |===
 
 Le nom Python est normalisé selon PEP 503 dans le PURL (`_normalizePyName` :
 minuscules, `[-_.]+ → -`).
+
+[NOTE]
+====
+Les chemins de modules Go contiennent des `/` qui *ne doivent pas* être
+encodés en `%2F` dans un PURL (spec PURL Go). Le getter `purl` de `WheelPackage`
+gère ce cas spécialement : `pkg:golang/$gn@$v` (sans `Uri.encodeComponent`).
+====
 
 Le champ `arch` contient le platform tag du wheel (ex. `any`, `linux_x86_64`)
 ou l'architecture détectée depuis le nom de fichier pour les archives génériques.
@@ -1071,29 +1112,300 @@ class RequirementsParser {
 . Extrait la version après `==` (épinglée) ou le premier nombre de version sinon
 . Normalise le nom selon PEP 503 (`[-_.]+ → -`, minuscules)
 
-=== Intégration dans `main()`
+=== Intégration dans `main()` — pré-expansion des manifestes
 
-Les fichiers `.txt` sont *pré-expansés avant la boucle concurrente* :
+Tous les parseurs produisant N paquets depuis un seul fichier (cardinalité 1:N)
+sont *pré-expansés avant la boucle concurrente* :
 
 [source,dart]
 ----
-for (final ref in inputRefs) {
+for (final ref in packageRefs) {
   if (_isRequirements(ref)) {
-    preloadedPackages.addAll(RequirementsParser().parseFile(ref));
+    preloadedPackages.addAll(reqParser.parseFile(ref));
+  } else if (_isGoSum(ref)) {
+    preloadedPackages.addAll(goParser.parseGoSum(ref));
+  } else if (_isGoMod(ref)) {
+    preloadedPackages.addAll(goParser.parseGoMod(ref));
+  } else if (_isPackageLock(ref)) {
+    preloadedPackages.addAll(npmParser.parsePackageLock(ref));
+  } else if (_isYarnLock(ref)) {
+    preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
+  } else if (_isPomXml(ref)) {
+    preloadedPackages.addAll(mavenParser.parsePomXml(ref));
   } else {
-    mainRefs.add(ref);
+    filteredRefs.add(ref);
   }
 }
-// … boucle Future.wait sur mainRefs …
+// … boucle Future.wait sur filteredRefs …
 packages.addAll(preloadedPackages);
+----
+
+Helpers de détection :
+
+[source,dart]
+----
+bool _isRequirements(String r) => r.endsWith('.txt') && !r.endsWith('.whl');
+bool _isGoSum(String r)        => r.endsWith('go.sum');
+bool _isGoMod(String r)        => r.endsWith('go.mod');
+bool _isPackageLock(String r)  => r.endsWith('package-lock.json');
+bool _isYarnLock(String r)     => r.endsWith('yarn.lock');
+bool _isPomXml(String r)       => r.endsWith('pom.xml');
 ----
 
 [NOTE]
 ====
 *Pourquoi la pré-expansion ?* La boucle concurrente produit `Future<Package?>`
-(1 ref → 0 ou 1 paquet). Un requirements.txt peut contenir N paquets
+(1 ref → 0 ou 1 paquet). Un fichier de manifeste peut contenir N paquets
 (cardinalité 1:N), incompatible avec ce modèle.
 ====
+
+== `lib/go_parser.dart` — Modules Go
+
+Parseur pur Dart pour `go.sum` et `go.mod`. Utilise `WheelPackage` avec
+`packageType: 'golang'`.
+
+=== `parseGoSum(String path)`
+
+Format `go.sum` : une ligne `module version hash` ou `module version/go.mod hash`.
+
+[source,text]
+----
+github.com/gorilla/mux v1.8.1 h1:TnC2...
+github.com/gorilla/mux v1.8.1/go.mod h1:dvbg...
+----
+
+Traitement :
+. Ignore les lignes vides ou commençant par `#`
+. Ignore les lignes dont le deuxième champ se termine par `/go.mod` (doublon de checksum)
+. Extrait `module` et `version` (préfixe `v` retiré)
+. Déduplication par clé `module@version` (évite le doublon entre les deux lignes d'un module)
+. Nom = chemin module brut en minuscules (slashes conservés pour PURL)
+
+=== `parseGoMod(String path)`
+
+Format `go.mod` : directives `require` individuelles ou en bloc.
+
+[source,text]
+----
+require (
+    github.com/gorilla/mux v1.8.1
+    golang.org/x/net v0.17.0  // indirect
+)
+require github.com/pkg/errors v0.9.1
+----
+
+Traitement :
+. Détecte les blocs `require (…)` et les directives `require x v` isolées
+. Retire les commentaires `// indirect` et tout ce qui suit `//`
+. Préfixe `v` retiré de la version
+. Les versions `v0.0.0-yyyymmdd-commit` (pseudo-versions) sont conservées telles quelles
+
+== `lib/npm_parser.dart` — Paquets npm
+
+Parseur pur Dart pour `package-lock.json` (lockfileVersion 1, 2 et 3).
+
+=== Détection de version
+
+[source,dart]
+----
+final v = json['lockfileVersion'];
+if (v == 1) return _parseDependenciesField(json);
+return _parsePackagesField(json);   // v2 et v3
+----
+
+=== `_parsePackagesField` (v2/v3)
+
+Clé `packages` → map `{ "node_modules/pkg": { version, license, … } }`.
+
+. Ignore la clé vide `""` (racine du projet)
+. Retire le préfixe `node_modules/` du nom
+. `_extractLicense(raw)` : gère `String | List` (certains packages déclarent
+  plusieurs licences sous forme de tableau `[{ "type": "MIT" }]`)
+
+=== `_parseDependenciesField` (v1)
+
+Clé `dependencies` → map récursive (dépendances imbriquées).
+
+. Traitement récursif : pour chaque package, ses propres `dependencies` sont
+  aussi parsés (dépendances imbriquées de npm v1)
+. Chaque paquet a `version` et `resolved` au plus haut niveau
+
+== `lib/yarn_parser.dart` — Paquets yarn
+
+Parseur pur Dart pour `yarn.lock`, compatible yarn v1 (classique) et yarn v2+
+(Berry).
+
+=== Détection de format
+
+[source,dart]
+----
+final isBerry = content.contains('__metadata:');
+return isBerry ? _parseBerry(content) : _parseClassic(content);
+----
+
+=== `_parseClassic` (yarn v1)
+
+Format : blocs `"pkg@^1.0.0":` suivis de lignes indentées.
+
+[source,text]
+----
+"lodash@^4.17.21":
+  version "4.17.21"
+  resolved "https://registry.yarnpkg.com/..."
+----
+
+. Détecte les lignes d'en-tête (non indentées, se terminant par `:`)
+. Extrait `name` via `_nameFromHeader()` qui gère les scopes `@scope/pkg`,
+  préfixes `@npm:`, `@patch:`, et en-têtes multi-spécifications séparées par `, `
+. Regroupe les champs `version`, `resolved` dans `_YarnBlock`
+. Déduplique par `name@version`
+
+=== `_parseBerry` (yarn v2+)
+
+Format : blocs `"pkg@npm:^1.0.0":` avec syntaxe YAML-like sans guillemets.
+
+[source,text]
+----
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+----
+
+. Même logique de blocs que classique
+. La clé `version:` n'a pas de guillemets (contrairement à yarn v1)
+. `__metadata:` est ignoré (bloc de métadonnées Berry)
+
+== `lib/maven_parser.dart` — Dépendances Maven
+
+Parseur pur Dart pour `pom.xml`. Utilise de l'extraction XML légère par regex
+(aucune bibliothèque XML disponible — seule dépendance pubspec : `args: ^2.4.2`).
+
+=== Pré-nettoyage
+
+Avant extraction, les sections confondantes sont retirées du XML :
+
+[source,dart]
+----
+String _stripSection(String xml, String tag) =>
+    xml.replaceAll(RegExp('<$tag[^>]*>.*?</$tag>', dotAll: true), '');
+
+final cleaned = _stripSection(
+    _stripSection(_stripSection(content, 'dependencyManagement'), 'build'),
+    'plugin');
+----
+
+Cela évite d'extraire les dépendances de `dependencyManagement` (déclarations
+de version sans dépendance effective) et les plugins Maven.
+
+=== Extraction des dépendances
+
+Regex sur chaque bloc `<dependency>…</dependency>` :
+
+. `_extractFirst(xml, 'groupId')` et `_extractFirst(xml, 'artifactId')` via regex
+. Version extraite via `_extractFirst(xml, 'version')` (vide si variable `${…}`)
+. Scope `test` ou `system` → ignoré
+. Name stocké comme `groupId:artifactId` (séparateur `:` pour la reconstruction PURL)
+
+=== PURL Maven
+
+Le getter `WheelPackage.purl` gère le type `'maven'` spécifiquement :
+
+[source,dart]
+----
+if (_packageType == 'maven') {
+  final parts = name.split(':');  // ["org.slf4j", "slf4j-api"]
+  final ns = Uri.encodeComponent(parts[0]);
+  final nm = Uri.encodeComponent(parts[1]);
+  return 'pkg:maven/$ns/$nm@$v';
+}
+----
+
+Exemple : `org.slf4j:slf4j-api@2.0.7` → `pkg:maven/org.slf4j/slf4j-api@2.0.7`
+
+== `lib/csv_generator.dart` — Export CSV
+
+Génère un fichier CSV (RFC 4180) à partir d'une `List<Package>`.
+
+=== Signature
+
+[source,dart]
+----
+Future<void> writeToFile(List<Package> packages, String outputPath,
+    {String documentName = 'SBOM', String? inputRef}) async
+----
+
+=== Format de sortie
+
+En-tête fixe : `name,version,architecture,license,type,purl,url,vendor`
+
+Les paquets sont triés par nom avant écriture. Chaque colonne est passée par
+`_cell(value)` :
+
+[source,dart]
+----
+String _cell(String v) {
+  if (v.contains(',') || v.contains('"') || v.contains('\n')) {
+    return '"${v.replaceAll('"', '""')}"';
+  }
+  return v;
+}
+----
+
+RFC 4180 : les valeurs contenant une virgule, un guillemet ou une nouvelle ligne
+sont entourées de guillemets doubles, et les guillemets internes sont doublés.
+
+== `lib/sbom_reader.dart` — Lecteur SBOM
+
+Relit un fichier SBOM JSON existant et reconstruit une `List<Package>`.
+Utilisé par la sous-commande `convert`.
+
+=== `SbomFormat` enum
+
+[source,dart]
+----
+enum SbomFormat { cyclonedx, spdx2, spdx3, unknown }
+----
+
+=== Détection de format
+
+[source,dart]
+----
+static SbomFormat detectFormat(Map<String, dynamic> json) {
+  if (json['bomFormat'] == 'CycloneDX')    return SbomFormat.cyclonedx;
+  if (json.containsKey('spdxVersion'))     return SbomFormat.spdx2;
+  if (json.containsKey('@context') && json.containsKey('@graph'))
+                                           return SbomFormat.spdx3;
+  return SbomFormat.unknown;
+}
+----
+
+=== Méthode `read(json)`
+
+Dispatche selon le format :
+
+* *CycloneDX* : lit `json['components']` → `List<Map>` → `_cdxComponent(c)` pour chaque élément
+* *SPDX 2.3* : lit `json['packages']` → `_spdx2Package(p)` pour chaque élément
+* *SPDX 3.0* : lit `json['@graph']` → filtre les nodes de type `software_Package` → `_spdx3Package(node)`
+
+Chaque extracteur renseigne : `name`, `version`, `purl`, `license`, `vendor`,
+`url`, `sha256` (si présent), et infère le `packageType` via `_purlToType(purl)`.
+
+=== `_purlToType(String purl)`
+
+[source,dart]
+----
+String _purlToType(String purl) => switch (true) {
+  _ when purl.startsWith('pkg:rpm/')      => 'rpm',
+  _ when purl.startsWith('pkg:golang/')   => 'golang',
+  _ when purl.startsWith('pkg:npm/')      => 'npm',
+  _ when purl.startsWith('pkg:maven/')    => 'maven',
+  _ when purl.startsWith('pkg:pypi/')     => 'pypi',
+  _ when purl.startsWith('pkg:cargo/')    => 'cargo',
+  _ when purl.startsWith('pkg:apk/')      => 'apk',
+  _ when purl.startsWith('pkg:deb/')      => 'deb',
+  _                                       => 'source',
+};
+----
 
 == `bin/sbom_generator.dart` — Point d'entrée
 
@@ -1220,6 +1532,9 @@ un fichier de sortie distinct.
 
 |`html`
 |`.html`
+
+|`csv`
+|`.csv`
 |===
 
 `_basePath(output)` retire les extensions connues du nom passé à `--output`
@@ -1231,14 +1546,16 @@ La boucle de résolution de dépendances est skippée si *tous* les formats
 demandés sont `markdown` ou `asciidoc` (les deux formats tabulaires ne
 nécessitent pas les relations de dépendances).
 
-=== Sous-commandes `diff` et `merge` _(nouveau)_
+=== Sous-commandes `diff`, `merge`, `convert` et `validate` _(nouveau)_
 
 Routage avant le parsing principal :
 
 [source,dart]
 ----
-if (arguments.first == 'diff')  { await _runDiff(arguments.sublist(1));  return; }
-if (arguments.first == 'merge') { await _runMerge(arguments.sublist(1)); return; }
+if (arguments.first == 'diff')     { await _runDiff(arguments.sublist(1));     return; }
+if (arguments.first == 'merge')    { await _runMerge(arguments.sublist(1));    return; }
+if (arguments.first == 'convert')  { await _runConvert(arguments.sublist(1));  return; }
+if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); return; }
 ----
 
 *`_runDiff(args)`* : valide 2 arguments positionnels, charge les fichiers via
@@ -1248,6 +1565,65 @@ if (arguments.first == 'merge') { await _runMerge(arguments.sublist(1)); return;
 
 *`_runMerge(args)`* : valide N ≥ 2 arguments positionnels + `-o <sortie>`.
 Charge chaque SBOM, appelle `SbomMerger.merge()`, écrit le JSON résultant.
+
+*`_runConvert(args)`* : convertit un SBOM existant vers un ou plusieurs formats
+sans re-scanner les sources.
+
+Options : `-i <source>` (obligatoire), `-f <formats>` (virgule-séparés),
+`-o <sortie>` (base de chemin), `-n <nom>` (nom du document).
+
+Implémentation :
+. Charge le JSON source via `SbomReader.loadJson(path)`
+. Détecte le format avec `SbomReader.detectFormat(json)` → `SbomFormat` enum
+. Relit les paquets avec `SbomReader().read(json)` → `List<Package>`
+. Réutilise la boucle de génération existante (mêmes générateurs que scan)
+
+[source,dart]
+----
+final json  = await SbomReader.loadJson(inputFile);
+final pkgs  = SbomReader().read(json);
+final docName = nameOpt ?? SbomReader().documentName(json) ?? 'converted';
+// puis switch (fmt) { case 'cyclonedx': … case 'csv': … }
+----
+
+*`_runValidate(args)`* : vérifie la conformité structurelle d'un ou plusieurs
+fichiers SBOM (champs obligatoires) sans dépendance externe.
+
+Options : arguments positionnels (fichiers à valider), `--strict` (vérifie
+aussi les champs recommandés). Code retour `0` = tous valides, `1` = au moins
+un invalide.
+
+[source,dart]
+----
+Future<bool> _validateSbom(Map<String, dynamic> json, bool strict) {
+  final format = SbomReader.detectFormat(json);
+  return switch (format) {
+    SbomFormat.cyclonedx => _validateCycloneDx(json, strict),
+    SbomFormat.spdx2     => _validateSpdx2(json, strict),
+    SbomFormat.spdx3     => _validateSpdx3(json, strict),
+    _                    => false,
+  };
+}
+----
+
+Champs vérifiés :
+
+[cols="1,2,2", options="header"]
+|===
+|Format |Obligatoires |Recommandés (strict)
+
+|CycloneDX
+|`bomFormat`, `specVersion`, `serialNumber`, `components`
+|`metadata.timestamp`, `metadata.component`, `version`
+
+|SPDX 2.3
+|`spdxVersion`, `SPDXID`, `name`, `dataLicense`, `packages`
+|`documentNamespace`, `creationInfo`
+
+|SPDX 3.0
+|`@context`, `@graph`
+|au moins un node de type `software_Package` dans `@graph`
+|===
 
 === Options CI/CD _(nouveau)_
 
@@ -1999,8 +2375,12 @@ entrées sont lancées simultanément.
 main()
   ├── ArgParser.parse()                       (--concurrency validé ≥ 0)
   ├── File.readAsLines()                      [si --input fourni]
-  ├── [pré-expansion .txt]
-  │     └── RequirementsParser.parseFile() → preloadedPackages
+  ├── [pré-expansion manifestes]
+  │     ├── RequirementsParser.parseFile()   → preloadedPackages [.txt]
+  │     ├── GoParser.parseGoSum/parseGoMod() → preloadedPackages [go.sum/go.mod]
+  │     ├── NpmParser.parsePackageLock()     → preloadedPackages [package-lock.json]
+  │     ├── YarnParser.parseYarnLock()       → preloadedPackages [yarn.lock]
+  │     └── MavenParser.parsePomXml()        → preloadedPackages [pom.xml]
   ├── [indexation --rpm-dir]                  [si --rpm-dir spécifié]
   │     └── dir.list(recursive: true) → rpmExactIndex + rpmNameIndex
   ├── Process.run('<ociTool>', ['--version'])  [si --image fourni]
@@ -2043,8 +2423,8 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (72 au total)
-dart test test/unit/                 # tests unitaires seuls (64)
+dart test                            # tous les tests (117 au total)
+dart test test/unit/                 # tests unitaires seuls (109)
 dart test test/integration/          # tests d'intégration (8, requiert python3)
 ----
 
@@ -2073,6 +2453,30 @@ dart test test/integration/          # tests d'intégration (8, requiert python3
 |`test/unit/oci_parser_test.dart`
 |4
 |`OciParser.detectRefType` — `.tar`, `.tar.gz`, `.tgz`, référence registre
+
+|`test/unit/go_parser_test.dart`
+|11
+|`parseGoSum` (6 : basic, /go.mod skip, version strip, dedup, multi-module, missing),
+`parseGoMod` (4 : bloc require, require inline, commentaire indirect, missing), erreur (1)
+
+|`test/unit/npm_parser_test.dart`
+|14
+|v2/v3 `packages` field (5 : basic, scope, skip root, license list, missing),
+v1 `dependencies` field (2 : basic, nested), erreurs (2), PURLs (5)
+
+|`test/unit/yarn_parser_test.dart`
+|18
+|yarn v1 classique (5 : basic, scoped, multi-spec header, version, missing),
+yarn v2+ Berry (2 : basic, version), erreurs (2), nom et PURL (9)
+
+|`test/unit/maven_parser_test.dart`
+|10
+|extraction de base, nom groupId:artifactId, version, scope test/system, dependencyManagement,
+packageType, PURL, fichier inexistant, pom sans dependencies
+
+|`test/unit/csv_generator_test.dart`
+|7
+|headers, ligne par paquet, tri par nom, échappement virgule, guillemets, PURLs, fichier vide
 |===
 
 === Suite d'intégration
@@ -2091,11 +2495,14 @@ automatiquement si `python3` est absent.
 
 == Checklist avant modification
 
-* [ ] `dart analyze` passe sans erreur ni avertissement (`No issues found!`)
+* [ ] `dart analyze lib/ bin/ test/` passe sans erreur ni avertissement (`No issues found!`)
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
-* [ ] `dart test` — tous les 68 tests verts
+* [ ] `dart test` — tous les 117 tests verts (109 unitaires + 8 intégration)
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
 * [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + requirements.txt + `--image`
+* [ ] Test avec manifestes Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
+* [ ] Test sous-commande `convert` : CycloneDX → SPDX, SPDX → CycloneDX, tous → CSV
+* [ ] Test sous-commande `validate` : fichier valide, invalide, strict mode
 * [ ] Si modification de `--rpm-dir` : vérifier résolution exacte (NEVRA), résolution
   par nom, avertissement multi-match, fallback `rpm -q` si absent
 * [ ] Le SBOM CycloneDX passe `sbom_schema_valid: 10.0` dans sbomqs
@@ -2112,6 +2519,8 @@ automatiquement si `python3` est absent.
   (`if (pkg is …)`), `bin/sbom_generator.dart` (dispatch + outil check) et ce document
 * [ ] Si modification de `OciParser` ou `--image`/`--oci-tool` : tester les trois backends
   (syft, trivy, skopeo) avec registre, tar et OCI layout
+* [ ] Si ajout d'un parseur manifeste (1:N) : l'ajouter au bloc de pré-expansion dans
+  `main()` avec son helper `_isXxx()` — ne pas passer par la boucle concurrente
 
 == Dépendances externes
 

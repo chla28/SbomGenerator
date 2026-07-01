@@ -6,11 +6,11 @@
 :icons: font
 :source-highlighter: rouge
 :rouge-style: monokai
-:docdate: 2026-06-29
+:docdate: 2026-06-30
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
-Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *requirements.txt* et *images OCI* (via syft, trivy ou skopeo).
-Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown* et *AsciiDoc*.
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml) et *images OCI* (via syft, trivy ou skopeo).
+Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
 
 == Prérequis
 
@@ -97,6 +97,8 @@ sbom_generator -I <image-oci> [options]
 sbom_generator -i <fichier> -I <image-oci> [options]
 sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
+sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
+sbom_generator validate <sbom1> [<sbom2> ...]
 ....
 
 === Options
@@ -232,6 +234,14 @@ Un fichier `<sbom>.bundle` est créé à côté de chaque fichier signé.
 |`.html`
 |Rapport HTML autonome (aucune dépendance externe) : statistiques,
 graphiques par écosystème et licence (top 10/15), tableau filtrable et triable.
+
+|`csv`
+|—
+|—
+|`.csv`
+|Fichier CSV (RFC 4180) : une ligne par paquet, colonnes `name`, `version`,
+`architecture`, `license`, `type`, `purl`, `url`, `vendor`. Idéal pour intégration
+dans Excel, Jira ou tout outil de reporting.
 |===
 
 En mode multi-format (`-f cyclonedx,spdx,markdown`), `--output` est traité comme
@@ -279,6 +289,26 @@ librement dans le même fichier.
 |Fichier `requirements.txt`
 |`/opt/project/requirements.txt`
 |Parseur pur Dart (PEP 508 simplifié)
+
+|Modules Go (`go.sum`)
+|`/opt/myapp/go.sum`
+|Parseur pur Dart — extrait module et version ; PURL `pkg:golang/…`
+
+|Modules Go (`go.mod`)
+|`/opt/myapp/go.mod`
+|Parseur pur Dart — extraits des directives `require` ; PURL `pkg:golang/…`
+
+|Paquets npm (`package-lock.json`)
+|`/opt/myapp/package-lock.json`
+|Parseur pur Dart — lockfileVersion 1, 2 et 3 ; PURL `pkg:npm/…`
+
+|Paquets yarn (`yarn.lock`)
+|`/opt/myapp/yarn.lock`
+|Parseur pur Dart — yarn v1 classique et yarn v2+ Berry ; PURL `pkg:npm/…`
+
+|Dépendances Maven (`pom.xml`)
+|`/opt/myapp/pom.xml`
+|Parseur pur Dart — scope compile/provided, hors test et dependencyManagement ; PURL `pkg:maven/…`
 |===
 
 === Règles de syntaxe
@@ -311,6 +341,16 @@ openssl-libs
 
 # Dépendances Python
 /opt/project/requirements.txt
+
+# Modules Go (au choix : go.sum ou go.mod)
+/opt/myapp/go.sum
+
+# Paquets npm / yarn
+/opt/webapp/package-lock.json
+/opt/webapp/yarn.lock
+
+# Dépendances Maven
+/opt/javaapp/pom.xml
 
 # Commenter un paquet temporairement
 # systemd
@@ -454,6 +494,87 @@ Les formats `.tar`, `.tar.gz` et `.tgz` sont détectés automatiquement.
 # Génère : sbom.cdx.json + sbom.cdx.json.bundle (signature cosign)
 #          sbom.spdx.json + sbom.spdx.json.bundle
 ----
+
+=== Rapport CSV
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f csv -o rapport.csv
+# → rapport.csv : une ligne par paquet, colonnes :
+#   name,version,architecture,license,type,purl,url,vendor
+----
+
+=== Modules Go
+
+[source,bash]
+----
+# Depuis go.sum (toutes les dépendances checksum)
+echo "/opt/myapp/go.sum" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -n "MyGoApp" -o sbom.cdx.json
+
+# Depuis go.mod (dépendances directes et indirectes)
+echo "/opt/myapp/go.mod" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -o sbom.cdx.json
+----
+
+=== Paquets npm / yarn
+
+[source,bash]
+----
+# npm package-lock.json (v1, v2 ou v3)
+echo "/opt/webapp/package-lock.json" > sources.txt
+./sbom_generator -i sources.txt -f spdx -o webapp.spdx.json
+
+# yarn.lock (v1 classique ou v2+ Berry)
+echo "/opt/webapp/yarn.lock" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx,csv -o webapp
+# → webapp.cdx.json + webapp.csv
+----
+
+=== Dépendances Maven
+
+[source,bash]
+----
+echo "/opt/javaapp/pom.xml" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -n "MonServiceJava" -o sbom.cdx.json
+----
+
+=== Conversion de format (`convert`)
+
+Convertit un fichier SBOM existant vers un ou plusieurs formats sans re-scanner :
+
+[source,bash]
+----
+# CycloneDX → SPDX 2.3
+./sbom_generator convert -i sbom.cdx.json -f spdx -o sbom.spdx.json
+
+# SPDX → CycloneDX + CSV (formats multiples)
+./sbom_generator convert -i sbom.spdx.json -f cyclonedx,csv -o rapport
+
+# Tous les formats en une seule commande
+./sbom_generator convert -i sbom.cdx.json -f spdx,spdx3,markdown,csv -o sbom
+----
+
+Formats source acceptés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD.
+
+=== Validation de SBOM (`validate`)
+
+Vérifie la conformité structurelle d'un ou plusieurs fichiers SBOM :
+
+[source,bash]
+----
+# Valider un fichier
+./sbom_generator validate sbom.cdx.json
+# → sbom.cdx.json : OK (CycloneDX 1.6)
+
+# Valider plusieurs fichiers en une passe (exit 1 si au moins un invalide)
+./sbom_generator validate sbom.cdx.json sbom.spdx.json
+
+# Mode strict (les champs recommandés sont aussi vérifiés)
+./sbom_generator validate --strict sbom.cdx.json
+----
+
+Codes de retour : `0` = tous valides, `1` = au moins un fichier invalide ou introuvable.
 
 === Comparaison de deux SBOMs (`diff`)
 
@@ -669,7 +790,7 @@ CycloneDX dans cette version de sbomqs (toujours 0, indépendamment du contenu).
 ....
 sbom_generator/
 ├── bin/
-│   └── sbom_generator.dart        # Point d'entrée CLI
+│   └── sbom_generator.dart        # Point d'entrée CLI (sous-commandes : diff, merge, scan, convert, validate)
 ├── lib/
 │   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
 │   ├── rpm_parser.dart            # Interrogation rpm + résolution dépendances
@@ -678,20 +799,27 @@ sbom_generator/
 │   ├── zip_parser.dart            # Lecture archives .zip
 │   ├── deb_parser.dart            # Lecture paquets .deb (dpkg-deb)
 │   ├── requirements_parser.dart   # Lecture requirements.txt (pur Dart)
+│   ├── go_parser.dart             # Lecture go.sum et go.mod (pur Dart)
+│   ├── npm_parser.dart            # Lecture package-lock.json v1/v2/v3 (pur Dart)
+│   ├── yarn_parser.dart           # Lecture yarn.lock v1 et v2+ Berry (pur Dart)
+│   ├── maven_parser.dart          # Lecture pom.xml (pur Dart, extraction XML légère)
 │   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo)
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée
+│   ├── sbom_reader.dart           # Lecteur SBOM (CycloneDX/SPDX) → List<Package>
 │   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6
 │   ├── spdx_generator.dart        # Générateur SPDX 2.3
 │   ├── spdx3_generator.dart       # Générateur SPDX 3.0 JSON-LD
 │   ├── simple_json_generator.dart # Générateur JSON personnalisé
 │   ├── markdown_generator.dart    # Tableau Markdown des licences
-│   └── asciidoc_generator.dart    # Tableau AsciiDoc des licences
+│   ├── asciidoc_generator.dart    # Tableau AsciiDoc des licences
+│   ├── html_generator.dart        # Rapport HTML interactif autonome
+│   └── csv_generator.dart         # Export CSV (RFC 4180)
 ├── doc/
 │   ├── developer.adoc             # Documentation développeur
 │   └── usage.adoc                 # Ce document
 ├── test/
-│   ├── unit/                      # Tests unitaires (60 tests)
+│   ├── unit/                      # Tests unitaires (109 tests)
 │   └── integration/               # Tests d'intégration (8 tests)
 ├── sbom_generator                 # Binaire natif compilé
 ├── pubspec.yaml                   # Dépendances Dart (args ^2.4.2)
