@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - skopeo ne retournait aucun paquet RPM (chemin `--dbpath` incorrect)
 - Onglets de l'interface graphique maintenant scrollables pour éviter le chevauchement de texte
+- CLI : `--input` pointant directement vers une archive unique (`.zip`, `.tar`,
+  `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`) provoquait un crash
+  (`FileSystemException` de décodage UTF-8) au lieu d'être traité comme le
+  paquet à analyser ; message d'erreur explicite pour les autres cas de
+  fichier illisible
+- GUI : les champs *Fichier de paquets* et *Image OCI* sont désormais
+  mutuellement exclusifs — remplir l'un vide automatiquement l'autre (saisie,
+  glisser-déposer, sélecteur de fichier/répertoire), pour éviter toute
+  ambiguïté sur la source réellement utilisée
 
 ## [1.0.0] - 2026-06-22
 

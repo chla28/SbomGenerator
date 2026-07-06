@@ -329,7 +329,13 @@ Le fichier doit contenir *un élément par ligne*. Les types acceptés sont :
 Un seul fichier d'entrée peut contenir des lignes de types différents.
 
 NOTE: Le champ *Fichier d'entrée* devient optionnel si une *Image OCI* est
-spécifiée dans la section suivante — les deux sources peuvent être combinées.
+spécifiée dans la section suivante.
+
+IMPORTANT: Les champs *Fichier d'entrée* et *Image OCI* sont mutuellement
+exclusifs dans l'interface : remplir l'un (saisie, glisser-déposer ou
+sélecteur de fichier/répertoire) vide automatiquement l'autre. Pour combiner
+les deux sources en une seule analyse, utilisez la ligne de commande
+(`--input` et `--image` ensemble).
 
 === Section Image OCI
 

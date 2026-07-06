@@ -1409,6 +1409,46 @@ String _purlToType(String purl) => switch (true) {
 
 == `bin/sbom_generator.dart` — Point d'entrée
 
+=== Option `--input` / `-i` — archive unique acceptée directement
+
+Historiquement, `--input` devait toujours pointer vers un fichier liste
+(texte, une référence par ligne). Passer directement une archive binaire
+(`.zip` notamment) faisait planter `File.readAsLines()` avec une
+`FileSystemException` de décodage UTF-8 peu explicite.
+
+`_isSingleArchiveInput()` détecte désormais si `inputPath` pointe lui-même
+vers une archive/un paquet unique et, dans ce cas, l'utilise tel quel comme
+unique référence — sans passer par `readAsLines` :
+
+[source,dart]
+----
+bool _isSingleArchiveInput(String path) =>
+    path.endsWith('.zip') ||
+    _isTar(path) ||
+    path.endsWith('.whl') ||
+    path.endsWith('.deb') ||
+    path.endsWith('.rpm');
+
+if (inputPath != null) {
+  if (_isSingleArchiveInput(inputPath)) {
+    packageRefs = [inputPath];
+  } else {
+    try {
+      lines = await File(inputPath).readAsLines();
+    } on FileSystemException {
+      _err('… message explicite …');
+      exit(1);
+    }
+    // … découpage en packageRefs …
+  }
+}
+----
+
+Pour tout chemin restant, la lecture ligne par ligne est protégée par un
+`try/catch` : toute `FileSystemException` (fichier binaire non reconnu,
+encodage invalide) produit un message d'erreur actionnable au lieu d'une
+stack trace brute.
+
 === Option `--image` / `-I` _(nouveau)_
 
 Référence à une image OCI à analyser. Trois formats acceptés :
@@ -2374,7 +2414,9 @@ entrées sont lancées simultanément.
 ....
 main()
   ├── ArgParser.parse()                       (--concurrency validé ≥ 0)
-  ├── File.readAsLines()                      [si --input fourni]
+  ├── _isSingleArchiveInput(inputPath)          [si --input fourni]
+  │     ├── true  → packageRefs = [inputPath]
+  │     └── false → File.readAsLines() (try/catch FileSystemException)
   ├── [pré-expansion manifestes]
   │     ├── RequirementsParser.parseFile()   → preloadedPackages [.txt]
   │     ├── GoParser.parseGoSum/parseGoMod() → preloadedPackages [go.sum/go.mod]

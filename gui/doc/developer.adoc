@@ -621,6 +621,32 @@ validator: (v) => (v == null || v.trim().isEmpty) &&
         : null,
 ----
 
+*Exclusivité mutuelle* : `_inputCtrl` et `_imageCtrl` sont mutuellement
+exclusifs dans l'UI — remplir l'un vide l'autre, afin d'éviter toute
+ambiguïté sur la source réellement utilisée (le CLI, lui, sait combiner les
+deux). Chaque point d'entrée qui modifie l'un des deux champs vide l'autre
+avant d'appeler `_sync()` :
+
+* `onChanged` des deux `TextFormField` (saisie manuelle)
+* `onDragDone` du `DropTarget` (glisser-déposer sur le champ fichier d'entrée)
+* `_pickFile()` / `_pickDir()` — un paramètre optionnel `TextEditingController? clears`
+  a été ajouté à ces deux helpers génériques (également utilisés par
+  `rpm-dir`, `license-map`, etc.) ; seuls les appels pour `_inputCtrl` et
+  `_imageCtrl` le renseignent :
++
+[source,dart]
+----
+Future<void> _pickFile(TextEditingController ctrl,
+    {String? title, List<String>? extensions,
+    TextEditingController? clears}) async {
+  …
+  ctrl.text = r.files.single.path!;
+  clears?.clear();
+  _sync();
+  setState(() {});
+}
+----
+
 *Prévisualisation de la commande* : le widget `_CommandPreview` est inséré
 entre le bouton *▶ Générer le SBOM* et la fin du formulaire. Il lit
 `config.toCommandLine(SettingsService.cliBinary)` à chaque `build()` (donc

@@ -317,6 +317,20 @@ librement dans le même fichier.
 * Les lignes commençant par `#` sont des commentaires et sont ignorées.
 * Les paquets identiques (même `bomRef`) sont automatiquement dédupliqués.
 
+=== Raccourci : passer directement une archive unique
+
+`--input` accepte aussi directement le chemin d'une archive ou d'un paquet
+unique (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`), sans passer
+par un fichier liste intermédiaire :
+
+[source,shell]
+----
+sbom_generator -i /opt/3PP/myapp-2.0.0-linux-amd64.zip -o sbom
+----
+
+Pour tout autre chemin, `--input` reste interprété comme un fichier liste
+(une référence par ligne, voir ci-dessus).
+
 === Exemple de fichier d'entrée mixte
 
 [source,text]
