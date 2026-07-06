@@ -116,7 +116,9 @@ class _ConfigPanelState extends State<ConfigPanel> {
   }
 
   Future<void> _pickFile(TextEditingController ctrl,
-      {String? title, List<String>? extensions}) async {
+      {String? title,
+      List<String>? extensions,
+      TextEditingController? clears}) async {
     final r = await FilePicker.platform.pickFiles(
       dialogTitle: title,
       type: extensions != null ? FileType.custom : FileType.any,
@@ -124,16 +126,18 @@ class _ConfigPanelState extends State<ConfigPanel> {
     );
     if (r != null && r.files.single.path != null) {
       ctrl.text = r.files.single.path!;
+      clears?.clear();
       _sync();
       setState(() {});
     }
   }
 
   Future<void> _pickDir(TextEditingController ctrl,
-      {String? title, VoidCallback? onDone}) async {
+      {String? title, VoidCallback? onDone, TextEditingController? clears}) async {
     final r = await FilePicker.platform.getDirectoryPath(dialogTitle: title);
     if (r != null) {
       ctrl.text = r;
+      clears?.clear();
       onDone?.call();
     }
   }
@@ -210,6 +214,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
                         onDragDone: (detail) {
                           if (detail.files.isNotEmpty) {
                             _inputCtrl.text = detail.files.first.path;
+                            _imageCtrl.clear();
                             _sync();
                           }
                           setState(() => _isDragging = false);
@@ -238,13 +243,16 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
                               extensions: ['lst', 'txt'],
+                              clears: _imageCtrl,
                             ),
                             filterLabel: '.lst .txt',
                             onPick: () => _pickFile(
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
+                              clears: _imageCtrl,
                             ),
-                            onChanged: (_) {
+                            onChanged: (v) {
+                              if (v.trim().isNotEmpty) _imageCtrl.clear();
                               _sync();
                               setState(() {});
                             },
@@ -307,10 +315,16 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           _imageCtrl,
                           title: 'Sélectionner une archive OCI',
                           extensions: ['tar', 'gz', 'tgz'],
+                          clears: _inputCtrl,
                         ),
-                        onPickDir: () =>
-                            _pickDir(_imageCtrl, title: 'Sélectionner un répertoire OCI layout', onDone: _sync),
-                        onChanged: (_) {
+                        onPickDir: () => _pickDir(
+                          _imageCtrl,
+                          title: 'Sélectionner un répertoire OCI layout',
+                          onDone: _sync,
+                          clears: _inputCtrl,
+                        ),
+                        onChanged: (v) {
+                          if (v.trim().isNotEmpty) _inputCtrl.clear();
                           _sync();
                           setState(() {});
                         },
