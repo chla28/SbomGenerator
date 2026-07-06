@@ -274,16 +274,31 @@ Future<void> main(List<String> arguments) async {
   // --- Read package list (optionnel si --image est fourni) ---
   List<String> packageRefs = [];
   if (inputPath != null) {
-    final lines = await File(inputPath).readAsLines();
-    packageRefs = lines
-        .map((l) => l.trim())
-        .where((l) => l.isNotEmpty && !l.startsWith('#'))
-        .toList();
+    if (_isSingleArchiveInput(inputPath)) {
+      // --input pointe directement vers une archive/paquet unique
+      // (et non vers un fichier liste) : on l'utilise telle quelle.
+      packageRefs = [inputPath];
+    } else {
+      List<String> lines;
+      try {
+        lines = await File(inputPath).readAsLines();
+      } on FileSystemException {
+        _err('$inputPath ne semble pas être un fichier texte lisible. '
+            'Si c\'est une archive (.zip/.tar/.tar.gz/.tgz/.whl/.deb/.rpm), '
+            'passez-la directement via --input, sinon --input doit être un '
+            'fichier listant une référence de paquet par ligne.');
+        exit(1);
+      }
+      packageRefs = lines
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty && !l.startsWith('#'))
+          .toList();
 
-    if (packageRefs.isEmpty && imageRef == null) {
-      _err('No packages found in $inputPath '
-          '(empty file or all lines are comments).');
-      exit(1);
+      if (packageRefs.isEmpty && imageRef == null) {
+        _err('No packages found in $inputPath '
+            '(empty file or all lines are comments).');
+        exit(1);
+      }
     }
   }
 
@@ -805,6 +820,15 @@ Future<void> _signWithCosign(String sbomPath, {bool verbose = false}) async {
 
 bool _isTar(String ref) =>
     ref.endsWith('.tar') || ref.endsWith('.tar.gz') || ref.endsWith('.tgz');
+
+/// True si --input pointe directement vers une archive/un paquet unique
+/// plutôt que vers un fichier liste (une référence par ligne).
+bool _isSingleArchiveInput(String path) =>
+    path.endsWith('.zip') ||
+    _isTar(path) ||
+    path.endsWith('.whl') ||
+    path.endsWith('.deb') ||
+    path.endsWith('.rpm');
 
 bool _isRequirements(String ref) =>
     ref.endsWith('.txt') && !ref.endsWith('.whl');
