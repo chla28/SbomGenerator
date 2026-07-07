@@ -103,13 +103,14 @@ class DashboardPanel extends StatelessWidget {
                   );
           }),
 
-          // ── CVEs présents dans plusieurs scanners ──
+          // ── Comparaison inter-scanners (union complète des CVE) ──
           if (scansRun >= 2 && allIds.isNotEmpty) ...[
             const SizedBox(height: 24),
             _CrossScannerSection(
               grypeVulns: grype,
               osvVulns: osv,
               trivyVulns: trivy,
+              scansRun: scansRun,
             ),
           ],
         ],
@@ -475,11 +476,13 @@ class _CrossScannerSection extends StatelessWidget {
   final List<GrypeVuln>? grypeVulns;
   final List<OsvVuln>? osvVulns;
   final List<TrivyVuln>? trivyVulns;
+  final int scansRun;
 
   const _CrossScannerSection({
     required this.grypeVulns,
     required this.osvVulns,
     required this.trivyVulns,
+    required this.scansRun,
   });
 
   @override
@@ -489,15 +492,10 @@ class _CrossScannerSection extends StatelessWidget {
     final osvIds = osvVulns?.map((v) => v.id).toSet() ?? {};
     final trivyIds = trivyVulns?.map((v) => v.id).toSet() ?? {};
 
-    // CVEs dans au moins 2 scanners
-    final allIds = {...grypeIds, ...osvIds, ...trivyIds};
-    final crossIds = allIds.where((id) {
-      int n = 0;
-      if (grypeIds.contains(id)) n++;
-      if (osvIds.contains(id)) n++;
-      if (trivyIds.contains(id)) n++;
-      return n >= 2;
-    }).toList();
+    // Union complète : toutes les CVE vues par au moins un scanner, pas
+    // seulement celles communes à plusieurs — c'est justement en gardant
+    // les CVE isolées qu'on repère les écarts de détection entre scanners.
+    final crossIds = {...grypeIds, ...osvIds, ...trivyIds}.toList();
 
     if (crossIds.isEmpty) return const SizedBox.shrink();
 
@@ -535,7 +533,7 @@ class _CrossScannerSection extends StatelessWidget {
                 const Icon(Icons.join_inner, size: 18, color: Colors.deepOrange),
                 const SizedBox(width: 8),
                 Text(
-                  'CVE détectés par plusieurs scanners (${crossIds.length})',
+                  'Comparaison inter-scanners (${crossIds.length} CVE)',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
                 ),
@@ -584,6 +582,7 @@ class _CrossScannerSection extends StatelessWidget {
                 inOsv: osvIds.contains(id),
                 inTrivy: trivyIds.contains(id),
                 severity: grypeMap[id] ?? osvMap[id] ?? trivyMap[id] ?? '',
+                scansRun: scansRun,
               ),
           ],
         ),
@@ -598,6 +597,7 @@ class _CrossRow extends StatelessWidget {
   final bool inOsv;
   final bool inTrivy;
   final String severity;
+  final int scansRun;
 
   const _CrossRow({
     required this.id,
@@ -605,6 +605,7 @@ class _CrossRow extends StatelessWidget {
     required this.inOsv,
     required this.inTrivy,
     required this.severity,
+    required this.scansRun,
   });
 
   static Color _fg(String s) => switch (s.toLowerCase()) {
@@ -627,10 +628,21 @@ class _CrossRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = _fg(severity);
     final bg = _bg(severity);
+    final foundByCount =
+        [inGrype, inOsv, inTrivy].where((present) => present).length;
+    // Vue par un seul scanner alors que plusieurs ont tourné : c'est
+    // précisément l'écart de détection que ce tableau doit faire ressortir.
+    final isIsolated = foundByCount == 1 && scansRun > 1;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
+        color: isIsolated ? const Color(0xFFFFF8E1) : null,
         border: Border(
+          left: BorderSide(
+            color: isIsolated ? Colors.amber[700]! : Colors.transparent,
+            width: 3,
+          ),
           bottom: BorderSide(color: Colors.grey[200]!, width: 0.5),
         ),
       ),
@@ -655,6 +667,14 @@ class _CrossRow extends StatelessWidget {
               ),
             ),
           ),
+          if (isIsolated) ...[
+            Tooltip(
+              message: 'Vu par un seul scanner sur $scansRun',
+              child: Icon(Icons.error_outline,
+                  size: 13, color: Colors.amber[800]),
+            ),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Text(
               id,

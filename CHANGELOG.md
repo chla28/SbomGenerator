@@ -34,6 +34,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Scan des JARs Maven dans le backend skopeo
 
 ### Fixed
+- GUI : le tableau « Comparaison inter-scanners » du tableau de bord n'affichait que les
+  CVE vues par au moins 2 scanners sur 3, masquant celles détectées par un seul scanner —
+  il liste désormais l'union complète des CVE (Grype ∪ OSV ∪ Trivy), avec un marqueur
+  visuel (bordure/icône ambre) sur les CVE vues par un seul scanner pour repérer les
+  écarts de détection entre outils
 - `.jar` sans `pom.properties` (la grande majorité des jars réels, hors builds Quarkus/RH)
   étaient silencieusement ignorés : `JarParser` lit désormais `META-INF/MANIFEST.MF`
   (`Bundle-SymbolicName`, `Implementation-Vendor-Id`, `Implementation-Title`,
