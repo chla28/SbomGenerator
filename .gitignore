@@ -4,7 +4,7 @@ bin/sbom_generator.exe
 bin/sbom_generator
 dist/
 .dart_tool/
-.tmp/
+./tmp/
 
 # Fixture d'intégration téléchargée localement (~450 Mo) pour
 # test/integration/oci_skopeo_test.dart — jamais commitée.
