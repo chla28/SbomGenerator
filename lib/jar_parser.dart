@@ -5,7 +5,11 @@ import 'models.dart';
 ///
 /// Fallback chain (each step only runs if the previous one found nothing):
 ///   1. `META-INF/maven/*/*/pom.properties` — groupId/artifactId/version,
-///      exactly as reported by the Maven build itself.
+///      exactly as reported by the Maven build itself. Shaded/uber jars can
+///      embed *several* `pom.properties` (their own plus relocated
+///      dependencies) — only one whose artifactId matches the jar's own
+///      filename is trusted; an ambiguous match is treated as "not found"
+///      rather than risking picking up a bundled dependency's identity.
 ///   2. Filename convention `<groupId>.<artifactId>-<version>.jar`
 ///      (Quarkus/Red Hat style) — both coordinates come from the name.
 ///   3. Filename `<artifactId>-<version>.jar` (the vast majority of real
@@ -31,23 +35,24 @@ class JarParser {
   ];
 
   Future<WheelPackage?> parseJarFile(String path) async {
-    final pomCoords = await _fromPomProperties(path);
+    final basename = path.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
+    final match = _versionSep.firstMatch(basename);
+    final prefix = match != null ? basename.substring(0, match.start) : null;
+
+    final pomCoords = await _fromPomProperties(path, expectedArtifactId: prefix);
     if (pomCoords != null) {
       final (groupId, artifactId, version) = pomCoords;
       return _toPackage(path, groupId, artifactId, version);
     }
 
-    final basename = path.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
-    final match = _versionSep.firstMatch(basename);
-    if (match == null) {
+    if (match == null || prefix == null) {
       stderr.writeln(
           'Warning: impossible de déterminer les coordonnées Maven de "$path" '
-          '(pas de META-INF/maven/*/*/pom.properties, et aucun suffixe de '
-          'version reconnaissable dans le nom de fichier)');
+          '(pas de META-INF/maven/*/*/pom.properties exploitable, et aucun '
+          'suffixe de version reconnaissable dans le nom de fichier)');
       return null;
     }
-    final prefix = basename.substring(0, match.start);
-    final version = basename.substring(match.start + 1);
+    final filenameVersion = basename.substring(match.start + 1);
 
     final lastDot = prefix.lastIndexOf('.');
     final String groupId;
@@ -61,7 +66,7 @@ class JarParser {
       groupId = await _groupIdFromManifest(path) ?? prefix;
     }
 
-    return _toPackage(path, groupId, artifactId, version);
+    return _toPackage(path, groupId, artifactId, filenameVersion);
   }
 
   WheelPackage _toPackage(
@@ -85,11 +90,40 @@ class JarParser {
     );
   }
 
-  Future<(String, String, String)?> _fromPomProperties(String path) async {
+  /// [expectedArtifactId], when known, is the artifactId guessed from the
+  /// jar's own filename (version suffix stripped). It disambiguates
+  /// shaded/uber jars that embed more than one `pom.properties`.
+  Future<(String, String, String)?> _fromPomProperties(
+    String path, {
+    required String? expectedArtifactId,
+  }) async {
+    // 1) Tentative ciblée : seul le pom.properties dont le segment artifactId
+    // correspond au nom de fichier du jar est lu — évite de piocher les
+    // métadonnées d'une dépendance relocalisée à l'intérieur d'un uber-jar
+    // (ex. netty-common-*.jar qui embarque aussi le pom.properties de
+    // jctools-core).
+    if (expectedArtifactId != null) {
+      final targeted = await _readPomProperties(
+          path, 'META-INF/maven/*/$expectedArtifactId/pom.properties');
+      if (targeted != null) return targeted;
+    }
+
+    // 2) Repli sur un glob large, mais uniquement si un unique pom.properties
+    // matche : s'il y en a plusieurs, impossible de savoir lequel décrit le
+    // jar lui-même plutôt qu'une dépendance embarquée — mieux vaut ne rien
+    // affirmer que d'afficher une identité erronée.
+    return _readPomProperties(
+        path, 'META-INF/maven/*/*/pom.properties', requireSingleMatch: true);
+  }
+
+  Future<(String, String, String)?> _readPomProperties(
+    String path,
+    String globPattern, {
+    bool requireSingleMatch = false,
+  }) async {
     final ProcessResult result;
     try {
-      result = await Process.run(
-          'unzip', ['-p', path, 'META-INF/maven/*/*/pom.properties']);
+      result = await Process.run('unzip', ['-p', path, globPattern]);
     } on ProcessException {
       return null;
     }
@@ -97,6 +131,10 @@ class JarParser {
 
     final content = result.stdout.toString();
     if (content.trim().isEmpty) return null;
+
+    if (requireSingleMatch && 'artifactId='.allMatches(content).length > 1) {
+      return null;
+    }
 
     String? groupId, artifactId, version;
     for (final rawLine in content.split('\n')) {

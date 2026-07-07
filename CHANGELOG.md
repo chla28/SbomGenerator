@@ -36,6 +36,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `Automatic-Module-Name`) et, à défaut, retombe sur `groupId = artifactId` plutôt que
   d'abandonner le paquet — sur un jeu réel de 207 jars, 82 étaient perdus par rapport à
   syft, 0 après ce correctif
+- `.jar` « shaded »/uber-jar embarquant le `pom.properties` d'une dépendance relocalisée
+  (ex. `netty-common-*.jar` qui embarque aussi celui de `org.jctools:jctools-core`)
+  ressortait avec l'identité de la dépendance embarquée au lieu de la sienne : `JarParser`
+  ne lit désormais que le `pom.properties` dont l'artifactId correspond au nom de fichier
+  du jar, et renonce (repli sur manifeste/nom de fichier) plutôt que de deviner en cas
+  d'ambiguïté — détecté par comparaison avec syft sur un second jeu réel de 274 jars
 - skopeo ne retournait aucun paquet RPM (chemin `--dbpath` incorrect)
 - Onglets de l'interface graphique maintenant scrollables pour éviter le chevauchement de texte
 - CLI : `--input` pointant directement vers une archive unique (`.zip`, `.tar`,

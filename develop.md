@@ -471,12 +471,33 @@ class JarParser {
 
 ### Chaîne de fallback
 
-1. `unzip -p <jar> "META-INF/maven/*/*/pom.properties"` — parsing clé=valeur
-   (`groupId`, `artifactId`, `version`). En cas d'archive avec plusieurs
-   `pom.properties` embarqués (jar « shaded »/uber-jar), les valeurs sont
-   simplement écrasées ligne à ligne (dernier match gagnant) : pas de gestion
-   de plusieurs artefacts par jar dans ce cas — cas jugé hors scope pour un
-   `.jar` passé individuellement en `--input`.
+1. `META-INF/maven/*/*/pom.properties` — parsing clé=valeur (`groupId`,
+   `artifactId`, `version`), en deux temps :
+   1. tentative **ciblée** : `unzip -p <jar> "META-INF/maven/*/<artifactId-du-nom-de-fichier>/pom.properties"`
+      — ne lit que le pom.properties dont le segment artifactId correspond
+      au nom de fichier du jar lui-même ;
+   2. à défaut, repli sur le glob large `META-INF/maven/*/*/pom.properties`,
+      mais **seulement si un unique `pom.properties` matche** (compté via
+      les occurrences de `artifactId=` dans la sortie concaténée).
+
+   **Bug corrigé, découvert sur un jar réel** (`netty-common-4.1.100.Final.jar`,
+   qui embarque *aussi* le `pom.properties` de sa dépendance relocalisée
+   `org.jctools:jctools-core`) : lire le glob large sans discrimination
+   concatène les deux blocs et un parsing clé=valeur naïf se fait écraser
+   par le second bloc — le jar `netty-common` ressortait avec l'identité
+   `jctools-core` ! Même cause sur `woodstox-core-6.5.1.jar`, qui embarque
+   `isorelax` et `net.java.dev.msv:xsdlib`. La tentative ciblée (1) résout
+   le cas courant sans ambiguïté ; le comptage (2) empêche de deviner à
+   tort quand la cible n'a pas pu être identifiée par le nom de fichier.
+
+   **Limite assumée** : contrairement à syft, qui émet séparément *chaque*
+   `pom.properties` trouvé dans une archive (y compris ceux des dépendances
+   relocalisées, avec un `virtualPath` du type `/netty-common-*.jar:org.jctools:jctools-core`),
+   `JarParser` conserve le modèle « un `.jar` = un paquet » utilisé par tous
+   les autres parseurs du projet (RPM, deb, wheel). Les dépendances
+   relocalisées à l'intérieur d'un uber-jar ne sont donc *pas* ajoutées comme
+   composants séparés — extraire N paquets à partir d'un seul fichier serait
+   un changement d'architecture plus large, non fait à ce stade.
 2. À défaut, convention de nom de fichier `<groupId>.<artifactId>-<version>.jar`
    (Quarkus/Red Hat) : regex `-(\d)` pour repérer le début de version, puis
    dernier `.` du préfixe pour séparer groupId/artifactId.
