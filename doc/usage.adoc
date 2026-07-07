@@ -310,8 +310,8 @@ librement dans le même fichier.
 
 |Archive Java `.jar`
 |`/opt/libs/my-lib-1.2.3.jar`
-|`unzip -p META-INF/maven/*/*/pom.properties`, sinon convention de nom
-`<groupId>.<artifactId>-<version>.jar` ; PURL `pkg:maven/…`
+|`pom.properties` embarqué, sinon `META-INF/MANIFEST.MF`, sinon nom de
+fichier ; PURL `pkg:maven/…`
 
 |Fichier `requirements.txt`
 |`/opt/project/requirements.txt`

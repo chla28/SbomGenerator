@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Support de CycloneDX 1.7 en plus de 1.6 (`--cyclonedx-version`) : classification TLP
   (`--tlp`), déclarations de brevets par paquet (`--patent-map`) et attribution automatique
   des données de composants à l'outil source (`citations`, ex. syft/trivy avec `--image`)
+- `--input` accepte désormais des fichiers `.jar` (coordonnées Maven via `pom.properties`,
+  `META-INF/MANIFEST.MF`, ou nom de fichier) et des dossiers scannés récursivement pour
+  tous les types de paquets/manifestes déjà supportés ; sélecteur de dossier ajouté dans
+  la GUI Flutter
 - Parseurs manifestes : Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
 - Format de sortie CSV (RFC 4180) avec colonnes : nom, version, type, purl, licence, description, fournisseur
 - Sous-commande `convert` : conversion entre formats CycloneDX 1.5, SPDX 2.3, SPDX 3.0 et CSV
@@ -26,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Scan des JARs Maven dans le backend skopeo
 
 ### Fixed
+- `.jar` sans `pom.properties` (la grande majorité des jars réels, hors builds Quarkus/RH)
+  étaient silencieusement ignorés : `JarParser` lit désormais `META-INF/MANIFEST.MF`
+  (`Bundle-SymbolicName`, `Implementation-Vendor-Id`, `Implementation-Title`,
+  `Automatic-Module-Name`) et, à défaut, retombe sur `groupId = artifactId` plutôt que
+  d'abandonner le paquet — sur un jeu réel de 207 jars, 82 étaient perdus par rapport à
+  syft, 0 après ce correctif
 - skopeo ne retournait aucun paquet RPM (chemin `--dbpath` incorrect)
 - Onglets de l'interface graphique maintenant scrollables pour éviter le chevauchement de texte
 - CLI : `--input` pointant directement vers une archive unique (`.zip`, `.tar`,

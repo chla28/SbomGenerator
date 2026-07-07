@@ -464,7 +464,8 @@ retourne un `WheelPackage(packageType: 'maven')` (comme `maven_parser.dart`) plu
 class JarParser {
   Future<WheelPackage?> parseJarFile(String path) async { … }
   Future<(String, String, String)?> _fromPomProperties(String path) async { … }
-  (String, String, String)? _fromFilename(String path) { … }
+  Future<String?> _groupIdFromManifest(String path) async { … }
+  bool _looksLikeGroupId(String s) => s.contains('.') && s == s.toLowerCase() && !s.contains(' ');
 }
 ```
 
@@ -476,15 +477,45 @@ class JarParser {
    simplement écrasées ligne à ligne (dernier match gagnant) : pas de gestion
    de plusieurs artefacts par jar dans ce cas — cas jugé hors scope pour un
    `.jar` passé individuellement en `--input`.
-2. À défaut (`pom.properties` absent, ou `unzip` indisponible via
-   `ProcessException` capturée), convention de nom de fichier
-   `<groupId>.<artifactId>-<version>.jar` (regex `-(\d)` pour repérer le début
-   de version, puis dernier `.` du préfixe pour séparer groupId/artifactId).
-3. Si aucune des deux méthodes ne donne de résultat exploitable → `null` +
-   avertissement `stderr` (le paquet est ignoré, pas d'exception remontée).
+2. À défaut, convention de nom de fichier `<groupId>.<artifactId>-<version>.jar`
+   (Quarkus/Red Hat) : regex `-(\d)` pour repérer le début de version, puis
+   dernier `.` du préfixe pour séparer groupId/artifactId.
+3. À défaut (préfixe sans point — la très grande majorité des jars réels,
+   convention `<artifactId>-<version>.jar` simple), lecture de
+   `META-INF/MANIFEST.MF` à la recherche d'un groupId plausible, dans cet
+   ordre de priorité : `Bundle-SymbolicName`, `Implementation-Vendor-Id`,
+   `Implementation-Title`, `Automatic-Module-Name` (première occurrence de
+   chaque clé conservée, repliement de ligne RFC 822 géré). Une valeur n'est
+   retenue que si `_looksLikeGroupId` l'accepte : au moins un point, et
+   entièrement en minuscules (rejette par ex. `javafx.baseEmpty`, une
+   valeur `Automatic-Module-Name` qui n'est pas un vrai nom de package).
+   **Découvert par comparaison avec syft sur un jeu réel de 207 jars** (voir
+   commit associé) : ce comportement reproduit exactement syft pour la
+   quasi-totalité des cas testés (ex. `caffeine` → `com.github.ben-manes.caffeine`
+   via `Bundle-SymbolicName`, `commons-httpclient` → `org.apache` via
+   `Implementation-Vendor-Id` prioritaire sur `Implementation-Title`).
+4. Si le manifeste ne donne rien d'exploitable non plus, `groupId` reprend
+   la valeur de `artifactId` (`pkg:maven/<artifactId>/<artifactId>@<version>`)
+   — c'est dégradé mais **non abandonné** : mieux vaut un paquet avec un
+   groupId approximatif qu'un paquet silencieusement absent du SBOM.
+5. Seul un nom de fichier sans aucun suffixe `-<chiffre>` reconnaissable fait
+   réellement échouer l'extraction (`null` + avertissement `stderr`) : ce
+   cas est rare et reste hors scope (aucune donnée exploitable nulle part).
 
-Requiert `unzip` dans le PATH (nouvelle vérification dans
-`bin/sbom_generator.dart`, `hasJar` → `unzip -v`).
+**Limite connue, assumée** : certaines bibliothèques très répandues
+(Spring Framework notamment : `spring-core`, `spring-beans`, …) n'exposent
+leur vrai groupId (`org.springframework`) nulle part dans le jar lui-même —
+seul un `Automatic-Module-Name` du type `spring.core` est présent. syft
+résout ce cas via une base de connaissance interne figée (mapping
+artefact→groupId pour des bibliothèques ultra-connues), que nous ne
+répliquons pas ici : notre sortie pour ces jars précis est donc
+`pkg:maven/spring.core/spring-core@…` plutôt que
+`pkg:maven/org.springframework/spring-core@…`. Le paquet est présent avec
+la bonne version, seul le groupId diffère — jugé acceptable plutôt que
+d'embarquer un dictionnaire de bibliothèques connues.
+
+Requiert `unzip` dans le PATH (vérification dans `bin/sbom_generator.dart`,
+`hasJar` → `unzip -v`).
 
 ---
 

@@ -50,6 +50,20 @@ void main() {
     return jarPath;
   }
 
+  /// Construit un .jar réel (via `zip`) avec un META-INF/MANIFEST.MF donné,
+  /// sans pom.properties — reproduit les jars réels sans métadonnées Maven.
+  Future<String> _buildJarWithManifest(String manifest, String jarName) async {
+    final metaDir = Directory('${tmp.path}/META-INF')..createSync();
+    File('${metaDir.path}/MANIFEST.MF').writeAsStringSync(manifest);
+
+    final jarPath = '${tmp.path}/$jarName';
+    final result = await Process.run(
+        'zip', ['-q', '-r', jarPath, 'META-INF'],
+        workingDirectory: tmp.path);
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    return jarPath;
+  }
+
   group('JarParser.parseJarFile — pom.properties', () {
     test('extrait groupId/artifactId/version depuis META-INF/maven', () async {
       if (!hasZipTools) {
@@ -92,6 +106,96 @@ void main() {
 
       final pkg = await JarParser().parseJarFile(jarPath);
       expect(pkg, isNull);
+    });
+
+    test('utilise artifactId comme groupId quand rien d\'autre n\'est disponible',
+        () async {
+      // Fichier vide (pas un zip valide) : ni pom.properties ni manifeste
+      // lisibles, et le nom ne suit pas la convention groupId.artifactId.
+      final jarPath = '${tmp.path}/aopalliance-1.0.jar';
+      File(jarPath).writeAsBytesSync([]);
+
+      final pkg = await JarParser().parseJarFile(jarPath);
+      expect(pkg, isNotNull);
+      expect(pkg!.name, 'aopalliance:aopalliance');
+      expect(pkg.version, '1.0');
+      expect(pkg.purl, 'pkg:maven/aopalliance/aopalliance@1.0');
+    });
+  });
+
+  group('JarParser.parseJarFile — repli sur META-INF/MANIFEST.MF', () {
+    test('récupère le groupId via Bundle-SymbolicName (jar OSGi sans pom.properties)',
+        () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
+      final jarPath = await _buildJarWithManifest(
+        'Manifest-Version: 1.0\n'
+        'Bundle-SymbolicName: com.github.ben-manes.caffeine\n'
+        'Bundle-Version: 2.9.3\n',
+        'caffeine-2.9.3.jar',
+      );
+
+      final pkg = await JarParser().parseJarFile(jarPath);
+      expect(pkg, isNotNull);
+      expect(pkg!.purl, 'pkg:maven/com.github.ben-manes.caffeine/caffeine@2.9.3');
+    });
+
+    test('priorité Implementation-Vendor-Id > Implementation-Title', () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
+      final jarPath = await _buildJarWithManifest(
+        'Manifest-Version: 1.0\n'
+        'Implementation-Title: org.apache.commons.httpclient\n'
+        'Implementation-Vendor-Id: org.apache\n',
+        'commons-httpclient-3.1.jar',
+      );
+
+      final pkg = await JarParser().parseJarFile(jarPath);
+      expect(pkg, isNotNull);
+      expect(pkg!.purl, 'pkg:maven/org.apache/commons-httpclient@3.1');
+    });
+
+    test('ignore une valeur de manifeste non conforme (casse, pas de point)',
+        () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
+      // Automatic-Module-Name contient une majuscule interne (baseEmpty) :
+      // ce n'est pas un vrai nom de package Java, doit être rejeté.
+      final jarPath = await _buildJarWithManifest(
+        'Manifest-Version: 1.0\n'
+        'Automatic-Module-Name: javafx.baseEmpty\n',
+        'javafx-base-13.jar',
+      );
+
+      final pkg = await JarParser().parseJarFile(jarPath);
+      expect(pkg, isNotNull);
+      expect(pkg!.purl, 'pkg:maven/javafx-base/javafx-base@13');
+    });
+
+    test('prend la première occurrence d\'une clé répétée (manifeste multi-sections)',
+        () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
+      final jarPath = await _buildJarWithManifest(
+        'Manifest-Version: 1.0\n'
+        'Implementation-Title: org.apache.xmlcommons.version\n'
+        '\n'
+        'Name: org/xml/sax/\n'
+        'Implementation-Title: org.xml.sax\n',
+        'xml-apis-1.3.04.jar',
+      );
+
+      final pkg = await JarParser().parseJarFile(jarPath);
+      expect(pkg, isNotNull);
+      expect(pkg!.purl, 'pkg:maven/org.apache.xmlcommons.version/xml-apis@1.3.04');
     });
   });
 }
