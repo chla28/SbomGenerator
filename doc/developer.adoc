@@ -801,6 +801,43 @@ Découpe sur `,` puis sur `|` (alternatives), retire les contraintes de version
 `(>= …)`, normalise les espaces. Exemple : `"libc6 (>= 2.17) | libc6-amd64"`
 → `["libc6", "libc6-amd64"]`.
 
+== `lib/jar_parser.dart` — Coordonnées Maven d'un `.jar` autonome
+
+Contrairement à `MavenParser` (qui lit un manifeste `pom.xml`), `JarParser` extrait les
+coordonnées Maven directement d'une archive `.jar` binaire, en miroir de la logique déjà
+utilisée pour le scan d'images OCI dans `oci_parser.dart` (`_parseMavenJars` ci-dessous),
+mais retourne un `WheelPackage(packageType: 'maven')` (comme `maven_parser.dart`) plutôt
+qu'un `OciPackage` — pas de notion d'`imageRef` pour un fichier local.
+
+=== `JarParser`
+
+[source,dart]
+----
+class JarParser {
+  Future<WheelPackage?> parseJarFile(String path) async { … }
+  Future<(String, String, String)?> _fromPomProperties(String path) async { … }
+  (String, String, String)? _fromFilename(String path) { … }
+}
+----
+
+=== Chaîne de fallback
+
+. `unzip -p <jar> "META-INF/maven/*/*/pom.properties"` — parsing clé=valeur
+  (`groupId`, `artifactId`, `version`). En cas d'archive avec plusieurs
+  `pom.properties` embarqués (jar « shaded »/uber-jar), les valeurs sont
+  simplement écrasées ligne à ligne (dernier match gagnant) : pas de gestion
+  de plusieurs artefacts par jar dans ce cas — cas jugé hors scope pour un
+  `.jar` passé individuellement en `--input`.
+. À défaut (`pom.properties` absent, ou `unzip` indisponible via
+  `ProcessException` capturée), convention de nom de fichier
+  `<groupId>.<artifactId>-<version>.jar` (regex `-(\d)` pour repérer le début
+  de version, puis dernier `.` du préfixe pour séparer groupId/artifactId).
+. Si aucune des deux méthodes ne donne de résultat exploitable → `null` +
+  avertissement `stderr` (le paquet est ignoré, pas d'exception remontée).
+
+Requiert `unzip` dans le PATH (nouvelle vérification dans
+`bin/sbom_generator.dart`, `hasJar` → `unzip -v`).
+
 == `lib/oci_parser.dart` — Analyse d'images OCI
 
 === `OciRefType` (enum)
@@ -1409,16 +1446,13 @@ String _purlToType(String purl) => switch (true) {
 
 == `bin/sbom_generator.dart` — Point d'entrée
 
-=== Option `--input` / `-i` — archive unique acceptée directement
+=== Option `--input` / `-i` — fichier liste, archive unique, ou dossier
 
 Historiquement, `--input` devait toujours pointer vers un fichier liste
 (texte, une référence par ligne). Passer directement une archive binaire
 (`.zip` notamment) faisait planter `File.readAsLines()` avec une
-`FileSystemException` de décodage UTF-8 peu explicite.
-
-`_isSingleArchiveInput()` détecte désormais si `inputPath` pointe lui-même
-vers une archive/un paquet unique et, dans ce cas, l'utilise tel quel comme
-unique référence — sans passer par `readAsLines` :
+`FileSystemException` de décodage UTF-8 peu explicite. `--input` accepte
+désormais trois formes, résolues par trois branches mutuellement exclusives :
 
 [source,dart]
 ----
@@ -1427,10 +1461,23 @@ bool _isSingleArchiveInput(String path) =>
     _isTar(path) ||
     path.endsWith('.whl') ||
     path.endsWith('.deb') ||
-    path.endsWith('.rpm');
+    path.endsWith('.rpm') ||
+    _isJar(path);
 
 if (inputPath != null) {
-  if (_isSingleArchiveInput(inputPath)) {
+  if (await FileSystemEntity.isDirectory(inputPath)) {
+    // Scan récursif : tout fichier matché par _isSupportedPackageFile()
+    // devient un packageRef.
+    final found = <String>[];
+    await for (final entity
+        in Directory(inputPath).list(recursive: true, followLinks: false)) {
+      if (entity is File && _isSupportedPackageFile(entity.path)) {
+        found.add(entity.path);
+      }
+    }
+    found.sort();
+    packageRefs = found;
+  } else if (_isSingleArchiveInput(inputPath)) {
     packageRefs = [inputPath];
   } else {
     try {
@@ -1444,10 +1491,28 @@ if (inputPath != null) {
 }
 ----
 
-Pour tout chemin restant, la lecture ligne par ligne est protégée par un
-`try/catch` : toute `FileSystemException` (fichier binaire non reconnu,
-encodage invalide) produit un message d'erreur actionnable au lieu d'une
-stack trace brute.
+Pour tout chemin restant (branche fichier liste), la lecture ligne par ligne
+reste protégée par un `try/catch` : toute `FileSystemException` (fichier
+binaire non reconnu, encodage invalide) produit un message d'erreur
+actionnable au lieu d'une stack trace brute.
+
+`_isSupportedPackageFile()` est volontairement plus stricte que le fichier
+liste pour les manifestes : elle exige un nom de fichier *exact*
+(`requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`,
+`yarn.lock`) plutôt qu'une extension générique (`*.txt` par ex.), pour éviter
+qu'un `README.txt` ou un `notes.txt` traînant dans l'arborescence scannée soit
+pris à tort pour un fichier de requirements. Le fichier liste, lui, continue
+d'accepter n'importe quel `.txt` (hors `.whl`) via `_isRequirements()` — la
+tolérance y est acceptable car l'utilisateur a explicitement tapé le chemin.
+
+Les noms de paquets RPM nus (ex. `bash`) ne sont jamais découverts par le
+scan de dossier : ce ne sont pas des fichiers sur disque. `--rpm-dir` reste
+le mécanisme dédié pour résoudre ce cas.
+
+`FileSystemEntity.type()` remplace l'ancien `File(inputPath).exists()` pour
+la vérification d'existence initiale, car ce dernier renvoie `false` pour un
+chemin de dossier (uniquement vrai pour les fichiers), ce qui aurait fait
+échouer `--input <dossier>` avec « Input file not found ».
 
 === Option `--image` / `-I` _(nouveau)_
 
@@ -1535,8 +1600,8 @@ if (rpmDir != null && !ref.contains('/') && !ref.endsWith('.whl') && !_isTar(ref
 ----
 
 Si aucune correspondance n'est trouvée dans le dossier, `rpm -q` est utilisé
-normalement (fallback transparent). Les références `.whl`, archives tar/zip et
-`.deb` ne sont jamais concernées, même si `--rpm-dir` est spécifié.
+normalement (fallback transparent). Les références `.whl`, archives tar/zip,
+`.deb` et `.jar` ne sont jamais concernées, même si `--rpm-dir` est spécifié.
 
 === Option `--format` / `-f` — multi-format _(nouveau)_
 

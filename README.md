@@ -6,7 +6,10 @@ Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paq
 
 ## Ce que fait le programme
 
-**Entrée** — un fichier texte, une référence par ligne :
+**Entrée (`--input`)** — trois formes possibles :
+1. un fichier texte listant une référence par ligne ;
+2. une archive/un paquet unique (traité directement, sans fichier liste) ;
+3. un **dossier**, scanné récursivement pour tous les types ci-dessous.
 
 | Type | Exemples | Outil requis |
 |------|----------|--------------|
@@ -17,9 +20,10 @@ Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paq
 | Archive tar générique `.tar.gz` / `.tgz` | `/opt/3PP/apache-tomcat-10.1.44.tar.gz` | `python3` |
 | Archive ZIP générique `.zip` | `/opt/3PP/myapp-2.0.0-linux-amd64.zip` | `python3` |
 | Paquet Debian `.deb` | `/opt/pkgs/libssl3_3.0.1_amd64.deb` | `dpkg-deb` |
+| Archive Java `.jar` | `/opt/libs/my-lib-1.2.3.jar` | `unzip` |
 | Requirements Python `.txt` | `/opt/reqs/requirements.txt` | *(aucun)* |
 
-Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangés librement dans un même fichier.
+Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangés librement dans un même fichier ou dossier.
 
 **Traitement :**
 - RPM : 3 appels `rpm` en parallèle par paquet (`--queryformat`, `--requires`, `--provides`)
@@ -27,7 +31,9 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 - Archive tar : détection (Python sdist si `PKG-INFO` présent, sinon générique), lecture `LICENSE`/`COPYING`
 - Archive ZIP : même logique que tar, via `python3 zipfile`
 - Paquet Debian : extraction du fichier `control` via `dpkg-deb -f`, parsing RFC 822
+- Archive `.jar` : coordonnées Maven lues via `unzip -p META-INF/maven/*/*/pom.properties`, sinon déduites du nom de fichier (convention `<groupId>.<artifactId>-<version>.jar`)
 - Requirements.txt : parsing pur Dart (PEP 503), expansion en `WheelPackage` avant la boucle principale
+- Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
 **Formats de sortie :**
 
@@ -126,6 +132,13 @@ sbom_generator merge a.cdx.json b.cdx.json c.cdx.json -o merged.cdx.json -n "Sys
 
 # Résoudre les noms RPM depuis un dossier local (pas de rpm installé requis)
 ./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
+
+# --input pointant directement vers un dossier : scan récursif de tous les
+# types reconnus (.jar, .rpm, .deb, .whl, archives, manifestes…)
+./sbom_generator -i /opt/app/libs -o sbom.cdx.json
+
+# --input pointant directement vers un .jar unique
+./sbom_generator -i /opt/app/libs/my-lib-1.2.3.jar -o sbom.cdx.json
 
 # Traitement de 8 entrées en parallèle (liste mixte RPM + .deb + .whl + .txt)
 ./sbom_generator -i packages.txt -c 8 -o sbom.cdx.json
@@ -255,6 +268,7 @@ sbom_generator/
 │   ├── tar_parser.dart          # Lecture des .tar/.tar.gz/.tgz
 │   ├── zip_parser.dart          # Lecture des .zip génériques
 │   ├── deb_parser.dart          # Lecture des .deb (dpkg-deb -f)
+│   ├── jar_parser.dart          # Coordonnées Maven d'un .jar (unzip -p pom.properties)
 │   ├── requirements_parser.dart # Parsing requirements.txt Python (pur Dart)
 │   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo)
 │   │                            #   skopeo : RPM, dpkg, APK, Maven JARs, PyPI, npm

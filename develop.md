@@ -450,6 +450,44 @@ Découpe sur `,` puis sur `|` (alternatives), retire les contraintes de version 
 
 ---
 
+## `lib/jar_parser.dart` — Coordonnées Maven d'un `.jar` autonome
+
+Contrairement à `MavenParser` (qui lit un manifeste `pom.xml`), `JarParser` extrait les
+coordonnées Maven directement d'une archive `.jar` binaire, en miroir de la logique déjà
+utilisée pour le scan d'images OCI dans `oci_parser.dart` (`_parseMavenJars`), mais
+retourne un `WheelPackage(packageType: 'maven')` (comme `maven_parser.dart`) plutôt qu'un
+`OciPackage` — pas de notion d'`imageRef` pour un fichier local.
+
+### `JarParser`
+
+```dart
+class JarParser {
+  Future<WheelPackage?> parseJarFile(String path) async { … }
+  Future<(String, String, String)?> _fromPomProperties(String path) async { … }
+  (String, String, String)? _fromFilename(String path) { … }
+}
+```
+
+### Chaîne de fallback
+
+1. `unzip -p <jar> "META-INF/maven/*/*/pom.properties"` — parsing clé=valeur
+   (`groupId`, `artifactId`, `version`). En cas d'archive avec plusieurs
+   `pom.properties` embarqués (jar « shaded »/uber-jar), les valeurs sont
+   simplement écrasées ligne à ligne (dernier match gagnant) : pas de gestion
+   de plusieurs artefacts par jar dans ce cas — cas jugé hors scope pour un
+   `.jar` passé individuellement en `--input`.
+2. À défaut (`pom.properties` absent, ou `unzip` indisponible via
+   `ProcessException` capturée), convention de nom de fichier
+   `<groupId>.<artifactId>-<version>.jar` (regex `-(\d)` pour repérer le début
+   de version, puis dernier `.` du préfixe pour séparer groupId/artifactId).
+3. Si aucune des deux méthodes ne donne de résultat exploitable → `null` +
+   avertissement `stderr` (le paquet est ignoré, pas d'exception remontée).
+
+Requiert `unzip` dans le PATH (nouvelle vérification dans
+`bin/sbom_generator.dart`, `hasJar` → `unzip -v`).
+
+---
+
 ## `lib/requirements_parser.dart` — Parsing requirements.txt Python
 
 Parser **pur Dart**, sans subprocess. Retourne `List<WheelPackage>`.
@@ -498,6 +536,39 @@ packages.addAll(preloadedPackages);
 
 ## `bin/sbom_generator.dart` — Point d'entrée
 
+### Résolution de `--input` : fichier liste, archive unique, ou dossier
+
+Trois branches mutuellement exclusives (voir le bloc « Read package list ») :
+
+```dart
+if (await FileSystemEntity.isDirectory(inputPath)) {
+  // Scan récursif : tout fichier matché par _isSupportedPackageFile()
+  // devient un packageRef, dans le même pipeline que s'il figurait dans
+  // un fichier liste (y compris le pré-traitement manifestes/lockfiles).
+} else if (_isSingleArchiveInput(inputPath)) {
+  // .zip/.tar*/.whl/.deb/.rpm/.jar : utilisé tel quel comme unique packageRef.
+} else {
+  // Fichier liste classique : une référence par ligne.
+}
+```
+
+`_isSupportedPackageFile()` est volontairement plus stricte que le fichier liste pour les
+manifestes : elle exige un nom de fichier **exact** (`requirements.txt`, `pom.xml`,
+`go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`) plutôt qu'une extension générique
+(`*.txt` par ex.), pour éviter qu'un `README.txt` ou un `notes.txt` traînant dans
+l'arborescence scannée soit pris à tort pour un fichier de requirements. Le fichier liste,
+lui, continue d'accepter n'importe quel `.txt` (hors `.whl`) via `_isRequirements()` — la
+tolérance y est acceptable car l'utilisateur a explicitement tapé le chemin.
+
+Les noms de paquets RPM nus (ex. `bash`) ne sont jamais découverts par le scan de
+dossier : ce ne sont pas des fichiers sur disque. `--rpm-dir` reste le mécanisme dédié
+pour résoudre ce cas (voir ci-dessous).
+
+`FileSystemEntity.type()` remplace l'ancien `File(inputPath).exists()` pour la
+vérification d'existence initiale, car ce dernier renvoie `false` pour un chemin de
+dossier (uniquement vrai pour les fichiers), ce qui aurait fait échouer `--input
+<dossier>` avec « Input file not found ».
+
 ### Option `--rpm-dir` / `-d`
 
 Permet de résoudre les noms RPM nus (sans `/` ni extension) vers des fichiers `.rpm` locaux au lieu d'interroger la base de données des paquets installés.
@@ -534,7 +605,7 @@ if (rpmDir != null && !ref.contains('/') && !ref.endsWith('.whl') && !_isTar(ref
 
 Si aucune correspondance n'est trouvée dans le dossier, `rpm -q` est utilisé normalement (fallback transparent).
 
-Les références `.whl`, archives tar/zip et `.deb` ne sont jamais concernées, même si `--rpm-dir` est spécifié.
+Les références `.whl`, archives tar/zip, `.deb` et `.jar` ne sont jamais concernées, même si `--rpm-dir` est spécifié.
 
 ### Option `--format` / `-f` — multi-format *(nouveau)*
 

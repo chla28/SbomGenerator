@@ -9,7 +9,7 @@
 :docdate: 2026-06-30
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
-Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml) et *images OCI* (via syft, trivy ou skopeo).
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml) et *images OCI* (via syft, trivy ou skopeo). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
 Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
 
 == Prérequis
@@ -48,7 +48,12 @@ Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0
 |`--image` avec `--oci-tool trivy`
 |Analyse d'images OCI — tous types de paquets
 
-|`skopeo` + `tar` + `unzip`
+|`unzip`
+|—
+|`.jar` (via `--input`) ou `--image` avec `--oci-tool skopeo`
+|Extraction des coordonnées Maven (`pom.properties`) d'une archive JAR
+
+|`skopeo` + `tar`
 |—
 |`--image` avec `--oci-tool skopeo`
 |Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python packages et npm
@@ -65,7 +70,7 @@ dpkg-deb --version
 syft version      # si --oci-tool syft
 trivy --version   # si --oci-tool trivy
 skopeo --version  # si --oci-tool skopeo
-unzip --version   # si --oci-tool skopeo (extraction pom.properties des JARs)
+unzip --version   # si --input contient un .jar, ou --oci-tool skopeo
 ----
 
 == Installation
@@ -107,10 +112,11 @@ sbom_generator validate <sbom1> [<sbom2> ...]
 |===
 |Option |Raccourci |Défaut |Description
 
-|`--input <fichier>`
+|`--input <chemin>`
 |`-i`
 |_(requis si pas de --image)_
-|Fichier contenant la liste des paquets/archives (une référence par ligne)
+|Fichier liste (une référence par ligne), archive/paquet unique, ou dossier
+scanné récursivement (voir <<Format du fichier d'entrée>>)
 
 |`--image <référence>`
 |`-I`
@@ -302,6 +308,11 @@ librement dans le même fichier.
 |`/opt/pkgs/libssl3_3.0.1_amd64.deb`
 |`dpkg-deb -f`
 
+|Archive Java `.jar`
+|`/opt/libs/my-lib-1.2.3.jar`
+|`unzip -p META-INF/maven/*/*/pom.properties`, sinon convention de nom
+`<groupId>.<artifactId>-<version>.jar` ; PURL `pkg:maven/…`
+
 |Fichier `requirements.txt`
 |`/opt/project/requirements.txt`
 |Parseur pur Dart (PEP 508 simplifié)
@@ -336,16 +347,37 @@ librement dans le même fichier.
 === Raccourci : passer directement une archive unique
 
 `--input` accepte aussi directement le chemin d'une archive ou d'un paquet
-unique (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`), sans passer
-par un fichier liste intermédiaire :
+unique (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`, `.jar`), sans
+passer par un fichier liste intermédiaire :
 
 [source,shell]
 ----
 sbom_generator -i /opt/3PP/myapp-2.0.0-linux-amd64.zip -o sbom
+sbom_generator -i /opt/libs/my-lib-1.2.3.jar -o sbom
 ----
 
-Pour tout autre chemin, `--input` reste interprété comme un fichier liste
-(une référence par ligne, voir ci-dessus).
+Pour tout autre chemin de fichier, `--input` reste interprété comme un
+fichier liste (une référence par ligne, voir ci-dessus).
+
+=== Raccourci : passer directement un dossier
+
+Si `--input` pointe vers un **dossier**, celui-ci est scanné récursivement
+(liens symboliques ignorés) à la recherche de tous les types de fichiers du
+tableau ci-dessus : `.rpm`, `.deb`, `.whl`, `.jar`, `.zip`,
+`.tar`/`.tar.gz`/`.tgz`, ainsi que les manifestes reconnus par leur nom exact
+(`requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`,
+`yarn.lock`). Un `.txt` qui ne s'appelle pas exactement `requirements.txt`
+n'est donc pas retenu, contrairement au fichier liste où n'importe quel
+`.txt` (hors `.whl`) est traité comme un fichier de requirements.
+
+[source,shell]
+----
+sbom_generator -i /opt/app/libs -o sbom
+----
+
+Les noms de paquets RPM nus (ex. `bash`, sans chemin ni extension) ne
+peuvent pas être découverts ainsi : ce ne sont pas des fichiers. Utilisez un
+fichier liste ou `--rpm-dir` pour ce cas.
 
 === Exemple de fichier d'entrée mixte
 
@@ -852,6 +884,7 @@ sbom_generator/
 │   ├── tar_parser.dart            # Lecture archives .tar/.tar.gz/.tgz
 │   ├── zip_parser.dart            # Lecture archives .zip
 │   ├── deb_parser.dart            # Lecture paquets .deb (dpkg-deb)
+│   ├── jar_parser.dart            # Coordonnées Maven d'un .jar (unzip -p pom.properties)
 │   ├── requirements_parser.dart   # Lecture requirements.txt (pur Dart)
 │   ├── go_parser.dart             # Lecture go.sum et go.mod (pur Dart)
 │   ├── npm_parser.dart            # Lecture package-lock.json v1/v2/v3 (pur Dart)
@@ -920,6 +953,19 @@ sudo dnf install dpkg
 
 # Debian/Ubuntu
 sudo apt install dpkg
+----
+
+=== `unzip not found — required to read .jar files`
+
+Installez `unzip` :
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install unzip
+
+# Debian/Ubuntu
+sudo apt install unzip
 ----
 
 === `Warning: cannot query "pkg"`

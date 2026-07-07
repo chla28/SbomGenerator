@@ -9,6 +9,7 @@ import 'package:sbom_generator/rpm_parser.dart';
 import 'package:sbom_generator/tar_parser.dart';
 import 'package:sbom_generator/wheel_parser.dart';
 import 'package:sbom_generator/zip_parser.dart';
+import 'package:sbom_generator/jar_parser.dart';
 import 'package:sbom_generator/cyclonedx_generator.dart';
 import 'package:sbom_generator/spdx_generator.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
@@ -71,16 +72,21 @@ Future<void> main(List<String> arguments) async {
     ..addOption(
       'input',
       abbr: 'i',
-      help: 'Input file containing one package reference per line.\n'
-          'Each line may be:\n'
+      help: 'Input file containing one package reference per line, a single\n'
+          'archive/package file, or a directory to scan recursively.\n'
+          'Each line (or discovered file) may be:\n'
           '  • an RPM package name, NEVRA, or path to a .rpm file\n'
           '  • a path to a Debian .deb file\n'
           '  • a path to a Python .whl file\n'
           '  • a path to a requirements.txt file\n'
           '  • a path to a .tar / .tar.gz / .tgz / .zip archive\n'
+          '  • a path to a .jar file (Maven coordinates via\n'
+          '    META-INF/maven/*/*/pom.properties, or filename convention)\n'
           '  • a path to a go.sum or go.mod file\n'
           '  • a path to a package-lock.json or yarn.lock file\n'
           '  • a path to a pom.xml file\n'
+          'If --input is a directory, it is scanned recursively for all of\n'
+          'the file types above (requires unzip for .jar).\n'
           'Optional when --image is provided.',
     )
     ..addOption(
@@ -304,9 +310,9 @@ Future<void> main(List<String> arguments) async {
       (cycloneDxVersion == '1.7' && imageRef != null) ? ociTool : null;
 
   if (inputPath != null) {
-    final inputFile = File(inputPath);
-    if (!await inputFile.exists()) {
-      _err('Input file not found: $inputPath');
+    final inputType = await FileSystemEntity.type(inputPath);
+    if (inputType == FileSystemEntityType.notFound) {
+      _err('Input not found: $inputPath');
       exit(1);
     }
   }
@@ -314,7 +320,26 @@ Future<void> main(List<String> arguments) async {
   // --- Read package list (optionnel si --image est fourni) ---
   List<String> packageRefs = [];
   if (inputPath != null) {
-    if (_isSingleArchiveInput(inputPath)) {
+    if (await FileSystemEntity.isDirectory(inputPath)) {
+      // --input pointe vers un dossier : scan récursif de tous les types de
+      // paquets/manifestes reconnus (pas de fichier liste dans ce cas).
+      final found = <String>[];
+      await for (final entity
+          in Directory(inputPath).list(recursive: true, followLinks: false)) {
+        if (entity is File && _isSupportedPackageFile(entity.path)) {
+          found.add(entity.path);
+        }
+      }
+      found.sort();
+      packageRefs = found;
+      if (verbose) {
+        print('${found.length} fichier(s) de paquet trouvé(s) dans $inputPath.');
+      }
+      if (packageRefs.isEmpty && imageRef == null) {
+        _err('Aucun paquet reconnu dans le dossier $inputPath.');
+        exit(1);
+      }
+    } else if (_isSingleArchiveInput(inputPath)) {
       // --input pointe directement vers une archive/paquet unique
       // (et non vers un fichier liste) : on l'utilise telle quelle.
       packageRefs = [inputPath];
@@ -324,9 +349,10 @@ Future<void> main(List<String> arguments) async {
         lines = await File(inputPath).readAsLines();
       } on FileSystemException {
         _err('$inputPath ne semble pas être un fichier texte lisible. '
-            'Si c\'est une archive (.zip/.tar/.tar.gz/.tgz/.whl/.deb/.rpm), '
+            'Si c\'est une archive (.zip/.tar/.tar.gz/.tgz/.whl/.deb/.rpm/.jar), '
             'passez-la directement via --input, sinon --input doit être un '
-            'fichier listant une référence de paquet par ligne.');
+            'fichier listant une référence de paquet par ligne, ou un dossier '
+            'à scanner.');
         exit(1);
       }
       packageRefs = lines
@@ -430,11 +456,13 @@ Future<void> main(List<String> arguments) async {
       !r.endsWith('.whl') &&
       !_isTar(r) &&
       !r.endsWith('.deb') &&
-      !r.endsWith('.zip'));
+      !r.endsWith('.zip') &&
+      !_isJar(r));
   final hasWhl = mainRefs.any((r) => r.endsWith('.whl'));
   final hasTar = mainRefs.any(_isTar);
   final hasZip = mainRefs.any((r) => r.endsWith('.zip'));
   final hasDeb = mainRefs.any((r) => r.endsWith('.deb'));
+  final hasJar = mainRefs.any(_isJar);
 
   if (hasRpm) {
     final rpmCheck = await Process.run('rpm', ['--version']);
@@ -465,6 +493,17 @@ Future<void> main(List<String> arguments) async {
           'dpkg-deb: ${(debCheck.stdout as String).split('\n').first.trim()}');
   }
 
+  if (hasJar) {
+    final unzipCheck = await Process.run('unzip', ['-v']);
+    if (unzipCheck.exitCode != 0) {
+      _err('unzip not found — required to read .jar files.');
+      exit(1);
+    }
+    if (verbose) {
+      print('unzip: ${(unzipCheck.stdout as String).split('\n').first.trim()}');
+    }
+  }
+
   // --- Parse packages ---
   final total = mainRefs.length +
       (preloadedPackages.isNotEmpty ? 1 : 0) +
@@ -480,6 +519,7 @@ Future<void> main(List<String> arguments) async {
   final tarParser = TarParser();
   final zipParser = ZipParser();
   final debParser = DebParser();
+  final jarParser = JarParser();
 
   final mainTotal = mainRefs.length;
   final sem = _Semaphore(
@@ -496,7 +536,8 @@ Future<void> main(List<String> arguments) async {
           !ref.endsWith('.whl') &&
           !ref.endsWith('.deb') &&
           !ref.endsWith('.zip') &&
-          !_isTar(ref)) {
+          !_isTar(ref) &&
+          !_isJar(ref)) {
         final resolved = rpmExactIndex[ref] ??
             (() {
               final paths = rpmNameIndex[ref];
@@ -523,6 +564,8 @@ Future<void> main(List<String> arguments) async {
           pkg = await zipParser.parseZipFile(ref);
         } else if (ref.endsWith('.deb')) {
           pkg = await debParser.parseDebFile(ref);
+        } else if (_isJar(ref)) {
+          pkg = await jarParser.parseJarFile(ref);
         } else {
           pkg = await rpmParser.parsePackage(ref);
         }
@@ -866,6 +909,8 @@ Future<void> _signWithCosign(String sbomPath, {bool verbose = false}) async {
 bool _isTar(String ref) =>
     ref.endsWith('.tar') || ref.endsWith('.tar.gz') || ref.endsWith('.tgz');
 
+bool _isJar(String ref) => ref.endsWith('.jar');
+
 /// True si --input pointe directement vers une archive/un paquet unique
 /// plutôt que vers un fichier liste (une référence par ligne).
 bool _isSingleArchiveInput(String path) =>
@@ -873,7 +918,8 @@ bool _isSingleArchiveInput(String path) =>
     _isTar(path) ||
     path.endsWith('.whl') ||
     path.endsWith('.deb') ||
-    path.endsWith('.rpm');
+    path.endsWith('.rpm') ||
+    _isJar(path);
 
 bool _isRequirements(String ref) =>
     ref.endsWith('.txt') && !ref.endsWith('.whl');
@@ -883,6 +929,27 @@ bool _isGoMod(String ref) => ref.endsWith('go.mod');
 bool _isPackageLock(String ref) => ref.endsWith('package-lock.json');
 bool _isYarnLock(String ref) => ref.endsWith('yarn.lock');
 bool _isPomXml(String ref) => ref.endsWith('pom.xml');
+
+/// True si [path] est un fichier reconnu par le scan récursif d'un dossier
+/// passé en --input (voir la lecture de packageRefs plus haut). Contrairement
+/// au fichier liste, seuls les noms exacts sont acceptés pour les manifestes
+/// (ex. `requirements.txt`, pas n'importe quel `.txt`) afin d'éviter les faux
+/// positifs lors d'un scan automatique.
+bool _isSupportedPackageFile(String path) {
+  final base = path.split('/').last;
+  return path.endsWith('.rpm') ||
+      path.endsWith('.deb') ||
+      path.endsWith('.whl') ||
+      _isJar(path) ||
+      path.endsWith('.zip') ||
+      _isTar(path) ||
+      base == 'requirements.txt' ||
+      base == 'pom.xml' ||
+      base == 'go.sum' ||
+      base == 'go.mod' ||
+      base == 'package-lock.json' ||
+      base == 'yarn.lock';
+}
 
 void _err(String msg) => stderr.writeln('Error: $msg');
 
