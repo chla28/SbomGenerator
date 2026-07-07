@@ -318,4 +318,58 @@ void main() {
           'pkg:maven/org.apache.xmlcommons.version/xml-apis@1.3.04');
     });
   });
+
+  group('JarParser.parseJarFile — table de correspondance groupId connus', () {
+    test(
+        'corrige le groupId de spring-core malgré un manifeste trompeur (Automatic-Module-Name)',
+        () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
+      // Reproduit le manifeste réel de spring-core : Automatic-Module-Name
+      // "spring.core" ressemble à un groupId valide (point, minuscules) mais
+      // n'est PAS le vrai groupId Maven (org.springframework). C'est
+      // précisément le cas qui faisait manquer CVE-2025-41249 côté grype.
+      final jarPath = await _buildJarWithManifest(
+        'Manifest-Version: 1.0\n'
+        'Automatic-Module-Name: spring.core\n',
+        'spring-core-5.3.39.jar',
+      );
+
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl, 'pkg:maven/org.springframework/spring-core@5.3.39');
+    });
+
+    test('s\'applique même sans manifeste lisible (jar vide)', () async {
+      final jarPath = '${tmp.path}/spring-webmvc-5.3.39.jar';
+      File(jarPath).writeAsBytesSync([]);
+
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl,
+          'pkg:maven/org.springframework/spring-webmvc@5.3.39');
+    });
+
+    test('ne s\'applique pas aux artifactId hors de la liste (ex. spring-data-jpa)',
+        () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
+      // spring-data-jpa n'est pas dans la table : son manifeste expose déjà
+      // le vrai groupId via Implementation-Vendor-Id, pas besoin de repli.
+      final jarPath = await _buildJarWithManifest(
+        'Manifest-Version: 1.0\n'
+        'Implementation-Vendor-Id: org.springframework.data\n',
+        'spring-data-jpa-2.6.5.jar',
+      );
+
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl,
+          'pkg:maven/org.springframework.data/spring-data-jpa@2.6.5');
+    });
+  });
 }

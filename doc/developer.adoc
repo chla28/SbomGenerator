@@ -877,16 +877,29 @@ l'identité `jctools-core` ! Même cause sur `woodstox-core-6.5.1.jar`
 mélange, tout en permettant de les remonter correctement comme paquets
 séparés plutôt que de choisir arbitrairement laquelle garder.
 
-*Limite connue, assumée* : certaines bibliothèques très répandues (Spring
-Framework notamment : `spring-core`, `spring-beans`, …) n'exposent leur vrai
-groupId (`org.springframework`) nulle part dans le jar lui-même — seul un
-`Automatic-Module-Name` du type `spring.core` est présent. syft résout ce cas
-via une base de connaissance interne figée (mapping artefact→groupId pour
-des bibliothèques ultra-connues), que nous ne répliquons pas ici : notre
-sortie pour ces jars précis est donc `pkg:maven/spring.core/spring-core@…`
-plutôt que `pkg:maven/org.springframework/spring-core@…`. Le paquet est
-présent avec la bonne version, seul le groupId diffère — jugé acceptable
-plutôt que d'embarquer un dictionnaire de bibliothèques connues.
+=== `_knownGroupIdOverrides` — correspondances curées (Spring Framework)
+
+Certaines bibliothèques très répandues (les modules « core » de Spring Framework :
+`spring-core`, `spring-beans`, `spring-webmvc`, …) n'exposent leur vrai groupId
+(`org.springframework`) nulle part dans le jar lui-même — ni `pom.properties`, ni un champ
+manifeste fiable : seul un `Automatic-Module-Name` du type `spring.core` est présent, qui
+passe `_looksLikeGroupId` (point, minuscules) mais est un nom de module JPMS, pas le
+groupId Maven réel.
+
+*Conséquence concrète, pas seulement cosmétique* : un scanner de vulnérabilités (grype…)
+associe les CVE aux vraies coordonnées Maven. Avec `pkg:maven/spring.core/spring-core@…`
+au lieu de `pkg:maven/org.springframework/spring-core@…`, aucune correspondance n'est
+trouvée — des CVE réelles et non corrigées (ex. CVE-2025-41249, CVE-2024-38820,
+CVE-2025-22233, toutes sur `org.springframework:spring-core`) restaient invisibles.
+Détecté en comparant un scan de vulnérabilités sur nos SBOM vs ceux de syft.
+
+`_knownGroupIdOverrides` (`Map<String artifactId, String groupId>`) est vérifiée *avant*
+l'heuristique manifeste — elle doit gagner face à une valeur de manifeste trompeuse.
+Volontairement limitée aux ~22 modules officiels de Spring Framework (liste stable,
+groupId `org.springframework` uniquement) : ce n'est pas une tentative de répliquer un
+dictionnaire CPE complet comme celui de syft, seulement de combler ce trou précis, à
+impact sécurité direct. Spring Data/Integration/Retry/Security n'y figurent pas : leur
+manifeste expose déjà le vrai groupId via `Implementation-Vendor-Id`.
 
 Requiert `unzip` dans le PATH (vérification dans `bin/sbom_generator.dart`,
 `hasJar` → `unzip -v`).

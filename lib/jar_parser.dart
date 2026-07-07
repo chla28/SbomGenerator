@@ -16,10 +16,13 @@ import 'models.dart';
 ///   2. Filename convention `<groupId>.<artifactId>-<version>.jar`
 ///      (Quarkus/Red Hat style) — both coordinates come from the name.
 ///   3. Filename `<artifactId>-<version>.jar` (the vast majority of real
-///      jars) + `META-INF/MANIFEST.MF` for a plausible groupId
-///      (`Bundle-SymbolicName`, `Implementation-Vendor-Id`,
-///      `Implementation-Title`, `Automatic-Module-Name`, in that priority
-///      order — first one that looks like a real Java package name wins).
+///      jars): first [_knownGroupIdOverrides] (a small curated list of
+///      well-known libraries, e.g. Spring Framework, whose real groupId
+///      can't be recovered from the jar itself), then
+///      `META-INF/MANIFEST.MF` for a plausible groupId (`Bundle-SymbolicName`,
+///      `Implementation-Vendor-Id`, `Implementation-Title`,
+///      `Automatic-Module-Name`, in that priority order — first one that
+///      looks like a real Java package name wins).
 ///   4. Filename only, artifactId reused as groupId, when nothing above
 ///      yields anything — this still produces a valid, non-dropped Maven
 ///      PURL (`pkg:maven/<artifactId>/<artifactId>@<version>`), matching
@@ -40,6 +43,51 @@ class JarParser {
     'Implementation-Title',
     'Automatic-Module-Name',
   ];
+
+  /// Curated artifactId → real Maven groupId overrides, for well-known
+  /// libraries whose true groupId is not recoverable from the jar itself
+  /// (no `pom.properties`, and `META-INF/MANIFEST.MF` only exposes a
+  /// misleading value — e.g. `Automatic-Module-Name: spring.core`, which
+  /// passes [_looksLikeGroupId] but is a JPMS module name, not the real
+  /// Maven groupId `org.springframework`).
+  ///
+  /// Checked *before* the manifest heuristic so it always wins over a
+  /// misleading manifest value. This matters for vulnerability scanning:
+  /// scanners match CVEs against the real Maven coordinates, so a wrong
+  /// groupId (`pkg:maven/spring.core/spring-core`) silently hides real,
+  /// unfixed CVEs (e.g. CVE-2025-41249, CVE-2024-38820, CVE-2025-22233 on
+  /// `org.springframework:spring-core`) instead of just being cosmetically
+  /// imprecise.
+  ///
+  /// Deliberately narrow in scope — this is not an attempt to replicate a
+  /// full CPE/package dictionary like syft's, only to close this specific,
+  /// security-relevant gap. Spring Data/Integration/Retry/Security are not
+  /// listed here: their manifests already expose the real groupId via
+  /// `Implementation-Vendor-Id`.
+  static const _knownGroupIdOverrides = {
+    'spring-aop': 'org.springframework',
+    'spring-aspects': 'org.springframework',
+    'spring-beans': 'org.springframework',
+    'spring-context': 'org.springframework',
+    'spring-context-indexer': 'org.springframework',
+    'spring-context-support': 'org.springframework',
+    'spring-core': 'org.springframework',
+    'spring-expression': 'org.springframework',
+    'spring-instrument': 'org.springframework',
+    'spring-jcl': 'org.springframework',
+    'spring-jdbc': 'org.springframework',
+    'spring-jms': 'org.springframework',
+    'spring-messaging': 'org.springframework',
+    'spring-orm': 'org.springframework',
+    'spring-oxm': 'org.springframework',
+    'spring-r2dbc': 'org.springframework',
+    'spring-test': 'org.springframework',
+    'spring-tx': 'org.springframework',
+    'spring-web': 'org.springframework',
+    'spring-webflux': 'org.springframework',
+    'spring-webmvc': 'org.springframework',
+    'spring-websocket': 'org.springframework',
+  };
 
   Future<List<WheelPackage>> parseJarFile(String path) async {
     final basename = path.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
@@ -81,7 +129,9 @@ class JarParser {
         artifactId = prefix.substring(lastDot + 1);
       } else {
         artifactId = prefix;
-        groupId = await _groupIdFromManifest(path) ?? prefix;
+        groupId = _knownGroupIdOverrides[artifactId] ??
+            await _groupIdFromManifest(path) ??
+            prefix;
       }
       ownPackage = _toPackage(path, groupId, artifactId, version);
     }

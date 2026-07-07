@@ -34,6 +34,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Scan des JARs Maven dans le backend skopeo
 
 ### Fixed
+- Les modules « core » de Spring Framework (`spring-core`, `spring-webmvc`, `spring-tx`…)
+  extraits d'un `.jar` recevaient un groupId erroné (`spring.core` au lieu du vrai
+  `org.springframework`, déduit à tort d'un `Automatic-Module-Name` qui n'est pas un
+  groupId Maven) — impact sécurité réel : un scanner de vulnérabilités ne peut pas
+  associer de CVE à un mauvais groupId, ce qui masquait silencieusement des CVE non
+  corrigées (CVE-2025-41249, CVE-2024-38820, CVE-2025-22233, entre autres, sur
+  `org.springframework:spring-core`). `JarParser` applique désormais une table de
+  correspondance curée (`_knownGroupIdOverrides`) pour les ~22 modules officiels de
+  Spring Framework, avant l'heuristique manifeste
 - Les composants Maven du SBOM CycloneDX pliaient le groupId dans le champ `name`
   (`"groupId:artifactId"`) au lieu d'utiliser le champ `group` dédié prévu par le schéma —
   contrairement à syft/trivy. `cyclonedx_generator.dart` sépare désormais `group`/`name`,
