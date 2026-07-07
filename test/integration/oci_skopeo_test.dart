@@ -19,8 +19,12 @@ import 'package:test/test.dart';
 const _keycloakTar = 'keycloak_26.tar';
 
 /// Premier layer de keycloak_26.tar (contient var/lib/rpm/rpmdb.sqlite).
+/// Dépend de l'image exacte utilisée pour produire keycloak_26.tar
+/// localement (`skopeo copy docker://quay.io/keycloak/keycloak:26.0.0
+/// docker-archive:keycloak_26.tar`) — à mettre à jour si le fichier est
+/// régénéré depuis une autre image/tag (digest de layer différent).
 const _keycloakLayer =
-    '702bea3dc94887d2fcf1aa0d56565c57d5ca6d24659c8d0b6cbde5c58d6c182f.tar';
+    '456a106fc69abcc6e07bbd99e09cdb5b34d4bbd88f7043293e012be50189f055.tar';
 
 bool get _keycloakAvailable => File(_keycloakTar).existsSync();
 

@@ -4,3 +4,7 @@ bin/sbom_generator.exe
 bin/sbom_generator
 dist/
 .dart_tool/
+
+# Fixture d'intégration téléchargée localement (~450 Mo) pour
+# test/integration/oci_skopeo_test.dart — jamais commitée.
+keycloak_26.tar
