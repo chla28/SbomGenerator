@@ -324,7 +324,8 @@ class _HomeScreenState extends State<HomeScreen> {
         Text(
           'Interface graphique pour l\'outil sbom_generator.\n\n'
           'Génère des SBOM (Software Bill of Materials) depuis des listes '
-          'de paquets RPM, .whl, .tar.gz, .deb, .zip ou requirements.txt.\n\n'
+          'de paquets RPM, .whl, .tar.gz, .deb, .zip, .jar ou requirements.txt '
+          '— fichier liste, paquet unique, ou dossier scanné récursivement.\n\n'
           'Formats supportés : CycloneDX 1.6/1.7, SPDX 2.3, SPDX 3.0 JSON-LD, '
           'JSON personnalisé, Markdown, AsciiDoc.',
         ),

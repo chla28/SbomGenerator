@@ -230,15 +230,16 @@ class _ConfigPanelState extends State<ConfigPanel> {
                                 )
                               : const BoxDecoration(),
                           child: _FileField(
-                            label: 'Fichier de paquets (--input)',
+                            label: 'Paquets à analyser (--input)',
                             controller: _inputCtrl,
                             hint: _isDragging
-                                ? 'Déposez le fichier ici…'
-                                : 'rpm.lst, requirements.txt, …',
+                                ? 'Déposez un fichier ou un dossier ici…'
+                                : 'rpm.lst, un .jar, ou un dossier…',
                             helpText:
-                                'Fichier texte listant les paquets à analyser.\n'
-                                'Formats acceptés : rpm.lst (rpm -qa),\n'
-                                'requirements.txt, package.json, go.mod, …',
+                                'Fichier liste (une référence par ligne),\n'
+                                'une archive/un paquet unique (.rpm, .deb,\n'
+                                '.whl, .jar, .zip, .tar.gz…), ou un dossier\n'
+                                'scanné récursivement pour tous ces types.',
                             onPickFiltered: () => _pickFile(
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
@@ -249,6 +250,16 @@ class _ConfigPanelState extends State<ConfigPanel> {
                             onPick: () => _pickFile(
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
+                              clears: _imageCtrl,
+                            ),
+                            onPickDir: () => _pickDir(
+                              _inputCtrl,
+                              title: 'Sélectionner un dossier de paquets',
+                              onDone: () {
+                                _imageCtrl.clear();
+                                _sync();
+                                setState(() {});
+                              },
                               clears: _imageCtrl,
                             ),
                             onChanged: (v) {
@@ -267,7 +278,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Glissez-déposez un fichier depuis votre gestionnaire',
+                        'Glissez-déposez un fichier ou un dossier depuis votre gestionnaire',
                         style: TextStyle(
                           fontSize: 10,
                           color: theme.colorScheme.onSurface
@@ -764,6 +775,8 @@ class _Section extends StatelessWidget {
   }
 }
 
+enum _PickKind { filtered, anyFile, directory }
+
 class _FileField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
@@ -772,6 +785,7 @@ class _FileField extends StatelessWidget {
   final VoidCallback onPick;
   final VoidCallback? onPickFiltered;
   final String? filterLabel;
+  final VoidCallback? onPickDir;
   final ValueChanged<String>? onChanged;
   final FormFieldValidator<String>? validator;
 
@@ -781,6 +795,7 @@ class _FileField extends StatelessWidget {
     required this.onPick,
     this.onPickFiltered,
     this.filterLabel,
+    this.onPickDir,
     this.hint,
     this.helpText,
     this.onChanged,
@@ -802,25 +817,29 @@ class _FileField extends StatelessWidget {
           hintText: hint,
           border: const OutlineInputBorder(),
           isDense: true,
-          suffixIcon: onPickFiltered != null
-              ? PopupMenuButton<bool>(
+          suffixIcon: (onPickFiltered != null || onPickDir != null)
+              ? PopupMenuButton<_PickKind>(
                   icon: const Icon(Icons.folder_open, size: 18),
                   tooltip: 'Parcourir…',
-                  onSelected: (filtered) =>
-                      filtered ? onPickFiltered!() : onPick(),
+                  onSelected: (kind) => switch (kind) {
+                    _PickKind.filtered => onPickFiltered!(),
+                    _PickKind.directory => onPickDir!(),
+                    _PickKind.anyFile => onPick(),
+                  },
                   itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: true,
-                      child: ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading:
-                            const Icon(Icons.filter_alt_outlined, size: 16),
-                        title: Text('Type filtré ($filterLabel)'),
+                    if (onPickFiltered != null)
+                      PopupMenuItem(
+                        value: _PickKind.filtered,
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading:
+                              const Icon(Icons.filter_alt_outlined, size: 16),
+                          title: Text('Type filtré ($filterLabel)'),
+                        ),
                       ),
-                    ),
                     const PopupMenuItem(
-                      value: false,
+                      value: _PickKind.anyFile,
                       child: ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
@@ -828,6 +847,16 @@ class _FileField extends StatelessWidget {
                         title: Text('Tous les fichiers'),
                       ),
                     ),
+                    if (onPickDir != null)
+                      const PopupMenuItem(
+                        value: _PickKind.directory,
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.folder_outlined, size: 16),
+                          title: Text('Dossier (scan récursif)'),
+                        ),
+                      ),
                   ],
                 )
               : IconButton(
@@ -1275,23 +1304,28 @@ class _CycloneDxVersionSelector extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(left: 32, bottom: 4),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Version (--cyclonedx-version)',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.secondary,
-            ),
+          Row(
+            children: [
+              Text(
+                'Version (--cyclonedx-version)',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.secondary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const HelpIcon(
+                '1.6 — la plus répandue chez les consommateurs actuels (défaut).\n'
+                '1.7 — ajoute citations / patentAssertions / distributionConstraints\n'
+                '(voir --tlp et --patent-map en ligne de commande).',
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          const HelpIcon(
-            '1.6 — la plus répandue chez les consommateurs actuels (défaut).\n'
-            '1.7 — ajoute citations / patentAssertions / distributionConstraints\n'
-            '(voir --tlp et --patent-map en ligne de commande).',
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(height: 6),
           SegmentedButton<String>(
             style: SegmentedButton.styleFrom(
               textStyle: const TextStyle(fontSize: 11),
@@ -1327,7 +1361,7 @@ class _InputTypeLegend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Types acceptés dans le fichier (un par ligne) :',
+            'Types acceptés (fichier liste, paquet unique, ou dossier scanné) :',
             style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -1341,6 +1375,7 @@ class _InputTypeLegend extends StatelessWidget {
             ('Archive tar', '/path/to/pkg.tar.gz  ou  .tgz'),
             ('Archive .zip', '/path/to/archive.zip'),
             ('Paquet Debian', '/path/to/package.deb'),
+            ('Archive Java', '/path/to/lib.jar'),
             ('requirements', '/path/to/requirements.txt'),
           ])
             Padding(
