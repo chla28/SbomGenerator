@@ -52,6 +52,29 @@ class SbomMerger {
       }
     }
 
+    // Fusionner les citations (CycloneDX 1.7, root-level)
+    final allCitations = <Map<String, dynamic>>[];
+    final citationRefs = <String>{};
+    for (final sbom in sboms) {
+      for (final citation in (sbom['citations'] as List?) ?? []) {
+        final c = citation as Map<String, dynamic>;
+        final ref = (c['bom-ref'] as String?) ?? '';
+        if (ref.isEmpty || citationRefs.add(ref)) allCitations.add(c);
+      }
+    }
+
+    // Fusionner definitions.patents (CycloneDX 1.7, root-level)
+    final allPatents = <Map<String, dynamic>>[];
+    final patentRefs = <String>{};
+    for (final sbom in sboms) {
+      final defs = sbom['definitions'] as Map<String, dynamic>?;
+      for (final patent in (defs?['patents'] as List?) ?? []) {
+        final p = patent as Map<String, dynamic>;
+        final ref = (p['bom-ref'] as String?) ?? '';
+        if (ref.isEmpty || patentRefs.add(ref)) allPatents.add(p);
+      }
+    }
+
     // Construire le document fusionné
     final result = <String, dynamic>{
       'bomFormat': 'CycloneDX',
@@ -62,6 +85,8 @@ class SbomMerger {
       'components': allComponents,
     };
     if (allDeps.isNotEmpty) result['dependencies'] = allDeps;
+    if (allCitations.isNotEmpty) result['citations'] = allCitations;
+    if (allPatents.isNotEmpty) result['definitions'] = {'patents': allPatents};
 
     return result;
   }

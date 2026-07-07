@@ -382,7 +382,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           const SizedBox(width: 4),
                           const HelpIcon(
                             'Sélectionnez un ou plusieurs formats de sortie.\n'
-                            'CycloneDX 1.6 et SPDX sont les standards industrie.\n'
+                            'CycloneDX (1.6 ou 1.7) et SPDX sont les standards industrie.\n'
                             'Markdown et AsciiDoc sont lisibles directement.',
                           ),
                         ],
@@ -402,6 +402,18 @@ class _ConfigPanelState extends State<ConfigPanel> {
                             widget.onChanged?.call();
                           }),
                         ),
+
+                      // Version CycloneDX (visible uniquement si cyclonedx sélectionné)
+                      if (c.formats.contains('cyclonedx')) ...[
+                        const SizedBox(height: 6),
+                        _CycloneDxVersionSelector(
+                          selected: c.cycloneDxVersion,
+                          onChanged: (v) => setState(() {
+                            c.cycloneDxVersion = v;
+                            widget.onChanged?.call();
+                          }),
+                        ),
+                      ],
 
                       // Option PDF (visible uniquement si asciidoc sélectionné)
                       if (c.formats.contains('asciidoc')) ...[
@@ -1245,6 +1257,56 @@ class _OciToolSelector extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CycloneDxVersionSelector extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _CycloneDxVersionSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 32, bottom: 4),
+      child: Row(
+        children: [
+          Text(
+            'Version (--cyclonedx-version)',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.secondary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const HelpIcon(
+            '1.6 — la plus répandue chez les consommateurs actuels (défaut).\n'
+            '1.7 — ajoute citations / patentAssertions / distributionConstraints\n'
+            '(voir --tlp et --patent-map en ligne de commande).',
+          ),
+          const SizedBox(width: 8),
+          SegmentedButton<String>(
+            style: SegmentedButton.styleFrom(
+              textStyle: const TextStyle(fontSize: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              minimumSize: const Size(0, 28),
+            ),
+            segments: const [
+              ButtonSegment(value: '1.6', label: Text('1.6')),
+              ButtonSegment(value: '1.7', label: Text('1.7')),
+            ],
+            selected: {selected},
+            onSelectionChanged: (s) => onChanged(s.first),
+          ),
+        ],
+      ),
     );
   }
 }

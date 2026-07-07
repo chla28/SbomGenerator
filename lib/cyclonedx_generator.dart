@@ -3,10 +3,60 @@ import 'dart:io';
 import 'license_normalizer.dart';
 import 'models.dart';
 
-/// Generates a CycloneDX 1.6 JSON SBOM.
+/// A patent assertion to attach to a matching package's component, per the
+/// CycloneDX 1.7 `patentAssertions` / `definitions.patents` structures.
 ///
-/// Specification: https://cyclonedx.org/specification/overview/
+/// Only meaningful when generating with [CycloneDxGenerator.supportedSpecVersions]
+/// entry `'1.7'` — CycloneDX 1.6 has no patent-related fields.
+class PatentAssertion {
+  /// The patent number as granted by the issuing authority (e.g. `US1234567`).
+  final String patentNumber;
+
+  /// Two-letter jurisdiction / patent office code (WIPO ST.3), e.g. `US`, `EP`.
+  final String jurisdiction;
+
+  /// Legal status per the CycloneDX `patentLegalStatus` enum
+  /// (pending, granted, revoked, expired, lapsed, withdrawn, abandoned,
+  /// suspended, reinstated, opposed, terminated, invalidated, in-force).
+  final String legalStatus;
+
+  /// Nature of the assertion per the CycloneDX `assertionType` enum
+  /// (ownership, license, third-party-claim, standards-inclusion, prior-art,
+  /// exclusive-rights, non-assertion, research-or-evaluation).
+  final String assertionType;
+
+  const PatentAssertion({
+    required this.patentNumber,
+    required this.jurisdiction,
+    required this.legalStatus,
+    required this.assertionType,
+  });
+
+  static const validLegalStatuses = [
+    'pending', 'granted', 'revoked', 'expired', 'lapsed', 'withdrawn',
+    'abandoned', 'suspended', 'reinstated', 'opposed', 'terminated',
+    'invalidated', 'in-force',
+  ];
+
+  static const validAssertionTypes = [
+    'ownership', 'license', 'third-party-claim', 'standards-inclusion',
+    'prior-art', 'exclusive-rights', 'non-assertion', 'research-or-evaluation',
+  ];
+}
+
+/// Generates a CycloneDX JSON SBOM.
+///
+/// Supports CycloneDX 1.6 (default) and 1.7. Specification:
+/// https://cyclonedx.org/specification/overview/
 class CycloneDxGenerator {
+  /// specVersion values this generator knows how to emit.
+  static const supportedSpecVersions = ['1.6', '1.7'];
+
+  /// Traffic Light Protocol classifications accepted by `--tlp` (1.7 only).
+  static const validTlpClassifications = [
+    'CLEAR', 'GREEN', 'AMBER', 'AMBER_AND_STRICT', 'RED',
+  ];
+
   // ── Public API ─────────────────────────────────────────────────────────────
 
   Map<String, dynamic> generate(
@@ -15,9 +65,45 @@ class CycloneDxGenerator {
     String? documentName,
     String? author,
     String? organization,
+    String specVersion = '1.6',
+    String? tlp,
+    String? citationSource,
+    Map<String, PatentAssertion>? patentsByPackageName,
   }) {
+    if (!supportedSpecVersions.contains(specVersion)) {
+      throw ArgumentError(
+          'specVersion non supporté : "$specVersion" (valides : ${supportedSpecVersions.join(', ')})');
+    }
+    final is17 = specVersion == '1.7';
+    final patents = patentsByPackageName ?? const {};
+
+    if (!is17 && (tlp != null || citationSource != null || patents.isNotEmpty)) {
+      throw ArgumentError(
+          'tlp / citationSource / patentsByPackageName nécessitent specVersion="1.7" '
+          '(CycloneDX 1.6 n\'a pas ces champs : le schéma 1.6 rejette les propriétés inconnues)');
+    }
+    if (tlp != null && !validTlpClassifications.contains(tlp)) {
+      throw ArgumentError(
+          'tlp invalide : "$tlp" (valides : ${validTlpClassifications.join(', ')})');
+    }
+    for (final p in patents.values) {
+      if (!RegExp(r'^[A-Z]{2}$').hasMatch(p.jurisdiction)) {
+        throw ArgumentError(
+            'jurisdiction de brevet invalide : "${p.jurisdiction}" (2 lettres majuscules attendues, ex: US)');
+      }
+      if (!PatentAssertion.validLegalStatuses.contains(p.legalStatus)) {
+        throw ArgumentError(
+            'legalStatus de brevet invalide : "${p.legalStatus}" (valides : ${PatentAssertion.validLegalStatuses.join(', ')})');
+      }
+      if (!PatentAssertion.validAssertionTypes.contains(p.assertionType)) {
+        throw ArgumentError(
+            'assertionType de brevet invalide : "${p.assertionType}" (valides : ${PatentAssertion.validAssertionTypes.join(', ')})');
+      }
+    }
+
     final now = DateTime.now().toUtc().toIso8601String();
     final serialNumber = 'urn:uuid:${generateUuidV4()}';
+    final orgName = organization ?? 'local';
 
     final depIndex = <String, List<String>>{
       for (final d in dependencies) d.sourceRef: d.dependsOn,
@@ -38,13 +124,17 @@ class CycloneDxGenerator {
 
     final allBomRefs = [for (final pkg in packages) pkg.bomRef];
 
-    return {
+    final result = {
       'bomFormat': 'CycloneDX',
-      'specVersion': '1.6',
+      'specVersion': specVersion,
       'serialNumber': serialNumber,
       'version': 1,
-      'metadata': _buildMetadata(now, documentName, author, organization),
-      'components': [for (final pkg in packages) _packageToComponent(pkg)],
+      'metadata': _buildMetadata(now, documentName, author, organization,
+          tlp: tlp, extraTool: citationSource),
+      'components': [
+        for (final pkg in packages)
+          _packageToComponent(pkg, patents[pkg.name], orgName),
+      ],
       'dependencies': [rootDep, ...pkgDeps],
       'compositions': [
         {
@@ -55,6 +145,18 @@ class CycloneDxGenerator {
         },
       ],
     };
+
+    if (is17) {
+      final patentDefs = _buildPatentDefinitions(packages, patents);
+      if (patentDefs.isNotEmpty) {
+        result['definitions'] = {'patents': patentDefs};
+      }
+      if (citationSource != null) {
+        result['citations'] = [_buildCitation(now, citationSource)];
+      }
+    }
+
+    return result;
   }
 
   Future<void> writeToFile(
@@ -64,9 +166,22 @@ class CycloneDxGenerator {
     String? documentName,
     String? author,
     String? organization,
+    String specVersion = '1.6',
+    String? tlp,
+    String? citationSource,
+    Map<String, PatentAssertion>? patentsByPackageName,
   }) async {
-    final sbom = generate(packages, dependencies,
-        documentName: documentName, author: author, organization: organization);
+    final sbom = generate(
+      packages,
+      dependencies,
+      documentName: documentName,
+      author: author,
+      organization: organization,
+      specVersion: specVersion,
+      tlp: tlp,
+      citationSource: citationSource,
+      patentsByPackageName: patentsByPackageName,
+    );
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }
@@ -77,26 +192,35 @@ class CycloneDxGenerator {
     String timestamp,
     String? name,
     String? author,
-    String? org,
-  ) {
+    String? org, {
+    String? tlp,
+    String? extraTool,
+  }) {
     final authorName = author ?? 'sbom_generator';
     final orgName = org ?? 'local';
 
-    return {
+    final tools = <Map<String, dynamic>>[
+      {
+        'type': 'application',
+        'bom-ref': 'tool-sbom_generator',
+        'name': 'sbom_generator',
+        'version': '1.0.0',
+      }
+    ];
+    if (extraTool != null && extraTool != 'sbom_generator') {
+      tools.add({
+        'type': 'application',
+        'bom-ref': _toolBomRef(extraTool),
+        'name': extraTool,
+      });
+    }
+
+    final metadata = <String, dynamic>{
       'timestamp': timestamp,
       'lifecycles': [
         {'phase': 'operations'}
       ],
-      'tools': {
-        'components': [
-          {
-            'type': 'application',
-            'bom-ref': 'tool-sbom_generator',
-            'name': 'sbom_generator',
-            'version': '1.0.0',
-          }
-        ]
-      },
+      'tools': {'components': tools},
       'authors': [
         {'name': authorName}
       ],
@@ -113,11 +237,54 @@ class CycloneDxGenerator {
         'version': '1.0',
       },
     };
+
+    // CycloneDX 1.7+ only (schema 1.6 has no `distributionConstraints`).
+    if (tlp != null) {
+      metadata['distributionConstraints'] = {'tlp': tlp};
+    }
+
+    return metadata;
   }
+
+  // ── Citations & patents (CycloneDX 1.7) ────────────────────────────────────
+
+  Map<String, dynamic> _buildCitation(String timestamp, String source) => {
+        'bom-ref': 'citation-components',
+        'timestamp': timestamp,
+        'attributedTo': _toolBomRef(source),
+        'pointers': ['/components'],
+        'note': 'Données de composants collectées via $source.',
+      };
+
+  List<Map<String, dynamic>> _buildPatentDefinitions(
+      List<Package> packages, Map<String, PatentAssertion> patents) {
+    final seenRefs = <String>{};
+    final defs = <Map<String, dynamic>>[];
+    for (final pkg in packages) {
+      final patent = patents[pkg.name];
+      if (patent == null) continue;
+      final ref = _patentBomRef(patent.patentNumber);
+      if (seenRefs.add(ref)) {
+        defs.add({
+          'bom-ref': ref,
+          'patentNumber': patent.patentNumber,
+          'jurisdiction': patent.jurisdiction,
+          'patentLegalStatus': patent.legalStatus,
+        });
+      }
+    }
+    return defs;
+  }
+
+  String _toolBomRef(String toolName) => 'tool-${_cpeToken(toolName)}';
+
+  String _patentBomRef(String patentNumber) =>
+      'patent-${_cpeToken(patentNumber)}';
 
   // ── Component ──────────────────────────────────────────────────────────────
 
-  Map<String, dynamic> _packageToComponent(Package pkg) {
+  Map<String, dynamic> _packageToComponent(
+      Package pkg, PatentAssertion? patent, String orgName) {
     final component = <String, dynamic>{
       'type': 'library',
       'bom-ref': pkg.bomRef,
@@ -139,6 +306,21 @@ class CycloneDxGenerator {
     if (_hasValue(pkg.license)) {
       component['licenses'] =
           LicenseNormalizer.toCycloneDxLicenses(pkg.license);
+    }
+
+    // CycloneDX 1.7+ only (schema 1.6 has no `patentAssertions`).
+    if (patent != null) {
+      component['patentAssertions'] = [
+        {
+          'assertionType': patent.assertionType,
+          // `url` (organization-only field) disambiguates the asserter from
+          // an `organizationalContact` (person) for the schema's oneOf check
+          // — both share every other field, so a bare {'name': ...} is
+          // ambiguous and fails strict CycloneDX 1.7 validation.
+          'asserter': {'name': orgName, 'url': <String>[]},
+          'patentRefs': [_patentBomRef(patent.patentNumber)],
+        }
+      ];
     }
 
     // CPE only makes practical sense for RPM packages (NVD uses distro CPEs)

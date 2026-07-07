@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Support de CycloneDX 1.7 en plus de 1.6 (`--cyclonedx-version`) : classification TLP
+  (`--tlp`), déclarations de brevets par paquet (`--patent-map`) et attribution automatique
+  des données de composants à l'outil source (`citations`, ex. syft/trivy avec `--image`)
 - Parseurs manifestes : Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
 - Format de sortie CSV (RFC 4180) avec colonnes : nom, version, type, purl, licence, description, fournisseur
 - Sous-commande `convert` : conversion entre formats CycloneDX 1.5, SPDX 2.3, SPDX 3.0 et CSV

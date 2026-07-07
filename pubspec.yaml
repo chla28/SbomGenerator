@@ -1,7 +1,7 @@
 name: sbom_generator
 description: >
   Generates SBOM (Software Bill of Materials) from a list of RPM packages.
-  Supports CycloneDX 1.5, SPDX 2.3, and custom JSON output formats.
+  Supports CycloneDX 1.6/1.7, SPDX 2.3, and custom JSON output formats.
   Includes dependency relationships resolved via rpm requires/provides.
 version: 1.0.0
 

@@ -33,6 +33,8 @@ const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciid
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
 const _validOciTools = {'syft', 'trivy', 'skopeo'};
 const _validDateFields = {'published', 'modified', 'latest'};
+const _validCycloneDxVersions = CycloneDxGenerator.supportedSpecVersions;
+const _validTlpClassifications = CycloneDxGenerator.validTlpClassifications;
 
 Future<void> main(List<String> arguments) async {
   // Sous-commande `scan` : analyse CVE avec filtre date
@@ -113,7 +115,7 @@ Future<void> main(List<String> arguments) async {
       abbr: 'f',
       defaultsTo: 'cyclonedx',
       help: 'Output format(s), comma-separated.\n'
-          '  cyclonedx  CycloneDX 1.6 JSON (default)\n'
+          '  cyclonedx  CycloneDX 1.6 or 1.7 JSON (default: 1.6, see --cyclonedx-version)\n'
           '  spdx       SPDX 2.3 JSON\n'
           '  spdx3      SPDX 3.0 JSON-LD\n'
           '  json       Custom human-friendly JSON\n'
@@ -162,6 +164,29 @@ Future<void> main(List<String> arguments) async {
       help: 'Fait échouer la génération si un paquet a cette licence.\n'
           'Peut être répété. Supporte les expressions SPDX partielles.\n'
           'Exemple : --deny-license GPL-3.0 --deny-license AGPL-3.0',
+    )
+    ..addOption(
+      'cyclonedx-version',
+      defaultsTo: '1.6',
+      allowed: _validCycloneDxVersions,
+      help: 'Version de la spécification CycloneDX à générer.\n'
+          '  1.6  (défaut, la plus répandue chez les consommateurs actuels)\n'
+          '  1.7  Ajoute citations/patentAssertions/distributionConstraints '
+          'quand --tlp ou --patent-map sont fournis.',
+    )
+    ..addOption(
+      'tlp',
+      allowed: _validTlpClassifications,
+      help: 'Classification TLP (Traffic Light Protocol) du BOM.\n'
+          'Nécessite --cyclonedx-version 1.7.\n'
+          'Valeurs : ${_validTlpClassifications.join(", ")}',
+    )
+    ..addOption(
+      'patent-map',
+      help: 'Chemin vers un fichier de déclarations de brevets.\n'
+          'Nécessite --cyclonedx-version 1.7.\n'
+          'Format : une ligne "package_name: numéro|juridiction|statut|type"\n'
+          'Exemple : openssl: US1234567|US|granted|license',
     )
     ..addOption(
       'min-quality-score',
@@ -262,6 +287,21 @@ Future<void> main(List<String> arguments) async {
   if (verbose && licenseOverrides.isNotEmpty) {
     print('License overrides: ${licenseOverrides.length} entr(ée(s)) chargée(s).');
   }
+
+  // CycloneDX 1.7 : version cible + champs optionnels associés
+  final cycloneDxVersion = args['cyclonedx-version'] as String;
+  final tlp = args['tlp'] as String?;
+  final patentMapPath = args['patent-map'] as String?;
+  final patentMap =
+      patentMapPath != null ? _parsePatentMap(patentMapPath) : <String, PatentAssertion>{};
+  if (cycloneDxVersion != '1.7' && (tlp != null || patentMap.isNotEmpty)) {
+    _err('--tlp et --patent-map nécessitent --cyclonedx-version 1.7.');
+    exit(1);
+  }
+  // Le BOM ne peut réellement attribuer les données de composants à un outil
+  // externe que lorsque celui-ci a effectivement produit la liste (--image).
+  final citationSource =
+      (cycloneDxVersion == '1.7' && imageRef != null) ? ociTool : null;
 
   if (inputPath != null) {
     final inputFile = File(inputPath);
@@ -584,7 +624,12 @@ Future<void> main(List<String> arguments) async {
       switch (fmt) {
         case 'cyclonedx':
           await CycloneDxGenerator().writeToFile(
-              uniquePackages, dependencies, outPath, documentName: docName);
+              uniquePackages, dependencies, outPath,
+              documentName: docName,
+              specVersion: cycloneDxVersion,
+              tlp: tlp,
+              citationSource: citationSource,
+              patentsByPackageName: patentMap);
         case 'spdx':
           await SpdxGenerator().writeToFile(
               uniquePackages, dependencies, outPath, documentName: docName);
@@ -938,6 +983,39 @@ Map<String, String> _parseLicenseMap(String path) {
     final name = trimmed.substring(0, idx).trim();
     final license = trimmed.substring(idx + 1).trim();
     if (name.isNotEmpty && license.isNotEmpty) result[name] = license;
+  }
+  return result;
+}
+
+// ── Patent map helpers (CycloneDX 1.7) ────────────────────────────────────────
+
+/// Parses a patent declaration file (CycloneDX 1.7 `patentAssertions`).
+/// One line per package: `package_name: patentNumber|jurisdiction|legalStatus|assertionType`.
+/// Example: `openssl: US1234567|US|granted|license`.
+Map<String, PatentAssertion> _parsePatentMap(String path) {
+  final file = File(path);
+  if (!file.existsSync()) {
+    _err('Patent map file not found: $path');
+    exit(1);
+  }
+  final result = <String, PatentAssertion>{};
+  for (final line in file.readAsLinesSync()) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+    final idx = trimmed.indexOf(':');
+    if (idx < 1) continue;
+    final name = trimmed.substring(0, idx).trim();
+    final fields = trimmed.substring(idx + 1).trim().split('|');
+    if (name.isEmpty || fields.length != 4) {
+      _err('--patent-map : ligne invalide (attendu "name: number|jurisdiction|status|type") : "$trimmed"');
+      exit(1);
+    }
+    result[name] = PatentAssertion(
+      patentNumber: fields[0].trim(),
+      jurisdiction: fields[1].trim(),
+      legalStatus: fields[2].trim(),
+      assertionType: fields[3].trim(),
+    );
   }
   return result;
 }
@@ -1348,6 +1426,12 @@ Future<void> _runConvert(List<String> arguments) async {
             '  cyclonedx  spdx  spdx3  json  markdown  asciidoc  html  csv')
     ..addOption('name', abbr: 'n',
         help: 'Nom du document SBOM de sortie (remplace celui du fichier source).')
+    ..addOption(
+      'cyclonedx-version',
+      defaultsTo: '1.6',
+      allowed: _validCycloneDxVersions,
+      help: 'Version CycloneDX cible quand -f inclut "cyclonedx" (défaut : 1.6).',
+    )
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
 
   ArgResults args;
@@ -1363,6 +1447,7 @@ Future<void> _runConvert(List<String> arguments) async {
   final inputPath = args['input'] as String;
   final outputPath = args['output'] as String;
   final docName = args['name'] as String?;
+  final cycloneDxVersion = args['cyclonedx-version'] as String;
 
   final formats = (args['format'] as String)
       .split(',')
@@ -1421,8 +1506,8 @@ Future<void> _runConvert(List<String> arguments) async {
     try {
       switch (fmt) {
         case 'cyclonedx':
-          await CycloneDxGenerator()
-              .writeToFile(packages, [], outPath, documentName: name);
+          await CycloneDxGenerator().writeToFile(packages, [], outPath,
+              documentName: name, specVersion: cycloneDxVersion);
         case 'spdx':
           await SpdxGenerator()
               .writeToFile(packages, [], outPath, documentName: name);

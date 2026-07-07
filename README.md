@@ -33,7 +33,7 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 
 | `-f` | Standard | Contenu |
 |------|----------|---------|
-| `cyclonedx` | CycloneDX 1.6 JSON *(défaut)* | `components[]` + `dependencies[]` + `compositions[]` |
+| `cyclonedx` | CycloneDX 1.6/1.7 JSON *(1.6 par défaut, `--cyclonedx-version`)* | `components[]` + `dependencies[]` + `compositions[]` |
 | `spdx` | SPDX 2.3 JSON | `packages[]` + `relationships[]` |
 | `spdx3` | SPDX 3.0 JSON-LD | graphe `@graph` (éléments, relations, organisations) |
 | `json` | JSON personnalisé | métadonnées complètes + graphe de dépendances résolu |
@@ -145,6 +145,10 @@ sbom_generator merge a.cdx.json b.cdx.json c.cdx.json -o merged.cdx.json -n "Sys
 # Signer les SBOMs avec cosign après génération
 ./sbom_generator -i packages.txt -f cyclonedx,spdx -o sbom --sign
 
+# CycloneDX 1.7 avec classification TLP et déclarations de brevets
+./sbom_generator -i packages.txt --cyclonedx-version 1.7 --tlp AMBER \
+  --patent-map patents.txt -o sbom.cdx.json
+
 # Comparer deux SBOMs
 ./sbom_generator diff ancien.cdx.json nouveau.cdx.json
 ./sbom_generator diff ancien.cdx.json nouveau.cdx.json --json -o diff.json
@@ -163,6 +167,20 @@ my-internal-lib: LicenseRef-Proprietary
 ```
 
 Chaque ligne `nom: expression` remplace la licence détectée automatiquement pour le paquet de ce nom. Les lignes commençant par `#` sont ignorées.
+
+### Exemple de fichier de brevets (`patents.txt`, CycloneDX 1.7 uniquement)
+
+```text
+# Déclarations de brevets — format : nom_paquet: numéro|juridiction|statut|type_assertion
+openssl: US1234567|US|granted|license
+my-internal-lib: US7654321|US|pending|ownership
+```
+
+- `juridiction` : code WIPO ST.3 à 2 lettres (`US`, `EP`, `JP`…)
+- `statut` : `pending`, `granted`, `revoked`, `expired`, `lapsed`, `withdrawn`, `abandoned`, `suspended`, `reinstated`, `opposed`, `terminated`, `invalidated`, `in-force`
+- `type_assertion` : `ownership`, `license`, `third-party-claim`, `standards-inclusion`, `prior-art`, `exclusive-rights`, `non-assertion`, `research-or-evaluation`
+
+Nécessite `--cyclonedx-version 1.7` (le schéma 1.6 n'a pas de champ `patentAssertions`).
 
 ### Exemple de fichier d'entrée
 
@@ -245,7 +263,7 @@ sbom_generator/
 │   ├── sbom_diff.dart           # Comparaison de SBOMs (SbomDiffer)
 │   ├── sbom_merger.dart         # Fusion de SBOMs (SbomMerger)
 │   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
-│   ├── cyclonedx_generator.dart # Format CycloneDX 1.6 JSON
+│   ├── cyclonedx_generator.dart # Format CycloneDX 1.6/1.7 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
 │   ├── spdx3_generator.dart     # Format SPDX 3.0 JSON-LD
 │   ├── simple_json_generator.dart  # Format JSON personnalisé

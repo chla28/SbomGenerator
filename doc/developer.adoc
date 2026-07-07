@@ -1842,14 +1842,41 @@ et `░` (vides), suivies du compteur `current/total` et du pourcentage :
 
 Le libellé est tronqué à gauche si le nom dépasse la largeur disponible.
 
-== `lib/cyclonedx_generator.dart` — Générateur CycloneDX 1.6
+== `lib/cyclonedx_generator.dart` — Générateur CycloneDX 1.6/1.7
 
 === Signature mise à jour
 
 [source,dart]
 ----
-Map<String, dynamic> generate(List<Package> packages, List<PackageDependency> dependencies, ...)
+Map<String, dynamic> generate(List<Package> packages, List<PackageDependency> dependencies, {
+  String? documentName, String? author, String? organization,
+  String specVersion = '1.6',              // '1.6' ou '1.7'
+  String? tlp,                             // distributionConstraints.tlp (1.7)
+  String? citationSource,                  // citations[] attributedTo (1.7)
+  Map<String, PatentAssertion>? patentsByPackageName,  // patentAssertions (1.7)
+})
 ----
+
+=== Support CycloneDX 1.7
+
+Le schéma JSON 1.6 a `additionalProperties: false` partout : les champs propres à 1.7
+(`citations`, `definitions.patents`, `components[].patentAssertions`,
+`metadata.distributionConstraints`) ne sont donc *jamais* émis en 1.6, et `generate()`
+lève une `ArgumentError` si `tlp`/`citationSource`/`patentsByPackageName` sont fournis sans
+`specVersion: '1.7'`. `CycloneDxGenerator.supportedSpecVersions` et
+`.validTlpClassifications` exposent les valeurs valides pour la CLI.
+
+`PatentAssertion` (patentNumber, jurisdiction, legalStatus, assertionType) est validée
+avant génération (regex ST.3 pour `jurisdiction`, enums CycloneDX pour le reste). Chaque
+brevet référencé est dédupliqué dans `definitions.patents[]` par `bom-ref`
+(`patent-<numéro normalisé>`) ; le composant correspondant reçoit une entrée
+`patentAssertions[]` pointant vers ce `bom-ref`. Point notable : le champ `asserter` doit
+être désambiguïsé avec un `url: []` vide, sinon le schéma le valide simultanément comme
+`organizationalEntity` *et* `organizationalContact` et le `oneOf` strict échoue.
+
+La citation (`--image` + `--cyclonedx-version 1.7`) attribue `/components` au `bom-ref`
+de l'outil OCI utilisé (`--oci-tool`), ajouté comme second `tools.components[]` dans les
+métadonnées.
 
 === Propriétés spécifiques par type (`_packageToComponent`)
 

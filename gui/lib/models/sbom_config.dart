@@ -12,7 +12,7 @@ String formatExtension(String fmt) => _formatExtensions[fmt] ?? '.json';
 const allFormats = ['cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc'];
 
 const formatLabels = {
-  'cyclonedx': 'CycloneDX 1.6',
+  'cyclonedx': 'CycloneDX',
   'spdx': 'SPDX 2.3',
   'spdx3': 'SPDX 3.0 JSON-LD',
   'json': 'JSON personnalisé',
@@ -27,6 +27,9 @@ const ociToolLabels = {
   'trivy': 'Trivy',
   'skopeo': 'Skopeo',
 };
+
+/// Versions CycloneDX supportées par --cyclonedx-version.
+const allCycloneDxVersions = ['1.6', '1.7'];
 
 class SbomConfig {
   String inputFile;
@@ -47,6 +50,9 @@ class SbomConfig {
   /// Backend OCI choisi (--oci-tool) : 'syft', 'trivy' ou 'skopeo'.
   String ociTool;
 
+  /// Version CycloneDX générée (--cyclonedx-version) : '1.6' ou '1.7'.
+  String cycloneDxVersion;
+
   SbomConfig({
     this.inputFile = '',
     this.outputBase = 'sbom',
@@ -61,6 +67,7 @@ class SbomConfig {
     this.enableSbomqs = false,
     this.imageRef = '',
     this.ociTool = 'syft',
+    this.cycloneDxVersion = '1.6',
   }) : formats = formats ?? {'cyclonedx'};
 
   Map<String, dynamic> toJson() => {
@@ -75,6 +82,7 @@ class SbomConfig {
     'enableSbomqs': enableSbomqs,
     'imageRef': imageRef,
     'ociTool': ociTool,
+    'cycloneDxVersion': cycloneDxVersion,
   };
 
   factory SbomConfig.fromJson(Map<String, dynamic> j) => SbomConfig(
@@ -89,6 +97,7 @@ class SbomConfig {
     enableSbomqs: j['enableSbomqs'] as bool? ?? false,
     imageRef: j['imageRef'] as String? ?? '',
     ociTool: j['ociTool'] as String? ?? 'syft',
+    cycloneDxVersion: j['cycloneDxVersion'] as String? ?? '1.6',
   );
 
   List<String> toArgs() {
@@ -112,6 +121,9 @@ class SbomConfig {
     }
     if (licenseMapFile.isNotEmpty) {
       args.addAll(['--license-map', licenseMapFile]);
+    }
+    if (formats.contains('cyclonedx') && cycloneDxVersion != '1.6') {
+      args.addAll(['--cyclonedx-version', cycloneDxVersion]);
     }
     args.addAll(['--concurrency', concurrency.toString()]);
     if (verbose) args.add('--verbose');

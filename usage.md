@@ -1,7 +1,7 @@
 # sbom_generator — Guide d'utilisation
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste de paquets RPM.
-Prend en charge les formats **CycloneDX 1.6**, **SPDX 2.3**, **SPDX 3.0 JSON-LD** et un format **JSON personnalisé**.
+Prend en charge les formats **CycloneDX 1.6/1.7**, **SPDX 2.3**, **SPDX 3.0 JSON-LD** et un format **JSON personnalisé**.
 
 ---
 
@@ -55,6 +55,9 @@ sbom_generator -i <fichier> [options]
 | `--output <fichier>` | `-o` | `sbom.json` | Fichier SBOM de sortie |
 | `--format <fmt>` | `-f` | `cyclonedx` | Format de sortie (voir ci-dessous) |
 | `--name <nom>` | `-n` | `RPM Package Set` | Nom du document SBOM / composant racine |
+| `--cyclonedx-version <ver>` | | `1.6` | Version CycloneDX générée : `1.6` ou `1.7` |
+| `--tlp <classification>` | | | Classification TLP du BOM (1.7 uniquement) : `CLEAR`, `GREEN`, `AMBER`, `AMBER_AND_STRICT`, `RED` |
+| `--patent-map <fichier>` | | | Déclarations de brevets par paquet (1.7 uniquement, voir ci-dessous) |
 | `--verbose` | `-v` | désactivé | Affiche les détails de progression |
 | `--version` | | | Affiche la version et quitte |
 | `--help` | `-h` | | Affiche l'aide |
@@ -63,10 +66,23 @@ sbom_generator -i <fichier> [options]
 
 | Valeur | Standard | Version | Description |
 |--------|----------|---------|-------------|
-| `cyclonedx` | CycloneDX | 1.6 | Format par défaut. JSON conforme au schéma CycloneDX 1.6. |
+| `cyclonedx` | CycloneDX | 1.6 ou 1.7 | Format par défaut (1.6). JSON conforme au schéma CycloneDX ; `--cyclonedx-version 1.7` active en plus `citations`, `patentAssertions` et `distributionConstraints`. |
 | `spdx` | SPDX | 2.3 | JSON SPDX 2.3 avec `packages[]` et `relationships[]`. |
 | `spdx3` | SPDX | 3.0 | JSON-LD SPDX 3.0 avec graphe plat d'éléments (`@graph`). |
 | `json` | Personnalisé | 1.0 | JSON lisible incluant toutes les métadonnées RPM brutes. |
+
+#### Déclarations de brevets (`--patent-map`, CycloneDX 1.7)
+
+Fichier texte, une déclaration par ligne :
+```
+package_name: numéro_brevet|juridiction|statut_légal|type_assertion
+openssl: US1234567|US|granted|license
+```
+- `juridiction` : code WIPO ST.3 à 2 lettres (`US`, `EP`, `JP`…)
+- `statut_légal` : `pending`, `granted`, `revoked`, `expired`, `lapsed`, `withdrawn`, `abandoned`, `suspended`, `reinstated`, `opposed`, `terminated`, `invalidated`, `in-force`
+- `type_assertion` : `ownership`, `license`, `third-party-claim`, `standards-inclusion`, `prior-art`, `exclusive-rights`, `non-assertion`, `research-or-evaluation`
+
+Quand `--image` est utilisé avec `--cyclonedx-version 1.7`, une `citation` racine attribue automatiquement les données de composants à l'outil d'analyse choisi (`--oci-tool`).
 
 ---
 
@@ -210,9 +226,9 @@ Les dépendances sont résolues **au sein de la liste fournie** :
 
 ## Formats de sortie en détail
 
-### CycloneDX 1.6 (`cyclonedx`)
+### CycloneDX 1.6 / 1.7 (`cyclonedx`)
 
-Structure JSON :
+Structure JSON (1.6, par défaut) :
 ```
 {
   "bomFormat": "CycloneDX",
@@ -226,6 +242,13 @@ Structure JSON :
 ```
 
 Chaque `dependencies[].dependsOn` contient les `bom-ref` des paquets dont dépend le composant. L'entrée racine liste tous les composants du SBOM.
+
+Avec `--cyclonedx-version 1.7`, des champs supplémentaires apparaissent selon les options fournies :
+- `metadata.distributionConstraints.tlp` (`--tlp`)
+- `citations[]` racine attribuant `/components` à l'outil source (automatique avec `--image`)
+- `components[].patentAssertions[]` + `definitions.patents[]` (`--patent-map`)
+
+Ces champs n'existent pas dans le schéma CycloneDX 1.6 : ils sont donc uniquement émis quand `--cyclonedx-version 1.7` est actif (une erreur est levée sinon).
 
 ### SPDX 2.3 (`spdx`)
 
@@ -302,7 +325,7 @@ sbom_generator/
 ├── lib/
 │   ├── models.dart                # RpmPackage, PackageDependency, UUID
 │   ├── rpm_parser.dart            # Interrogation rpm + résolution dépendances
-│   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6
+│   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6/1.7
 │   ├── spdx_generator.dart        # Générateur SPDX 2.3
 │   ├── spdx3_generator.dart       # Générateur SPDX 3.0 JSON-LD
 │   └── simple_json_generator.dart # Générateur JSON personnalisé

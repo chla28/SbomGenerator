@@ -10,7 +10,7 @@
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
 Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml) et *images OCI* (via syft, trivy ou skopeo).
-Prend en charge les formats de sortie *CycloneDX 1.6*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
+Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
 
 == Prérequis
 
@@ -158,6 +158,22 @@ sbom_generator validate <sbom1> [<sbom2> ...]
 |Refuser les composants dont la licence correspond au motif SPDX (correspondance partielle,
 répétable). Code retour 2 si au moins une violation est détectée.
 
+|`--cyclonedx-version <ver>`
+|—
+|`1.6`
+|Version CycloneDX générée : `1.6` ou `1.7`. Requis pour `--tlp` et `--patent-map`.
+
+|`--tlp <classification>`
+|—
+|—
+|Classification TLP (Traffic Light Protocol) du BOM — 1.7 uniquement.
+Valeurs : `CLEAR`, `GREEN`, `AMBER`, `AMBER_AND_STRICT`, `RED`.
+
+|`--patent-map <fichier>`
+|—
+|—
+|Fichier de déclarations de brevets par paquet — 1.7 uniquement (voir <<patent-map>>).
+
 |`--min-quality-score <score>`
 |—
 |—
@@ -194,9 +210,9 @@ Un fichier `<sbom>.bundle` est créé à côté de chaque fichier signé.
 
 |`cyclonedx`
 |CycloneDX
-|1.6
+|1.6 ou 1.7
 |`.cdx.json`
-|Format par défaut. JSON conforme au schéma CycloneDX 1.6.
+|Format par défaut (1.6). `--cyclonedx-version 1.7` active en plus `citations`, `patentAssertions` et `distributionConstraints`.
 
 |`spdx`
 |SPDX
@@ -709,9 +725,9 @@ Les dépendances sont résolues *au sein de la liste fournie* :
 
 == Formats de sortie en détail
 
-=== CycloneDX 1.6 (`cyclonedx`)
+=== CycloneDX 1.6 / 1.7 (`cyclonedx`)
 
-Structure JSON :
+Structure JSON (1.6, par défaut) :
 
 ....
 {
@@ -727,6 +743,30 @@ Structure JSON :
 
 Chaque `dependencies[].dependsOn` contient les `bom-ref` des paquets dont dépend le composant.
 L'entrée racine liste tous les composants du SBOM.
+
+Avec `--cyclonedx-version 1.7`, des champs supplémentaires apparaissent selon les options
+fournies (absents du schéma 1.6, donc n'apparaissent jamais en 1.6) :
+
+* `metadata.distributionConstraints.tlp` — via `--tlp`
+* `citations[]` racine, attribuant `/components` à l'outil source — automatique dès que
+  `--image` est utilisé (attribution à `--oci-tool`)
+* `components[].patentAssertions[]` + `definitions.patents[]` — via `--patent-map`
+
+[[patent-map]]
+==== Déclarations de brevets (`--patent-map`)
+
+Fichier texte, une déclaration par ligne :
+
+....
+package_name: numéro_brevet|juridiction|statut_légal|type_assertion
+openssl: US1234567|US|granted|license
+....
+
+* `juridiction` : code WIPO ST.3 à 2 lettres (`US`, `EP`, `JP`…)
+* `statut_légal` : `pending`, `granted`, `revoked`, `expired`, `lapsed`, `withdrawn`,
+  `abandoned`, `suspended`, `reinstated`, `opposed`, `terminated`, `invalidated`, `in-force`
+* `type_assertion` : `ownership`, `license`, `third-party-claim`, `standards-inclusion`,
+  `prior-art`, `exclusive-rights`, `non-assertion`, `research-or-evaluation`
 
 === SPDX 2.3 (`spdx`)
 
@@ -821,7 +861,7 @@ sbom_generator/
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée
 │   ├── sbom_reader.dart           # Lecteur SBOM (CycloneDX/SPDX) → List<Package>
-│   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6
+│   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6/1.7
 │   ├── spdx_generator.dart        # Générateur SPDX 2.3
 │   ├── spdx3_generator.dart       # Générateur SPDX 3.0 JSON-LD
 │   ├── simple_json_generator.dart # Générateur JSON personnalisé
