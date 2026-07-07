@@ -527,7 +527,7 @@ Future<void> main(List<String> arguments) async {
   int completed = 0;
 
   final rawResults = await Future.wait(
-    List<Future<Package?>>.generate(mainTotal, (i) async {
+    List<Future<List<Package>>>.generate(mainTotal, (i) async {
       var ref = mainRefs[i];
 
       // Resolve bare RPM name to a local file when --rpm-dir is set
@@ -555,24 +555,32 @@ Future<void> main(List<String> arguments) async {
 
       await sem.acquire();
       try {
-        Package? pkg;
+        List<Package> pkgs;
         if (ref.endsWith('.whl')) {
-          pkg = await whlParser.parseWheelFile(ref);
+          final pkg = await whlParser.parseWheelFile(ref);
+          pkgs = pkg != null ? [pkg] : const [];
         } else if (_isTar(ref)) {
-          pkg = await tarParser.parseTarFile(ref);
+          final pkg = await tarParser.parseTarFile(ref);
+          pkgs = pkg != null ? [pkg] : const [];
         } else if (ref.endsWith('.zip')) {
-          pkg = await zipParser.parseZipFile(ref);
+          final pkg = await zipParser.parseZipFile(ref);
+          pkgs = pkg != null ? [pkg] : const [];
         } else if (ref.endsWith('.deb')) {
-          pkg = await debParser.parseDebFile(ref);
+          final pkg = await debParser.parseDebFile(ref);
+          pkgs = pkg != null ? [pkg] : const [];
         } else if (_isJar(ref)) {
-          pkg = await jarParser.parseJarFile(ref);
+          // Un .jar « shaded »/uber-jar peut embarquer une ou plusieurs
+          // dépendances relocalisées : chacune ressort comme un paquet
+          // supplémentaire, en plus du jar lui-même.
+          pkgs = await jarParser.parseJarFile(ref);
         } else {
-          pkg = await rpmParser.parsePackage(ref);
+          final pkg = await rpmParser.parsePackage(ref);
+          pkgs = pkg != null ? [pkg] : const [];
         }
         completed++;
         final label = ref.contains('/') ? ref.split('/').last : ref;
         _printProgress(completed, mainTotal, label);
-        return pkg;
+        return pkgs;
       } finally {
         sem.release();
       }
@@ -584,9 +592,9 @@ Future<void> main(List<String> arguments) async {
   final packages = <Package>[];
   final failedRefs = <String>[];
   for (int i = 0; i < rawResults.length; i++) {
-    final pkg = rawResults[i];
-    if (pkg != null) {
-      packages.add(pkg);
+    final pkgs = rawResults[i];
+    if (pkgs.isNotEmpty) {
+      packages.addAll(pkgs);
     } else {
       failedRefs.add(mainRefs[i]);
     }

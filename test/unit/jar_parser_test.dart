@@ -98,7 +98,8 @@ void main() {
   }
 
   group('JarParser.parseJarFile — jar « shaded »/uber-jar', () {
-    test('retient sa propre identité plutôt qu\'une dépendance relocalisée',
+    test(
+        'remonte sa propre identité ET les dépendances relocalisées comme paquets distincts',
         () async {
       if (!hasZipTools) {
         markTestSkipped('zip/unzip absents — test ignoré');
@@ -114,19 +115,51 @@ void main() {
         jarName: 'netty-common-4.1.100.Final.jar',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.purl, 'pkg:maven/io.netty/netty-common@4.1.100.Final');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(2));
+      expect(pkgs[0].purl, 'pkg:maven/io.netty/netty-common@4.1.100.Final');
+      expect(pkgs[1].purl, 'pkg:maven/org.jctools/jctools-core@3.1.0');
+      // Les deux paquets partagent le même fichier source (un seul .jar).
+      expect(pkgs[0].sourceRef, jarPath);
+      expect(pkgs[1].sourceRef, jarPath);
     });
 
-    test('repli sur le nom de fichier si aucun pom.properties ne correspond',
+    test('remonte plusieurs dépendances relocalisées (woodstox-core)',
         () async {
       if (!hasZipTools) {
         markTestSkipped('zip/unzip absents — test ignoré');
         return;
       }
+      final jarPath = await _buildShadedJar(
+        ownGroupId: 'com.fasterxml.woodstox',
+        ownArtifactId: 'woodstox-core',
+        ownVersion: '6.5.1',
+        bundled: [
+          ('com.sun.xml.bind.jaxb', 'isorelax', '20090621'),
+          ('net.java.dev.msv', 'xsdlib', '2013.6.1'),
+        ],
+        jarName: 'woodstox-core-6.5.1.jar',
+      );
+
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      final purls = pkgs.map((p) => p.purl).toSet();
+      expect(purls, {
+        'pkg:maven/com.fasterxml.woodstox/woodstox-core@6.5.1',
+        'pkg:maven/com.sun.xml.bind.jaxb/isorelax@20090621',
+        'pkg:maven/net.java.dev.msv/xsdlib@2013.6.1',
+      });
+    });
+
+    test(
+        'repli sur le nom de fichier pour sa propre identité si aucun pom.properties ne correspond, '
+        'mais remonte quand même les dépendances embarquées', () async {
+      if (!hasZipTools) {
+        markTestSkipped('zip/unzip absents — test ignoré');
+        return;
+      }
       // Aucun des pom.properties embarqués ne correspond au nom du jar
-      // lui-même : impossible de savoir lequel est le bon, on ne devine pas.
+      // lui-même : impossible de deviner lequel est le bon pour l'identité
+      // propre, mais les entrées lues restent des dépendances valides.
       final jarPath = await _buildShadedJar(
         ownGroupId: 'com.example',
         ownArtifactId: 'something-else',
@@ -135,9 +168,13 @@ void main() {
         jarName: 'my-app-2.0.0.jar',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.purl, 'pkg:maven/my-app/my-app@2.0.0');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      final purls = pkgs.map((p) => p.purl).toSet();
+      expect(purls, {
+        'pkg:maven/my-app/my-app@2.0.0',
+        'pkg:maven/com.example/something-else@9.9.9',
+        'pkg:maven/org.other/other-lib@1.0.0',
+      });
     });
   });
 
@@ -153,9 +190,10 @@ void main() {
         version: '1.2.3',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.name, 'com.example:my-lib');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      final pkg = pkgs.single;
+      expect(pkg.name, 'com.example:my-lib');
       expect(pkg.version, '1.2.3');
       expect(pkg.packageType, 'maven');
       expect(pkg.purl, 'pkg:maven/com.example/my-lib@1.2.3');
@@ -169,20 +207,22 @@ void main() {
       final jarPath = '${tmp.path}/org.apache.commons.commons-lang3-3.14.0.jar';
       File(jarPath).writeAsBytesSync([]); // fichier vide, pas un vrai zip
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.name, 'org.apache.commons:commons-lang3');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      final pkg = pkgs.single;
+      expect(pkg.name, 'org.apache.commons:commons-lang3');
       expect(pkg.version, '3.14.0');
       expect(pkg.purl, 'pkg:maven/org.apache.commons/commons-lang3@3.14.0');
     });
 
-    test('retourne null quand ni pom.properties ni convention de nom ne matchent',
+    test(
+        'retourne une liste vide quand ni pom.properties ni convention de nom ne matchent',
         () async {
       final jarPath = '${tmp.path}/mystery.jar';
       File(jarPath).writeAsBytesSync([]);
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNull);
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, isEmpty);
     });
 
     test('utilise artifactId comme groupId quand rien d\'autre n\'est disponible',
@@ -192,9 +232,10 @@ void main() {
       final jarPath = '${tmp.path}/aopalliance-1.0.jar';
       File(jarPath).writeAsBytesSync([]);
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.name, 'aopalliance:aopalliance');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      final pkg = pkgs.single;
+      expect(pkg.name, 'aopalliance:aopalliance');
       expect(pkg.version, '1.0');
       expect(pkg.purl, 'pkg:maven/aopalliance/aopalliance@1.0');
     });
@@ -214,9 +255,10 @@ void main() {
         'caffeine-2.9.3.jar',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.purl, 'pkg:maven/com.github.ben-manes.caffeine/caffeine@2.9.3');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl,
+          'pkg:maven/com.github.ben-manes.caffeine/caffeine@2.9.3');
     });
 
     test('priorité Implementation-Vendor-Id > Implementation-Title', () async {
@@ -231,9 +273,9 @@ void main() {
         'commons-httpclient-3.1.jar',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.purl, 'pkg:maven/org.apache/commons-httpclient@3.1');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl, 'pkg:maven/org.apache/commons-httpclient@3.1');
     });
 
     test('ignore une valeur de manifeste non conforme (casse, pas de point)',
@@ -250,9 +292,9 @@ void main() {
         'javafx-base-13.jar',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.purl, 'pkg:maven/javafx-base/javafx-base@13');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl, 'pkg:maven/javafx-base/javafx-base@13');
     });
 
     test('prend la première occurrence d\'une clé répétée (manifeste multi-sections)',
@@ -270,9 +312,10 @@ void main() {
         'xml-apis-1.3.04.jar',
       );
 
-      final pkg = await JarParser().parseJarFile(jarPath);
-      expect(pkg, isNotNull);
-      expect(pkg!.purl, 'pkg:maven/org.apache.xmlcommons.version/xml-apis@1.3.04');
+      final pkgs = await JarParser().parseJarFile(jarPath);
+      expect(pkgs, hasLength(1));
+      expect(pkgs.single.purl,
+          'pkg:maven/org.apache.xmlcommons.version/xml-apis@1.3.04');
     });
   });
 }

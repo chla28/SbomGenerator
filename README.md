@@ -31,7 +31,7 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 - Archive tar : détection (Python sdist si `PKG-INFO` présent, sinon générique), lecture `LICENSE`/`COPYING`
 - Archive ZIP : même logique que tar, via `python3 zipfile`
 - Paquet Debian : extraction du fichier `control` via `dpkg-deb -f`, parsing RFC 822
-- Archive `.jar` : coordonnées Maven lues via `pom.properties` embarqué, sinon `META-INF/MANIFEST.MF` (Bundle-SymbolicName…), sinon déduites du nom de fichier
+- Archive `.jar` : coordonnées Maven lues via `pom.properties` embarqué, sinon `META-INF/MANIFEST.MF` (Bundle-SymbolicName…), sinon déduites du nom de fichier ; un jar « shaded »/uber-jar embarquant des dépendances relocalisées (chacune avec son propre `pom.properties`) produit un composant par dépendance en plus du jar lui-même
 - Requirements.txt : parsing pur Dart (PEP 503), expansion en `WheelPackage` avant la boucle principale
 - Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 

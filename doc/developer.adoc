@@ -806,76 +806,76 @@ Découpe sur `,` puis sur `|` (alternatives), retire les contraintes de version
 Contrairement à `MavenParser` (qui lit un manifeste `pom.xml`), `JarParser` extrait les
 coordonnées Maven directement d'une archive `.jar` binaire, en miroir de la logique déjà
 utilisée pour le scan d'images OCI dans `oci_parser.dart` (`_parseMavenJars` ci-dessous),
-mais retourne un `WheelPackage(packageType: 'maven')` (comme `maven_parser.dart`) plutôt
-qu'un `OciPackage` — pas de notion d'`imageRef` pour un fichier local.
+mais retourne des `WheelPackage(packageType: 'maven')` (comme `maven_parser.dart`) plutôt
+que des `OciPackage` — pas de notion d'`imageRef` pour un fichier local.
+
+*Un `.jar` peut produire plusieurs paquets.* Un jar « shaded »/uber-jar (ex.
+`netty-common-*.jar`) peut embarquer, en plus de son propre `pom.properties`, celui d'une
+ou plusieurs dépendances relocalisées (ex. `org.jctools:jctools-core`). `parseJarFile`
+retourne donc une *liste* : le jar lui-même en premier élément (si son identité a pu être
+déterminée), suivi d'un élément par dépendance embarquée détectée — même comportement que
+syft, qui liste séparément chaque `pom.properties` trouvé (avec un `virtualPath` du type
+`/netty-common-*.jar:org.jctools:jctools-core`).
 
 === `JarParser`
 
 [source,dart]
 ----
 class JarParser {
-  Future<WheelPackage?> parseJarFile(String path) async { … }
-  Future<(String, String, String)?> _fromPomProperties(String path) async { … }
+  Future<List<WheelPackage>> parseJarFile(String path) async { … }
+  Future<List<(String, String, String)>> _readAllPomProperties(String path) async { … }
+  Future<(String, String, String)?> _readSinglePomProperties(String path, String entryPath) async { … }
   Future<String?> _groupIdFromManifest(String path) async { … }
   bool _looksLikeGroupId(String s) => s.contains('.') && s == s.toLowerCase() && !s.contains(' ');
 }
 ----
 
-=== Chaîne de fallback
+=== Résolution de l'identité propre + des dépendances embarquées
 
-. `META-INF/maven/*/*/pom.properties` — parsing clé=valeur (`groupId`,
-  `artifactId`, `version`), en deux temps :
-  .. tentative *ciblée* : `unzip -p <jar> "META-INF/maven/*/<artifactId-du-nom-de-fichier>/pom.properties"`
-     — ne lit que le pom.properties dont le segment artifactId correspond
-     au nom de fichier du jar lui-même ;
-  .. à défaut, repli sur le glob large `META-INF/maven/*/*/pom.properties`,
-     mais *seulement* si un unique `pom.properties` matche (compté via les
-     occurrences de `artifactId=` dans la sortie concaténée).
+. `_readAllPomProperties` liste *tous* les
+  `META-INF/maven/<groupId>/<artifactId>/pom.properties` présents dans
+  l'archive (`unzip -l` puis un `unzip -p <jar> <chemin exact>` *par entrée*,
+  jamais un glob concaténant plusieurs blocs — voir bug ci-dessous) et
+  retourne un `(groupId, artifactId, version)` par entrée exploitable.
+. Parmi ces entrées, celle dont l'`artifactId` correspond au nom de fichier
+  du jar (préfixe avant le premier `-<chiffre>`) est l'identité *propre* du
+  jar ; s'il n'y a qu'une seule entrée au total, elle est prise par défaut.
+  Toutes les *autres* entrées deviennent des paquets supplémentaires
+  (dépendances relocalisées).
+. Si aucune entrée ne correspond au nom de fichier (jar ambigu, plusieurs
+  `pom.properties` sans correspondance claire), l'identité propre retombe sur
+  la convention de nom `<groupId>.<artifactId>-<version>.jar` (Quarkus/Red
+  Hat), puis sur `META-INF/MANIFEST.MF` (`Bundle-SymbolicName`,
+  `Implementation-Vendor-Id`, `Implementation-Title`,
+  `Automatic-Module-Name`, dans cet ordre — première occurrence de chaque
+  clé conservée, repliement de ligne RFC 822 géré, valeur retenue seulement
+  si `_looksLikeGroupId` l'accepte : au moins un point, entièrement en
+  minuscules — rejette par ex. `javafx.baseEmpty`).
 +
-*Bug corrigé, découvert sur un jar réel* (`netty-common-4.1.100.Final.jar`,
-qui embarque aussi le `pom.properties` de sa dépendance relocalisée
-`org.jctools:jctools-core`) : lire le glob large sans discrimination
-concatène les deux blocs et un parsing clé=valeur naïf se fait écraser par
-le second bloc — le jar `netty-common` ressortait avec l'identité
-`jctools-core` ! Même cause sur `woodstox-core-6.5.1.jar`, qui embarque
-`isorelax` et `net.java.dev.msv:xsdlib`. La tentative ciblée résout le cas
-courant sans ambiguïté ; le comptage empêche de deviner à tort quand la
-cible n'a pas pu être identifiée par le nom de fichier.
-+
-*Limite assumée* : contrairement à syft, qui émet séparément chaque
-`pom.properties` trouvé dans une archive (y compris ceux des dépendances
-relocalisées, avec un `virtualPath` du type
-`/netty-common-*.jar:org.jctools:jctools-core`), `JarParser` conserve le
-modèle « un `.jar` = un paquet » utilisé par tous les autres parseurs du
-projet (RPM, deb, wheel). Les dépendances relocalisées à l'intérieur d'un
-uber-jar ne sont donc *pas* ajoutées comme composants séparés — extraire
-N paquets à partir d'un seul fichier serait un changement d'architecture
-plus large, non fait à ce stade.
-. À défaut, convention de nom de fichier `<groupId>.<artifactId>-<version>.jar`
-  (Quarkus/Red Hat) : regex `-(\d)` pour repérer le début de version, puis
-  dernier `.` du préfixe pour séparer groupId/artifactId.
-. À défaut (préfixe sans point — la très grande majorité des jars réels,
-  convention `<artifactId>-<version>.jar` simple), lecture de
-  `META-INF/MANIFEST.MF` à la recherche d'un groupId plausible, dans cet
-  ordre de priorité : `Bundle-SymbolicName`, `Implementation-Vendor-Id`,
-  `Implementation-Title`, `Automatic-Module-Name` (première occurrence de
-  chaque clé conservée, repliement de ligne RFC 822 géré). Une valeur n'est
-  retenue que si `_looksLikeGroupId` l'accepte : au moins un point, et
-  entièrement en minuscules (rejette par ex. `javafx.baseEmpty`, une valeur
-  `Automatic-Module-Name` qui n'est pas un vrai nom de package).
-+
-*Découvert par comparaison avec syft sur un jeu réel de 207 jars* (voir
-commit associé) : ce comportement reproduit exactement syft pour la
-quasi-totalité des cas testés (ex. `caffeine` → `com.github.ben-manes.caffeine`
-via `Bundle-SymbolicName`, `commons-httpclient` → `org.apache` via
-`Implementation-Vendor-Id` prioritaire sur `Implementation-Title`).
+*Découvert par comparaison avec syft sur un jeu réel de 207 jars* : ce
+comportement le reproduit exactement pour la quasi-totalité des cas testés
+(ex. `caffeine` → `com.github.ben-manes.caffeine` via `Bundle-SymbolicName`,
+`commons-httpclient` → `org.apache` via `Implementation-Vendor-Id`
+prioritaire sur `Implementation-Title`). Les entrées `pom.properties` déjà
+identifiées comme dépendances embarquées restent remontées même dans ce cas.
 . Si le manifeste ne donne rien d'exploitable non plus, `groupId` reprend la
-  valeur de `artifactId` (`pkg:maven/<artifactId>/<artifactId>@<version>`) —
-  c'est dégradé mais *non abandonné* : mieux vaut un paquet avec un groupId
-  approximatif qu'un paquet silencieusement absent du SBOM.
-. Seul un nom de fichier sans aucun suffixe `-<chiffre>` reconnaissable fait
-  réellement échouer l'extraction (`null` + avertissement `stderr`) : ce cas
-  est rare et reste hors scope (aucune donnée exploitable nulle part).
+  valeur d'`artifactId` (`pkg:maven/<artifactId>/<artifactId>@<version>`) —
+  dégradé mais *non abandonné*.
+. Liste vide (+ avertissement `stderr`) seulement si ni identité propre ni
+  dépendance embarquée n'ont pu être déterminées (aucun `pom.properties`
+  exploitable et aucun suffixe de version reconnaissable dans le nom de
+  fichier).
+
+*Bug corrigé, découvert sur un jar réel* (`netty-common-4.1.100.Final.jar`) :
+lire le `pom.properties` via un glob large
+(`META-INF/maven/*/*/pom.properties`) sans discrimination concatène le
+contenu de toutes les entrées trouvées, et un parsing clé=valeur naïf se
+fait écraser par le second bloc — le jar `netty-common` ressortait avec
+l'identité `jctools-core` ! Même cause sur `woodstox-core-6.5.1.jar`
+(embarque `isorelax` et `net.java.dev.msv:xsdlib`). Lire chaque entrée
+*individuellement* (étape 1 ci-dessus) élimine complètement le risque de
+mélange, tout en permettant de les remonter correctement comme paquets
+séparés plutôt que de choisir arbitrairement laquelle garder.
 
 *Limite connue, assumée* : certaines bibliothèques très répandues (Spring
 Framework notamment : `spring-core`, `spring-beans`, …) n'exposent leur vrai

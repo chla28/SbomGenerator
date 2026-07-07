@@ -311,7 +311,9 @@ librement dans le même fichier.
 |Archive Java `.jar`
 |`/opt/libs/my-lib-1.2.3.jar`
 |`pom.properties` embarqué, sinon `META-INF/MANIFEST.MF`, sinon nom de
-fichier ; PURL `pkg:maven/…`
+fichier ; PURL `pkg:maven/…`. Un jar « shaded »/uber-jar embarquant des
+dépendances relocalisées (chacune avec son propre `pom.properties`) produit
+un composant par dépendance, en plus du jar lui-même.
 
 |Fichier `requirements.txt`
 |`/opt/project/requirements.txt`

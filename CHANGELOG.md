@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `META-INF/MANIFEST.MF`, ou nom de fichier) et des dossiers scannés récursivement pour
   tous les types de paquets/manifestes déjà supportés ; sélecteur de dossier ajouté dans
   la GUI Flutter
+- Un `.jar` « shaded »/uber-jar embarquant des dépendances relocalisées (chacune avec son
+  propre `pom.properties`, ex. `netty-common-*.jar` qui embarque `org.jctools:jctools-core`)
+  produit désormais un composant SBOM par dépendance détectée, en plus du jar lui-même —
+  comportement aligné sur syft, vérifié sur deux jeux réels de 207 et 274 jars
 - Parseurs manifestes : Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
 - Format de sortie CSV (RFC 4180) avec colonnes : nom, version, type, purl, licence, description, fournisseur
 - Sous-commande `convert` : conversion entre formats CycloneDX 1.5, SPDX 2.3, SPDX 3.0 et CSV
@@ -39,9 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `.jar` « shaded »/uber-jar embarquant le `pom.properties` d'une dépendance relocalisée
   (ex. `netty-common-*.jar` qui embarque aussi celui de `org.jctools:jctools-core`)
   ressortait avec l'identité de la dépendance embarquée au lieu de la sienne : `JarParser`
-  ne lit désormais que le `pom.properties` dont l'artifactId correspond au nom de fichier
-  du jar, et renonce (repli sur manifeste/nom de fichier) plutôt que de deviner en cas
-  d'ambiguïté — détecté par comparaison avec syft sur un second jeu réel de 274 jars
+  lit désormais chaque `pom.properties` embarqué individuellement (jamais concaténé), pour
+  éviter tout mélange — détecté par comparaison avec syft sur un second jeu réel de 274 jars
 - skopeo ne retournait aucun paquet RPM (chemin `--dbpath` incorrect)
 - Onglets de l'interface graphique maintenant scrollables pour éviter le chevauchement de texte
 - CLI : `--input` pointant directement vers une archive unique (`.zip`, `.tar`,

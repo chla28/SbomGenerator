@@ -3,13 +3,16 @@ import 'models.dart';
 
 /// Parses standalone Java `.jar` files to recover Maven coordinates.
 ///
-/// Fallback chain (each step only runs if the previous one found nothing):
-///   1. `META-INF/maven/*/*/pom.properties` — groupId/artifactId/version,
-///      exactly as reported by the Maven build itself. Shaded/uber jars can
-///      embed *several* `pom.properties` (their own plus relocated
-///      dependencies) — only one whose artifactId matches the jar's own
-///      filename is trusted; an ambiguous match is treated as "not found"
-///      rather than risking picking up a bundled dependency's identity.
+/// Returns one [WheelPackage] per Maven artifact found in the jar: normally
+/// just the jar's own identity, but a "shaded"/uber-jar that embeds
+/// relocated dependencies (each with their own `META-INF/maven/*/*/pom.properties`)
+/// yields one additional package per embedded dependency — mirroring what
+/// tools such as syft report for the same jar.
+///
+/// Fallback chain for the jar's *own* identity (each step only runs if the
+/// previous one found nothing):
+///   1. The `pom.properties` whose artifactId matches the jar's own
+///      filename (version suffix stripped).
 ///   2. Filename convention `<groupId>.<artifactId>-<version>.jar`
 ///      (Quarkus/Red Hat style) — both coordinates come from the name.
 ///   3. Filename `<artifactId>-<version>.jar` (the vast majority of real
@@ -22,10 +25,14 @@ import 'models.dart';
 ///      PURL (`pkg:maven/<artifactId>/<artifactId>@<version>`), matching
 ///      what tools such as syft do for jars with no embedded metadata.
 ///
-/// Requires `unzip` in PATH. Returns `null` (with a stderr warning) only
-/// when no version-like suffix can even be located in the filename.
+/// Requires `unzip` in PATH. Returns an empty list (with a stderr warning)
+/// only when no version-like suffix can even be located in the filename and
+/// no embedded `pom.properties` could be read at all.
 class JarParser {
   static final _versionSep = RegExp(r'-(\d)');
+
+  static final _pomPropertiesEntry =
+      RegExp(r'^META-INF/maven/([^/\s]+)/([^/\s]+)/pom\.properties$');
 
   static const _manifestGroupIdKeys = [
     'Bundle-SymbolicName',
@@ -34,39 +41,64 @@ class JarParser {
     'Automatic-Module-Name',
   ];
 
-  Future<WheelPackage?> parseJarFile(String path) async {
+  Future<List<WheelPackage>> parseJarFile(String path) async {
     final basename = path.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
     final match = _versionSep.firstMatch(basename);
     final prefix = match != null ? basename.substring(0, match.start) : null;
 
-    final pomCoords = await _fromPomProperties(path, expectedArtifactId: prefix);
-    if (pomCoords != null) {
-      final (groupId, artifactId, version) = pomCoords;
-      return _toPackage(path, groupId, artifactId, version);
+    final pomEntries = await _readAllPomProperties(path);
+
+    // Sépare l'entrée qui décrit le jar lui-même (artifactId == nom de
+    // fichier, ou seule entrée présente) du reste : les autres sont des
+    // dépendances relocalisées embarquées (jar « shaded »/uber-jar).
+    (String, String, String)? ownFromPom;
+    final embedded = <(String, String, String)>[];
+    if (pomEntries.isNotEmpty) {
+      final ownIndex = prefix != null
+          ? pomEntries.indexWhere((e) => e.$2 == prefix)
+          : (pomEntries.length == 1 ? 0 : -1);
+      for (var i = 0; i < pomEntries.length; i++) {
+        if (i == ownIndex) {
+          ownFromPom = pomEntries[i];
+        } else {
+          embedded.add(pomEntries[i]);
+        }
+      }
     }
 
-    if (match == null || prefix == null) {
+    WheelPackage? ownPackage;
+    if (ownFromPom != null) {
+      final (groupId, artifactId, version) = ownFromPom;
+      ownPackage = _toPackage(path, groupId, artifactId, version);
+    } else if (prefix != null) {
+      final version = basename.substring(match!.start + 1);
+      final lastDot = prefix.lastIndexOf('.');
+      final String groupId;
+      final String artifactId;
+      if (lastDot > 0) {
+        // Convention <groupId>.<artifactId>-<version>.jar (Quarkus/Red Hat).
+        groupId = prefix.substring(0, lastDot);
+        artifactId = prefix.substring(lastDot + 1);
+      } else {
+        artifactId = prefix;
+        groupId = await _groupIdFromManifest(path) ?? prefix;
+      }
+      ownPackage = _toPackage(path, groupId, artifactId, version);
+    }
+
+    if (ownPackage == null && embedded.isEmpty) {
       stderr.writeln(
           'Warning: impossible de déterminer les coordonnées Maven de "$path" '
           '(pas de META-INF/maven/*/*/pom.properties exploitable, et aucun '
           'suffixe de version reconnaissable dans le nom de fichier)');
-      return null;
-    }
-    final filenameVersion = basename.substring(match.start + 1);
-
-    final lastDot = prefix.lastIndexOf('.');
-    final String groupId;
-    final String artifactId;
-    if (lastDot > 0) {
-      // Convention <groupId>.<artifactId>-<version>.jar (Quarkus/Red Hat).
-      groupId = prefix.substring(0, lastDot);
-      artifactId = prefix.substring(lastDot + 1);
-    } else {
-      artifactId = prefix;
-      groupId = await _groupIdFromManifest(path) ?? prefix;
+      return const [];
     }
 
-    return _toPackage(path, groupId, artifactId, filenameVersion);
+    return [
+      if (ownPackage != null) ownPackage,
+      for (final (groupId, artifactId, version) in embedded)
+        _toPackage(path, groupId, artifactId, version),
+    ];
   }
 
   WheelPackage _toPackage(
@@ -90,40 +122,43 @@ class JarParser {
     );
   }
 
-  /// [expectedArtifactId], when known, is the artifactId guessed from the
-  /// jar's own filename (version suffix stripped). It disambiguates
-  /// shaded/uber jars that embed more than one `pom.properties`.
-  Future<(String, String, String)?> _fromPomProperties(
-    String path, {
-    required String? expectedArtifactId,
-  }) async {
-    // 1) Tentative ciblée : seul le pom.properties dont le segment artifactId
-    // correspond au nom de fichier du jar est lu — évite de piocher les
-    // métadonnées d'une dépendance relocalisée à l'intérieur d'un uber-jar
-    // (ex. netty-common-*.jar qui embarque aussi le pom.properties de
-    // jctools-core).
-    if (expectedArtifactId != null) {
-      final targeted = await _readPomProperties(
-          path, 'META-INF/maven/*/$expectedArtifactId/pom.properties');
-      if (targeted != null) return targeted;
+  /// Lists every `META-INF/maven/<groupId>/<artifactId>/pom.properties`
+  /// entry embedded in the jar and reads each one *individually* (never
+  /// concatenated) so that a shaded/uber-jar bundling several relocated
+  /// dependencies never has one artifact's fields clobber another's.
+  Future<List<(String, String, String)>> _readAllPomProperties(
+      String path) async {
+    final ProcessResult listResult;
+    try {
+      listResult = await Process.run('unzip', ['-l', path]);
+    } on ProcessException {
+      return const [];
     }
+    if (listResult.exitCode != 0) return const [];
 
-    // 2) Repli sur un glob large, mais uniquement si un unique pom.properties
-    // matche : s'il y en a plusieurs, impossible de savoir lequel décrit le
-    // jar lui-même plutôt qu'une dépendance embarquée — mieux vaut ne rien
-    // affirmer que d'afficher une identité erronée.
-    return _readPomProperties(
-        path, 'META-INF/maven/*/*/pom.properties', requireSingleMatch: true);
+    final entries = <String>[];
+    for (final line in listResult.stdout.toString().split('\n')) {
+      final trimmed = line.trim();
+      final lastSpace = trimmed.lastIndexOf(RegExp(r'\s'));
+      if (lastSpace < 0) continue;
+      final entryPath = trimmed.substring(lastSpace + 1);
+      if (_pomPropertiesEntry.hasMatch(entryPath)) entries.add(entryPath);
+    }
+    if (entries.isEmpty) return const [];
+
+    final results = <(String, String, String)>[];
+    for (final entry in entries) {
+      final coords = await _readSinglePomProperties(path, entry);
+      if (coords != null) results.add(coords);
+    }
+    return results;
   }
 
-  Future<(String, String, String)?> _readPomProperties(
-    String path,
-    String globPattern, {
-    bool requireSingleMatch = false,
-  }) async {
+  Future<(String, String, String)?> _readSinglePomProperties(
+      String path, String entryPath) async {
     final ProcessResult result;
     try {
-      result = await Process.run('unzip', ['-p', path, globPattern]);
+      result = await Process.run('unzip', ['-p', path, entryPath]);
     } on ProcessException {
       return null;
     }
@@ -131,10 +166,6 @@ class JarParser {
 
     final content = result.stdout.toString();
     if (content.trim().isEmpty) return null;
-
-    if (requireSingleMatch && 'artifactId='.allMatches(content).length > 1) {
-      return null;
-    }
 
     String? groupId, artifactId, version;
     for (final rawLine in content.split('\n')) {
