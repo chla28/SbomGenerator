@@ -285,10 +285,19 @@ class CycloneDxGenerator {
 
   Map<String, dynamic> _packageToComponent(
       Package pkg, PatentAssertion? patent, String orgName) {
+    // Maven coordinates are stored as "groupId:artifactId" in pkg.name.
+    // CycloneDX has a dedicated `group` field for exactly this (matching
+    // what tools such as syft emit) — split it out instead of leaving the
+    // groupId folded into `name`.
+    final nameParts =
+        pkg.packageType == 'maven' ? pkg.name.split(':') : const <String>[];
+    final hasGroup = nameParts.length == 2 && nameParts[0].isNotEmpty;
+
     final component = <String, dynamic>{
       'type': 'library',
       'bom-ref': pkg.bomRef,
-      'name': pkg.name,
+      if (hasGroup) 'group': nameParts[0],
+      'name': hasGroup ? nameParts[1] : pkg.name,
       'version': pkg.fullVersion,
       'purl': pkg.purl,
     };

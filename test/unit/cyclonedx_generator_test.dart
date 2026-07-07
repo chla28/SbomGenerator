@@ -23,6 +23,25 @@ RpmPackage _rpm({
       provides: const [],
     );
 
+WheelPackage _maven({
+  required String groupId,
+  required String artifactId,
+  String version = '1.0.0',
+}) =>
+    WheelPackage(
+      name: '$groupId:$artifactId',
+      version: version,
+      license: '',
+      url: '',
+      summary: '',
+      vendor: groupId,
+      arch: 'any',
+      sourceRef: '$artifactId-$version.jar',
+      requires: const [],
+      provides: ['$groupId:$artifactId'],
+      packageType: 'maven',
+    );
+
 void main() {
   final generator = CycloneDxGenerator();
 
@@ -213,6 +232,25 @@ void main() {
             }),
         throwsArgumentError,
       );
+    });
+  });
+
+  group('CycloneDxGenerator.generate — champ group (composants Maven)', () {
+    test('sépare groupId/artifactId dans les champs group/name dédiés', () {
+      final sbom = generator.generate(
+          [_maven(groupId: 'com.sun.xml.fastinfoset', artifactId: 'FastInfoset', version: '1.2.15')],
+          []);
+      final component = (sbom['components'] as List).single as Map;
+      expect(component['group'], 'com.sun.xml.fastinfoset');
+      expect(component['name'], 'FastInfoset');
+      expect(component['purl'], 'pkg:maven/com.sun.xml.fastinfoset/FastInfoset@1.2.15');
+    });
+
+    test('n\'ajoute pas de champ group pour les paquets non-Maven', () {
+      final sbom = generator.generate([_rpm(name: 'bash')], []);
+      final component = (sbom['components'] as List).single as Map;
+      expect(component.containsKey('group'), isFalse);
+      expect(component['name'], 'bash');
     });
   });
 }

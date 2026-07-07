@@ -67,10 +67,22 @@ class SbomReader {
   }
 
   Package _cdxComponent(Map<String, dynamic> c) {
-    final name = (c['name'] as String?) ?? '';
+    final rawName = (c['name'] as String?) ?? '';
     final version = (c['version'] as String?) ?? '';
     final purl = (c['purl'] as String?) ?? '';
     final description = (c['description'] as String?) ?? '';
+    final packageType = _purlToType(purl);
+
+    // Maven components store groupId in the dedicated CycloneDX `group`
+    // field (see cyclonedx_generator.dart) rather than folded into `name`.
+    // Recombine them into the "groupId:artifactId" convention used
+    // internally by WheelPackage(packageType: 'maven') so groupId isn't
+    // silently dropped when re-reading a document we (or another tool)
+    // generated this way.
+    final group = (c['group'] as String?) ?? '';
+    final name = (packageType == 'maven' && group.isNotEmpty)
+        ? '$group:$rawName'
+        : rawName;
 
     String license = '';
     final licenses = c['licenses'] as List?;
@@ -121,7 +133,7 @@ class SbomReader {
       sha256Header: sha256,
       requires: [],
       provides: [name],
-      packageType: _purlToType(purl),
+      packageType: packageType,
     );
   }
 

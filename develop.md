@@ -820,6 +820,22 @@ La citation (`--image` + `--cyclonedx-version 1.7`) attribue `/components` au `b
 de l'outil OCI utilisé (`--oci-tool`), ajouté comme second `tools.components[]` dans les
 métadonnées.
 
+### Champ `group` (composants Maven)
+
+`WheelPackage(packageType: 'maven')` stocke les coordonnées Maven sous la forme
+`"groupId:artifactId"` dans `Package.name` (convention interne partagée par
+`maven_parser.dart`, `jar_parser.dart`, `oci_parser.dart`). `_packageToComponent` sépare ce
+`name` en deux champs CycloneDX dédiés — `group: groupId` et `name: artifactId` — au lieu
+de laisser le groupId concaténé dans `name`, pour suivre la convention CycloneDX standard
+(champ `group` prévu exactement pour ça) et se rapprocher de ce qu'émettent syft/trivy.
+`Package.name` lui-même n'est pas modifié : les autres générateurs (SPDX, Markdown, CSV…)
+continuent d'afficher `"groupId:artifactId"` tel quel.
+
+Corollaire côté lecture : `sbom_reader.dart` (`_cdxComponent`) recombine `group` + `name`
+en `"groupId:artifactId"` dès qu'un composant a `packageType == 'maven'` et un champ
+`group` non vide — sinon le groupId serait silencieusement perdu en relisant un document
+CycloneDX généré ainsi (`convert`, `merge`, GUI…).
+
 ### Propriétés spécifiques par type (`_packageToComponent`)
 
 ```dart

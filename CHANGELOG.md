@@ -34,6 +34,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Scan des JARs Maven dans le backend skopeo
 
 ### Fixed
+- Les composants Maven du SBOM CycloneDX pliaient le groupId dans le champ `name`
+  (`"groupId:artifactId"`) au lieu d'utiliser le champ `group` dédié prévu par le schéma —
+  contrairement à syft/trivy. `cyclonedx_generator.dart` sépare désormais `group`/`name`,
+  et `sbom_reader.dart` recombine les deux à la relecture (`convert`, `merge`) pour ne pas
+  perdre le groupId
 - GUI : le tableau « Comparaison inter-scanners » du tableau de bord n'affichait que les
   CVE vues par au moins 2 scanners sur 3, masquant celles détectées par un seul scanner —
   il liste désormais l'union complète des CVE (Grype ∪ OSV ∪ Trivy), avec un marqueur

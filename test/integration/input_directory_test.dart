@@ -58,9 +58,15 @@ void main() {
 
     final doc = jsonDecode(await File(outPath).readAsString())
         as Map<String, dynamic>;
-    final names = (doc['components'] as List)
-        .map((c) => (c as Map)['name'] as String)
-        .toSet();
+    // Les composants Maven séparent groupId (champ `group`) et artifactId
+    // (`name`), suivant la convention CycloneDX — recombinés ici pour
+    // comparaison, comme le fait SbomReader à la relecture.
+    final names = (doc['components'] as List).map((c) {
+      final map = c as Map;
+      final group = map['group'] as String?;
+      final name = map['name'] as String;
+      return group != null ? '$group:$name' : name;
+    }).toSet();
 
     expect(names, {
       'org.apache.commons:commons-lang3',
