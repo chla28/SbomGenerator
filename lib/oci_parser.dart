@@ -284,8 +284,18 @@ class OciParser {
   OciPackage? _trivyPkgToPackage(
       Map<String, dynamic> p, String ecosystemType, String imageRef) {
     final name = (p['Name'] as String?) ?? '';
-    final version = (p['Version'] as String?) ?? '';
     if (name.isEmpty) return null;
+
+    // Trivy sépare version/release/epoch en champs distincts (contrairement à
+    // syft qui rend directement "1:2.41-5"). Reconstituer la version complète
+    // est indispensable : le comparateur de versions de grype se base sur le
+    // champ `version` du composant CycloneDX, pas sur le PURL. Une version
+    // tronquée (release/epoch manquants) le fait comparer par ex. "1.8.12" à
+    // la place de "2:1.8.12-1", ce qui la fait paraître bien plus ancienne
+    // qu'elle ne l'est et remonte des CVE en réalité déjà corrigées.
+    final version = _debFullVersion(
+        (p['Version'] as String?) ?? '', (p['Release'] as String?) ?? '', p['Epoch']);
+    if (version.isEmpty) return null;
 
     final licenses = (p['Licenses'] as List?) ?? [];
     final licenseStr =
@@ -295,9 +305,27 @@ class OciParser {
     final vendor = (p['Maintainer'] as String?) ?? '';
     final summary = (p['Summary'] as String?) ?? '';
 
+    final packageType = _normalizeTrivyType(ecosystemType);
+
     // PURL depuis le champ Identifier (trivy >= 0.38)
     final identifier = p['Identifier'] as Map<String, dynamic>?;
-    final purlStr = (identifier?['PURL'] as String?) ?? '';
+    var purlStr = (identifier?['PURL'] as String?) ?? '';
+
+    // Contrairement à syft, le PURL de trivy n'inclut jamais le qualifiant
+    // `upstream` du paquet source Debian/Ubuntu, alors que le security-tracker
+    // Debian (utilisé par grype) indexe les CVE par paquet SOURCE et non par
+    // paquet binaire (ex : les CVE de "bsdutils" sont classées sous
+    // "util-linux", celles de "libc6" sous "glibc"). Sans ce qualifiant, grype
+    // ignore silencieusement la vulnérabilité pour tout paquet binaire dont le
+    // nom ou la version diffère de son paquet source — trivy expose pourtant
+    // cette info via SrcName/SrcVersion/SrcRelease/SrcEpoch.
+    if (packageType == 'deb' && purlStr.isNotEmpty && !purlStr.contains('upstream=')) {
+      final upstream = _debUpstreamQualifier(p, name, version);
+      if (upstream != null) {
+        final sep = purlStr.contains('?') ? '&' : '?';
+        purlStr = '$purlStr${sep}upstream=${Uri.encodeComponent(upstream)}';
+      }
+    }
 
     final deps = (p['DependsOn'] as List?) ?? [];
     final requires = deps.map((d) => d.toString()).toList();
@@ -314,9 +342,37 @@ class OciParser {
       imageRef: imageRef,
       requires: requires,
       provides: [name],
-      packageType: _normalizeTrivyType(ecosystemType),
+      packageType: packageType,
       purlOverride: purlStr,
     );
+  }
+
+  /// Construit la valeur du qualifiant `upstream=` (nom [+ version] du paquet
+  /// source Debian/Ubuntu), à la manière de syft, à partir des champs Src*
+  /// fournis par trivy. Retourne `null` si le paquet binaire et le paquet
+  /// source sont identiques (même nom, même version complète) — auquel cas
+  /// le qualifiant serait redondant. [binFullVersion] est déjà la version
+  /// complète reconstruite (epoch:version-release) du paquet binaire.
+  String? _debUpstreamQualifier(
+      Map<String, dynamic> p, String name, String binFullVersion) {
+    final srcName = (p['SrcName'] as String?) ?? '';
+    if (srcName.isEmpty) return null;
+
+    final srcFull = _debFullVersion((p['SrcVersion'] as String?) ?? '',
+        (p['SrcRelease'] as String?) ?? '', p['SrcEpoch']);
+
+    if (srcName == name && srcFull == binFullVersion) return null;
+    return srcFull != binFullVersion ? '$srcName@$srcFull' : srcName;
+  }
+
+  /// Reconstruit la version complète `[epoch:]version[-release]` (convention
+  /// Debian/RPM commune) à partir des champs séparés de trivy.
+  String _debFullVersion(String version, String release, dynamic epoch) {
+    final epochNum =
+        epoch is int ? epoch : int.tryParse(epoch?.toString() ?? '');
+    final epochPrefix = (epochNum != null && epochNum != 0) ? '$epochNum:' : '';
+    final releaseSuffix = release.isNotEmpty ? '-$release' : '';
+    return '$epochPrefix$version$releaseSuffix';
   }
 
   String _normalizeTrivyType(String type) => switch (type.toLowerCase()) {
@@ -976,3 +1032,10 @@ class OciParser {
 Future<List<Package>> ociParserParseRpmRoot(
         String rootDir, String imageRef, {bool verbose = false}) =>
     OciParser()._parseRpmRoot(rootDir, imageRef, verbose: verbose);
+
+/// Appelle [OciParser._trivyPkgToPackage] depuis les tests sans passer par
+/// l'exécutable trivy, pour vérifier la reconstruction de version et du
+/// qualifiant PURL `upstream`.
+OciPackage? ociParserTrivyPkgToPackage(
+        Map<String, dynamic> pkgJson, String ecosystemType, String imageRef) =>
+    OciParser()._trivyPkgToPackage(pkgJson, ecosystemType, imageRef);
