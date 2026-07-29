@@ -46,20 +46,22 @@ class PolicyChecker {
   /// Retourne le score sbomqs (0–10) du fichier [sbomPath], ou null si sbomqs
   /// est absent ou échoue.
   Future<double?> runSbomqs(String sbomPath, {bool verbose = false}) async {
-    final check = await Process.run('sbomqs', ['--version']);
+    final check = await Process.run('sbomqs', ['version']);
     if (check.exitCode != 0) {
       stderr.writeln('policy: sbomqs introuvable — vérification qualité ignorée.');
       return null;
     }
 
     if (verbose) print('sbomqs : évaluation de $sbomPath…');
-    final result = await Process.run('sbomqs', ['score', sbomPath]);
+    // --basic force une sortie sur une seule ligne (score en premier champ) ;
+    // sans ce flag, sbomqs >= 2.0 imprime un tableau détaillé illisible ici.
+    final result = await Process.run('sbomqs', ['score', '--basic', sbomPath]);
     if (result.exitCode != 0) {
       stderr.writeln('sbomqs: échec (code ${result.exitCode})');
       return null;
     }
 
-    // sbomqs écrit une ligne du type "7.3  <fichier>"
+    // sbomqs --basic écrit une ligne du type "7.3  D  Interlynk  1.6  json  <fichier>"
     final output = result.stdout as String;
     for (final line in output.split('\n')) {
       final parts = line.trim().split(RegExp(r'\s+'));
