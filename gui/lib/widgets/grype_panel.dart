@@ -10,6 +10,7 @@ import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/grype_runner.dart';
 import '../services/version_service.dart';
+import 'vuln_shared.dart';
 
 // ─── Modèle de vulnérabilité ──────────────────────────────────────────────────
 
@@ -356,7 +357,7 @@ class _GrypePanelState extends State<GrypePanel>
           _GrypeBanner(
               exitCode: _exitCode!, vulns: _vulns, error: _error),
         if (!_isRunning && _error != null && _vulns.isEmpty)
-          _ErrorBanner(error: _error!),
+          ErrorBanner(message: _error!),
         if (showResults) ...[
           ColoredBox(
             color:
@@ -408,7 +409,7 @@ class _GrypePanelState extends State<GrypePanel>
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
                 ),
-                _JsonView(json: _jsonOutput),
+                JsonView(json: _jsonOutput),
                 _TemplateView(
                   content: _templateOutput,
                   hasTemplate: _templateCtrl.text.trim().isNotEmpty,
@@ -525,7 +526,7 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _SplitPickButton(
+              SplitPickButton(
                 filterLabel: '.json .jsonld',
                 onPickFiltered: onPickSbom,
                 onPickAll: onPickSbomAll,
@@ -674,7 +675,7 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _SplitPickButton(
+              SplitPickButton(
                 filterLabel: '.tmpl .tpl .txt',
                 onPickFiltered: onPickTemplate,
                 onPickAll: onPickTemplateAll,
@@ -705,7 +706,7 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _SplitPickButton(
+              SplitPickButton(
                 filterLabel: '.yaml .yml',
                 onPickFiltered: onPickConfig,
                 onPickAll: onPickConfigAll,
@@ -875,36 +876,6 @@ class _GrypeBanner extends StatelessWidget {
   }
 }
 
-class _ErrorBanner extends StatelessWidget {
-  final String error;
-  const _ErrorBanner({required this.error});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.red[50],
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.error_outline, color: Colors.red[700], size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SelectableText(
-              error,
-              style: TextStyle(
-                  color: Colors.red[800],
-                  fontFamily: 'monospace',
-                  fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─── Vue table des vulnérabilités ─────────────────────────────────────────────
 
 enum _SortCol { severity, package, cveId }
@@ -994,25 +965,18 @@ class _VulnTableViewState extends State<_VulnTableView> {
     return list;
   }
 
-  static String _csv(String s) {
-    if (s.contains(',') || s.contains('"') || s.contains('\n')) {
-      return '"${s.replaceAll('"', '""')}"';
-    }
-    return s;
-  }
-
   Future<void> _exportCsv(BuildContext context) async {
     final rows = _filtered;
     final buf = StringBuffer();
     buf.writeln('Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Type');
     for (final v in rows) {
       buf.writeln([
-        _csv(v.severity),
-        _csv(v.id),
-        _csv(v.packageName),
-        _csv(v.installedVersion),
-        _csv(v.fixedVersion),
-        _csv(v.packageType),
+        csvEscape(v.severity),
+        csvEscape(v.id),
+        csvEscape(v.packageName),
+        csvEscape(v.installedVersion),
+        csvEscape(v.fixedVersion),
+        csvEscape(v.packageType),
       ].join(','));
     }
     final path = await FilePicker.saveFile(
@@ -1031,24 +995,6 @@ class _VulnTableViewState extends State<_VulnTableView> {
       ));
     }
   }
-
-  static Color _fg(String s) => switch (s.toLowerCase()) {
-        'critical' => const Color(0xFFB71C1C),
-        'high' => const Color(0xFFBF360C),
-        'medium' => const Color(0xFFE65100),
-        'low' => const Color(0xFF2E7D32),
-        'negligible' => Colors.grey,
-        _ => Colors.grey,
-      };
-
-  static Color _bg(String s) => switch (s.toLowerCase()) {
-        'critical' => const Color(0xFFFFEBEE),
-        'high' => const Color(0xFFFBE9E7),
-        'medium' => const Color(0xFFFFF3E0),
-        'low' => const Color(0xFFF1F8E9),
-        'negligible' => const Color(0xFFF5F5F5),
-        _ => const Color(0xFFF5F5F5),
-      };
 
   @override
   Widget build(BuildContext context) {
@@ -1109,8 +1055,8 @@ class _VulnTableViewState extends State<_VulnTableView> {
                           label: Text('$s (${counts[s]})',
                               style: const TextStyle(fontSize: 11)),
                           selected: _activeFilters.contains(s),
-                          selectedColor: _fg(s).withValues(alpha: 0.2),
-                          checkmarkColor: _fg(s),
+                          selectedColor: severityFg(s).withValues(alpha: 0.2),
+                          checkmarkColor: severityFg(s),
                           onSelected: (v) => setState(() {
                             if (v) {
                               _activeFilters.add(s);
@@ -1175,7 +1121,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
         ),
 
         // ── Filtre date ──
-        _DateFilterBar(
+        DateFilterBar(
           filter: widget.dateFilter,
           onChanged: widget.onDateFilterChanged,
           onPropagate: widget.onPropagate,
@@ -1187,18 +1133,18 @@ class _VulnTableViewState extends State<_VulnTableView> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 3),
           child: Row(
             children: [
-              _SortHeader('SÉVÉRITÉ', _sortCol == _SortCol.severity, _sortAsc,
+              SortHeader('SÉVÉRITÉ', _sortCol == _SortCol.severity, _sortAsc,
                   () => _onSort(_SortCol.severity),
                   width: 72),
               const SizedBox(width: 12),
               Expanded(
                 flex: 3,
-                child: _SortHeader('PAQUET', _sortCol == _SortCol.package,
+                child: SortHeader('PAQUET', _sortCol == _SortCol.package,
                     _sortAsc, () => _onSort(_SortCol.package)),
               ),
               Expanded(
                 flex: 2,
-                child: _SortHeader('CVE / ID', _sortCol == _SortCol.cveId,
+                child: SortHeader('CVE / ID', _sortCol == _SortCol.cveId,
                     _sortAsc, () => _onSort(_SortCol.cveId)),
               ),
               const SizedBox(
@@ -1244,8 +1190,8 @@ class _VulnTableViewState extends State<_VulnTableView> {
                   itemCount: filtered.length,
                   itemBuilder: (_, i) {
                     final v = filtered[i];
-                    final fg = _fg(v.severity);
-                    final bg = _bg(v.severity);
+                    final fg = severityFg(v.severity);
+                    final bg = severityBg(v.severity);
                     return Card(
                       margin: const EdgeInsets.only(bottom: 6),
                       color: bg,
@@ -1345,109 +1291,6 @@ class _VulnTableViewState extends State<_VulnTableView> {
                     );
                   },
                 ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── En-tête de colonne triable ──────────────────────────────────────────────
-
-class _SortHeader extends StatelessWidget {
-  final String label;
-  final bool active;
-  final bool ascending;
-  final VoidCallback onTap;
-  final double? width;
-
-  const _SortHeader(this.label, this.active, this.ascending, this.onTap,
-      {this.width});
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        active ? Theme.of(context).colorScheme.primary : Colors.grey[600]!;
-    Widget cell = InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: color)),
-            if (active) ...[
-              const SizedBox(width: 2),
-              Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 11, color: color),
-            ],
-          ],
-        ),
-      ),
-    );
-    return width != null ? SizedBox(width: width, child: cell) : cell;
-  }
-}
-
-// ─── Vue JSON brut ────────────────────────────────────────────────────────────
-
-class _JsonView extends StatelessWidget {
-  final String json;
-  const _JsonView({required this.json});
-
-  String _pretty() {
-    try {
-      return const JsonEncoder.withIndent('  ')
-          .convert(jsonDecode(json));
-    } catch (_) {
-      return json;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pretty = _pretty();
-    return Stack(
-      children: [
-        Container(
-          color: const Color(0xFF1E1E1E),
-          padding: const EdgeInsets.all(12),
-          child: SelectionArea(
-            child: SingleChildScrollView(
-              child: Text(
-                pretty,
-                style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Color(0xFFD4D4D4),
-                    height: 1.5),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: Tooltip(
-            message: 'Copier le JSON',
-            child: IconButton(
-              icon: const Icon(Icons.copy_outlined,
-                  size: 18, color: Colors.white70),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: json));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('JSON copié'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-            ),
-          ),
         ),
       ],
     );
@@ -1564,261 +1407,5 @@ class _GrypeRunningHint extends StatelessWidget {
           ],
         ),
       );
-}
-
-// ─── Barre de filtre par date CVE ─────────────────────────────────────────────
-
-class _DateFilterBar extends StatelessWidget {
-  final CveDateFilter filter;
-  final void Function(CveDateFilter)? onChanged;
-  final void Function(CveDateFilter)? onPropagate;
-
-  const _DateFilterBar({
-    required this.filter,
-    this.onChanged,
-    this.onPropagate,
-  });
-
-  Future<void> _pickDate(
-    BuildContext context,
-    DateTime? current,
-    void Function(DateTime?) onPicked,
-  ) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: current ?? now,
-      firstDate: DateTime(1999),
-      lastDate: now,
-    );
-    if (picked != null) onPicked(picked);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fmt = _fmtDate;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        border: Border(
-          bottom: BorderSide(color: theme.dividerColor, width: 0.5),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.calendar_today_outlined, size: 14),
-          const SizedBox(width: 6),
-          const Text('Date CVE :', style: TextStyle(fontSize: 11)),
-          const SizedBox(width: 6),
-          // Champ de date (published / modified / latest)
-          SegmentedButton<CveDateField>(
-            segments: const [
-              ButtonSegment(
-                  value: CveDateField.published,
-                  label: Text('Publication', style: TextStyle(fontSize: 10))),
-              ButtonSegment(
-                  value: CveDateField.modified,
-                  label: Text('Modification', style: TextStyle(fontSize: 10))),
-              ButtonSegment(
-                  value: CveDateField.latest,
-                  label: Text('La plus récente', style: TextStyle(fontSize: 10))),
-            ],
-            selected: {filter.field},
-            onSelectionChanged: (s) =>
-                onChanged?.call(filter.copyWith(field: s.first)),
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: WidgetStateProperty.all(
-                  const TextStyle(fontSize: 10)),
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Après le
-          _DateChip(
-            label: filter.after == null ? 'Après le…' : 'Après : ${fmt(filter.after!)}',
-            active: filter.after != null,
-            onTap: () => _pickDate(context, filter.after,
-                (d) => onChanged?.call(filter.copyWith(after: d))),
-            onClear: filter.after == null
-                ? null
-                : () => onChanged?.call(filter.copyWith(after: null)),
-          ),
-          const SizedBox(width: 4),
-          // Avant le
-          _DateChip(
-            label: filter.before == null ? 'Avant le…' : 'Avant : ${fmt(filter.before!)}',
-            active: filter.before != null,
-            onTap: () => _pickDate(context, filter.before,
-                (d) => onChanged?.call(filter.copyWith(before: d))),
-            onClear: filter.before == null
-                ? null
-                : () => onChanged?.call(filter.copyWith(before: null)),
-          ),
-          const SizedBox(width: 10),
-          // Inclure CVE sans date
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: Checkbox(
-                  value: filter.includeUndated,
-                  onChanged: (v) =>
-                      onChanged?.call(filter.copyWith(includeUndated: v ?? false)),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Text('Sans date', style: TextStyle(fontSize: 11)),
-            ],
-          ),
-          const Spacer(),
-          // Bouton Propager
-          if (onPropagate != null)
-            TextButton.icon(
-              icon: const Icon(Icons.sync_alt, size: 14),
-              label: const Text('Propager aux autres onglets',
-                  style: TextStyle(fontSize: 11)),
-              style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () => onPropagate!(filter),
-            ),
-        ],
-      ),
-    );
-  }
-
-  static String _fmtDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
-}
-
-class _DateChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final VoidCallback? onClear;
-
-  const _DateChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.onClear,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: active
-              ? theme.colorScheme.primaryContainer
-              : theme.colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: active
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline,
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: active
-                    ? theme.colorScheme.onPrimaryContainer
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (onClear != null) ...[
-              const SizedBox(width: 4),
-              InkWell(
-                onTap: onClear,
-                child: Icon(Icons.close, size: 12,
-                    color: theme.colorScheme.onPrimaryContainer),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Split-button pour sélection de fichier avec filtre ───────────────────────
-
-class _SplitPickButton extends StatefulWidget {
-  final String filterLabel;
-  final VoidCallback onPickFiltered;
-  final VoidCallback onPickAll;
-
-  const _SplitPickButton({
-    required this.filterLabel,
-    required this.onPickFiltered,
-    required this.onPickAll,
-  });
-
-  @override
-  State<_SplitPickButton> createState() => _SplitPickButtonState();
-}
-
-class _SplitPickButtonState extends State<_SplitPickButton> {
-  final MenuController _menu = MenuController();
-
-  @override
-  Widget build(BuildContext context) {
-    return MenuAnchor(
-      controller: _menu,
-      menuChildren: [
-        MenuItemButton(
-          leadingIcon: const Icon(Icons.filter_alt_outlined, size: 16),
-          onPressed: () {
-            _menu.close();
-            widget.onPickFiltered();
-          },
-          child: Text('Type filtré (${widget.filterLabel})'),
-        ),
-        MenuItemButton(
-          leadingIcon: const Icon(Icons.folder_open, size: 16),
-          onPressed: () {
-            _menu.close();
-            widget.onPickAll();
-          },
-          child: const Text('Tous les fichiers'),
-        ),
-      ],
-      builder: (context, controller, _) => OutlinedButton.icon(
-        onPressed: controller.isOpen ? controller.close : controller.open,
-        icon: const Icon(Icons.folder_open, size: 18),
-        label: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Choisir'),
-            SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
