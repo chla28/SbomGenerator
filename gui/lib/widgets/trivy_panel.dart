@@ -13,14 +13,21 @@ import 'vuln_shared.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
 
-class TrivyVuln {
+class TrivyVuln implements VulnRow {
+  @override
   final String id;
+  @override
   final String severity;
+  @override
   final String packageName;
+  @override
   final String installedVersion;
+  @override
   final String fixedVersion;
   final String title;
+  @override
   final DateTime? publishedDate;
+  @override
   final DateTime? modifiedDate;
 
   const TrivyVuln({
@@ -326,9 +333,27 @@ class _TrivyPanelState extends State<TrivyPanel>
             child: TabBarView(
               controller: _resultTabs,
               children: [
-                _VulnTableView(
+                VulnTableView<TrivyVuln>(
                   vulns: _vulns,
                   parseFailed: _parseFailed,
+                  parseFailedMessage:
+                      'Sortie trivy illisible : voir le message d\'erreur ci-dessus',
+                  severityOrder: const [
+                    'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'
+                  ],
+                  csvDialogTitle: 'Exporter les vulnérabilités Trivy',
+                  csvFileName: 'trivy_vulns.csv',
+                  csvHeader:
+                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Titre',
+                  csvRow: (v) => [
+                    v.severity,
+                    v.id,
+                    v.packageName,
+                    v.installedVersion,
+                    v.fixedVersion,
+                    v.title,
+                  ],
+                  descriptionOf: (v) => v.title,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
@@ -660,361 +685,6 @@ class _TrivyBanner extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ─── Tableau des vulnérabilités ───────────────────────────────────────────────
-
-enum _SortCol { severity, cveId, package }
-
-class _VulnTableView extends StatefulWidget {
-  final List<TrivyVuln> vulns;
-  final bool parseFailed;
-  final CveDateFilter dateFilter;
-  final void Function(CveDateFilter)? onDateFilterChanged;
-  final void Function(CveDateFilter)? onPropagate;
-
-  const _VulnTableView({
-    required this.vulns,
-    this.parseFailed = false,
-    this.dateFilter = CveDateFilter.empty,
-    this.onDateFilterChanged,
-    this.onPropagate,
-  });
-
-  @override
-  State<_VulnTableView> createState() => _VulnTableViewState();
-}
-
-class _VulnTableViewState extends State<_VulnTableView> {
-  static const _severityOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
-
-  Set<String> _activeFilters = {};
-  final _searchCtrl = TextEditingController();
-  String _searchTerm = '';
-  _SortCol _sortCol = _SortCol.severity;
-  bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  static int _sevOrd(String s) => switch (s.toUpperCase()) {
-        'CRITICAL' => 0,
-        'HIGH' => 1,
-        'MEDIUM' => 2,
-        'LOW' => 3,
-        _ => 4,
-      };
-
-  void _onSort(_SortCol col) => setState(() {
-        if (_sortCol == col) {
-          _sortAsc = !_sortAsc;
-        } else {
-          _sortCol = col;
-          _sortAsc = col == _SortCol.severity;
-        }
-      });
-
-  List<TrivyVuln> get _filtered {
-    var list = _activeFilters.isEmpty
-        ? widget.vulns
-        : widget.vulns.where((v) => _activeFilters.contains(v.severity)).toList();
-    if (_searchTerm.isNotEmpty) {
-      final q = _searchTerm.toLowerCase();
-      list = list
-          .where((v) =>
-              v.packageName.toLowerCase().contains(q) ||
-              v.id.toLowerCase().contains(q))
-          .toList();
-    }
-    if (widget.dateFilter.hasConstraints) {
-      list = list
-          .where((v) => widget.dateFilter.matches(v.publishedDate, v.modifiedDate))
-          .toList();
-    }
-    list = List.of(list)
-      ..sort((a, b) {
-        final cmp = switch (_sortCol) {
-          _SortCol.severity => _sevOrd(a.severity).compareTo(_sevOrd(b.severity)),
-          _SortCol.cveId    => a.id.compareTo(b.id),
-          _SortCol.package  => a.packageName.compareTo(b.packageName),
-        };
-        return _sortAsc ? cmp : -cmp;
-      });
-    return list;
-  }
-
-  Future<void> _exportCsv(BuildContext context) async {
-    final rows = _filtered;
-    final buf = StringBuffer();
-    buf.writeln('Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Titre');
-    for (final v in rows) {
-      buf.writeln([
-        csvEscape(v.severity),
-        csvEscape(v.id),
-        csvEscape(v.packageName),
-        csvEscape(v.installedVersion),
-        csvEscape(v.fixedVersion),
-        csvEscape(v.title),
-      ].join(','));
-    }
-    final path = await FilePicker.saveFile(
-      dialogTitle: 'Exporter les vulnérabilités Trivy',
-      fileName: 'trivy_vulns.csv',
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-    );
-    if (path == null || !context.mounted) return;
-    await File(path).writeAsString(buf.toString());
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text('${rows.length} vulnérabilité(s) exportée(s) → $path'),
-        duration: const Duration(seconds: 4),
-      ));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.parseFailed) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 56, color: Colors.red),
-            SizedBox(height: 12),
-            Text('Sortie trivy illisible : voir le message d\'erreur ci-dessus',
-                style: TextStyle(color: Colors.red, fontSize: 15)),
-          ],
-        ),
-      );
-    }
-    if (widget.vulns.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.verified_user_outlined, size: 56, color: Colors.green),
-            SizedBox(height: 12),
-            Text('Aucune vulnérabilité détectée',
-                style: TextStyle(color: Colors.green, fontSize: 15)),
-          ],
-        ),
-      );
-    }
-
-    final counts = <String, int>{};
-    for (final v in widget.vulns) {
-      counts[v.severity] = (counts[v.severity] ?? 0) + 1;
-    }
-    final filtered = _filtered;
-
-    return Column(
-      children: [
-        // ── Filtres + recherche ──
-        Container(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            children: [
-              const Text('Filtre :', style: TextStyle(fontSize: 11)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 2,
-                  children: [
-                    for (final s in _severityOrder)
-                      if (counts.containsKey(s))
-                        FilterChip(
-                          label: Text('$s (${counts[s]})'),
-                          labelStyle: TextStyle(
-                              fontSize: 11,
-                              color: _activeFilters.contains(s)
-                                  ? Colors.white
-                                  : severityFg(s)),
-                          backgroundColor: severityBg(s),
-                          selectedColor: severityFg(s),
-                          selected: _activeFilters.contains(s),
-                          onSelected: (v) => setState(() {
-                            if (v) {
-                              _activeFilters.add(s);
-                            } else {
-                              _activeFilters.remove(s);
-                            }
-                          }),
-                        ),
-                    if (_activeFilters.isNotEmpty)
-                      ActionChip(
-                        label: const Text('Tout voir',
-                            style: TextStyle(fontSize: 11)),
-                        onPressed: () => setState(() => _activeFilters = {}),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 200,
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _searchTerm = v),
-                  decoration: InputDecoration(
-                    hintText: 'Paquet ou CVE…',
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.search, size: 16),
-                    suffixIcon: _searchTerm.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 14),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _searchTerm = '');
-                            },
-                            padding: EdgeInsets.zero,
-                          )
-                        : null,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    border: const OutlineInputBorder(),
-                  ),
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.download_outlined, size: 18),
-                tooltip: 'Exporter CSV',
-                onPressed:
-                    _filtered.isEmpty ? null : () => _exportCsv(context),
-              ),
-            ],
-          ),
-        ),
-
-        // ── Filtre date ──
-        DateFilterBar(
-          filter: widget.dateFilter,
-          onChanged: widget.onDateFilterChanged,
-          onPropagate: widget.onPropagate,
-        ),
-
-        // ── En-têtes de tri ──
-        Container(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          child: Row(
-            children: [
-              SortHeader('SÉVÉRITÉ', _sortCol == _SortCol.severity, _sortAsc,
-                  () => _onSort(_SortCol.severity)),
-              const SizedBox(width: 16),
-              SortHeader('CVE / ID', _sortCol == _SortCol.cveId, _sortAsc,
-                  () => _onSort(_SortCol.cveId)),
-              const SizedBox(width: 16),
-              SortHeader('PAQUET', _sortCol == _SortCol.package, _sortAsc,
-                  () => _onSort(_SortCol.package)),
-            ],
-          ),
-        ),
-
-        // ── Liste ──
-        Expanded(
-          child: filtered.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _searchTerm.isNotEmpty
-                            ? Icons.search_off
-                            : Icons.filter_alt_off_outlined,
-                        size: 40,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _searchTerm.isNotEmpty
-                            ? 'Aucun résultat pour "$_searchTerm"'
-                            : 'Aucun résultat pour ${_activeFilters.join(', ')}',
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) {
-                    final v = filtered[i];
-                    final fg = severityFg(v.severity);
-                    final bg = severityBg(v.severity);
-                    return ListTile(
-                      dense: true,
-                      leading: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: bg,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: fg, width: 0.8),
-                        ),
-                        child: Text(
-                          v.severity,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: fg),
-                        ),
-                      ),
-                      title: Text(
-                        v.id,
-                        style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                v.packageName,
-                                style: const TextStyle(
-                                    fontFamily: 'monospace', fontSize: 11),
-                              ),
-                              Text(' ${v.installedVersion}',
-                                  style: const TextStyle(
-                                      fontSize: 11, color: Colors.grey)),
-                              if (v.fixedVersion.isNotEmpty) ...[
-                                const Text(' → ',
-                                    style: TextStyle(
-                                        fontSize: 11, color: Colors.green)),
-                                Text(v.fixedVersion,
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.green)),
-                              ],
-                            ],
-                          ),
-                          if (v.title.isNotEmpty)
-                            Text(
-                              v.title,
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                      isThreeLine: v.title.isNotEmpty,
-                    );
-                  },
-                ),
-        ),
-      ],
     );
   }
 }

@@ -4,7 +4,9 @@
 // jusqu'ici ce code presque à l'identique.
 
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -436,6 +438,429 @@ class DateChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Tableau de vulnérabilités partagé ─────────────────────────────────────
+//
+// grype/trivy/osv-scanner exposent chacun un modèle de vulnérabilité distinct
+// (GrypeVuln/TrivyVuln/OsvVuln, conservés séparés car consommés avec leur
+// propre type par DashboardPanel et ResultsPanel) mais partagent 7 des 8
+// champs. VulnRow capture ce socle commun pour que le tableau — tri, filtre,
+// recherche, export CSV, rendu de la liste — n'existe qu'une seule fois.
+
+abstract class VulnRow {
+  String get id;
+  String get severity;
+  String get packageName;
+  String get installedVersion;
+  String get fixedVersion;
+  DateTime? get publishedDate;
+  DateTime? get modifiedDate;
+}
+
+enum VulnSortCol { severity, cveId, package }
+
+class VulnTableView<T extends VulnRow> extends StatefulWidget {
+  final List<T> vulns;
+  final bool parseFailed;
+
+  /// Message affiché quand [parseFailed] est vrai, ex. "Sortie grype illisible…".
+  final String parseFailedMessage;
+
+  /// Valeurs de sévérité telles qu'elles apparaissent dans les données de cet
+  /// outil (la casse diffère selon l'outil : "Critical" vs "CRITICAL").
+  final List<String> severityOrder;
+
+  final String csvDialogTitle;
+  final String csvFileName;
+  final String csvHeader;
+  final List<String> Function(T) csvRow;
+
+  /// En-tête de la colonne optionnelle affichée en fin de ligne (ex. "TYPE",
+  /// "ÉCOSYSTÈME"). Null si l'outil n'a pas de champ de classification.
+  final String? extraColumnHeader;
+  final String Function(T)? extraOf;
+
+  /// Texte descriptif optionnel affiché en 2e ligne (ex. le titre de la CVE
+  /// pour trivy). Null si l'outil n'a pas ce genre de champ.
+  final String Function(T)? descriptionOf;
+
+  final CveDateFilter dateFilter;
+  final void Function(CveDateFilter)? onDateFilterChanged;
+  final void Function(CveDateFilter)? onPropagate;
+
+  const VulnTableView({
+    super.key,
+    required this.vulns,
+    this.parseFailed = false,
+    required this.parseFailedMessage,
+    required this.severityOrder,
+    required this.csvDialogTitle,
+    required this.csvFileName,
+    required this.csvHeader,
+    required this.csvRow,
+    this.extraColumnHeader,
+    this.extraOf,
+    this.descriptionOf,
+    this.dateFilter = CveDateFilter.empty,
+    this.onDateFilterChanged,
+    this.onPropagate,
+  });
+
+  @override
+  State<VulnTableView<T>> createState() => _VulnTableViewState<T>();
+}
+
+class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
+  Set<String> _activeFilters = {};
+  final _searchCtrl = TextEditingController();
+  String _searchTerm = '';
+  VulnSortCol _sortCol = VulnSortCol.severity;
+  bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  static int _sevOrd(String s) => switch (s.toLowerCase()) {
+        'critical' => 0,
+        'high' => 1,
+        'medium' => 2,
+        'low' => 3,
+        _ => 4,
+      };
+
+  void _onSort(VulnSortCol col) => setState(() {
+        if (_sortCol == col) {
+          _sortAsc = !_sortAsc;
+        } else {
+          _sortCol = col;
+          _sortAsc = col == VulnSortCol.severity;
+        }
+      });
+
+  List<T> get _filtered {
+    var list = _activeFilters.isEmpty
+        ? widget.vulns
+        : widget.vulns.where((v) => _activeFilters.contains(v.severity)).toList();
+    if (_searchTerm.isNotEmpty) {
+      final q = _searchTerm.toLowerCase();
+      list = list
+          .where((v) =>
+              v.packageName.toLowerCase().contains(q) ||
+              v.id.toLowerCase().contains(q))
+          .toList();
+    }
+    if (widget.dateFilter.hasConstraints) {
+      list = list
+          .where((v) => widget.dateFilter.matches(v.publishedDate, v.modifiedDate))
+          .toList();
+    }
+    list = List.of(list)
+      ..sort((a, b) {
+        final cmp = switch (_sortCol) {
+          VulnSortCol.severity => _sevOrd(a.severity).compareTo(_sevOrd(b.severity)),
+          VulnSortCol.cveId    => a.id.compareTo(b.id),
+          VulnSortCol.package  => a.packageName.compareTo(b.packageName),
+        };
+        return _sortAsc ? cmp : -cmp;
+      });
+    return list;
+  }
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final rows = _filtered;
+    final buf = StringBuffer();
+    buf.writeln(widget.csvHeader);
+    for (final v in rows) {
+      buf.writeln(widget.csvRow(v).map(csvEscape).join(','));
+    }
+    final path = await FilePicker.saveFile(
+      dialogTitle: widget.csvDialogTitle,
+      fileName: widget.csvFileName,
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (path == null || !context.mounted) return;
+    await File(path).writeAsString(buf.toString());
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${rows.length} vulnérabilité(s) exportée(s) → $path'),
+        duration: const Duration(seconds: 4),
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.parseFailed) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 56, color: Colors.red),
+            const SizedBox(height: 12),
+            Text(widget.parseFailedMessage,
+                style: const TextStyle(color: Colors.red, fontSize: 15)),
+          ],
+        ),
+      );
+    }
+    if (widget.vulns.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.verified_user_outlined, size: 56, color: Colors.green),
+            SizedBox(height: 12),
+            Text('Aucune vulnérabilité détectée',
+                style: TextStyle(color: Colors.green, fontSize: 15)),
+          ],
+        ),
+      );
+    }
+
+    final counts = <String, int>{};
+    for (final v in widget.vulns) {
+      counts[v.severity] = (counts[v.severity] ?? 0) + 1;
+    }
+    final filtered = _filtered;
+
+    return Column(
+      children: [
+        // ── Filtres + recherche ──
+        Container(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              const Text('Filtre :', style: TextStyle(fontSize: 11)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    for (final s in widget.severityOrder)
+                      if (counts.containsKey(s))
+                        FilterChip(
+                          label: Text('$s (${counts[s]})'),
+                          labelStyle: TextStyle(
+                              fontSize: 11,
+                              color: _activeFilters.contains(s)
+                                  ? Colors.white
+                                  : severityFg(s)),
+                          backgroundColor: severityBg(s),
+                          selectedColor: severityFg(s),
+                          selected: _activeFilters.contains(s),
+                          onSelected: (v) => setState(() {
+                            if (v) {
+                              _activeFilters.add(s);
+                            } else {
+                              _activeFilters.remove(s);
+                            }
+                          }),
+                        ),
+                    if (_activeFilters.isNotEmpty)
+                      ActionChip(
+                        label: const Text('Tout voir',
+                            style: TextStyle(fontSize: 11)),
+                        onPressed: () => setState(() => _activeFilters = {}),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 200,
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _searchTerm = v),
+                  decoration: InputDecoration(
+                    hintText: 'Paquet ou CVE…',
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, size: 16),
+                    suffixIcon: _searchTerm.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 14),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchTerm = '');
+                            },
+                            padding: EdgeInsets.zero,
+                          )
+                        : null,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    border: const OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.download_outlined, size: 18),
+                tooltip: 'Exporter CSV',
+                onPressed:
+                    _filtered.isEmpty ? null : () => _exportCsv(context),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Filtre date ──
+        DateFilterBar(
+          filter: widget.dateFilter,
+          onChanged: widget.onDateFilterChanged,
+          onPropagate: widget.onPropagate,
+        ),
+
+        // ── En-têtes de tri ──
+        Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          child: Row(
+            children: [
+              SortHeader('SÉVÉRITÉ', _sortCol == VulnSortCol.severity, _sortAsc,
+                  () => _onSort(VulnSortCol.severity)),
+              const SizedBox(width: 16),
+              SortHeader('CVE / ID', _sortCol == VulnSortCol.cveId, _sortAsc,
+                  () => _onSort(VulnSortCol.cveId)),
+              const SizedBox(width: 16),
+              SortHeader('PAQUET', _sortCol == VulnSortCol.package, _sortAsc,
+                  () => _onSort(VulnSortCol.package)),
+              if (widget.extraColumnHeader != null) ...[
+                const Spacer(),
+                Text(widget.extraColumnHeader!,
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey)),
+              ],
+            ],
+          ),
+        ),
+
+        // ── Liste ──
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _searchTerm.isNotEmpty
+                            ? Icons.search_off
+                            : Icons.filter_alt_off_outlined,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _searchTerm.isNotEmpty
+                            ? 'Aucun résultat pour "$_searchTerm"'
+                            : 'Aucun résultat pour ${_activeFilters.join(', ')}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) {
+                    final v = filtered[i];
+                    final fg = severityFg(v.severity);
+                    final bg = severityBg(v.severity);
+                    final description = widget.descriptionOf?.call(v) ?? '';
+                    return ListTile(
+                      dense: true,
+                      leading: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: fg, width: 0.8),
+                        ),
+                        child: Text(
+                          v.severity.toUpperCase(),
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: fg),
+                        ),
+                      ),
+                      title: Tooltip(
+                        message: 'Copier l\'identifiant',
+                        child: InkWell(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: v.id));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('CVE copié'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            v.id,
+                            style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                v.packageName,
+                                style: const TextStyle(
+                                    fontFamily: 'monospace', fontSize: 11),
+                              ),
+                              Text(' ${v.installedVersion}',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey)),
+                              if (v.fixedVersion.isNotEmpty) ...[
+                                const Text(' → ',
+                                    style: TextStyle(
+                                        fontSize: 11, color: Colors.green)),
+                                Text(v.fixedVersion,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.green)),
+                              ],
+                            ],
+                          ),
+                          if (description.isNotEmpty)
+                            Text(
+                              description,
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                      isThreeLine: description.isNotEmpty,
+                      trailing: widget.extraOf == null
+                          ? null
+                          : Text(
+                              widget.extraOf!(v),
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey),
+                            ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
