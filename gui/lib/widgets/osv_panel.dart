@@ -70,75 +70,77 @@ class OsvVuln {
     }
   }
 
+  /// Lève une [FormatException] si `raw` n'est pas un JSON osv-scanner
+  /// valide, plutôt que de retourner silencieusement une liste vide : un
+  /// JSON tronqué/corrompu ne doit pas être confondu avec "aucune
+  /// vulnérabilité".
   static List<OsvVuln> fromJson(String raw) {
     final vulns = <OsvVuln>[];
-    try {
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      for (final result in (data['results'] as List? ?? [])) {
-        for (final pkg in (result['packages'] as List? ?? [])) {
-          final pkgInfo = (pkg['package'] as Map?) ?? {};
-          final name = pkgInfo['name'] as String? ?? '';
-          final version = pkgInfo['version'] as String? ?? '';
-          final ecosystem = pkgInfo['ecosystem'] as String? ?? '';
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    for (final result in (data['results'] as List? ?? [])) {
+      for (final pkg in (result['packages'] as List? ?? [])) {
+        final pkgInfo = (pkg['package'] as Map?) ?? {};
+        final name = pkgInfo['name'] as String? ?? '';
+        final version = pkgInfo['version'] as String? ?? '';
+        final ecosystem = pkgInfo['ecosystem'] as String? ?? '';
 
-          // max_severity par vuln id depuis les groupes
-          final groupSev = <String, String>{};
-          for (final g in (pkg['groups'] as List? ?? [])) {
-            final ms = (g['max_severity'] as String?) ?? '';
-            for (final id in (g['ids'] as List? ?? [])) {
-              groupSev[id as String] = ms;
-            }
+        // max_severity par vuln id depuis les groupes
+        final groupSev = <String, String>{};
+        for (final g in (pkg['groups'] as List? ?? [])) {
+          final ms = (g['max_severity'] as String?) ?? '';
+          for (final id in (g['ids'] as List? ?? [])) {
+            groupSev[id as String] = ms;
           }
+        }
 
-          for (final v in (pkg['vulnerabilities'] as List? ?? [])) {
-            final osvId = v['id'] as String? ?? '';
-            final aliases = (v['aliases'] as List?)?.cast<String>() ?? [];
-            final cve = aliases.firstWhere(
-              (a) => a.startsWith('CVE-'),
-              orElse: () => '',
-            );
-            final displayId = cve.isNotEmpty ? cve : osvId;
+        for (final v in (pkg['vulnerabilities'] as List? ?? [])) {
+          final osvId = v['id'] as String? ?? '';
+          final aliases = (v['aliases'] as List?)?.cast<String>() ?? [];
+          final cve = aliases.firstWhere(
+            (a) => a.startsWith('CVE-'),
+            orElse: () => '',
+          );
+          final displayId = cve.isNotEmpty ? cve : osvId;
 
-            // Sévérité : database_specific > max_severity CVSS > inconnu
-            // database_specific.severity est en majuscules dans le JSON OSV
-            // (_cvssToSeverity retourne déjà du titre case)
-            final dbSev =
-                (v['database_specific'] as Map?)?['severity'] as String?;
-            final rawSev = (dbSev?.isNotEmpty == true)
-                ? dbSev!
-                : _cvssToSeverity(groupSev[osvId]);
-            final severity = _normalizeSeverity(rawSev);
+          // Sévérité : database_specific > max_severity CVSS > inconnu
+          // database_specific.severity est en majuscules dans le JSON OSV
+          // (_cvssToSeverity retourne déjà du titre case)
+          final dbSev =
+              (v['database_specific'] as Map?)?['severity'] as String?;
+          final rawSev = (dbSev?.isNotEmpty == true)
+              ? dbSev!
+              : _cvssToSeverity(groupSev[osvId]);
+          final severity = _normalizeSeverity(rawSev);
 
-            // Version corrigée depuis affected[].ranges[].events
-            String fixedVersion = '';
-            for (final aff in (v['affected'] as List? ?? [])) {
-              for (final range in ((aff['ranges'] as List?) ?? [])) {
-                for (final event in ((range['events'] as List?) ?? [])) {
-                  final fixed = (event as Map)['fixed'] as String?;
-                  if (fixed != null) {
-                    fixedVersion = fixed;
-                    break;
-                  }
+          // Version corrigée depuis affected[].ranges[].events
+          String fixedVersion = '';
+          for (final aff in (v['affected'] as List? ?? [])) {
+            for (final range in ((aff['ranges'] as List?) ?? [])) {
+              for (final event in ((range['events'] as List?) ?? [])) {
+                final fixed = (event as Map)['fixed'] as String?;
+                if (fixed != null) {
+                  fixedVersion = fixed;
+                  break;
                 }
-                if (fixedVersion.isNotEmpty) break;
               }
               if (fixedVersion.isNotEmpty) break;
             }
-
-            vulns.add(OsvVuln(
-              id: displayId,
-              severity: severity,
-              packageName: name,
-              installedVersion: version,
-              fixedVersion: fixedVersion,
-              ecosystem: ecosystem,
-              publishedDate: _parseDate(v['published'] as String?),
-              modifiedDate: _parseDate(v['modified'] as String?),
-            ));
+            if (fixedVersion.isNotEmpty) break;
           }
+
+          vulns.add(OsvVuln(
+            id: displayId,
+            severity: severity,
+            packageName: name,
+            installedVersion: version,
+            fixedVersion: fixedVersion,
+            ecosystem: ecosystem,
+            publishedDate: _parseDate(v['published'] as String?),
+            modifiedDate: _parseDate(v['modified'] as String?),
+          ));
         }
       }
-    } catch (_) {}
+    }
     vulns.sort((a, b) => _order(a.severity).compareTo(_order(b.severity)));
     return vulns;
   }
@@ -179,6 +181,7 @@ class _OsvPanelState extends State<OsvPanel>
   List<OsvVuln> _vulns = [];
   String _jsonOutput = '';
   String? _error;
+  bool _parseFailed = false;
   int? _exitCode;
 
   ToolVersionInfo? _versionInfo;
@@ -258,6 +261,7 @@ class _OsvPanelState extends State<OsvPanel>
       _vulns = [];
       _jsonOutput = '';
       _error = null;
+      _parseFailed = false;
       _exitCode = null;
     });
 
@@ -272,11 +276,21 @@ class _OsvPanelState extends State<OsvPanel>
         if (!mounted) return;
         switch (event) {
           case OsvOutputEvent(:final jsonOutput):
-            setState(() {
-              _jsonOutput = jsonOutput;
-              _vulns = OsvVuln.fromJson(jsonOutput);
-            });
-            widget.onVulnsChanged?.call(_vulns);
+            try {
+              final vulns = OsvVuln.fromJson(jsonOutput);
+              setState(() {
+                _jsonOutput = jsonOutput;
+                _vulns = vulns;
+              });
+              widget.onVulnsChanged?.call(_vulns);
+            } catch (e) {
+              setState(() {
+                _jsonOutput = jsonOutput;
+                _vulns = [];
+                _parseFailed = true;
+                _error = 'Sortie osv-scanner illisible (JSON invalide) : $e';
+              });
+            }
           case OsvDoneEvent(:final exitCode, :final stderr):
             setState(() {
               _isRunning = false;
@@ -361,6 +375,7 @@ class _OsvPanelState extends State<OsvPanel>
               children: [
                 _VulnTableView(
                   vulns: _vulns,
+                  parseFailed: _parseFailed,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
@@ -613,12 +628,14 @@ enum _SortCol { severity, cveId, package }
 
 class _VulnTableView extends StatefulWidget {
   final List<OsvVuln> vulns;
+  final bool parseFailed;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
 
   const _VulnTableView({
     required this.vulns,
+    this.parseFailed = false,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -747,6 +764,20 @@ class _VulnTableViewState extends State<_VulnTableView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.parseFailed) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 56, color: Colors.red),
+            SizedBox(height: 12),
+            Text(
+                'Sortie osv-scanner illisible : voir le message d\'erreur ci-dessus',
+                style: TextStyle(color: Colors.red, fontSize: 15)),
+          ],
+        ),
+      );
+    }
     if (widget.vulns.isEmpty) {
       return const Center(
         child: Column(

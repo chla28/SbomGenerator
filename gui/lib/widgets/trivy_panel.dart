@@ -52,25 +52,26 @@ class TrivyVuln {
     }
   }
 
+  /// Lève une [FormatException] si `raw` n'est pas un JSON trivy valide,
+  /// plutôt que de retourner silencieusement une liste vide : un JSON
+  /// tronqué/corrompu ne doit pas être confondu avec "aucune vulnérabilité".
   static List<TrivyVuln> fromJson(String raw) {
     final vulns = <TrivyVuln>[];
-    try {
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      for (final result in (data['Results'] as List? ?? [])) {
-        for (final v in ((result['Vulnerabilities'] as List?) ?? [])) {
-          vulns.add(TrivyVuln(
-            id: v['VulnerabilityID'] as String? ?? '',
-            severity: v['Severity'] as String? ?? 'Unknown',
-            packageName: v['PkgName'] as String? ?? '',
-            installedVersion: v['InstalledVersion'] as String? ?? '',
-            fixedVersion: v['FixedVersion'] as String? ?? '',
-            title: v['Title'] as String? ?? '',
-            publishedDate: _parseDate(v['PublishedDate'] as String?),
-            modifiedDate: _parseDate(v['LastModifiedDate'] as String?),
-          ));
-        }
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    for (final result in (data['Results'] as List? ?? [])) {
+      for (final v in ((result['Vulnerabilities'] as List?) ?? [])) {
+        vulns.add(TrivyVuln(
+          id: v['VulnerabilityID'] as String? ?? '',
+          severity: v['Severity'] as String? ?? 'Unknown',
+          packageName: v['PkgName'] as String? ?? '',
+          installedVersion: v['InstalledVersion'] as String? ?? '',
+          fixedVersion: v['FixedVersion'] as String? ?? '',
+          title: v['Title'] as String? ?? '',
+          publishedDate: _parseDate(v['PublishedDate'] as String?),
+          modifiedDate: _parseDate(v['LastModifiedDate'] as String?),
+        ));
       }
-    } catch (_) {}
+    }
     vulns.sort((a, b) => _order(a.severity).compareTo(_order(b.severity)));
     return vulns;
   }
@@ -116,6 +117,7 @@ class _TrivyPanelState extends State<TrivyPanel>
   List<TrivyVuln> _vulns = [];
   String _jsonOutput = '';
   String? _error;
+  bool _parseFailed = false;
   int? _exitCode;
 
   ToolVersionInfo? _versionInfo;
@@ -195,6 +197,7 @@ class _TrivyPanelState extends State<TrivyPanel>
       _vulns = [];
       _jsonOutput = '';
       _error = null;
+      _parseFailed = false;
       _exitCode = null;
     });
 
@@ -212,11 +215,21 @@ class _TrivyPanelState extends State<TrivyPanel>
         if (!mounted) return;
         switch (event) {
           case TrivyOutputEvent(:final jsonOutput):
-            setState(() {
-              _jsonOutput = jsonOutput;
-              _vulns = TrivyVuln.fromJson(jsonOutput);
-            });
-            widget.onVulnsChanged?.call(_vulns);
+            try {
+              final vulns = TrivyVuln.fromJson(jsonOutput);
+              setState(() {
+                _jsonOutput = jsonOutput;
+                _vulns = vulns;
+              });
+              widget.onVulnsChanged?.call(_vulns);
+            } catch (e) {
+              setState(() {
+                _jsonOutput = jsonOutput;
+                _vulns = [];
+                _parseFailed = true;
+                _error = 'Sortie trivy illisible (JSON invalide) : $e';
+              });
+            }
           case TrivyDoneEvent(:final exitCode, :final stderr):
             setState(() {
               _isRunning = false;
@@ -315,6 +328,7 @@ class _TrivyPanelState extends State<TrivyPanel>
               children: [
                 _VulnTableView(
                   vulns: _vulns,
+                  parseFailed: _parseFailed,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
@@ -681,12 +695,14 @@ enum _SortCol { severity, cveId, package }
 
 class _VulnTableView extends StatefulWidget {
   final List<TrivyVuln> vulns;
+  final bool parseFailed;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
 
   const _VulnTableView({
     required this.vulns,
+    this.parseFailed = false,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -813,6 +829,19 @@ class _VulnTableViewState extends State<_VulnTableView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.parseFailed) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 56, color: Colors.red),
+            SizedBox(height: 12),
+            Text('Sortie trivy illisible : voir le message d\'erreur ci-dessus',
+                style: TextStyle(color: Colors.red, fontSize: 15)),
+          ],
+        ),
+      );
+    }
     if (widget.vulns.isEmpty) {
       return const Center(
         child: Column(

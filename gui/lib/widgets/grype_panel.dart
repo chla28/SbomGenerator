@@ -52,34 +52,33 @@ class GrypeVuln {
     }
   }
 
+  /// Lève une [FormatException] si `raw` n'est pas un JSON grype valide,
+  /// plutôt que de retourner silencieusement une liste vide : un JSON
+  /// tronqué/corrompu ne doit pas être confondu avec "aucune vulnérabilité".
   static List<GrypeVuln> fromJson(String raw) {
-    try {
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      final matches = data['matches'] as List? ?? [];
-      final vulns = matches.map((m) {
-        final vuln = m['vulnerability'] as Map<String, dynamic>? ?? {};
-        final artifact = m['artifact'] as Map<String, dynamic>? ?? {};
-        final fix = vuln['fix'] as Map<String, dynamic>? ?? {};
-        final fixVersions =
-            (fix['versions'] as List?)?.cast<String>() ?? [];
-        final fixState = fix['state'] as String? ?? '';
-        return GrypeVuln(
-          id: vuln['id'] as String? ?? '',
-          severity: vuln['severity'] as String? ?? 'Unknown',
-          packageName: artifact['name'] as String? ?? '',
-          installedVersion: artifact['version'] as String? ?? '',
-          fixedVersion:
-              fixVersions.isNotEmpty ? fixVersions.first : fixState,
-          packageType: artifact['type'] as String? ?? '',
-          publishedDate: _parseDate(vuln['publishedDate'] as String?),
-          modifiedDate: _parseDate(vuln['lastModifiedDate'] as String?),
-        );
-      }).toList();
-      vulns.sort((a, b) => _order(a.severity).compareTo(_order(b.severity)));
-      return vulns;
-    } catch (_) {
-      return [];
-    }
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    final matches = data['matches'] as List? ?? [];
+    final vulns = matches.map((m) {
+      final vuln = m['vulnerability'] as Map<String, dynamic>? ?? {};
+      final artifact = m['artifact'] as Map<String, dynamic>? ?? {};
+      final fix = vuln['fix'] as Map<String, dynamic>? ?? {};
+      final fixVersions =
+          (fix['versions'] as List?)?.cast<String>() ?? [];
+      final fixState = fix['state'] as String? ?? '';
+      return GrypeVuln(
+        id: vuln['id'] as String? ?? '',
+        severity: vuln['severity'] as String? ?? 'Unknown',
+        packageName: artifact['name'] as String? ?? '',
+        installedVersion: artifact['version'] as String? ?? '',
+        fixedVersion:
+            fixVersions.isNotEmpty ? fixVersions.first : fixState,
+        packageType: artifact['type'] as String? ?? '',
+        publishedDate: _parseDate(vuln['publishedDate'] as String?),
+        modifiedDate: _parseDate(vuln['lastModifiedDate'] as String?),
+      );
+    }).toList();
+    vulns.sort((a, b) => _order(a.severity).compareTo(_order(b.severity)));
+    return vulns;
   }
 }
 
@@ -132,6 +131,7 @@ class _GrypePanelState extends State<GrypePanel>
   String _jsonOutput = '';
   String _templateOutput = '';
   String? _error;
+  bool _parseFailed = false;
   int? _exitCode;
 
   // Version outil
@@ -238,6 +238,7 @@ class _GrypePanelState extends State<GrypePanel>
       _jsonOutput = '';
       _templateOutput = '';
       _error = null;
+      _parseFailed = false;
       _exitCode = null;
     });
 
@@ -262,11 +263,21 @@ class _GrypePanelState extends State<GrypePanel>
         if (!mounted) return;
         switch (event) {
           case GrypeOutputEvent(:final jsonOutput):
-            setState(() {
-              _jsonOutput = jsonOutput;
-              _vulns = GrypeVuln.fromJson(jsonOutput);
-            });
-            widget.onVulnsChanged?.call(_vulns);
+            try {
+              final vulns = GrypeVuln.fromJson(jsonOutput);
+              setState(() {
+                _jsonOutput = jsonOutput;
+                _vulns = vulns;
+              });
+              widget.onVulnsChanged?.call(_vulns);
+            } catch (e) {
+              setState(() {
+                _jsonOutput = jsonOutput;
+                _vulns = [];
+                _parseFailed = true;
+                _error = 'Sortie grype illisible (JSON invalide) : $e';
+              });
+            }
           case GrypeTemplateEvent(:final content):
             setState(() {
               _templateOutput = content;
@@ -392,6 +403,7 @@ class _GrypePanelState extends State<GrypePanel>
               children: [
                 _VulnTableView(
                   vulns: _vulns,
+                  parseFailed: _parseFailed,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
@@ -899,12 +911,14 @@ enum _SortCol { severity, package, cveId }
 
 class _VulnTableView extends StatefulWidget {
   final List<GrypeVuln> vulns;
+  final bool parseFailed;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
 
   const _VulnTableView({
     required this.vulns,
+    this.parseFailed = false,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -1038,6 +1052,19 @@ class _VulnTableViewState extends State<_VulnTableView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.parseFailed) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 56, color: Colors.red),
+            SizedBox(height: 12),
+            Text('Sortie grype illisible : voir le message d\'erreur ci-dessus',
+                style: TextStyle(color: Colors.red, fontSize: 15)),
+          ],
+        ),
+      );
+    }
     if (widget.vulns.isEmpty) {
       return const Center(
         child: Column(
