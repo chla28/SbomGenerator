@@ -221,7 +221,7 @@ class _OsvPanelState extends State<OsvPanel>
   }
 
   Future<void> _pickSbomFile({bool filtered = true}) async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
       dialogTitle: 'Choisir un fichier SBOM',
@@ -232,7 +232,7 @@ class _OsvPanelState extends State<OsvPanel>
   }
 
   Future<void> _pickConfigFile({bool filtered = true}) async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['toml'] : null,
       dialogTitle: 'Choisir osv-scanner.toml',
@@ -712,7 +712,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
         _csv(v.ecosystem),
       ].join(','));
     }
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: 'Exporter les vulnérabilités OSV-Scanner',
       fileName: 'osv_vulns.csv',
       type: FileType.custom,

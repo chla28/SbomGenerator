@@ -119,7 +119,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
       {String? title,
       List<String>? extensions,
       TextEditingController? clears}) async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       dialogTitle: title,
       type: extensions != null ? FileType.custom : FileType.any,
       allowedExtensions: extensions,
@@ -134,7 +134,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
 
   Future<void> _pickDir(TextEditingController ctrl,
       {String? title, VoidCallback? onDone, TextEditingController? clears}) async {
-    final r = await FilePicker.platform.getDirectoryPath(dialogTitle: title);
+    final r = await FilePicker.getDirectoryPath(dialogTitle: title);
     if (r != null) {
       ctrl.text = r;
       clears?.clear();
@@ -144,7 +144,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
 
   Future<void> _saveFile(TextEditingController ctrl,
       {String? title, String? fileName}) async {
-    final r = await FilePicker.platform.saveFile(
+    final r = await FilePicker.saveFile(
       dialogTitle: title,
       fileName: fileName,
     );

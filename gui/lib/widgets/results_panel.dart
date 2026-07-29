@@ -586,7 +586,7 @@ class _LogExportBar extends StatelessWidget {
           ),
           TextButton.icon(
             onPressed: () async {
-              final path = await FilePicker.platform.saveFile(
+              final path = await FilePicker.saveFile(
                 dialogTitle: 'Enregistrer les logs',
                 fileName: 'sbom_generator.log',
               );

@@ -158,7 +158,7 @@ class _TrivyPanelState extends State<TrivyPanel>
   }
 
   Future<void> _pickSbomFile({bool filtered = true}) async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
       dialogTitle: 'Choisir un fichier SBOM',
@@ -169,7 +169,7 @@ class _TrivyPanelState extends State<TrivyPanel>
   }
 
   Future<void> _pickConfigFile({bool filtered = true}) async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['yaml', 'yml'] : null,
       dialogTitle: 'Choisir trivy.yaml',
@@ -778,7 +778,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
         _csv(v.title),
       ].join(','));
     }
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: 'Exporter les vulnérabilités Trivy',
       fileName: 'trivy_vulns.csv',
       type: FileType.custom,

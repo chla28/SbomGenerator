@@ -260,7 +260,7 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   Future<void> _pickFile({bool filtered = true}) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       dialogTitle: 'Sélectionner un fichier SBOM',
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,

@@ -223,7 +223,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
   }
 
   Future<void> _pickFile() async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       dialogTitle: 'Sélectionner un fichier SBOM (JSON)',
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],

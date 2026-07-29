@@ -121,7 +121,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   }
 
   Future<void> _loadFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       dialogTitle: 'Ouvrir un fichier SBOM',
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],

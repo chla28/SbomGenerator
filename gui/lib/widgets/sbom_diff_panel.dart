@@ -243,7 +243,7 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
   }
 
   Future<void> _pickFile(bool isA, {bool filtered = true}) async {
-    final r = await FilePicker.platform.pickFiles(
+    final r = await FilePicker.pickFiles(
       dialogTitle:
           'Sélectionner SBOM ${isA ? "A (référence)" : "B (comparé)"}',
       type: filtered ? FileType.custom : FileType.any,

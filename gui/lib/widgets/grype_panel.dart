@@ -189,7 +189,7 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   Future<void> _pickSbomFile({bool filtered = true}) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
       dialogTitle: 'Choisir un fichier SBOM',
@@ -200,7 +200,7 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   Future<void> _pickConfigFile({bool filtered = true}) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['yaml', 'yml'] : null,
       dialogTitle: 'Choisir grype.yaml',
@@ -211,7 +211,7 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   Future<void> _pickTemplateFile({bool filtered = true}) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['tmpl', 'tpl', 'txt'] : null,
       dialogTitle: 'Choisir un fichier template Grype',
@@ -1001,7 +1001,7 @@ class _VulnTableViewState extends State<_VulnTableView> {
         _csv(v.packageType),
       ].join(','));
     }
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: 'Exporter les vulnérabilités Grype',
       fileName: 'grype_vulns.csv',
       type: FileType.custom,
