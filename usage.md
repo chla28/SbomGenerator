@@ -1,21 +1,41 @@
 # sbom_generator — Guide d'utilisation
 
-Générateur de SBOM (Software Bill of Materials) à partir d'une liste de paquets RPM.
-Prend en charge les formats **CycloneDX 1.6/1.7**, **SPDX 2.3**, **SPDX 3.0 JSON-LD** et un format **JSON personnalisé**.
+Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
+Prend en charge les types d'entrée **RPM**, **Python wheel**, **archives tar/zip**, **paquets Debian**, **archives Java** (`.jar`), **requirements.txt**, **modules Go** (go.sum/go.mod), **paquets npm/yarn** (package-lock.json/yarn.lock), **paquets Maven** (pom.xml) et **images OCI** (via syft, trivy ou skopeo). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
+Prend en charge les formats de sortie **CycloneDX 1.6/1.7**, **SPDX 2.3**, **SPDX 3.0 JSON-LD**, **JSON personnalisé**, **Markdown**, **AsciiDoc**, **HTML interactif** et **CSV**.
+
+> Une version plus détaillée (AsciiDoc, avec table des matières et davantage
+> d'exemples) existe dans `doc/usage.adoc`. Ce fichier reste le guide rapide
+> au format Markdown.
 
 ---
 
 ## Prérequis
 
-| Composant | Version minimale | Rôle |
-|-----------|-----------------|------|
-| [Dart SDK](https://dart.dev/get-dart) | 3.0.0 | Compilation et exécution |
-| `rpm` | — | Interrogation des métadonnées RPM |
+| Composant | Version minimale | Requis pour | Rôle |
+|-----------|-----------------|-------------|------|
+| [Dart SDK](https://dart.dev/get-dart) | 3.0.0 | toujours | Compilation et exécution |
+| `rpm` | — | paquets RPM | Interrogation des métadonnées RPM |
+| `python3` | 3.6+ | `.whl`, `.tar*`, `.zip` | Extraction des métadonnées depuis les archives |
+| `dpkg-deb` | — | `.deb` | Lecture des métadonnées des paquets Debian |
+| `unzip` | — | `.jar` (via `--input`), ou `--image` avec `--oci-tool skopeo` | Extraction des coordonnées Maven (`pom.properties`) |
+| `syft` | — | `--image` avec `--oci-tool syft` (défaut) | Analyse d'images OCI — tous types de paquets |
+| `trivy` | — | `--image` avec `--oci-tool trivy` | Analyse d'images OCI — tous types de paquets |
+| `skopeo` + `tar` | — | `--image` avec `--oci-tool skopeo` | Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python, npm |
+| `grype` / `osv-scanner` / `trivy` | — | sous-commande `scan` | Recherche de vulnérabilités connues sur un SBOM déjà généré |
+| `sbomqs` | — | `--min-quality-score` | Score de qualité du SBOM généré |
+| `cosign` | — | `--sign` | Signature cryptographique du SBOM généré |
 
 Vérification :
 ```bash
 dart --version
 rpm --version
+python3 --version
+dpkg-deb --version
+unzip --version
+syft version      # si --oci-tool syft
+trivy --version   # si --oci-tool trivy ou scan --scanner trivy
+skopeo --version  # si --oci-tool skopeo
 ```
 
 ---
@@ -45,90 +65,161 @@ Le binaire `sbom_generator` est autonome, aucun SDK Dart requis pour l'exécuter
 
 ```
 sbom_generator -i <fichier> [options]
+sbom_generator -I <image-oci> [options]
+sbom_generator -i <fichier> -I <image-oci> [options]
+sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
+sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
+sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
+sbom_generator validate <sbom1> [<sbom2> ...]
+sbom_generator scan --sbom <fichier> [options]
 ```
 
-### Options
+### Options (génération de SBOM)
 
 | Option | Raccourci | Défaut | Description |
 |--------|-----------|--------|-------------|
-| `--input <fichier>` | `-i` | *(requis)* | Fichier contenant la liste des RPM |
-| `--output <fichier>` | `-o` | `sbom.json` | Fichier SBOM de sortie |
-| `--format <fmt>` | `-f` | `cyclonedx` | Format de sortie (voir ci-dessous) |
-| `--name <nom>` | `-n` | `RPM Package Set` | Nom du document SBOM / composant racine |
-| `--cyclonedx-version <ver>` | | `1.6` | Version CycloneDX générée : `1.6` ou `1.7` |
-| `--tlp <classification>` | | | Classification TLP du BOM (1.7 uniquement) : `CLEAR`, `GREEN`, `AMBER`, `AMBER_AND_STRICT`, `RED` |
-| `--patent-map <fichier>` | | | Déclarations de brevets par paquet (1.7 uniquement, voir ci-dessous) |
+| `--input <chemin>` | `-i` | *(requis si pas de `--image`)* | Fichier liste (une référence par ligne), archive/paquet unique, ou dossier scanné récursivement |
+| `--image <référence>` | `-I` | *(requis si pas de `--input`)* | Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/image.tar.gz`, `/path/image.tgz`, `/path/oci_dir/` |
+| `--oci-tool <outil>` | — | `syft` | Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo` |
+| `--output <fichier>` | `-o` | `sbom.json` | Fichier SBOM de sortie (chemin de base si multi-format) |
+| `--format <fmt>` | `-f` | `cyclonedx` | Format(s) de sortie, virgule-séparés (voir tableau ci-dessous) |
+| `--name <nom>` | `-n` | `Package Set` | Nom du composant racine dans le SBOM |
+| `--rpm-dir <dossier>` | `-d` | — | Dossier de recherche récursive de fichiers `.rpm` ; résout les noms nus sans interroger la base installée |
+| `--concurrency <N>` | `-c` | `4` | Nombre de paquets traités simultanément (`0` = illimité) |
+| `--license-map <fichier>` | `-l` | — | Fichier de substitution de licences (`nom: SPDX-expression` par ligne) |
+| `--deny-license <motif>` | — | — | Refuse les composants dont la licence correspond au motif SPDX (correspondance partielle, répétable). Code retour 2 si au moins une violation |
+| `--cyclonedx-version <ver>` | — | `1.6` | Version CycloneDX générée : `1.6` ou `1.7`. Requis pour `--tlp` et `--patent-map` |
+| `--tlp <classification>` | — | — | Classification TLP (Traffic Light Protocol) du BOM — 1.7 uniquement. Valeurs : `CLEAR`, `GREEN`, `AMBER`, `AMBER_AND_STRICT`, `RED` |
+| `--patent-map <fichier>` | — | — | Fichier de déclarations de brevets par paquet — 1.7 uniquement (voir ci-dessous) |
+| `--min-quality-score <score>` | — | — | Score sbomqs minimum requis (ex. `7.5`). Lance `sbomqs score` après génération, code retour 2 si insuffisant |
+| `--sign` | — | désactivé | Signe les fichiers SBOM avec `cosign sign-blob` après génération. Un fichier `<sbom>.bundle` est créé à côté de chaque fichier signé |
 | `--verbose` | `-v` | désactivé | Affiche les détails de progression |
 | `--version` | | | Affiche la version et quitte |
 | `--help` | `-h` | | Affiche l'aide |
 
 ### Formats disponibles
 
-| Valeur | Standard | Version | Description |
-|--------|----------|---------|-------------|
-| `cyclonedx` | CycloneDX | 1.6 ou 1.7 | Format par défaut (1.6). JSON conforme au schéma CycloneDX ; `--cyclonedx-version 1.7` active en plus `citations`, `patentAssertions` et `distributionConstraints`. |
-| `spdx` | SPDX | 2.3 | JSON SPDX 2.3 avec `packages[]` et `relationships[]`. |
-| `spdx3` | SPDX | 3.0 | JSON-LD SPDX 3.0 avec graphe plat d'éléments (`@graph`). |
-| `json` | Personnalisé | 1.0 | JSON lisible incluant toutes les métadonnées RPM brutes. |
+| Valeur | Standard | Version | Extension | Description |
+|--------|----------|---------|-----------|-------------|
+| `cyclonedx` | CycloneDX | 1.6 ou 1.7 | `.cdx.json` | Format par défaut (1.6). `--cyclonedx-version 1.7` active en plus `citations`, `patentAssertions` et `distributionConstraints` |
+| `spdx` | SPDX | 2.3 | `.spdx.json` | JSON SPDX 2.3 avec `packages[]` et `relationships[]` |
+| `spdx3` | SPDX | 3.0 | `.spdx3.jsonld` | JSON-LD SPDX 3.0 avec graphe plat d'éléments (`@graph`) |
+| `json` | Personnalisé | — | `.custom.json` | JSON lisible incluant toutes les métadonnées brutes |
+| `markdown` | — | — | `.md` | Tableau Markdown des paquets et licences |
+| `asciidoc` | — | — | `.adoc` | Tableau AsciiDoc des paquets et licences |
+| `html` | — | — | `.html` | Rapport HTML autonome (aucune dépendance externe) : statistiques, graphiques par écosystème et licence, tableau filtrable et triable |
+| `csv` | — | — | `.csv` | Fichier CSV (RFC 4180), une ligne par paquet : `name`, `version`, `architecture`, `license`, `type`, `purl`, `url`, `vendor` |
 
-#### Déclarations de brevets (`--patent-map`, CycloneDX 1.7)
-
-Fichier texte, une déclaration par ligne :
-```
-package_name: numéro_brevet|juridiction|statut_légal|type_assertion
-openssl: US1234567|US|granted|license
-```
-- `juridiction` : code WIPO ST.3 à 2 lettres (`US`, `EP`, `JP`…)
-- `statut_légal` : `pending`, `granted`, `revoked`, `expired`, `lapsed`, `withdrawn`, `abandoned`, `suspended`, `reinstated`, `opposed`, `terminated`, `invalidated`, `in-force`
-- `type_assertion` : `ownership`, `license`, `third-party-claim`, `standards-inclusion`, `prior-art`, `exclusive-rights`, `non-assertion`, `research-or-evaluation`
-
-Quand `--image` est utilisé avec `--cyclonedx-version 1.7`, une `citation` racine attribue automatiquement les données de composants à l'outil d'analyse choisi (`--oci-tool`).
+En mode multi-format (`-f cyclonedx,spdx,markdown`), `--output` est traité
+comme un chemin de base auquel chaque extension est ajoutée.
 
 ---
 
 ## Format du fichier d'entrée
 
-Un fichier texte, **une référence RPM par ligne**.
+Un fichier texte, **une référence par ligne**. Les types peuvent être
+mélangés librement dans le même fichier.
 
 ### Types de références acceptées
 
 | Type | Exemple | Mécanisme |
 |------|---------|-----------|
-| Nom de paquet installé | `bash` | `rpm -q bash` |
+| Nom de paquet RPM installé | `bash` | `rpm -q bash` |
 | NEVRA complet | `bash-5.1.8-6.el9.x86_64` | `rpm -q bash-5.1.8-6.el9.x86_64` |
-| Chemin vers un fichier `.rpm` | `/mnt/repo/bash-5.1.8.rpm` | `rpm -qp /mnt/repo/bash-5.1.8.rpm` |
+| Fichier `.rpm` local | `/mnt/repo/bash-5.1.8.rpm` | `rpm -qp /mnt/repo/bash-5.1.8.rpm` |
+| Wheel Python `.whl` | `/opt/wheels/requests-2.28.0-py3-none-any.whl` | `python3 zipfile` (extraction METADATA) |
+| Archive tar `.tar.gz` / `.tgz` / `.tar` | `/opt/src/mariadb-11.4.8.tar.gz` | `python3 tarfile` → PURL `pkg:pypi/…` ou `pkg:generic/…` |
+| Archive ZIP `.zip` | `/opt/src/mylib-1.0.zip` | `python3 zipfile` → PURL `pkg:pypi/…` ou `pkg:generic/…` |
+| Paquet Debian `.deb` | `/opt/pkgs/libssl3_3.0.1_amd64.deb` | `dpkg-deb -f` |
+| Archive Java `.jar` | `/opt/libs/my-lib-1.2.3.jar` | `pom.properties` embarqué, sinon `META-INF/MANIFEST.MF`, sinon nom de fichier ; PURL `pkg:maven/…`. Un jar « shaded »/uber-jar produit un composant par dépendance embarquée, en plus du jar lui-même |
+| Fichier `requirements.txt` | `/opt/project/requirements.txt` | Parseur pur Dart (PEP 508 simplifié) |
+| Modules Go (`go.sum`) | `/opt/myapp/go.sum` | Parseur pur Dart — extrait module et version ; PURL `pkg:golang/…` |
+| Modules Go (`go.mod`) | `/opt/myapp/go.mod` | Parseur pur Dart — extrait des directives `require` ; PURL `pkg:golang/…` |
+| Paquets npm (`package-lock.json`) | `/opt/myapp/package-lock.json` | Parseur pur Dart — lockfileVersion 1, 2 et 3 ; PURL `pkg:npm/…` |
+| Paquets yarn (`yarn.lock`) | `/opt/myapp/yarn.lock` | Parseur pur Dart — yarn v1 classique et yarn v2+ Berry ; PURL `pkg:npm/…` |
+| Dépendances Maven (`pom.xml`) | `/opt/myapp/pom.xml` | Parseur pur Dart — scope compile/provided, hors test et dependencyManagement ; PURL `pkg:maven/…` |
 
 ### Règles de syntaxe
 
 - Les lignes vides sont ignorées.
 - Les lignes commençant par `#` sont des commentaires et sont ignorées.
-- Les paquets identiques (même NEVRA, présents dans plusieurs dépôts) sont automatiquement dédupliqués.
+- Les paquets identiques (même `bomRef`) sont automatiquement dédupliqués.
 
-### Exemple de fichier d'entrée
+### Raccourci : passer directement une archive unique
+
+`--input` accepte aussi directement le chemin d'une archive ou d'un paquet
+unique (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`, `.jar`),
+sans passer par un fichier liste intermédiaire :
+
+```bash
+sbom_generator -i /opt/3PP/myapp-2.0.0-linux-amd64.zip -o sbom
+sbom_generator -i /opt/libs/my-lib-1.2.3.jar -o sbom
+```
+
+Pour tout autre chemin de fichier, `--input` reste interprété comme un
+fichier liste (une référence par ligne).
+
+### Raccourci : passer directement un dossier
+
+Si `--input` pointe vers un **dossier**, celui-ci est scanné récursivement
+(liens symboliques ignorés) à la recherche de tous les types de fichiers du
+tableau ci-dessus : `.rpm`, `.deb`, `.whl`, `.jar`, `.zip`,
+`.tar`/`.tar.gz`/`.tgz`, ainsi que les manifestes reconnus par leur nom exact
+(`requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`,
+`yarn.lock`). Un `.txt` qui ne s'appelle pas exactement `requirements.txt`
+n'est donc pas retenu, contrairement au fichier liste où n'importe quel
+`.txt` (hors `.whl`) est traité comme un fichier de requirements.
+
+```bash
+sbom_generator -i /opt/app/libs -o sbom
+```
+
+Les noms de paquets RPM nus (ex. `bash`, sans chemin ni extension) ne
+peuvent pas être découverts ainsi : ce ne sont pas des fichiers. Utilisez un
+fichier liste ou `--rpm-dir` pour ce cas.
+
+### Exemple de fichier d'entrée mixte
 
 ```text
-# Système de base RHEL 9
+# Paquets RPM (noms installés)
 bash
 glibc
 openssl-libs
-systemd
-
-# Paquets réseau
-NetworkManager
-NetworkManager-team
 
 # Fichiers RPM locaux
 /mnt/BaseOS/Packages/curl-7.76.1-14.el9.x86_64.rpm
 /mnt/AppStream/Packages/nginx-1.20.1-14.el9.x86_64.rpm
 
+# Wheels Python
+/opt/wheels/requests-2.28.0-py3-none-any.whl
+
+# Archives tierces
+/opt/src/mariadb-11.4.8-linux-systemd-x86_64.tar.gz
+
+# Paquet Debian
+/opt/pkgs/libssl3_3.0.1_amd64.deb
+
+# Dépendances Python
+/opt/project/requirements.txt
+
+# Modules Go (au choix : go.sum ou go.mod)
+/opt/myapp/go.sum
+
+# Paquets npm / yarn
+/opt/webapp/package-lock.json
+/opt/webapp/yarn.lock
+
+# Dépendances Maven
+/opt/javaapp/pom.xml
+
 # Commenter un paquet temporairement
-# python3
+# systemd
 ```
 
 ### Générer la liste depuis un système installé
 
 ```bash
-# Tous les paquets installés
+# Tous les paquets RPM installés
 rpm -qa > packages.txt
 
 # Paquets d'un groupe spécifique
@@ -166,23 +257,219 @@ find /mnt/BaseOS/Packages -name '*.rpm' > rpm_files.txt
 ./sbom_generator -i packages.txt -f json -n "Système RHEL 9" -o sbom.json -v
 ```
 
-### Fichiers RPM depuis un dépôt monté
+### Multi-format en un seul passage
 
 ```bash
-find /mnt/BaseOS/Packages -name '*.rpm' > liste.txt
-find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
-./sbom_generator -i liste.txt -f cyclonedx -n "RHEL 9 BaseOS+AppStream" -o rhel9.cdx.json
+./sbom_generator -i packages.txt -f cyclonedx,spdx,markdown -o sbom
+# Génère : sbom.cdx.json + sbom.spdx.json + sbom.md
 ```
 
-### Pipeline complet : génération + validation qualité
+### Traitement parallèle et override de licences
 
 ```bash
-# Génération
-./sbom_generator -i rpm97.lst -f cyclonedx -n "RHEL9 Base System" -o sbom.cdx.json
-
-# Validation de qualité avec sbomqs
-./sbomqs score sbom.cdx.json
+# 8 paquets en parallèle + substitution de licences
+./sbom_generator -i packages.txt -c 8 -l overrides.txt -o sbom.cdx.json
 ```
+
+### Résolution de noms RPM depuis un dossier local
+
+```bash
+# Les noms nus (bash, glibc…) sont résolus dans /mnt/repo au lieu de rpm -q
+./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
+```
+
+### Analyse d'une image OCI (via syft, défaut)
+
+```bash
+./sbom_generator -I nginx:latest -f cyclonedx -n "nginx" -o nginx.cdx.json
+```
+
+### Analyse d'une archive tar exportée avec docker save
+
+```bash
+./sbom_generator -I ./ubuntu.tar --oci-tool trivy -f spdx -o ubuntu.spdx.json
+
+# Archive compressée (docker save ubuntu | gzip > ubuntu.tar.gz)
+./sbom_generator -I ./ubuntu.tar.gz --oci-tool syft -f cyclonedx -o ubuntu.cdx.json
+```
+
+### Analyse d'un OCI layout directory via skopeo
+
+```bash
+./sbom_generator -I ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
+```
+
+### Combiner image OCI et liste de paquets supplémentaires
+
+```bash
+./sbom_generator -I nginx:latest -i extra_pkgs.txt -f cyclonedx,spdx -o sbom
+# Génère : sbom.cdx.json + sbom.spdx.json
+```
+
+### Rapport HTML interactif
+
+```bash
+./sbom_generator -i packages.txt -f html -n "Mon Application" -o sbom.html
+# → sbom.html : rapport autonome, aucune dépendance externe
+```
+
+### Rapport CSV
+
+```bash
+./sbom_generator -i packages.txt -f csv -o rapport.csv
+# → rapport.csv : une ligne par paquet, colonnes :
+#   name,version,architecture,license,type,purl,url,vendor
+```
+
+### Modules Go
+
+```bash
+# Depuis go.sum (toutes les dépendances checksum)
+echo "/opt/myapp/go.sum" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -n "MyGoApp" -o sbom.cdx.json
+
+# Depuis go.mod (dépendances directes et indirectes)
+echo "/opt/myapp/go.mod" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -o sbom.cdx.json
+```
+
+### Paquets npm / yarn
+
+```bash
+# npm package-lock.json (v1, v2 ou v3)
+echo "/opt/webapp/package-lock.json" > sources.txt
+./sbom_generator -i sources.txt -f spdx -o webapp.spdx.json
+
+# yarn.lock (v1 classique ou v2+ Berry)
+echo "/opt/webapp/yarn.lock" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx,csv -o webapp
+# → webapp.cdx.json + webapp.csv
+```
+
+### Dépendances Maven
+
+```bash
+echo "/opt/javaapp/pom.xml" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -n "MonServiceJava" -o sbom.cdx.json
+```
+
+### Pipeline CI/CD avec contrôle de licences et qualité
+
+```bash
+# Refuser GPL et AGPL, exiger un score sbomqs ≥ 7.0
+./sbom_generator -i packages.txt -f cyclonedx -o sbom.cdx.json \
+  --deny-license GPL --deny-license AGPL \
+  --min-quality-score 7.0
+# Code retour 0 = OK, 2 = violation politique
+```
+
+### Signature cosign
+
+```bash
+./sbom_generator -i packages.txt -f cyclonedx,spdx -o sbom --sign
+# Génère : sbom.cdx.json + sbom.cdx.json.bundle (signature cosign)
+#          sbom.spdx.json + sbom.spdx.json.bundle
+```
+
+### CycloneDX 1.7 avec classification TLP et déclarations de brevets
+
+```bash
+./sbom_generator -i packages.txt --cyclonedx-version 1.7 --tlp AMBER \
+  --patent-map patents.txt -o sbom.cdx.json
+```
+
+---
+
+## Comparer, fusionner, convertir, valider et analyser des SBOM
+
+### Comparaison de deux SBOM (`diff`)
+
+```bash
+# Diff coloré sur le terminal
+./sbom_generator diff avant.cdx.json après.cdx.json
+
+# Diff en JSON (pour automatisation)
+./sbom_generator diff avant.cdx.json après.cdx.json --json -o diff.json
+```
+
+Fonctionne sur la structure CycloneDX (`components[]`) ; comparer des
+fichiers SPDX ne produit pas d'erreur mais aucune comparaison exploitable.
+Codes de retour : `0` = aucun changement, `1` = au moins un changement détecté.
+
+### Fusion de SBOM (`merge`)
+
+```bash
+# Fusionner deux SBOM (déduplication par PURL)
+./sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json
+
+# Fusionner plusieurs SBOM avec nom de document
+./sbom_generator merge a.cdx.json b.cdx.json c.cdx.json \
+  -o merged.cdx.json -n "Système complet"
+```
+
+Seul le format CycloneDX est supporté en entrée et en sortie pour `merge`.
+
+### Conversion de format (`convert`)
+
+Convertit un fichier SBOM existant vers un ou plusieurs formats sans re-scanner :
+
+```bash
+# CycloneDX → SPDX 2.3
+./sbom_generator convert -i sbom.cdx.json -f spdx -o sbom.spdx.json
+
+# SPDX → CycloneDX + CSV (formats multiples)
+./sbom_generator convert -i sbom.spdx.json -f cyclonedx,csv -o rapport
+
+# Tous les formats en une seule commande
+./sbom_generator convert -i sbom.cdx.json -f spdx,spdx3,markdown,csv -o sbom
+```
+
+Formats source acceptés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD.
+
+### Validation de SBOM (`validate`)
+
+Vérifie la conformité structurelle d'un ou plusieurs fichiers SBOM :
+
+```bash
+# Valider un fichier
+./sbom_generator validate sbom.cdx.json
+# → sbom.cdx.json : OK (CycloneDX 1.6)
+
+# Valider plusieurs fichiers en une passe (exit 1 si au moins un invalide)
+./sbom_generator validate sbom.cdx.json sbom.spdx.json
+
+# Mode strict (les champs recommandés sont aussi vérifiés)
+./sbom_generator validate --strict sbom.cdx.json
+```
+
+Codes de retour : `0` = tous valides, `1` = au moins un fichier invalide ou introuvable.
+
+### Analyse de vulnérabilités (`scan`)
+
+Interroge un ou plusieurs scanners sur un SBOM déjà généré, avec filtrage
+par date de publication/modification :
+
+```bash
+# Grype (défaut), toutes les CVE
+./sbom_generator scan --sbom sbom.cdx.json
+
+# Toutes les CVE grype depuis 2024
+./sbom_generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# OSV-Scanner entre deux dates
+./sbom_generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# Les trois scanners, champ "dernière modification", CVE sans date incluses
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+```
+
+Scanners disponibles (`--scanner`) : `grype` (défaut), `osv`, `trivy`, ou
+`all` pour les trois. Champ de date (`--cve-date-field`) : `published`
+(défaut), `modified`, ou `latest` (la plus récente des deux). Résultats
+triés par sévérité décroissante. Codes de retour : `0` = aucune vulnérabilité
+dans la plage demandée, `1` = au moins une trouvée (ou erreur de scanner).
 
 ---
 
@@ -194,33 +481,35 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 |-------|---------|
 | Timestamp | Date/heure de génération (UTC ISO 8601) |
 | Outil | `sbom_generator 1.0.0` |
-| Auteur | Configurable via `--name` |
-| Supplier | Organisation productrice du SBOM |
+| Auteur | Fixé à `sbom_generator` (non configurable) |
+| Supplier | Fixé à `local` (non configurable) |
+| Nom du composant racine | Configurable via `--name` (défaut : `Package Set`) |
 | Lifecycle | `operations` (par défaut) |
 | Data license | `CC0-1.0` |
 
-### Par composant (paquet RPM)
+### Par composant
 
-| Champ | Source RPM | Description |
-|-------|-----------|-------------|
-| Nom | `%{NAME}` | Nom du paquet |
-| Version | `%{VERSION}-{%RELEASE}` | Version complète avec release |
-| PURL | calculé | `pkg:rpm/<name>@<version>?arch=<arch>` |
-| CPE 2.3 | calculé | `cpe:2.3:a:<vendor>:<name>:<version>:*:…` |
-| Checksum | `%{SHA256HEADER}` | SHA-256 de l'en-tête RPM |
-| Licence | `%{LICENSE}` | Normalisée vers SPDX (expression ou id) |
-| Supplier | `%{VENDOR}` | Fournisseur du paquet |
-| Description | `%{SUMMARY}` | Résumé court |
-| VCS | `%{SOURCERPM}` | Lien vers le RPM source (Fedora/RHEL) |
-| Propriétés | `rpm:arch`, `rpm:release`, `rpm:requires` | Métadonnées RPM additionnelles |
+| Champ | Description |
+|-------|-------------|
+| Nom, version | Selon le type de paquet (voir « Types de références acceptées ») |
+| PURL | Identifiant de paquet universel, calculé selon l'écosystème |
+| CPE 2.3 | Calculé uniquement pour les paquets RPM |
+| Checksum | SHA-256 de l'en-tête RPM (paquets RPM uniquement) |
+| Licence | Normalisée vers SPDX (expression ou identifiant) |
+| Supplier | Fournisseur du paquet, quand l'information est disponible |
+| Description | Résumé court, quand disponible |
+| Propriétés additionnelles | Spécifiques à l'écosystème (`rpm:*`, `deb:*`, `pypi:*`…) |
 
 ### Dépendances
 
-Les dépendances sont résolues **au sein de la liste fournie** :
-- `rpm -q --requires <pkg>` → liste des capabilities requises
-- `rpm -q --provides <pkg>` → liste des capabilities fournies
-- Résolution : si le paquet A requiert une capability que le paquet B fournit, une relation `A → B` est ajoutée
-- Les dépendances externes (glibc, systemd…) non présentes dans la liste apparaissent dans les propriétés `rpm:requires` mais pas dans `dependsOn`
+Les dépendances sont résolues **au sein de la liste fournie**, uniquement
+pour les paquets système (RPM) et par écosystème compatible (ex. Python ↔
+Python) :
+- Résolution : si le paquet A requiert une capability que le paquet B
+  fournit, une relation `A → B` est ajoutée.
+- Les dépendances externes non présentes dans la liste apparaissent dans les
+  propriétés (`rpm:requires`…) mais pas dans `dependsOn` — pas de résolution
+  transitive.
 
 ---
 
@@ -241,18 +530,27 @@ Structure JSON (1.6, par défaut) :
 }
 ```
 
-Chaque `dependencies[].dependsOn` contient les `bom-ref` des paquets dont dépend le composant. L'entrée racine liste tous les composants du SBOM.
+Avec `--cyclonedx-version 1.7`, des champs supplémentaires apparaissent
+selon les options fournies (absents du schéma 1.6, donc n'apparaissent
+jamais en 1.6) :
+- `metadata.distributionConstraints.tlp` — via `--tlp`
+- `citations[]` racine, attribuant `/components` à l'outil source —
+  automatique dès que `--image` est utilisé (attribution à `--oci-tool`)
+- `components[].patentAssertions[]` + `definitions.patents[]` — via `--patent-map`
 
-Avec `--cyclonedx-version 1.7`, des champs supplémentaires apparaissent selon les options fournies :
-- `metadata.distributionConstraints.tlp` (`--tlp`)
-- `citations[]` racine attribuant `/components` à l'outil source (automatique avec `--image`)
-- `components[].patentAssertions[]` + `definitions.patents[]` (`--patent-map`)
+#### Déclarations de brevets (`--patent-map`)
 
-Ces champs n'existent pas dans le schéma CycloneDX 1.6 : ils sont donc uniquement émis quand `--cyclonedx-version 1.7` est actif (une erreur est levée sinon).
+Fichier texte, une déclaration par ligne :
+```text
+package_name: numéro_brevet|juridiction|statut_légal|type_assertion
+openssl: US1234567|US|granted|license
+```
+- `juridiction` : code WIPO ST.3 à 2 lettres (`US`, `EP`, `JP`…)
+- `statut_légal` : `pending`, `granted`, `revoked`, `expired`, `lapsed`, `withdrawn`, `abandoned`, `suspended`, `reinstated`, `opposed`, `terminated`, `invalidated`, `in-force`
+- `type_assertion` : `ownership`, `license`, `third-party-claim`, `standards-inclusion`, `prior-art`, `exclusive-rights`, `non-assertion`, `research-or-evaluation`
 
 ### SPDX 2.3 (`spdx`)
 
-Structure JSON :
 ```
 {
   "spdxVersion": "SPDX-2.3",
@@ -263,11 +561,11 @@ Structure JSON :
 }
 ```
 
-Types de relations : `DESCRIBES` (document → paquets) et `DEPENDS_ON` (dépendances résolues).
+Types de relations : `DESCRIBES` (document → paquets) et `DEPENDS_ON`
+(dépendances résolues).
 
 ### SPDX 3.0 JSON-LD (`spdx3`)
 
-Structure JSON-LD :
 ```
 {
   "@context": "https://spdx.org/rdf/3.0.0/spdx-context.jsonld",
@@ -276,7 +574,7 @@ Structure JSON-LD :
     { type: "CreationInfo", specVersion: "3.0.0", … },
     { type: "Tool", … },
     { type: "Organization", … },         ← un par fournisseur unique
-    { type: "software:Package", … },     ← un par paquet RPM
+    { type: "software:Package", … },     ← un par paquet
     { type: "Relationship", relationshipType: "describes", … },
     { type: "Relationship", relationshipType: "dependsOn", … }
   ]
@@ -285,13 +583,15 @@ Structure JSON-LD :
 
 ### JSON personnalisé (`json`)
 
-Inclut toutes les métadonnées RPM brutes (`requires`, `provides`) ainsi que les dépendances résolues en noms lisibles. Idéal pour du scripting ou de l'intégration personnalisée.
+Inclut toutes les métadonnées brutes (`requires`, `provides`) ainsi que les
+dépendances résolues en noms lisibles. Idéal pour du scripting ou de
+l'intégration personnalisée.
 
 ---
 
 ## Scores de qualité sbomqs
 
-Résultats obtenus sur 772 paquets RHEL 9 (`rpm97.lst`) avec le format CycloneDX :
+Exemple de sortie (`sbomqs score --basic sbom.cdx.json`) :
 
 ```
 SBOM Quality Score: 7.8/10.0   Grade: C
@@ -310,7 +610,10 @@ NTIA 2025 RFC   : 10.0/10  A
 
 ### Limitations connues (sbomqs v2.0.6)
 
-- `comp_with_licenses` et `comp_with_valid_licenses` **ne sont pas implémentés** pour CycloneDX dans cette version de sbomqs (toujours 0, indépendamment du contenu)
+> `comp_with_licenses` et `comp_with_valid_licenses` **ne sont pas
+> implémentés** pour CycloneDX dans cette version de sbomqs (toujours 0,
+> indépendamment du contenu).
+
 - `comp_with_dependencies` : le mécanisme `compositions` n'est pas reconnu
 - `sbom_signature` : nécessite une clé cryptographique externe
 
@@ -321,19 +624,44 @@ NTIA 2025 RFC   : 10.0/10  A
 ```
 sbom_generator/
 ├── bin/
-│   └── sbom_generator.dart        # Point d'entrée CLI
+│   └── sbom_generator.dart        # Point d'entrée CLI (sous-commandes : diff, merge, convert, validate, scan)
 ├── lib/
-│   ├── models.dart                # RpmPackage, PackageDependency, UUID
-│   ├── rpm_parser.dart            # Interrogation rpm + résolution dépendances
-│   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6/1.7
-│   ├── spdx_generator.dart        # Générateur SPDX 2.3
-│   ├── spdx3_generator.dart       # Générateur SPDX 3.0 JSON-LD
-│   └── simple_json_generator.dart # Générateur JSON personnalisé
-├── sbom_generator                 # Binaire natif compilé
-├── pubspec.yaml                   # Dépendances Dart (args ^2.4.2)
-├── rpm97.lst                      # Exemple : liste RHEL 9
-├── rpm97.cdx.json                 # Exemple : SBOM CycloneDX généré
-└── sbomqs                         # Outil de mesure de qualité
+│   ├── models.dart                 # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
+│   ├── rpm_parser.dart             # Interrogation rpm + résolution dépendances
+│   ├── wheel_parser.dart           # Lecture wheels .whl (python3 zipfile)
+│   ├── tar_parser.dart             # Lecture archives .tar/.tar.gz/.tgz
+│   ├── zip_parser.dart             # Lecture archives .zip
+│   ├── deb_parser.dart             # Lecture paquets .deb (dpkg-deb)
+│   ├── jar_parser.dart             # Coordonnées Maven d'un .jar (unzip -p pom.properties)
+│   ├── requirements_parser.dart    # Lecture requirements.txt (pur Dart)
+│   ├── go_parser.dart              # Lecture go.sum et go.mod (pur Dart)
+│   ├── npm_parser.dart             # Lecture package-lock.json v1/v2/v3 (pur Dart)
+│   ├── yarn_parser.dart            # Lecture yarn.lock v1 et v2+ Berry (pur Dart)
+│   ├── maven_parser.dart           # Lecture pom.xml (pur Dart, extraction XML légère)
+│   ├── oci_parser.dart             # Analyse images OCI (syft / trivy / skopeo)
+│   ├── archive_helpers.dart        # Helpers partagés tar + zip
+│   ├── license_normalizer.dart     # Normalisation SPDX centralisée
+│   ├── sbom_diff.dart              # Comparaison de SBOM (sous-commande diff)
+│   ├── sbom_merger.dart            # Fusion de SBOM (sous-commande merge)
+│   ├── sbom_reader.dart            # Lecteur SBOM (CycloneDX/SPDX) → List<Package>
+│   ├── policy_checker.dart         # Licences interdites + score qualité CI/CD
+│   ├── cyclonedx_generator.dart    # Générateur CycloneDX 1.6/1.7
+│   ├── spdx_generator.dart         # Générateur SPDX 2.3
+│   ├── spdx3_generator.dart        # Générateur SPDX 3.0 JSON-LD
+│   ├── simple_json_generator.dart  # Générateur JSON personnalisé
+│   ├── markdown_generator.dart     # Tableau Markdown des licences
+│   ├── asciidoc_generator.dart     # Tableau AsciiDoc des licences
+│   ├── html_generator.dart         # Rapport HTML interactif autonome
+│   └── csv_generator.dart          # Export CSV (RFC 4180)
+├── doc/
+│   ├── developer.adoc              # Documentation développeur
+│   └── usage.adoc                  # Guide d'utilisation détaillé
+├── test/
+│   ├── unit/                       # Tests unitaires
+│   └── integration/                # Tests d'intégration
+├── scripts/                        # Build, installation, désinstallation
+├── example/3PP/                    # Exemples d'archives tierces
+└── pubspec.yaml                    # Dépendances Dart (args ^2.4.2)
 ```
 
 ---
@@ -342,13 +670,38 @@ sbom_generator/
 
 ### `rpm: command not found`
 
-Installez le paquet `rpm` :
 ```bash
 # Fedora/RHEL
 sudo dnf install rpm
-
 # Debian/Ubuntu
 sudo apt install rpm
+```
+
+### `python3 not found — required to read .whl, tar, and zip archives`
+
+```bash
+# Fedora/RHEL
+sudo dnf install python3
+# Debian/Ubuntu
+sudo apt install python3
+```
+
+### `dpkg-deb not found — required to read .deb files`
+
+```bash
+# Fedora/RHEL
+sudo dnf install dpkg
+# Debian/Ubuntu
+sudo apt install dpkg
+```
+
+### `unzip not found — required to read .jar files`
+
+```bash
+# Fedora/RHEL
+sudo dnf install unzip
+# Debian/Ubuntu
+sudo apt install unzip
 ```
 
 ### `Warning: cannot query "pkg"`
@@ -358,8 +711,29 @@ Vérifiez avec `rpm -q <paquet>` ou `rpm -qp <fichier.rpm>`.
 
 ### Doublons dans la liste d'entrée
 
-Si le même paquet (même NEVRA) apparaît plusieurs fois (par ex. présent dans BaseOS et AppStream), il n'est inclus qu'une seule fois dans le SBOM. Un message `($N doublon(s) supprimé(s))` l'indique.
+Si le même paquet (même `bomRef`) apparaît plusieurs fois, il n'est inclus
+qu'une seule fois dans le SBOM. Un message `($N doublon(s) supprimé(s))`
+l'indique.
+
+### `syft / trivy / skopeo: command not found`
+
+L'outil OCI demandé n'est pas installé ou n'est pas dans le `PATH`.
+Installez-le via son script officiel ou le gestionnaire de paquets du
+système. Vérifiez avec `which syft`, `which trivy` ou `which skopeo`.
+
+### `Échec de l'analyse OCI : …`
+
+- Vérifiez que la référence est accessible : `docker pull <image>` ou
+  `skopeo inspect docker://<image>`
+- Pour un registre privé, authentifiez-vous au préalable : `docker login`,
+  `skopeo login`
+- Pour une archive locale, vérifiez que le fichier existe : `ls -lh
+  /path/image.tar` (les formats `.tar`, `.tar.gz` et `.tgz` sont supportés)
 
 ### Fichier SBOM très volumineux
 
-Les propriétés `rpm:requires` peuvent représenter 50 à 150 entrées par paquet. Sur 779 paquets, le fichier CycloneDX peut atteindre 3 Mo. C'est normal.
+Les propriétés `rpm:requires` peuvent représenter 50 à 150 entrées par
+paquet ; sur plusieurs centaines de paquets, le fichier CycloneDX peut
+atteindre plusieurs Mo. C'est normal. Les images OCI peuvent aussi contenir
+plusieurs centaines de paquets (images de base : ~100, images applicatives
+complexes : 300–800).

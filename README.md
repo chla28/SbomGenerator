@@ -1,6 +1,6 @@
 # sbom_generator
 
-Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets RPM, Python wheels, archives tar/zip, paquets Debian et fichiers requirements.txt.
+Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn, Maven), d'archives génériques, ou d'une **image de conteneur** (OCI).
 
 ---
 
@@ -10,6 +10,8 @@ Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paq
 1. un fichier texte listant une référence par ligne ;
 2. une archive/un paquet unique (traité directement, sans fichier liste) ;
 3. un **dossier**, scanné récursivement pour tous les types ci-dessous.
+
+`--input` est optionnel dès lors que `--image` (voir plus bas) est fourni ; les deux sources peuvent aussi être combinées.
 
 | Type | Exemples | Outil requis |
 |------|----------|--------------|
@@ -22,8 +24,22 @@ Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paq
 | Paquet Debian `.deb` | `/opt/pkgs/libssl3_3.0.1_amd64.deb` | `dpkg-deb` |
 | Archive Java `.jar` | `/opt/libs/my-lib-1.2.3.jar` | `unzip` |
 | Requirements Python `.txt` | `/opt/reqs/requirements.txt` | *(aucun)* |
+| Modules Go `go.sum` / `go.mod` | `/opt/myapp/go.sum` | *(aucun)* |
+| Paquets npm `package-lock.json` | `/opt/webapp/package-lock.json` (v1/v2/v3) | *(aucun)* |
+| Paquets yarn `yarn.lock` | `/opt/webapp/yarn.lock` (classique et Berry) | *(aucun)* |
+| Dépendances Maven `pom.xml` | `/opt/javaapp/pom.xml` (scope compile) | *(aucun)* |
 
 Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangés librement dans un même fichier ou dossier.
+
+**Image de conteneur (`--image` / `-I`)** — alternative ou complément à `--input` :
+
+| Forme | Exemple |
+|-------|---------|
+| Référence de registre | `nginx:latest`, `ubuntu@sha256:…` |
+| Archive tar exportée | `/path/image.tar`, `.tar.gz`, `.tgz` (ex. `docker save`) |
+| Répertoire OCI layout | `/path/oci_dir/` (contient `index.json`) |
+
+Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes), `trivy` (tous écosystèmes), ou `skopeo` (extraction manuelle : dpkg, RPM, APK, Maven JARs, PyPI, npm).
 
 **Traitement :**
 - RPM : 3 appels `rpm` en parallèle par paquet (`--queryformat`, `--requires`, `--provides`)
@@ -33,6 +49,8 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 - Paquet Debian : extraction du fichier `control` via `dpkg-deb -f`, parsing RFC 822
 - Archive `.jar` : coordonnées Maven lues via `pom.properties` embarqué, sinon `META-INF/MANIFEST.MF` (Bundle-SymbolicName…), sinon déduites du nom de fichier ; un jar « shaded »/uber-jar embarquant des dépendances relocalisées (chacune avec son propre `pom.properties`) produit un composant par dépendance en plus du jar lui-même
 - Requirements.txt : parsing pur Dart (PEP 503), expansion en `WheelPackage` avant la boucle principale
+- Go (`go.sum`/`go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`) : parsing pur Dart, expansion en `WheelPackage` avant la boucle principale (même mécanisme que requirements.txt, cardinalité 1 fichier → N paquets)
+- Image OCI (`--image`) : analyse via `syft`, `trivy` ou `skopeo` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
 - Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
 **Formats de sortie :**
@@ -46,6 +64,7 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 | `markdown` | Tableau Markdown | tableau `Paquet / Version / Architecture / Licence` |
 | `asciidoc` | Tableau AsciiDoc | idem Markdown, format AsciiDoc |
 | `html` | Rapport HTML | rapport autonome filtrable et triable, graphiques par écosystème et licence |
+| `csv` | Fichier CSV (RFC 4180) | une ligne par paquet : `name,version,architecture,license,type,purl,url,vendor` |
 
 ---
 
@@ -57,6 +76,11 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 - `rpm` (pour les paquets RPM)
 - `python3` (pour les wheels et archives tar/zip)
 - `dpkg-deb` (pour les paquets Debian `.deb`)
+- `unzip` (pour les archives `.jar`, et pour `--oci-tool skopeo`)
+- `syft`, `trivy` ou `skopeo` (uniquement pour `--image`, selon le backend choisi)
+- `grype`, `osv-scanner` ou `trivy` (uniquement pour la sous-commande `scan`)
+- `sbomqs` (uniquement pour `--min-quality-score`)
+- `cosign` (uniquement pour `--sign`)
 
 ### Compiler l'exécutable natif
 
@@ -70,15 +94,23 @@ dart compile exe bin/sbom_generator.dart -o sbom_generator
 
 ```
 sbom_generator --input <fichier> [options]
+sbom_generator --image <image-oci> [options]
+sbom_generator --input <fichier> --image <image-oci> [options]
 sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
+sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
+sbom_generator validate <sbom1> [<sbom2> ...] [--strict]
+sbom_generator scan --sbom <fichier> [options]
 
 Options :
-  -i, --input              Fichier d'entrée (requis)
+  -i, --input              Fichier d'entrée (requis si --image absent)
+  -I, --image              Image de conteneur à analyser : registre, archive
+                           tar (.tar/.tar.gz/.tgz) ou répertoire OCI layout
+      --oci-tool            Backend d'analyse OCI : syft (défaut) | trivy | skopeo
   -o, --output             Fichier de sortie (défaut : sbom.json)
                            Avec plusieurs formats, utilisé comme base de nom
   -f, --format             Format(s), virgule-séparés :
-                             cyclonedx | spdx | spdx3 | json | markdown | asciidoc | html
+                             cyclonedx | spdx | spdx3 | json | markdown | asciidoc | html | csv
                            Exemple : -f cyclonedx,spdx,html
   -n, --name               Nom du document SBOM / composant racine
   -d, --rpm-dir            Dossier racine où chercher les fichiers .rpm
@@ -89,6 +121,9 @@ Options :
                            (répétable, correspondance SPDX partielle) — code retour 2 si violation
       --min-quality-score  Score sbomqs minimum requis (ex. : 7.5) — code retour 2 si insuffisant
       --sign               Signer les fichiers SBOM avec cosign après génération
+      --cyclonedx-version  Version CycloneDX générée : 1.6 (défaut) ou 1.7
+      --tlp                Classification TLP du BOM (CycloneDX 1.7 uniquement)
+      --patent-map         Déclarations de brevets par paquet (CycloneDX 1.7 uniquement)
   -v, --verbose            Afficher les détails
       --version            Afficher la version
   -h, --help               Afficher l'aide
@@ -104,6 +139,17 @@ sbom_generator diff avant.cdx.json après.cdx.json --json -o diff.json
 # Fusionner plusieurs SBOMs en un seul (déduplication par PURL)
 sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json
 sbom_generator merge a.cdx.json b.cdx.json c.cdx.json -o merged.cdx.json -n "Système complet"
+
+# Convertir un SBOM existant vers un ou plusieurs formats, sans re-scanner
+sbom_generator convert -i sbom.cdx.json -f spdx,csv -o rapport
+
+# Valider la structure d'un ou plusieurs SBOM (0 = tous valides, 1 = au moins un invalide)
+sbom_generator validate sbom.cdx.json sbom.spdx.json
+sbom_generator validate --strict sbom.cdx.json
+
+# Rechercher les vulnérabilités connues d'un SBOM déjà généré (grype/osv/trivy)
+sbom_generator scan --sbom sbom.cdx.json
+sbom_generator scan --sbom sbom.cdx.json --scanner all --cve-after 2024-01-01
 ```
 
 ### Exemples
@@ -129,6 +175,18 @@ sbom_generator merge a.cdx.json b.cdx.json c.cdx.json -o merged.cdx.json -n "Sys
 
 # Générer CycloneDX + SPDX + HTML en une seule passe
 ./sbom_generator -i packages.txt -f cyclonedx,spdx,html -o sbom
+
+# Rapport CSV
+./sbom_generator -i packages.txt -f csv -o rapport.csv
+
+# Analyser une image de conteneur (registre distant, via syft par défaut)
+./sbom_generator -I nginx:latest -o nginx.cdx.json
+
+# Analyser une archive tar exportée (docker save), backend trivy
+./sbom_generator -I ./ubuntu.tar --oci-tool trivy -f spdx -o ubuntu.spdx.json
+
+# Combiner une image OCI et une liste de paquets supplémentaires
+./sbom_generator -I nginx:latest -i extra_pkgs.txt -o sbom.cdx.json
 
 # Résoudre les noms RPM depuis un dossier local (pas de rpm installé requis)
 ./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
@@ -259,10 +317,11 @@ mongosh-2.5.6-linux-x64               → nom=mongosh           ver=2.5.6    arc
 ```
 sbom_generator/
 ├── bin/
-│   └── sbom_generator.dart      # Point d'entrée CLI + sous-commandes diff/merge
+│   └── sbom_generator.dart      # Point d'entrée CLI + sous-commandes
+│                                #   diff/merge/convert/validate/scan
 ├── lib/
 │   ├── models.dart              # Package, RpmPackage, WheelPackage, DebPackage,
-│   │                            #   PackageDependency, generateUuidV4()
+│   │                            #   OciPackage, PackageDependency, generateUuidV4()
 │   ├── rpm_parser.dart          # Interrogation rpm (3 appels en Future.wait)
 │   ├── wheel_parser.dart        # Lecture des .whl (ZIP + RFC 822)
 │   ├── tar_parser.dart          # Lecture des .tar/.tar.gz/.tgz
@@ -270,12 +329,17 @@ sbom_generator/
 │   ├── deb_parser.dart          # Lecture des .deb (dpkg-deb -f)
 │   ├── jar_parser.dart          # Coordonnées Maven d'un .jar (unzip -p pom.properties)
 │   ├── requirements_parser.dart # Parsing requirements.txt Python (pur Dart)
+│   ├── go_parser.dart           # Parsing go.sum / go.mod (pur Dart)
+│   ├── npm_parser.dart          # Parsing package-lock.json v1/v2/v3 (pur Dart)
+│   ├── yarn_parser.dart         # Parsing yarn.lock classique et Berry (pur Dart)
+│   ├── maven_parser.dart        # Parsing pom.xml (pur Dart, extraction XML légère)
 │   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo)
 │   │                            #   skopeo : RPM, dpkg, APK, Maven JARs, PyPI, npm
 │   ├── archive_helpers.dart     # Helpers partagés tar/zip (parseFilename, identifyLicense)
 │   ├── license_normalizer.dart  # Normalisation SPDX centralisée (LicenseNormalizer)
 │   ├── sbom_diff.dart           # Comparaison de SBOMs (SbomDiffer)
 │   ├── sbom_merger.dart         # Fusion de SBOMs (SbomMerger)
+│   ├── sbom_reader.dart         # Relecture d'un SBOM existant (sous-commande convert)
 │   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
 │   ├── cyclonedx_generator.dart # Format CycloneDX 1.6/1.7 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
@@ -283,18 +347,17 @@ sbom_generator/
 │   ├── simple_json_generator.dart  # Format JSON personnalisé
 │   ├── markdown_generator.dart  # Tableau Markdown des licences
 │   ├── asciidoc_generator.dart  # Tableau AsciiDoc des licences
-│   └── html_generator.dart      # Rapport HTML interactif (filtrable, triable)
+│   ├── html_generator.dart      # Rapport HTML interactif (filtrable, triable)
+│   └── csv_generator.dart       # Export CSV (RFC 4180)
 ├── test/
-│   ├── unit/
-│   │   ├── license_normalizer_test.dart  # 23 tests
-│   │   ├── archive_helpers_test.dart     # 18 tests
-│   │   ├── rpm_parser_test.dart          # 9 tests (buildDependencies)
-│   │   └── requirements_parser_test.dart # 10 tests
-│   └── integration/
-│       ├── tar_integration_test.dart     # 8 tests (archives réelles)
-│       └── oci_skopeo_test.dart          # tests skopeo (RPM + java)
+│   ├── unit/                    # Tests sans sous-processus réel (parseurs, générateurs,
+│   │                            #   licences, politiques…) — voir doc/developer.adoc
+│   └── integration/             # Tests sur archives/outils réels (@TestOn('posix'))
 ├── example/
 │   └── 3PP/                     # Exemples d'archives tierces
+├── doc/
+│   ├── developer.adoc           # Documentation développeur détaillée
+│   └── usage.adoc               # Guide d'utilisation détaillé
 ├── pubspec.yaml
 └── README.md
 ```
@@ -309,5 +372,7 @@ sbom_generator/
 | Python (wheel / sdist / requirements.txt / OCI) | `pkg:pypi/<name>@<ver>` | `pkg:pypi/requests@2.28.2` |
 | Archive tar/zip générique | `pkg:generic/<name>@<ver>` | `pkg:generic/apache-tomcat@10.1.44` |
 | Paquet Debian | `pkg:deb/<name>@<ver>?arch=<arch>` | `pkg:deb/libssl3@3.0.1?arch=amd64` |
-| Java Maven (OCI via skopeo) | `pkg:maven/<groupId>/<artifactId>@<ver>` | `pkg:maven/org.yaml/snakeyaml@2.0` |
-| npm (OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
+| Java Maven (`.jar` autonome, `pom.xml`, ou OCI via skopeo) | `pkg:maven/<groupId>/<artifactId>@<ver>` | `pkg:maven/org.yaml/snakeyaml@2.0` |
+| Go (`go.sum` / `go.mod`) | `pkg:golang/<module>@<ver>` | `pkg:golang/github.com/gorilla/mux@1.8.1` |
+| npm / yarn (`package-lock.json`, `yarn.lock`, ou OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
+| Image de conteneur (`--image`) | PURL fourni par l'outil d'analyse (syft/trivy), ou reconstruit selon l'écosystème détecté | `pkg:apk/alpine/musl@1.2.4-r2` |
