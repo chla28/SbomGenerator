@@ -1717,7 +1717,7 @@ La boucle de résolution de dépendances est skippée si *tous* les formats
 demandés sont `markdown` ou `asciidoc` (les deux formats tabulaires ne
 nécessitent pas les relations de dépendances).
 
-=== Sous-commandes `diff`, `merge`, `convert` et `validate` _(nouveau)_
+=== Sous-commandes `diff`, `merge`, `convert`, `validate` et `scan` _(nouveau)_
 
 Routage avant le parsing principal :
 
@@ -1727,6 +1727,7 @@ if (arguments.first == 'diff')     { await _runDiff(arguments.sublist(1));     r
 if (arguments.first == 'merge')    { await _runMerge(arguments.sublist(1));    return; }
 if (arguments.first == 'convert')  { await _runConvert(arguments.sublist(1));  return; }
 if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); return; }
+if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     return; }
 ----
 
 *`_runDiff(args)`* : valide 2 arguments positionnels, charge les fichiers via
@@ -1795,6 +1796,93 @@ Champs vérifiés :
 |`@context`, `@graph`
 |au moins un node de type `software_Package` dans `@graph`
 |===
+
+=== Sous-commande `scan` — analyse de vulnérabilités _(nouveau)_
+
+`_runScan(args)` interroge un ou plusieurs scanners externes sur un SBOM déjà
+généré, avec filtrage temporel sur les CVE retournées.
+
+Options propres à cette sous-commande (son propre `ArgParser`, distinct des
+options de génération) :
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Défaut |Description
+
+|`--sbom <fichier>` / `-s`
+|_(obligatoire)_
+|Fichier SBOM à analyser (`.cdx.json`, `.spdx.json`…)
+
+|`--scanner <valeur>` / `-S`
+|`grype`
+|`grype`, `osv`, `trivy`, ou `all` pour les trois
+
+|`--cve-after <AAAA-MM-JJ>`
+|—
+|N'affiche que les CVE dont la date est postérieure
+
+|`--cve-before <AAAA-MM-JJ>`
+|—
+|N'affiche que les CVE dont la date est antérieure (bornée à 23:59:59 du jour)
+
+|`--cve-date-field <valeur>`
+|`published`
+|Champ de date utilisé pour le filtre : `published`, `modified`, ou `latest`
+(la plus récente des deux)
+
+|`--include-undated`
+|désactivé
+|Inclut les CVE sans date connue dans les résultats filtrés (exclues par
+défaut dès qu'un filtre `--cve-after`/`--cve-before` est actif)
+|===
+
+Architecture interne :
+
+[cols="1,3", options="header"]
+|===
+|Fonction |Rôle
+
+|`_runScan()`
+|Parse les arguments via `ArgParser`, orchestre les scanners demandés
+
+|`_runScanner()`
+|Dispatch vers `_runGrype()`, `_runOsv()`, `_runTrivy()`
+
+|`_runGrype()` / `_runOsv()` / `_runTrivy()`
+|Lance le scanner via `Process.run()`, parse le JSON propre à chaque outil,
+retourne une liste normalisée `{id, severity, package, published, modified}`
+
+|`_filterByDate()`
+|Applique `after` / `before` / `includeUndated` sur le champ de date choisi
+
+|`_printScanResults()`
+|Trie par sévérité décroissante (`Critical` → `Unknown`) et affiche un
+tableau texte par scanner interrogé, avec rappel du filtre appliqué
+
+|`_printScanUsage()`
+|Affiche l'aide de la sous-commande avec exemples
+|===
+
+[source,dart]
+----
+Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile) async {
+  final result = await Process.run('grype', [sbomFile, '--output', 'json']);
+  // exitCode > 1 → erreur ; sinon parse data['matches'][].{vulnerability, artifact}
+}
+----
+
+Chaque scanner a son propre format JSON (`matches[]` pour grype,
+`results[].packages[].vulnerabilities[]` pour osv-scanner,
+`Results[].Vulnerabilities[]` pour trivy) ; `_runGrype`/`_runOsv`/`_runTrivy`
+absorbent cette hétérogénéité et retournent la même structure normalisée.
+
+L'échec d'un scanner (binaire absent, JSON illisible) n'empêche pas les
+autres scanners demandés (`--scanner all`) de s'exécuter.
+
+Codes de retour : `0` si aucune vulnérabilité dans la plage demandée (tous
+scanners confondus), `1` si au moins une trouvée ou en cas d'erreur de scanner.
+
+Voir `doc/usage.adoc` pour des exemples d'utilisation complets.
 
 === Options CI/CD _(nouveau)_
 
@@ -2639,10 +2727,14 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (117 au total)
-dart test test/unit/                 # tests unitaires seuls (109)
-dart test test/integration/          # tests d'intégration (8, requiert python3)
+dart test                            # tous les tests (176 au total)
+dart test test/unit/                 # tests unitaires seuls (157)
+dart test test/integration/          # tests d'intégration (19, dont certains
+                                      # sautés automatiquement selon l'environnement)
 ----
+
+Comptage vérifié par exécution réelle (`dart test -r compact`), pas recopié
+d'une exécution antérieure.
 
 === Suites unitaires
 
@@ -2656,7 +2748,7 @@ dart test test/integration/          # tests d'intégration (8, requiert python3
 
 |`test/unit/archive_helpers_test.dart`
 |18
-|`parseArchiveFilename` (5 archives réelles + edge cases), `identifyArchiveLicense` (10 licences)
+|`parseArchiveFilename` (archives réelles + edge cases), `identifyArchiveLicense`
 
 |`test/unit/rpm_parser_test.dart`
 |9
@@ -2667,32 +2759,48 @@ dart test test/integration/          # tests d'intégration (8, requiert python3
 |parsing RFC, PEP 503, extras, marqueurs, directives
 
 |`test/unit/oci_parser_test.dart`
-|4
-|`OciParser.detectRefType` — `.tar`, `.tar.gz`, `.tgz`, référence registre
+|10
+|`OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`), normalisation
+des types syft/trivy, construction PURL par écosystème
 
 |`test/unit/go_parser_test.dart`
-|11
-|`parseGoSum` (6 : basic, /go.mod skip, version strip, dedup, multi-module, missing),
-`parseGoMod` (4 : bloc require, require inline, commentaire indirect, missing), erreur (1)
+|10
+|`parseGoSum`, `parseGoMod`, dédoublonnage, versions préfixées `v`, erreurs
 
 |`test/unit/npm_parser_test.dart`
-|14
-|v2/v3 `packages` field (5 : basic, scope, skip root, license list, missing),
-v1 `dependencies` field (2 : basic, nested), erreurs (2), PURLs (5)
+|9
+|lockfileVersion 1/2/3, licences liste/chaîne, PURLs, erreurs
 
 |`test/unit/yarn_parser_test.dart`
-|18
-|yarn v1 classique (5 : basic, scoped, multi-spec header, version, missing),
-yarn v2+ Berry (2 : basic, version), erreurs (2), nom et PURL (9)
+|10
+|yarn v1 classique, yarn v2+ Berry, scopes, PURLs, erreurs
 
 |`test/unit/maven_parser_test.dart`
 |10
-|extraction de base, nom groupId:artifactId, version, scope test/system, dependencyManagement,
-packageType, PURL, fichier inexistant, pom sans dependencies
+|extraction de base, nom `groupId:artifactId`, scope test/system,
+`dependencyManagement`, PURL, fichier inexistant
+
+|`test/unit/jar_parser_test.dart`
+|14
+|identité propre vs dépendances relocalisées (uber-jar), repli
+`MANIFEST.MF`, table `_knownGroupIdOverrides` (Spring)
+
+|`test/unit/cyclonedx_generator_test.dart`
+|16
+|spec 1.6 par défaut, activation 1.7, TLP, citations, brevets, erreurs de
+validation
+
+|`test/unit/policy_checker_test.dart`
+|10
+|correspondance de licences interdites (exacte et partielle)
+
+|`test/unit/sbom_reader_test.dart`
+|2
+|détection de format, relecture d'un document CycloneDX
 
 |`test/unit/csv_generator_test.dart`
-|7
-|headers, ligne par paquet, tri par nom, échappement virgule, guillemets, PURLs, fichier vide
+|6
+|en-têtes, tri par nom, échappement RFC 4180
 |===
 
 === Suite d'intégration
@@ -2703,22 +2811,41 @@ packageType, PURL, fichier inexistant, pom sans dependencies
 
 |`test/integration/tar_integration_test.dart`
 |8
-|TarParser sur 5 archives réelles, WheelParser sur 2 wheels, bomRefs uniques
+|`TarParser` sur archives réelles, `WheelParser` sur wheels, bomRefs uniques
+
+|`test/integration/oci_skopeo_test.dart`
+|8
+|Backend skopeo : détection du chemin de base RPM selon la version de
+distribution, extraction Java — nécessite `rpm` et `skopeo`, certains cas
+nécessitent une archive `keycloak_26.tar` non versionnée
+
+|`test/integration/policy_checker_sbomqs_test.dart`
+|2
+|`PolicyChecker.runSbomqs` sur un SBOM réel — nécessite `sbomqs`
+
+|`test/integration/input_directory_test.dart`
+|1
+|`--input <dossier>` : scan récursif, filtrage par type de fichier reconnu
 |===
 
 Les tests d'intégration sont marqués `@TestOn('posix')` et se sautent
-automatiquement si `python3` est absent.
+automatiquement lorsque l'outil ou le fichier requis est absent de
+l'environnement (ex. `rpm` non installé, `keycloak_26.tar` non fourni) —
+sans faire échouer la suite.
 
 == Checklist avant modification
 
 * [ ] `dart analyze lib/ bin/ test/` passe sans erreur ni avertissement (`No issues found!`)
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
-* [ ] `dart test` — tous les 117 tests verts (109 unitaires + 8 intégration)
+* [ ] `dart test` — tous les 176 tests verts (157 unitaires + 19 intégration ;
+  certains tests d'intégration se sautent proprement selon l'environnement)
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
-* [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + requirements.txt + `--image`
+* [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + .jar + requirements.txt + `--image`
 * [ ] Test avec manifestes Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
 * [ ] Test sous-commande `convert` : CycloneDX → SPDX, SPDX → CycloneDX, tous → CSV
 * [ ] Test sous-commande `validate` : fichier valide, invalide, strict mode
+* [ ] Test sous-commande `scan` : chaque scanner (`grype`, `osv`, `trivy`, `all`),
+  filtres de date, `--include-undated`
 * [ ] Si modification de `--rpm-dir` : vérifier résolution exacte (NEVRA), résolution
   par nom, avertissement multi-match, fallback `rpm -q` si absent
 * [ ] Le SBOM CycloneDX passe `sbom_schema_valid: 10.0` dans sbomqs
@@ -2779,6 +2906,21 @@ Outils système requis à l'exécution :
 
 |`skopeo` + `tar`
 |images OCI avec `--oci-tool skopeo`
+
+|`unzip`
+|archives `.jar` (via `--input`), et backend `skopeo` (`--oci-tool skopeo`)
+
+|`grype`
+|sous-commande `scan --scanner grype` (défaut)
+
+|`osv-scanner`
+|sous-commande `scan --scanner osv`
+
+|`sbomqs`
+|`--min-quality-score`
+
+|`cosign`
+|`--sign`
 |===
 
 == Compilation et déploiement

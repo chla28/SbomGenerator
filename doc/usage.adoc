@@ -57,6 +57,26 @@ Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0
 |—
 |`--image` avec `--oci-tool skopeo`
 |Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python packages et npm
+
+|`grype`
+|—
+|sous-commande `scan --scanner grype` (défaut)
+|Recherche de vulnérabilités connues (CVE) sur un SBOM déjà généré
+
+|`osv-scanner`
+|—
+|sous-commande `scan --scanner osv`
+|Recherche de vulnérabilités connues via la base ouverte OSV
+
+|`sbomqs`
+|—
+|`--min-quality-score`
+|Score de qualité du SBOM généré (0–10)
+
+|`cosign`
+|—
+|`--sign`
+|Signature cryptographique des fichiers SBOM générés
 |===
 
 Vérification :
@@ -67,10 +87,14 @@ dart --version
 rpm --version
 python3 --version
 dpkg-deb --version
-syft version      # si --oci-tool syft
-trivy --version   # si --oci-tool trivy
-skopeo --version  # si --oci-tool skopeo
 unzip --version   # si --input contient un .jar, ou --oci-tool skopeo
+syft version      # si --oci-tool syft
+trivy --version   # si --oci-tool trivy, ou scan --scanner trivy
+skopeo --version  # si --oci-tool skopeo
+grype version         # si scan --scanner grype (défaut)
+osv-scanner --version # si scan --scanner osv
+sbomqs version         # si --min-quality-score
+cosign version         # si --sign
 ----
 
 == Installation
@@ -104,6 +128,7 @@ sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator validate <sbom1> [<sbom2> ...]
+sbom_generator scan --sbom <fichier> [options]
 ....
 
 === Options
@@ -663,12 +688,71 @@ Codes de retour : `0` = tous valides, `1` = au moins un fichier invalide ou intr
   -o merged.cdx.json -n "Système complet"
 ----
 
+=== Analyse de vulnérabilités (`scan`)
+
+Interroge un ou plusieurs scanners externes sur un SBOM déjà généré, avec un
+filtrage optionnel par date de publication ou de modification des CVE.
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Défaut |Description
+
+|`--sbom <fichier>` / `-s`
+|_(obligatoire)_
+|Fichier SBOM à analyser (`.cdx.json`, `.spdx.json`…)
+
+|`--scanner <valeur>` / `-S`
+|`grype`
+|`grype`, `osv`, `trivy`, ou `all` pour les trois
+
+|`--cve-after <AAAA-MM-JJ>`
+|—
+|N'affiche que les CVE publiées/modifiées après cette date
+
+|`--cve-before <AAAA-MM-JJ>`
+|—
+|N'affiche que les CVE publiées/modifiées avant cette date
+
+|`--cve-date-field <valeur>`
+|`published`
+|Champ de date utilisé pour le filtre : `published`, `modified`, ou `latest`
+
+|`--include-undated`
+|désactivé
+|Inclut les CVE sans date connue dans les résultats filtrés
+|===
+
+[source,bash]
+----
+# Toutes les CVE grype (scanner par défaut)
+./sbom_generator scan --sbom sbom.cdx.json
+
+# Toutes les CVE grype publiées depuis 2024
+./sbom_generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# CVE OSV-Scanner entre deux dates
+./sbom_generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# Les trois scanners, champ "dernière modification", CVE sans date incluses
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+----
+
+Les résultats sont triés par sévérité décroissante (`Critical` → `Unknown`)
+et affichés en tableau texte, un par scanner interrogé. L'échec d'un
+scanner (binaire absent, sortie JSON illisible) n'empêche pas les autres
+scanners demandés (`--scanner all`) de s'exécuter.
+
+Codes de retour : `0` = aucune CVE dans la plage demandée (tous scanners
+confondus), `1` = au moins une CVE trouvée, ou erreur de scanner.
+
 === Pipeline complet : génération + validation qualité
 
 [source,bash]
 ----
 # Génération
-./sbom_generator -i rpm97.lst -f cyclonedx -n "RHEL9 Base System" -o sbom.cdx.json
+./sbom_generator -i packages.txt -f cyclonedx -n "RHEL9 Base System" -o sbom.cdx.json
 
 # Validation de qualité avec sbomqs
 ./sbomqs score sbom.cdx.json
@@ -845,7 +929,7 @@ personnalisée.
 
 == Scores de qualité sbomqs
 
-Résultats obtenus sur 772 paquets RHEL 9 (`rpm97.lst`) avec le format CycloneDX :
+Exemple de sortie (`sbomqs score --basic sbom.cdx.json`) sur un SBOM CycloneDX :
 
 ....
 SBOM Quality Score: 7.8/10.0   Grade: C
@@ -895,7 +979,10 @@ sbom_generator/
 │   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo)
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée
-│   ├── sbom_reader.dart           # Lecteur SBOM (CycloneDX/SPDX) → List<Package>
+│   ├── sbom_diff.dart             # Comparaison de SBOMs (sous-commande diff)
+│   ├── sbom_merger.dart           # Fusion de SBOMs (sous-commande merge)
+│   ├── sbom_reader.dart           # Lecteur SBOM (CycloneDX/SPDX) → List<Package> (convert)
+│   ├── policy_checker.dart        # Licences interdites + score qualité CI/CD
 │   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6/1.7
 │   ├── spdx_generator.dart        # Générateur SPDX 2.3
 │   ├── spdx3_generator.dart       # Générateur SPDX 3.0 JSON-LD
@@ -908,13 +995,16 @@ sbom_generator/
 │   ├── developer.adoc             # Documentation développeur
 │   └── usage.adoc                 # Ce document
 ├── test/
-│   ├── unit/                      # Tests unitaires (109 tests)
-│   └── integration/               # Tests d'intégration (8 tests)
-├── sbom_generator                 # Binaire natif compilé
-├── pubspec.yaml                   # Dépendances Dart (args ^2.4.2)
-├── rpm97.lst                      # Exemple : liste RHEL 9
-└── sbomqs                         # Outil de mesure de qualité
+│   ├── unit/                      # Tests unitaires (157 tests)
+│   └── integration/                # Tests d'intégration (19 tests)
+├── scripts/                       # Build, installation, désinstallation
+├── example/3PP/                   # Exemples d'archives tierces
+└── pubspec.yaml                   # Dépendances Dart (args ^2.4.2)
 ....
+
+`sbomqs`, `grype`, `osv-scanner`, `cosign`, `syft`, `trivy` et `skopeo` sont
+des outils externes invoqués en sous-processus : ils ne font pas partie de
+ce dépôt (voir <<Prérequis>>).
 
 == Dépannage
 
