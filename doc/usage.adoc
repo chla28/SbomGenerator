@@ -674,19 +674,33 @@ Codes de retour : `0` = tous valides, `1` = au moins un fichier invalide ou intr
 
 # Diff en JSON (pour automatisation)
 ./sbom_generator diff avant.cdx.json après.cdx.json --json -o diff.json
+
+# Les deux fichiers comparés peuvent être dans des formats différents
+./sbom_generator diff avant.spdx.json apres.cdx.json
 ----
+
+Formats acceptés (détectés indépendamment pour chaque fichier) : CycloneDX,
+SPDX 2.3, SPDX 3.0 (JSON-LD).
 
 === Fusion de SBOMs (`merge`)
 
 [source,bash]
 ----
-# Fusionner deux SBOMs (déduplication par PURL)
+# Fusionner deux SBOMs CycloneDX (déduplication par PURL)
 ./sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json
 
 # Fusionner plusieurs SBOMs avec nom de document
 ./sbom_generator merge a.cdx.json b.cdx.json c.cdx.json \
   -o merged.cdx.json -n "Système complet"
+
+# Fusionner des SBOMs SPDX 2.3 (déduplication par PURL puis SPDXID)
+./sbom_generator merge base.spdx.json extra.spdx.json -o merged.spdx.json
 ----
+
+Tous les fichiers source doivent être dans le même format (celui du premier
+fichier fourni) : CycloneDX ou SPDX 2.3. Le format de sortie suit celui du
+premier fichier. Le format SPDX 3.0 (JSON-LD) n'est pas pris en charge en
+entrée pour `merge`.
 
 === Analyse de vulnérabilités (`scan`)
 
@@ -720,6 +734,14 @@ filtrage optionnel par date de publication ou de modification des CVE.
 |`--include-undated`
 |désactivé
 |Inclut les CVE sans date connue dans les résultats filtrés
+
+|`--format <valeur>` / `-f`
+|`text`
+|`text` (console colorée) ou `sarif` (rapport SARIF 2.1.0)
+
+|`--output <fichier>` / `-o`
+|—
+|Fichier de sortie pour `--format sarif` (sinon affiché sur stdout)
 |===
 
 [source,bash]
@@ -737,10 +759,16 @@ filtrage optionnel par date de publication ou de modification des CVE.
 # Les trois scanners, champ "dernière modification", CVE sans date incluses
 ./sbom_generator scan --sbom sbom.cdx.json --scanner all \
   --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Export SARIF (intégration GitHub Code Scanning) vers un fichier
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format sarif --output resultats.sarif
 ----
 
-Les résultats sont triés par sévérité décroissante (`Critical` → `Unknown`)
-et affichés en tableau texte, un par scanner interrogé. L'échec d'un
+Les résultats `--format text` sont triés par sévérité décroissante
+(`Critical` → `Unknown`) et affichés en tableau texte, un par scanner
+interrogé. En `--format sarif`, un `run` SARIF est produit par scanner
+interrogé, avec une règle par identifiant de vulnérabilité. L'échec d'un
 scanner (binaire absent, sortie JSON illisible) n'empêche pas les autres
 scanners demandés (`--scanner all`) de s'exécuter.
 
@@ -961,6 +989,7 @@ CycloneDX dans cette version de sbomqs (toujours 0, indépendamment du contenu).
 
 ....
 sbom_generator/
+├── .github/workflows/ci.yml       # CI : analyse + tests CLI et GUI
 ├── bin/
 │   └── sbom_generator.dart        # Point d'entrée CLI (sous-commandes : diff, merge, scan, convert, validate)
 ├── lib/
@@ -995,7 +1024,7 @@ sbom_generator/
 │   ├── developer.adoc             # Documentation développeur
 │   └── usage.adoc                 # Ce document
 ├── test/
-│   ├── unit/                      # Tests unitaires (157 tests)
+│   ├── unit/                      # Tests unitaires (204 tests)
 │   └── integration/                # Tests d'intégration (19 tests)
 ├── scripts/                       # Build, installation, désinstallation
 ├── example/3PP/                   # Exemples d'archives tierces

@@ -881,7 +881,12 @@ if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     r
   `printDiff()` (défaut, ANSI, `--no-color` pour désactiver) ou `toJson()`
   (si `--json` ou `--output`). Code retour : `0` sans changement, `1` sinon.
 - **`_runMerge(args)`** : valide N ≥ 2 arguments positionnels + `-o
-  <sortie>` (obligatoire), `-n <nom>` optionnel.
+  <sortie>` (obligatoire), `-n <nom>` optionnel. `SbomMerger.merge()` détecte
+  le format du premier fichier (`spdxVersion` présent → SPDX 2.3, sinon
+  CycloneDX) et fusionne tous les fichiers suivants selon cette même
+  structure ; le format de sortie suit celui du premier fichier. Un fichier
+  dans un format différent n'est pas rejeté explicitement, il produit
+  simplement une fusion incomplète (pas de validation croisée des formats).
 - **`_runConvert(args)`** : `-i <source>` (obligatoire), `-f <formats>`
   (virgule-séparés, défaut `cyclonedx`), `-o <sortie>`, `-n <nom>`,
   `--cyclonedx-version`. Charge le JSON source via `SbomReader.loadJson()`,
@@ -907,7 +912,9 @@ Options : `--sbom <fichier>` (obligatoire), `--scanner <grype|osv|trivy|all>`
 (défaut `grype`), `--cve-after`/`--cve-before <AAAA-MM-JJ>`,
 `--cve-date-field <published|modified|latest>` (défaut `published`),
 `--include-undated` (inclut les CVE sans date, exclues par défaut dès qu'un
-filtre de date est actif).
+filtre de date est actif), `--format <text|sarif>` (défaut `text`),
+`--output <fichier>` (fichier de sortie pour `--format sarif` ; sans cette
+option, le SARIF est affiché sur stdout).
 
 Architecture interne :
 
@@ -915,9 +922,10 @@ Architecture interne :
 |---|---|
 | `_runScan()` | Parse les arguments, orchestre les scanners demandés |
 | `_runScanner()` | Dispatch vers `_runGrype()` / `_runOsv()` / `_runTrivy()` |
-| `_runGrype()` / `_runOsv()` / `_runTrivy()` | Lance le scanner via `Process.run()`, parse son JSON propre, retourne une liste normalisée `{id, severity, package, published, modified}` |
+| `_runGrype()` / `_runOsv()` / `_runTrivy()` | Lance le scanner via `Process.run()` (capture `ProcessException` si le binaire est introuvable → message explicite, pas de crash), parse son JSON propre, retourne une liste normalisée `{id, severity, package, published, modified}` |
 | `_filterByDate()` | Applique `after`/`before`/`includeUndated` sur le champ de date choisi |
-| `_printScanResults()` | Trie par sévérité décroissante (Critical → Unknown) et affiche un tableau texte par scanner |
+| `_printScanResults()` | Trie par sévérité décroissante (Critical → Unknown) et affiche un tableau texte par scanner (`--format text`) |
+| `_buildSarifReport()` | Construit un rapport SARIF 2.1.0 (un `run` par scanner interrogé, une `rule` par identifiant de vulnérabilité, `level` dérivé de la sévérité via `_sarifLevel()`) — `--format sarif` |
 
 Code retour : `0` si aucune vulnérabilité dans la plage demandée (tous
 scanners confondus), `1` si au moins une trouvée ou en cas d'erreur de
@@ -1277,9 +1285,13 @@ class MonFormatGenerator {
    comportement conforme (→ `NOASSERTION` en SPDX), non une erreur.
 10. **Ordre préservé par `Future.wait(List.generate(...))`** — le résultat
     à l'index `i` correspond à l'entrée `i`, malgré le traitement concurrent.
-11. **`sbom_diff` ne comprend que la structure CycloneDX** — `_indexComponents`
-    lit `sbom['components']`, une clé propre à CycloneDX ; comparer des
-    fichiers SPDX ne produit pas d'erreur mais aucun résultat exploitable.
+11. **`sbom_diff` et `sbom_merger` comprennent CycloneDX et SPDX 2.3** (`diff`
+    comprend en plus SPDX 3.0 JSON-LD) — `_indexComponents`/`merge()`
+    détectent le format via `spdxVersion`/`@graph`, sinon supposent
+    CycloneDX. Pour `merge`, le format de sortie suit le premier fichier
+    fourni ; mélanger des formats dans les fichiers source n'est pas rejeté
+    explicitement et produit une fusion incomplète (pas de validation
+    croisée).
 12. **Écart syft/skopeo sur les images OCI** — syft lit aussi `MANIFEST.MF`
     avec des heuristiques de groupId non standard, ce qui lui fait trouver
     quelques paquets Java de plus que skopeo sur la même image. Documenté,
@@ -1368,8 +1380,8 @@ liste, le gain est ~4× par rapport à une boucle séquentielle.
 - **Pas de vérification préalable d'existence des fichiers** : un chemin
   invalide fait échouer le subprocess correspondant, le paquet est compté
   comme échec.
-- **`sbom_diff`/`sbom_merger` limités à la structure CycloneDX** en entrée
-  (voir Pièges §11).
+- **`sbom_diff`/`sbom_merger` sans validation croisée de format** entre
+  fichiers source (voir Pièges §11).
 - **Écart syft/skopeo** sur les paquets Java d'une image OCI (voir Pièges §12).
 
 ---
@@ -1382,10 +1394,13 @@ dart test test/unit/                 # tests unitaires seuls
 dart test test/integration/          # tests d'intégration seuls
 ```
 
-Au moment de la rédaction : **176 tests** au total (157 unitaires + 19
+Au moment de la rédaction : **223 tests** au total (204 unitaires + 19
 d'intégration, dont 6 sautées automatiquement dans un environnement sans
 `rpm` installé ou sans les archives OCI de test — `keycloak_26.tar` n'est
 pas versionné). Comptage vérifié via `dart test -r compact`.
+
+Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
+--fatal-infos` puis `dart test`) sur chaque push/pull request vers `main`.
 
 ### Suites unitaires (`test/unit/`)
 
@@ -1403,8 +1418,12 @@ pas versionné). Comptage vérifié via `dart test -r compact`.
 | `oci_parser_test.dart` | `OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`) |
 | `csv_generator_test.dart` | en-têtes, tri, échappement RFC 4180 |
 | `cyclonedx_generator_test.dart` | spec 1.6/1.7, TLP, citations, brevets |
+| `spdx_generator_test.dart` | enveloppe SPDX-2.3, paquets, licences, relations DESCRIBES/DEPENDS_ON |
+| `spdx3_generator_test.dart` | enveloppe JSON-LD, paquets, Organization partagée, relations describes/dependsOn |
 | `policy_checker_test.dart` | correspondance de licences interdites |
 | `sbom_reader_test.dart` | détection de format, relecture CycloneDX |
+| `sbom_diff_test.dart` | clé purl/name:type, CycloneDX/SPDX 2.3/SPDX 3.0, comparaison inter-format |
+| `sbom_merger_test.dart` | dédup CycloneDX (purl/bom-ref) et SPDX 2.3 (purl/SPDXID), fusion des relations |
 
 ### Suite d'intégration (`test/integration/`)
 

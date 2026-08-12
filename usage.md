@@ -392,9 +392,10 @@ echo "/opt/javaapp/pom.xml" > sources.txt
 ./sbom_generator diff avant.cdx.json après.cdx.json --json -o diff.json
 ```
 
-Fonctionne sur la structure CycloneDX (`components[]`) ; comparer des
-fichiers SPDX ne produit pas d'erreur mais aucune comparaison exploitable.
-Codes de retour : `0` = aucun changement, `1` = au moins un changement détecté.
+Fonctionne avec CycloneDX, SPDX 2.3 et SPDX 3.0 (JSON-LD) ; les deux fichiers
+comparés peuvent être dans des formats différents (chacun est lu selon sa
+propre structure). Codes de retour : `0` = aucun changement, `1` = au moins
+un changement détecté.
 
 ### Fusion de SBOM (`merge`)
 
@@ -407,7 +408,9 @@ Codes de retour : `0` = aucun changement, `1` = au moins un changement détecté
   -o merged.cdx.json -n "Système complet"
 ```
 
-Seul le format CycloneDX est supporté en entrée et en sortie pour `merge`.
+Formats supportés en entrée : CycloneDX ou SPDX 2.3 (tous les fichiers dans
+le même format). Le format de sortie suit celui du premier fichier fourni.
+Le format SPDX 3.0 (JSON-LD) n'est pas pris en charge en entrée pour `merge`.
 
 ### Conversion de format (`convert`)
 
@@ -463,13 +466,21 @@ par date de publication/modification :
 # Les trois scanners, champ "dernière modification", CVE sans date incluses
 ./sbom_generator scan --sbom sbom.cdx.json --scanner all \
   --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Export SARIF (intégration GitHub Code Scanning) vers un fichier
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format sarif --output resultats.sarif
 ```
 
 Scanners disponibles (`--scanner`) : `grype` (défaut), `osv`, `trivy`, ou
 `all` pour les trois. Champ de date (`--cve-date-field`) : `published`
-(défaut), `modified`, ou `latest` (la plus récente des deux). Résultats
-triés par sévérité décroissante. Codes de retour : `0` = aucune vulnérabilité
-dans la plage demandée, `1` = au moins une trouvée (ou erreur de scanner).
+(défaut), `modified`, ou `latest` (la plus récente des deux). Format de
+sortie (`--format`) : `text` (défaut, coloré console) ou `sarif` (SARIF
+2.1.0, écrit dans `--output <fichier>` ou affiché sur stdout si omis).
+Résultats `text` triés par sévérité décroissante. L'absence d'un scanner
+demandé est signalée sans faire échouer les autres. Codes de retour : `0` =
+aucune vulnérabilité dans la plage demandée, `1` = au moins une trouvée (ou
+erreur de scanner).
 
 ---
 

@@ -76,13 +76,18 @@ flutter run -d linux
 # Analyser le code (équivalent dart analyze)
 flutter analyze
 
-# Exécuter les tests
-flutter test
+# Exécuter les tests (-j 1 : plus déterministe que le parallélisme par
+# défaut sur des machines aux ressources limitées, voir Setup développement)
+flutter test -j 1
 ----
 
 En mode debug, Flutter affiche des assertions dans la console (ex. ListTile dans
 ColoredBox). Ces messages sont des _warnings_ inoffensifs, pas des crashes
 (voir <<sec-piege-listile>>).
+
+Exécuté automatiquement par `../.github/workflows/ci.yml` (job GUI :
+`flutter analyze` puis `flutter test -j 1`) sur chaque push/pull request
+vers `main`.
 
 === Compiler un binaire autonome
 
@@ -116,7 +121,7 @@ gui/
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 11 onglets
+│       ├── results_panel.dart        # Panneau droit : 12 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
@@ -124,12 +129,17 @@ gui/
 │       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
 │       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
+│       ├── sbom_merge_panel.dart     # Onglet Fusion SBOM — fusionne plusieurs SBOM
 │       └── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
 ├── doc/
 │   ├── developer.adoc               # Ce document
 │   └── user.adoc                    # Guide utilisateur
 ├── test/
-│   └── widget_test.dart
+│   ├── widget_test.dart
+│   ├── config_panel_input_test.dart
+│   ├── dashboard_panel_test.dart
+│   ├── sbom_merge_panel_test.dart
+│   └── sbom_viewer_panel_test.dart
 └── pubspec.yaml
 ----
 
@@ -875,6 +885,8 @@ Modèles privés :
 * `_SbomInfo` — métadonnées + liste de composants, avec méthode `parse(String json)`:
   ** `_parseCycloneDX()` — lit `components[]`, `licenses[0].expression`
   ** `_parseSpdx()` — lit `packages[]`, `externalRefs[purl]`
+  ** `_parseSpdx3()` — détecte `@graph`, lit les éléments `type: 'software:Package'`,
+     PURL via `externalIdentifier[externalIdentifierType=purl]`
 
 Patron "flat list virtuelle" (performance avec 800+ composants) :
 
@@ -907,16 +919,21 @@ intégré sur `Iterable`), *pas* `firstWhereOrNull` de `package:collection`.
 
 `SbomDiffPanel` est un `StatefulWidget` avec `AutomaticKeepAliveClientMixin`.
 
-Les modèles de parsing sont dupliqués depuis `sbom_tree_panel.dart` (privés `_`).
-Cette duplication est intentionnelle : les deux panels peuvent diverger dans
-leurs besoins de parsing, et évite une dépendance publique.
+Les modèles de parsing sont dupliqués depuis `sbom_tree_panel.dart` (privés `_`),
+y compris `_spdx3()` pour le SPDX 3.0 JSON-LD. Cette duplication est
+intentionnelle : les deux panels peuvent diverger dans leurs besoins de
+parsing, et évite une dépendance publique.
 
 Algorithme de comparaison (`_computeDiff`) :
 
 [source,dart]
 ----
 List<_DiffEntry> _computeDiff(_SbomInfo a, _SbomInfo b) {
-  // clé = name.toLowerCase()
+  // clé = _diffKey(c) : purl sans version (jusqu'au dernier '@') si présent,
+  //   sinon "name.toLowerCase():type.toLowerCase()" — alignée sur
+  //   SbomDiffer._componentKey() côté CLI (lib/sbom_diff.dart) pour que les
+  //   deux comparaisons produisent le même résultat sur un même couple de
+  //   fichiers.
   // construit mapA / mapB
   // union des clés → pour chaque clé :
   //   absente de A → added
@@ -926,6 +943,14 @@ List<_DiffEntry> _computeDiff(_SbomInfo a, _SbomInfo b) {
   // trie : added/removed/changed avant unchanged, puis par nom
 }
 ----
+
+NOTE: Avant cette clé purl-first, `_computeDiff` indexait par
+`name.toLowerCase()` seul, ce qui produisait un résultat différent de la
+sous-commande `diff` du CLI (purl-first) sur un renommage de paquet avec
+purl identique (faux Ajouté+Supprimé au lieu d'un seul Modifié). Corrigé.
+La logique de clé elle-même (`_componentKey`) est couverte côté CLI par
+`test/unit/sbom_diff_test.dart` ; aucun test widget dédié côté GUI (voir
+<<sec-file-io-tests>>).
 
 Statuts :
 
@@ -947,6 +972,42 @@ Sous-widgets :
   pour les composants modifiés : version et licence affichés avec
   `TextDecoration.lineThrough` (ancienne valeur) + texte vert (nouvelle valeur)
 
+[[sec-merge-panel]]
+==== `widgets/sbom_merge_panel.dart` — Onglet Fusion SBOM
+
+`SbomMergePanel` est un `StatefulWidget` avec `AutomaticKeepAliveClientMixin`.
+Contrairement à `SbomDiffPanel`/`SbomTreePanel`/`SbomViewerPanel`, ce panel
+ne parse pas lui-même le contenu des SBOM : il se contente de collecter une
+liste de chemins de fichiers et de déléguer la fusion au binaire CLI via
+`SbomRunner` (le même service que la génération, réutilisé tel quel).
+
+État de `_SbomMergePanelState` :
+
+* `List<String> _inputFiles` — chemins des fichiers à fusionner (ajout via
+  `FilePicker.pickFiles(allowMultiple: true)` ou via le menu *Fichiers
+  générés* alimenté par `widget.outputFiles`)
+* `_outputCtrl`, `_nameCtrl` — contrôleurs de texte pour `-o`/`-n`
+* `_running`, `_exitCode`, `_resultPath` — état d'exécution
+* `_logLines` — lignes de sortie de `SbomRunner` (`SbomLogEvent`)
+
+`_runMerge()` construit les arguments `['merge', ..._inputFiles, '-o', outputPath, if (nom) '-n', nom]`
+et les passe à `SbomRunner.run(args: args)` ; contrairement à la génération,
+le retour de `SbomOutputFileEvent` n'est pas exploité (le nom du fichier de
+sortie est déjà connu côté formulaire), seuls `SbomLogEvent`/`SbomDoneEvent`
+sont consommés.
+
+Le bouton *Fusionner* est actif uniquement si `_inputFiles.length >= 2` et
+`_outputCtrl.text` non vide (`canMerge` dans `build()`).
+
+[NOTE]
+====
+Le libellé de statut (compteur de fichiers sélectionnés) est enveloppé dans
+un `Expanded(child: Text(..., overflow: TextOverflow.ellipsis))` — sans cet
+`Expanded`, la barre d'outils déborde (`RenderFlex overflowed`) dès que la
+largeur disponible descend sous ~1250 px, ce qui se produit dès la taille
+par défaut d'un test Flutter (800×600). Voir <<sec-file-io-tests>>.
+====
+
 ==== `widgets/sbom_viewer_panel.dart` — Onglet Visionneuse SBOM
 
 `SbomViewerPanel` est un `StatefulWidget` const permettant d'ouvrir et d'explorer
@@ -961,7 +1022,9 @@ class _Component {
 
   factory _Component.fromSbom(Map<String, dynamic> raw, String format) {
     // CycloneDX : champs name, version, type, licenses[0].license.id, description, purl
-    // SPDX     : champs name, versionInfo, licenseConcluded, summary, externalRefs[purl]
+    // SPDX 2.x : champs name, versionInfo, licenseConcluded, summary, externalRefs[purl]
+    // SPDX 3.0 : @graph[type=software:Package], name, software:packageVersion,
+    //   concludedLicense/declaredLicense, summary, externalIdentifier[purl]
   }
 }
 ----
@@ -976,7 +1039,7 @@ class _Component {
 
 Méthodes clés :
 
-* `_loadFile()` — `FilePicker.platform.pickFiles()` → JSON parse → `_Component.fromSbom()`
+* `_loadFile()` — `FilePicker.pickFiles()` → JSON parse → `_Component.fromSbom()`
 * `_applyFilter()` — filtre `_all` sur `_search` (nom/version/licence/purl) et `_typeFilter`
 * `_sort(col)` — tri `_filtered` in-place par colonne
 
@@ -994,7 +1057,7 @@ Sous-widgets privés :
 
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **11 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **12 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -1037,10 +1100,14 @@ Sous-widgets privés :
 |`SbomDiffPanel` — diff entre deux fichiers SBOM
 
 |9
+|Fusion
+|`SbomMergePanel` — fusionne plusieurs SBOM via `sbom-generator merge`
+
+|10
 |Visionneuse
 |`SbomViewerPanel` — exploration interactive d'un fichier SBOM externe
 
-|10
+|11
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===
@@ -1341,7 +1408,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 10, vsync: this);  // ResultsPanel : 10 onglets
+    _tabs = TabController(length: 12, vsync: this);  // ResultsPanel : 12 onglets
   }
 
   @override
@@ -1415,18 +1482,20 @@ Stream<GrypeEvent> run({
 
 === Ajouter un onglet dans ResultsPanel
 
-Le `TabController` est actuellement à `length: 10` (Progression, Résultats,
+Le `TabController` est actuellement à `length: 12` (Progression, Résultats,
 Tableau de bord, Grype, OSV-Scanner, Trivy, Qualité SBOM, Arborescence,
-Comparaison, Aperçu). Pour en ajouter un onzième :
+Comparaison, Fusion, Visionneuse, Aperçu). Exemple réel : l'ajout de l'onglet
+*Fusion* (`SbomMergePanel`, 10^e^ → 12^e^ onglet) a suivi exactement ces
+étapes.
 
 . Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
 +
 [source,dart]
 ----
-_tabs = TabController(length: 11, vsync: this);  // était 10
+_tabs = TabController(length: 12, vsync: this);  // était 11
 ----
 
-. Ajouter un `Tab(...)` dans le `TabBar` :
+. Ajouter un `Tab(...)` dans le `TabBar`, à la position choisie :
 +
 [source,dart]
 ----
@@ -1442,7 +1511,8 @@ Tab(
 ),
 ----
 
-. Ajouter le widget correspondant dans le `TabBarView` :
+. Ajouter le widget correspondant dans le `TabBarView`, **au même index** que
+  le `Tab` (l'ordre des deux listes doit rester synchronisé) :
 +
 [source,dart]
 ----
@@ -1451,6 +1521,10 @@ MonNouveauWidget(outputFiles: widget.outputFiles),
 
 . Si le nouvel onglet reçoit des données de `HomeScreen`, ajouter le
   paramètre correspondant à `ResultsPanel` et le propager depuis `home_screen.dart`.
+
+. Si le nouvel onglet appelle le CLI, réutiliser `SbomRunner` (`services/sbom_runner.dart`)
+  plutôt que d'écrire un nouveau service `Process.start` — c'est ce que fait
+  `SbomMergePanel` pour `sbom-generator merge` (voir <<sec-merge-panel>>).
 
 === Ajouter un filtre au modèle `CveDateFilter`
 
@@ -1689,6 +1763,61 @@ Pour la persistance, `ConfigPanel` appelle le callback `widget.onChanged?.call()
 après chaque modification. `HomeScreen` y connecte `_saveSettings()` qui
 appelle `SettingsService.saveConfig(_config)` de façon asynchrone et non bloquante.
 
+=== `setState()` synchrone dans `initState()` (`SbomTreePanel`)
+
+`SbomTreePanel.initState()` appelait directement `_autoLoad(widget.outputFiles)`,
+qui invoque `_loadFile()` — une fonction `async` dont la toute première
+instruction (avant le premier `await`) est un `setState()`. En Dart, le code
+d'une fonction `async` avant le premier `await` s'exécute *de façon
+synchrone* dans la pile d'appel de l'appelant : ce `setState()` s'exécutait
+donc pendant `initState()`, avant que le widget ait fini de monter.
+
+Corrigé en différant l'appel après le premier frame :
+
+[source,dart]
+----
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance
+      .addPostFrameCallback((_) => _autoLoad(widget.outputFiles));
+}
+----
+
+C'est le correctif standard pour tout appel à `setState()` déclenché depuis
+`initState()`. Ce n'est *pas* la cause du blocage décrit en <<sec-file-io-tests>>
+(reproduit même avec ce correctif en place) mais reste une amélioration de
+robustesse à part entière.
+
+[[sec-file-io-tests]]
+=== `testWidgets` + `dart:io File` réel : blocage observé dans certains environnements
+
+En écrivant des tests widgets pour `SbomTreePanel`/`SbomDiffPanel` qui
+écrivent une fixture JSON sur disque (`File(...).writeAsString()`) puis la
+font lire par le panel testé, le test se bloquait indéfiniment (jusqu'au
+timeout interne de `flutter_test`, ~30 s, suivi d'une erreur secondaire
+`Bad state: Cannot close sink while adding stream.` lors du nettoyage forcé).
+
+Diagnostic par répétition avec un test minimal, sans aucun code du projet :
+un `testWidgets` qui fait un simple `File(...).writeAsString()` puis
+`tester.pumpWidget(...)` bloque déjà, alors que le même code dans un `test`
+classique (sans `WidgetTester`) s'exécute instantanément. Le blocage
+persiste avec le bac à sable (sandbox) de l'outil de développement désactivé
+— ce n'est donc pas un artefact de sandboxing, mais une interaction
+spécifique à l'environnement entre `AutomatedTestWidgetsFlutterBinding` et
+les I/O fichier réelles.
+
+Conséquence pratique : les tests widgets de ce dépôt évitent toute écriture/
+lecture de fichier réel à l'intérieur de `testWidgets` (`sbom_merge_panel_test.dart`,
+`sbom_viewer_panel_test.dart` s'en tiennent à un état en mémoire). La
+couverture de la logique de parsing SBOM (clé purl, formats CycloneDX/SPDX)
+reste donc portée côté CLI (`test/unit/sbom_diff_test.dart`), qui exerce le
+même algorithme (`_componentKey`/`_diffKey`) sans dépendance à Flutter.
+
+Si cette contrainte disparaît dans un environnement différent (poste de
+développeur standard, CI GitHub Actions), rien n'empêche d'ajouter des tests
+widgets équivalents pour `SbomTreePanel`/`SbomDiffPanel`.
+
 == Dépendances
 
 [cols="2,1,3", options="header"]
@@ -1696,7 +1825,7 @@ appelle `SettingsService.saveConfig(_config)` de façon asynchrone et non bloqua
 |Package |Version |Usage
 
 |`file_picker`
-|^8.1.7
+|^11.0.2
 |Sélecteurs de fichiers natifs (SBOM, template, config grype, sauvegarde logs)
 
 |`shared_preferences`
@@ -1712,7 +1841,7 @@ appelle `SettingsService.saveConfig(_config)` de façon asynchrone et non bloqua
 |Ouverture des fichiers générés avec l'application système (`launchUrl(Uri.file(...))`)
 
 |`desktop_drop`
-|^0.4.4
+|^0.7.1
 |Réception des glisser-déposer de fichiers depuis le gestionnaire de fichiers
 système (Linux) dans `ConfigPanel`
 |===

@@ -1022,14 +1022,15 @@ non standard (`common/`, `jrt-fs/`, etc.). Ce gap est documenté et accepté.
 
 === `SbomDiffer`
 
-Classe principale exposant trois méthodes statiques :
+Classe principale. `diff()`, `printDiff()` et `toJson()` sont des méthodes
+d'instance ; seule `loadFile()` est statique :
 
 [cols="2,2,2", options="header"]
 |===
 |Méthode |Entrée |Sortie
 
 |`diff(Map a, Map b)`
-|Deux SBOMs CycloneDX JSON parsés
+|Deux SBOMs JSON parsés (CycloneDX, SPDX 2.3 ou SPDX 3.0 JSON-LD, indépendamment détectés pour chaque fichier)
 |`SbomDiffResult`
 
 |`printDiff(result)`
@@ -1040,7 +1041,7 @@ Classe principale exposant trois méthodes statiques :
 |`SbomDiffResult`
 |`Map<String, dynamic>` avec section `summary`
 
-|`loadFile(path)`
+|`loadFile(path)` _(static)_
 |Chemin fichier
 |`Future<Map<String, dynamic>>`
 |===
@@ -1058,14 +1059,22 @@ class SbomDiffResult {
 
 === Algorithme de comparaison
 
-. Indexation par `_componentKey()` : `purl.substring(0, purl.lastIndexOf('@'))` si le PURL
-  contient un `@`, sinon `name:type` (clé sans version).
+. `_indexComponents()` détecte le format de chaque fichier indépendamment
+  (`spdxVersion` présent → `_indexSpdxComponents()`, `@graph` présent →
+  `_indexSpdx3Components()`, sinon `_indexCycloneDxComponents()`) et produit
+  une `Map<String, SbomComponent>` indexée par `_componentKey()`.
+. `_componentKey()` : `purl.substring(0, purl.lastIndexOf('@'))` si le PURL
+  contient un `@`, sinon `name:type` (clé sans version) — identique pour les
+  trois formats, ce qui permet de comparer deux fichiers dans des formats
+  différents.
 . Comparaison des index : absent de A = ajout, absent de B = suppression, présent dans
   les deux avec version différente = mise à jour.
 
 [NOTE]
 ====
 La sous-commande `diff` est accessible via `sbom_generator diff <a> <b> [--json] [-o <out>]`.
+La même clé purl-first est utilisée côté GUI (`gui/lib/widgets/sbom_diff_panel.dart`,
+fonction `_diffKey()`) pour que les deux comparaisons produisent le même résultat.
 ====
 
 == `lib/sbom_merger.dart` — Fusion de SBOMs
@@ -1075,25 +1084,49 @@ La sous-commande `diff` est accessible via `sbom_generator diff <a> <b> [--json]
 [source,dart]
 ----
 class SbomMerger {
-  static Map<String, dynamic> merge(
+  Map<String, dynamic> merge(
     List<Map<String, dynamic>> sboms, {
     String? documentName,
   });
 }
 ----
 
-=== Algorithme de fusion
+`merge()` est une méthode d'instance (pas statique). Elle détecte le format
+du **premier** SBOM fourni (`spdxVersion` présent → `_mergeSpdx()`, sinon
+`_mergeCycloneDx()`) et fusionne tous les fichiers selon cette même
+structure ; le document résultant est produit dans ce même format.
+
+=== Algorithme de fusion — CycloneDX (`_mergeCycloneDx`)
 
 . Premier SBOM comme base (préserve `metadata`).
 . Parcours de tous les SBOMs suivants :
   - Déduplication des `components` par `purl` (puis par `bom-ref` si PURL absent).
   - Déduplication des `dependencies` par `ref`.
+  - Déduplication des `citations` et `definitions.patents` (CycloneDX 1.7) par `bom-ref`.
 . Nouveau `serialNumber` UUID v4 généré via `_generateUuid()`.
 . `documentName` écrase `metadata.component.name` si fourni.
 
+=== Algorithme de fusion — SPDX 2.3 (`_mergeSpdx`)
+
+. Premier SBOM comme base (préserve `dataLicense`, `creationInfo.licenseListVersion`).
+. Déduplication des `packages` par PURL (`externalRefs[referenceType=purl]`), puis par `SPDXID`.
+. Déduplication des `relationships` par triple `(spdxElementId, relationshipType, relatedSpdxElement)`.
+. Nouveau `documentNamespace` généré via `_generateUuid()`.
+. `documentName` écrase `name` si fourni.
+
 [NOTE]
 ====
-Seul le format CycloneDX JSON est supporté en entrée et en sortie pour `merge`.
+Les fichiers source doivent tous être dans le même format que le premier
+fichier fourni (CycloneDX ou SPDX 2.3) ; un fichier dans un format différent
+n'est pas rejeté explicitement — il produit simplement une fusion
+incomplète, faute de validation croisée des formats. Le format SPDX 3.0
+(JSON-LD) n'est pas pris en charge en entrée pour `merge`.
+
+Les `SPDXID` des documents source sont conservés tels quels dans les
+`relationships` fusionnées ; pour les SBOM générés par cet outil ils sont
+déterministes (nom+version via `Package.spdxId`), donc stables entre
+documents — une collision reste théoriquement possible si un document
+externe réutilise un `SPDXID` générique pour un autre paquet.
 ====
 
 == `lib/policy_checker.dart` — Contrôle de politiques CI/CD
@@ -1834,6 +1867,15 @@ options de génération) :
 |désactivé
 |Inclut les CVE sans date connue dans les résultats filtrés (exclues par
 défaut dès qu'un filtre `--cve-after`/`--cve-before` est actif)
+
+|`--format <valeur>` / `-f`
+|`text`
+|`text` (console colorée) ou `sarif` (rapport SARIF 2.1.0)
+
+|`--output <fichier>` / `-o`
+|—
+|Fichier de sortie pour `--format sarif` ; sans cette option, le SARIF est
+affiché sur stdout
 |===
 
 Architecture interne :
@@ -1849,8 +1891,12 @@ Architecture interne :
 |Dispatch vers `_runGrype()`, `_runOsv()`, `_runTrivy()`
 
 |`_runGrype()` / `_runOsv()` / `_runTrivy()`
-|Lance le scanner via `Process.run()`, parse le JSON propre à chaque outil,
-retourne une liste normalisée `{id, severity, package, published, modified}`
+|Lance le scanner via `Process.run()` (capture `ProcessException` si le
+binaire est introuvable → message explicite sur stderr, pas de crash),
+parse le JSON propre à chaque outil, retourne une liste normalisée
+`{id, severity, package, published, modified}`. La bannière `── Nom ──`
+n'est imprimée que si `--format text` (silencieuse en `sarif` pour ne pas
+polluer la sortie JSON)
 
 |`_filterByDate()`
 |Applique `after` / `before` / `includeUndated` sur le champ de date choisi
@@ -1858,6 +1904,12 @@ retourne une liste normalisée `{id, severity, package, published, modified}`
 |`_printScanResults()`
 |Trie par sévérité décroissante (`Critical` → `Unknown`) et affiche un
 tableau texte par scanner interrogé, avec rappel du filtre appliqué
+(`--format text`)
+
+|`_buildSarifReport()`
+|Construit un rapport SARIF 2.1.0 (un `run` par scanner interrogé, une
+`rule` déduite par identifiant de vulnérabilité, `level` via `_sarifLevel()`,
+`security-severity` via `_sarifSecurityScore()`) — `--format sarif`
 
 |`_printScanUsage()`
 |Affiche l'aide de la sous-commande avec exemples
@@ -1865,8 +1917,14 @@ tableau texte par scanner interrogé, avec rappel du filtre appliqué
 
 [source,dart]
 ----
-Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile) async {
-  final result = await Process.run('grype', [sbomFile, '--output', 'json']);
+Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile, {bool quiet = false}) async {
+  final ProcessResult result;
+  try {
+    result = await Process.run('grype', [sbomFile, '--output', 'json']);
+  } on ProcessException catch (e) {
+    stderr.writeln('grype: introuvable (${e.message}). ...');
+    return null;
+  }
   // exitCode > 1 → erreur ; sinon parse data['matches'][].{vulnerability, artifact}
 }
 ----
@@ -2727,14 +2785,16 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (176 au total)
-dart test test/unit/                 # tests unitaires seuls (157)
+dart test                            # tous les tests (223 au total)
+dart test test/unit/                 # tests unitaires seuls (204)
 dart test test/integration/          # tests d'intégration (19, dont certains
                                       # sautés automatiquement selon l'environnement)
 ----
 
 Comptage vérifié par exécution réelle (`dart test -r compact`), pas recopié
-d'une exécution antérieure.
+d'une exécution antérieure. Exécuté automatiquement par
+`.github/workflows/ci.yml` (`dart analyze --fatal-infos` puis `dart test`)
+sur chaque push/pull request vers `main`.
 
 === Suites unitaires
 
@@ -2790,6 +2850,16 @@ des types syft/trivy, construction PURL par écosystème
 |spec 1.6 par défaut, activation 1.7, TLP, citations, brevets, erreurs de
 validation
 
+|`test/unit/spdx_generator_test.dart`
+|12
+|enveloppe SPDX-2.3, paquets (purl, licence, downloadLocation, supplier),
+relations DESCRIBES/DEPENDS_ON
+
+|`test/unit/spdx3_generator_test.dart`
+|12
+|enveloppe JSON-LD (@context/@graph), paquets software:Package, Organization
+partagée par vendor, relations describes/dependsOn
+
 |`test/unit/policy_checker_test.dart`
 |10
 |correspondance de licences interdites (exacte et partielle)
@@ -2801,6 +2871,15 @@ validation
 |`test/unit/csv_generator_test.dart`
 |6
 |en-têtes, tri par nom, échappement RFC 4180
+
+|`test/unit/sbom_diff_test.dart`
+|11
+|clé purl/name:type, CycloneDX/SPDX 2.3/SPDX 3.0 (y compris comparaison
+inter-format), toJson
+
+|`test/unit/sbom_merger_test.dart`
+|12
+|dédup CycloneDX (purl/bom-ref/dependencies) et SPDX 2.3 (purl/SPDXID/relationships)
 |===
 
 === Suite d'intégration
@@ -2837,7 +2916,7 @@ sans faire échouer la suite.
 
 * [ ] `dart analyze lib/ bin/ test/` passe sans erreur ni avertissement (`No issues found!`)
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
-* [ ] `dart test` — tous les 176 tests verts (157 unitaires + 19 intégration ;
+* [ ] `dart test` — tous les 223 tests verts (204 unitaires + 19 intégration ;
   certains tests d'intégration se sautent proprement selon l'environnement)
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
 * [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + .jar + requirements.txt + `--image`

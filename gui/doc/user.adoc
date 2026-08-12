@@ -238,7 +238,7 @@ L'interface est divisée en deux panneaux séparés par un séparateur vertical.
 │  🗒 SBOM Generator                         [🎨] [🌙] [ℹ]                 │
 ├───────────────────────┬────────────────────────────────────────────────────┤
 │                       │                                                    │
-│   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Visionneuse][Aperçu]│
+│   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Fusion][Visionneuse][Aperçu]│
 │   ─────────────────   │ ─────────────────────────────────────────────────  │
 │   ENTRÉE              │                                                    │
 │   [fichier.lst  📂▾]  │   12 / 23  52%    bash-5.1.8-6.el9.x86_64         │
@@ -267,13 +267,14 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : onze onglets — Progression (avec export
+*Panneau droit — Résultats* : douze onglets — Progression (avec export
 des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
 (synthèse CVE multi-scanners), Grype, OSV-Scanner et Trivy (analyses CVE),
 Qualité SBOM (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
-composants du SBOM), Comparaison SBOM (diff de deux SBOM), Visionneuse SBOM
-(exploration interactive d'un fichier SBOM externe) et Aperçu
-(prévisualisation du contenu SBOM).
+composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
+(combine plusieurs SBOM en un seul), Visionneuse SBOM (exploration
+interactive d'un fichier SBOM externe) et Aperçu (prévisualisation du
+contenu SBOM).
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
@@ -433,6 +434,14 @@ Cochez un ou plusieurs formats. Au moins un format doit être sélectionné.
 |AsciiDoc
 |`.adoc`
 |Rapport technique riche (tableaux, styles)
+
+|HTML
+|`.html`
+|Rapport interactif autonome (filtrable et triable, graphiques par écosystème/licence)
+
+|CSV
+|`.csv`
+|Import dans un tableur ou un pipeline de traitement de données
 |===
 
 ==== Option PDF (AsciiDoc uniquement)
@@ -1572,6 +1581,9 @@ Formats supportés :
   `licenses`, `description`
 * *SPDX 2.x* — `packages[]` avec champs `name`, `versionInfo`, `licenseConcluded`,
   `summary`, `externalRefs[purl]`
+* *SPDX 3.0 JSON-LD* — éléments `software:Package` du graphe `@graph`, avec
+  champs `name`, `software:packageVersion`, `concludedLicense`/`declaredLicense`,
+  `summary`, `externalIdentifier[purl]`
 
 La barre d'informations affiche le format détecté, le nom du document et le
 nombre total de composants chargés.
@@ -1635,8 +1647,9 @@ fichiers SBOM (par exemple avant / après une mise à jour).
 === Chargement des fichiers
 
 Sélectionnez un fichier dans chaque emplacement (SBOM A et SBOM B) via le
-bouton 📂 ou en saisissant un chemin. Les formats CycloneDX et SPDX sont
-supportés (mêmes formats que l'onglet Arborescence).
+bouton 📂 ou en saisissant un chemin. Les formats CycloneDX, SPDX 2.x et
+SPDX 3.0 JSON-LD sont supportés (mêmes formats que l'onglet Arborescence) ;
+les deux fichiers comparés n'ont pas besoin d'être dans le même format.
 
 Cliquez sur *Comparer* pour lancer la comparaison. Le bouton est actif
 uniquement si les deux fichiers sont sélectionnés.
@@ -1668,6 +1681,63 @@ Pour les composants *Modifiés* :
 
 * La *version* affiche l'ancienne valeur barrée et la nouvelle valeur en vert
 * La *licence* affiche l'ancienne valeur barrée et la nouvelle valeur en vert
+
+== Onglet Fusion SBOM
+
+L'onglet *Fusion SBOM* combine plusieurs fichiers SBOM en un seul document,
+en dédupliquant les composants communs. Il orchestre la sous-commande
+`sbom-generator merge` en arrière-plan.
+
+----
+  ┌─ [➕ Ajouter des fichiers…]  [📂 Fichiers générés]   3 fichier(s) sélectionné(s) ─┐
+  │  📄 base.cdx.json         /chemin/vers/base.cdx.json                      [✕]  │
+  │  📄 extra-1.cdx.json      /chemin/vers/extra-1.cdx.json                   [✕]  │
+  │  📄 extra-2.cdx.json      /chemin/vers/extra-2.cdx.json                   [✕]  │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [ Fichier de sortie : merged.cdx.json ]  [ Nom du document (optionnel) ]  [🔀 Fusionner]
+
+  ✔ Fusion réussie → merged.cdx.json
+----
+
+=== Sélection des fichiers à fusionner
+
+Deux façons d'alimenter la liste :
+
+* *➕ Ajouter des fichiers…* : ouvre un sélecteur de fichiers du système,
+  sélection multiple possible.
+* *📂 Fichiers générés* : menu listant les fichiers SBOM produits pendant la
+  session courante (mêmes formats que l'onglet Arborescence, hors SPDX 3.0
+  — voir Contraintes ci-dessous).
+
+Chaque fichier de la liste peut être retiré individuellement via le bouton
+*✕*. Le bouton *🔀 Fusionner* n'est actif qu'à partir de deux fichiers
+sélectionnés et d'un chemin de sortie renseigné.
+
+=== Fichier de sortie et nom du document
+
+* *Fichier de sortie* : chemin du document fusionné produit (valeur par
+  défaut : `merged.cdx.json`).
+* *Nom du document* (optionnel) : s'il est renseigné, remplace le nom du
+  document dans le fichier fusionné ; sinon, le nom du premier fichier
+  source est conservé.
+
+=== Lancement et résultat
+
+Le bouton *🔀 Fusionner* lance `sbom-generator merge` avec les fichiers
+sélectionnés. Le déroulé de la commande (journal) s'affiche sous les
+champs, suivi d'une bannière de résultat :
+
+* *✔ Fusion réussie → <fichier>* (vert) en cas de succès.
+* *✘ Échec de la fusion (code N)* (rouge) en cas d'échec — consultez le
+  journal affiché pour le détail de l'erreur.
+
+=== Contraintes
+
+Tous les fichiers sélectionnés doivent être dans le même format (celui du
+premier fichier de la liste) : CycloneDX ou SPDX 2.3. Le format de sortie
+suit celui du premier fichier. Le format SPDX 3.0 (JSON-LD) n'est pas pris
+en charge en entrée pour la fusion.
 
 == Personnalisation de l'apparence
 
