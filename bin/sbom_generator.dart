@@ -34,6 +34,7 @@ const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciid
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
 const _validOciTools = {'syft', 'trivy', 'skopeo'};
 const _validDateFields = {'published', 'modified', 'latest'};
+const _validScanFormats = {'text', 'sarif'};
 const _validCycloneDxVersions = CycloneDxGenerator.supportedSpecVersions;
 const _validTlpClassifications = CycloneDxGenerator.validTlpClassifications;
 
@@ -841,7 +842,8 @@ Codes de retour:
 Future<void> _runMerge(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('output', abbr: 'o', mandatory: true,
-        help: 'Fichier SBOM fusionné de sortie (.cdx.json).')
+        help: 'Fichier SBOM fusionné de sortie (même format que le premier '
+            'fichier d\'entrée : .cdx.json ou .spdx.json).')
     ..addOption('name', abbr: 'n', help: 'Nom du document SBOM fusionné.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
 
@@ -877,7 +879,8 @@ Future<void> _runMerge(List<String> arguments) async {
   final outPath = args['output'] as String;
   await File(outPath).writeAsString(
       const JsonEncoder.withIndent('  ').convert(merged));
-  final total = (merged['components'] as List).length;
+  final total = (merged['components'] as List? ?? merged['packages'] as List? ?? [])
+      .length;
   print('Fusion de ${files.length} SBOMs → $total composant(s) → $outPath');
 }
 
@@ -1125,6 +1128,15 @@ Future<void> _runScan(List<String> arguments) async {
         defaultsTo: false,
         negatable: false,
         help: 'Inclure les CVE sans date dans les résultats filtrés')
+    ..addOption('format',
+        abbr: 'f',
+        defaultsTo: 'text',
+        help: 'Format de sortie.\n'
+            '  text    Texte coloré sur stdout (défaut)\n'
+            '  sarif   SARIF 2.1.0 (intégration GitHub Code Scanning)')
+    ..addOption('output',
+        abbr: 'o',
+        help: 'Fichier de sortie pour --format sarif. Si omis, écrit sur stdout.')
     ..addFlag('help',
         abbr: 'h',
         negatable: false,
@@ -1148,6 +1160,8 @@ Future<void> _runScan(List<String> arguments) async {
   final scanner = args['scanner'] as String;
   final dateField = args['cve-date-field'] as String;
   final includeUndated = args['include-undated'] as bool;
+  final format = args['format'] as String;
+  final outputPath = args['output'] as String?;
 
   if (!_validScanners.contains(scanner)) {
     stderr.writeln('scan: scanner invalide "$scanner". Valides : ${_validScanners.join(', ')}');
@@ -1155,6 +1169,10 @@ Future<void> _runScan(List<String> arguments) async {
   }
   if (!_validDateFields.contains(dateField)) {
     stderr.writeln('scan: cve-date-field invalide "$dateField". Valides : ${_validDateFields.join(', ')}');
+    exit(1);
+  }
+  if (!_validScanFormats.contains(format)) {
+    stderr.writeln('scan: format invalide "$format". Valides : ${_validScanFormats.join(', ')}');
     exit(1);
   }
   if (!await File(sbomFile).exists()) {
@@ -1186,36 +1204,58 @@ Future<void> _runScan(List<String> arguments) async {
       ? ['grype', 'osv', 'trivy']
       : [scanner];
 
+  final quiet = format == 'sarif';
+  final resultsByScanner = <String, List<Map<String, dynamic>>>{};
   int totalShown = 0;
   for (final s in scanners) {
-    final vulns = await _runScanner(s, sbomFile);
+    final vulns = await _runScanner(s, sbomFile, quiet: quiet);
     if (vulns == null) continue;
 
     final filtered = _filterByDate(vulns, dateField, after, before, includeUndated);
-    _printScanResults(s, filtered, after, before, dateField);
+    resultsByScanner[s] = filtered;
+    if (!quiet) _printScanResults(s, filtered, after, before, dateField);
     totalShown += filtered.length;
+  }
+
+  if (format == 'sarif') {
+    final sarif = _buildSarifReport(resultsByScanner, sbomFile);
+    final json = const JsonEncoder.withIndent('  ').convert(sarif);
+    if (outputPath != null) {
+      await File(outputPath).writeAsString(json);
+      stderr.writeln('SARIF écrit → $outputPath');
+    } else {
+      print(json);
+    }
   }
 
   exit(totalShown > 0 ? 1 : 0);
 }
 
 // Retourne la liste brute [{id, severity, package, published, modified}] ou null si erreur.
-Future<List<Map<String, dynamic>>?>  _runScanner(String scanner, String sbomFile) async {
+Future<List<Map<String, dynamic>>?> _runScanner(
+    String scanner, String sbomFile, {bool quiet = false}) async {
   switch (scanner) {
     case 'grype':
-      return _runGrype(sbomFile);
+      return _runGrype(sbomFile, quiet: quiet);
     case 'osv':
-      return _runOsv(sbomFile);
+      return _runOsv(sbomFile, quiet: quiet);
     case 'trivy':
-      return _runTrivy(sbomFile);
+      return _runTrivy(sbomFile, quiet: quiet);
     default:
       return null;
   }
 }
 
-Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile) async {
-  stdout.writeln('\n── Grype ──────────────────────────────────────────');
-  final result = await Process.run('grype', [sbomFile, '--output', 'json']);
+Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile,
+    {bool quiet = false}) async {
+  if (!quiet) stdout.writeln('\n── Grype ──────────────────────────────────────────');
+  final ProcessResult result;
+  try {
+    result = await Process.run('grype', [sbomFile, '--output', 'json']);
+  } on ProcessException catch (e) {
+    stderr.writeln('grype: introuvable (${e.message}). Installez-le ou omettez --scanner grype.');
+    return null;
+  }
   if (result.exitCode > 1) {
     stderr.writeln('grype: erreur (code ${result.exitCode}): ${result.stderr}');
     return null;
@@ -1240,9 +1280,16 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile) async {
   }
 }
 
-Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile) async {
-  stdout.writeln('\n── OSV-Scanner ─────────────────────────────────────');
-  final result = await Process.run('osv-scanner', ['--format', 'json', '--sbom', sbomFile]);
+Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile,
+    {bool quiet = false}) async {
+  if (!quiet) stdout.writeln('\n── OSV-Scanner ─────────────────────────────────────');
+  final ProcessResult result;
+  try {
+    result = await Process.run('osv-scanner', ['--format', 'json', '--sbom', sbomFile]);
+  } on ProcessException catch (e) {
+    stderr.writeln('osv-scanner: introuvable (${e.message}). Installez-le ou omettez --scanner osv.');
+    return null;
+  }
   if (result.exitCode > 1) {
     stderr.writeln('osv-scanner: erreur (code ${result.exitCode}): ${result.stderr}');
     return null;
@@ -1276,9 +1323,16 @@ Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile) async {
   }
 }
 
-Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile) async {
-  stdout.writeln('\n── Trivy ───────────────────────────────────────────');
-  final result = await Process.run('trivy', ['sbom', '--format', 'json', '--quiet', sbomFile]);
+Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile,
+    {bool quiet = false}) async {
+  if (!quiet) stdout.writeln('\n── Trivy ───────────────────────────────────────────');
+  final ProcessResult result;
+  try {
+    result = await Process.run('trivy', ['sbom', '--format', 'json', '--quiet', sbomFile]);
+  } on ProcessException catch (e) {
+    stderr.writeln('trivy: introuvable (${e.message}). Installez-le ou omettez --scanner trivy.');
+    return null;
+  }
   if (result.exitCode > 1) {
     stderr.writeln('trivy: erreur (code ${result.exitCode}): ${result.stderr}');
     return null;
@@ -1403,11 +1457,96 @@ Exemples:
   sbom-generator scan --sbom sbom.cdx.json --scanner all \\
     --cve-date-field modified --cve-after 2023-01-01 --include-undated
 
+  # Export SARIF (GitHub Code Scanning) vers un fichier
+  sbom-generator scan --sbom sbom.cdx.json --scanner all \\
+    --format sarif --output results.sarif
+
 Codes de retour:
   0  Aucune CVE dans la plage demandée
   1  Au moins une CVE trouvée (ou erreur de scanner)
 ''');
 }
+
+/// Convertit les résultats de scan (par scanner) en rapport SARIF 2.1.0,
+/// consommable par exemple par `github/codeql-action/upload-sarif`.
+Map<String, dynamic> _buildSarifReport(
+  Map<String, List<Map<String, dynamic>>> resultsByScanner,
+  String sbomFile,
+) {
+  final runs = <Map<String, dynamic>>[];
+
+  for (final entry in resultsByScanner.entries) {
+    final scanner = entry.key;
+    final rulesById = <String, Map<String, dynamic>>{};
+    final results = <Map<String, dynamic>>[];
+
+    for (final v in entry.value) {
+      final id = (v['id'] as String?) ?? '';
+      if (id.isEmpty) continue;
+      final severity = (v['severity'] as String?) ?? 'Unknown';
+      final pkg = (v['package'] as String?) ?? '';
+
+      rulesById.putIfAbsent(id, () => {
+            'id': id,
+            'shortDescription': {'text': '$id — sévérité $severity'},
+            'helpUri': 'https://osv.dev/vulnerability/$id',
+            'properties': {'security-severity': _sarifSecurityScore(severity)},
+          });
+
+      results.add({
+        'ruleId': id,
+        'level': _sarifLevel(severity),
+        'message': {'text': 'Paquet vulnérable : $pkg (sévérité $severity)'},
+        'locations': [
+          {
+            'physicalLocation': {
+              'artifactLocation': {'uri': sbomFile.split('/').last},
+            },
+          }
+        ],
+      });
+    }
+
+    runs.add({
+      'tool': {
+        'driver': {
+          'name': scanner,
+          'informationUri': _scannerUrl(scanner),
+          'rules': rulesById.values.toList(),
+        },
+      },
+      'results': results,
+    });
+  }
+
+  return {
+    '\$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/'
+        'master/Schemata/sarif-schema-2.1.0.json',
+    'version': '2.1.0',
+    'runs': runs,
+  };
+}
+
+String _sarifLevel(String severity) => switch (severity.toUpperCase()) {
+      'CRITICAL' || 'HIGH' => 'error',
+      'MEDIUM' => 'warning',
+      _ => 'note',
+    };
+
+String _sarifSecurityScore(String severity) => switch (severity.toUpperCase()) {
+      'CRITICAL' => '9.0',
+      'HIGH' => '7.0',
+      'MEDIUM' => '4.0',
+      'LOW' => '1.0',
+      _ => '0.0',
+    };
+
+String _scannerUrl(String scanner) => switch (scanner) {
+      'grype' => 'https://github.com/anchore/grype',
+      'osv' => 'https://github.com/google/osv-scanner',
+      'trivy' => 'https://github.com/aquasecurity/trivy',
+      _ => '',
+    };
 
 /// Returns a new list with license overrides applied by package name.
 List<Package> _applyLicenseOverrides(

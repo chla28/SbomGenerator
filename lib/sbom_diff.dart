@@ -47,7 +47,7 @@ class SbomComponentUpdate {
   });
 }
 
-/// Compare deux fichiers SBOM CycloneDX JSON.
+/// Compare deux fichiers SBOM JSON (CycloneDX, SPDX 2.x ou SPDX 3.0 JSON-LD).
 class SbomDiffer {
   SbomDiffResult diff(Map<String, dynamic> before, Map<String, dynamic> after) {
     final beforeMap = _indexComponents(before);
@@ -101,6 +101,12 @@ class SbomDiffer {
   }
 
   Map<String, SbomComponent> _indexComponents(Map<String, dynamic> sbom) {
+    if (sbom.containsKey('spdxVersion')) return _indexSpdxComponents(sbom);
+    if (sbom.containsKey('@graph')) return _indexSpdx3Components(sbom);
+    return _indexCycloneDxComponents(sbom);
+  }
+
+  Map<String, SbomComponent> _indexCycloneDxComponents(Map<String, dynamic> sbom) {
     final result = <String, SbomComponent>{};
     final components = (sbom['components'] as List?) ?? [];
     for (final raw in components) {
@@ -112,8 +118,58 @@ class SbomDiffer {
         type: (c['type'] as String?) ?? 'library',
       );
       if (comp.name.isEmpty) continue;
-      final key = _componentKey(comp);
-      result[key] = comp;
+      result[_componentKey(comp)] = comp;
+    }
+    return result;
+  }
+
+  Map<String, SbomComponent> _indexSpdxComponents(Map<String, dynamic> sbom) {
+    final result = <String, SbomComponent>{};
+    final packages = (sbom['packages'] as List?) ?? [];
+    for (final raw in packages) {
+      final p = raw as Map<String, dynamic>;
+      String purl = '';
+      for (final ref in (p['externalRefs'] as List? ?? [])) {
+        final r = ref as Map<String, dynamic>;
+        if (r['referenceType'] == 'purl') {
+          purl = (r['referenceLocator'] as String?) ?? '';
+          break;
+        }
+      }
+      final comp = SbomComponent(
+        name: (p['name'] as String?) ?? '',
+        version: (p['versionInfo'] as String?) ?? '',
+        purl: purl,
+        type: 'package',
+      );
+      if (comp.name.isEmpty) continue;
+      result[_componentKey(comp)] = comp;
+    }
+    return result;
+  }
+
+  Map<String, SbomComponent> _indexSpdx3Components(Map<String, dynamic> sbom) {
+    final result = <String, SbomComponent>{};
+    final graph = (sbom['@graph'] as List?) ?? [];
+    for (final raw in graph) {
+      final e = raw as Map<String, dynamic>;
+      if (e['type'] != 'software:Package') continue;
+      String purl = '';
+      for (final ref in (e['externalIdentifier'] as List? ?? [])) {
+        final r = ref as Map<String, dynamic>;
+        if (r['externalIdentifierType'] == 'purl') {
+          purl = (r['identifier'] as String?) ?? '';
+          break;
+        }
+      }
+      final comp = SbomComponent(
+        name: (e['name'] as String?) ?? '',
+        version: (e['software:packageVersion'] as String?) ?? '',
+        purl: purl,
+        type: 'package',
+      );
+      if (comp.name.isEmpty) continue;
+      result[_componentKey(comp)] = comp;
     }
     return result;
   }

@@ -1,4 +1,5 @@
-/// Fusionne plusieurs documents SBOM CycloneDX JSON en un seul.
+/// Fusionne plusieurs documents SBOM JSON (CycloneDX ou SPDX 2.x) en un seul,
+/// dans le même format que le premier document fourni.
 class SbomMerger {
   Map<String, dynamic> merge(
     List<Map<String, dynamic>> sboms, {
@@ -7,6 +8,16 @@ class SbomMerger {
     if (sboms.isEmpty) throw ArgumentError('Au moins un SBOM requis');
     if (sboms.length == 1) return sboms.first;
 
+    if (sboms.first.containsKey('spdxVersion')) {
+      return _mergeSpdx(sboms, documentName: documentName);
+    }
+    return _mergeCycloneDx(sboms, documentName: documentName);
+  }
+
+  Map<String, dynamic> _mergeCycloneDx(
+    List<Map<String, dynamic>> sboms, {
+    String? documentName,
+  }) {
     // Prendre les métadonnées du premier SBOM comme base
     final base = sboms.first;
     final metadata = Map<String, dynamic>.from(
@@ -89,6 +100,69 @@ class SbomMerger {
     if (allPatents.isNotEmpty) result['definitions'] = {'patents': allPatents};
 
     return result;
+  }
+
+  /// Fusionne des documents SPDX 2.x. Les paquets sont dédupliqués par purl
+  /// (externalRefs de type "purl"), puis par SPDXID. Note : les SPDXID des
+  /// documents source sont conservés tels quels dans les relations ; pour les
+  /// SBOM générés par cet outil, ils sont déterministes (nom+version) donc
+  /// stables entre documents, mais une collision reste possible si un
+  /// document externe réutilise un SPDXID générique pour un autre paquet.
+  Map<String, dynamic> _mergeSpdx(
+    List<Map<String, dynamic>> sboms, {
+    String? documentName,
+  }) {
+    final base = sboms.first;
+
+    final seenKeys = <String>{};
+    final allPackages = <Map<String, dynamic>>[];
+    for (final sbom in sboms) {
+      final packages = (sbom['packages'] as List?) ?? [];
+      for (final raw in packages) {
+        final p = raw as Map<String, dynamic>;
+        final spdxId = (p['SPDXID'] as String?) ?? '';
+        String purl = '';
+        for (final ref in (p['externalRefs'] as List? ?? [])) {
+          final r = ref as Map<String, dynamic>;
+          if (r['referenceType'] == 'purl') {
+            purl = (r['referenceLocator'] as String?) ?? '';
+            break;
+          }
+        }
+        final key = purl.isNotEmpty ? purl : spdxId;
+        if (key.isEmpty || seenKeys.add(key)) {
+          allPackages.add(p);
+        }
+      }
+    }
+
+    final seenRels = <String>{};
+    final allRels = <Map<String, dynamic>>[];
+    for (final sbom in sboms) {
+      for (final raw in (sbom['relationships'] as List?) ?? []) {
+        final r = raw as Map<String, dynamic>;
+        final key =
+            '${r['spdxElementId']}|${r['relationshipType']}|${r['relatedSpdxElement']}';
+        if (seenRels.add(key)) allRels.add(r);
+      }
+    }
+
+    final baseCreationInfo = base['creationInfo'] as Map<String, dynamic>?;
+
+    return {
+      'SPDXID': 'SPDXRef-DOCUMENT',
+      'spdxVersion': (base['spdxVersion'] as String?) ?? 'SPDX-2.3',
+      'creationInfo': {
+        'created': DateTime.now().toUtc().toIso8601String(),
+        'creators': ['Tool: sbom_generator-1.0.0'],
+        'licenseListVersion': baseCreationInfo?['licenseListVersion'] ?? '3.21',
+      },
+      'name': documentName ?? (base['name'] as String? ?? 'Merged SBOM'),
+      'dataLicense': (base['dataLicense'] as String?) ?? 'CC0-1.0',
+      'documentNamespace': 'https://sbom.local/spdx/${_generateUuid()}',
+      'packages': allPackages,
+      'relationships': allRels,
+    };
   }
 
   /// UUID v4 simplifié (non-cryptographique, suffisant pour les bomRef).

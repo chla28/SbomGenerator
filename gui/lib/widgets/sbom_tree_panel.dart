@@ -51,6 +51,7 @@ class _SbomInfo {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       if (data['bomFormat'] == 'CycloneDX') return _parseCycloneDX(data);
       if (data.containsKey('spdxVersion')) return _parseSpdx(data);
+      if (data.containsKey('@graph')) return _parseSpdx3(data);
     } catch (_) {}
     return null;
   }
@@ -116,6 +117,42 @@ class _SbomInfo {
       components: pkgs,
     );
   }
+
+  static _SbomInfo _parseSpdx3(Map<String, dynamic> data) {
+    final graph = (data['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
+    final doc = graph.firstWhere(
+      (e) => e['type'] == 'SpdxDocument',
+      orElse: () => const {},
+    );
+    final comps = graph.where((e) => e['type'] == 'software:Package').map((p) {
+      String purl = '';
+      for (final ref in (p['externalIdentifier'] as List? ?? [])) {
+        final r = ref as Map<String, dynamic>;
+        if (r['externalIdentifierType'] == 'purl') {
+          purl = r['identifier'] as String? ?? '';
+          break;
+        }
+      }
+      final license = p['concludedLicense'] as String? ??
+          p['declaredLicense'] as String? ??
+          '';
+      return _SbomComponent(
+        name: p['name'] as String? ?? '',
+        version: p['software:packageVersion'] as String? ?? '',
+        type: 'package',
+        license: license == 'NOASSERTION' ? '' : license,
+        purl: purl,
+      );
+    }).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return _SbomInfo(
+      format: 'SPDX 3.0 JSON-LD',
+      specVersion: '3.0.0',
+      rootName: doc['name'] as String? ?? '',
+      rootVersion: '',
+      components: comps,
+    );
+  }
 }
 
 // ─── Items du ListView plat ───────────────────────────────────────────────────
@@ -166,7 +203,11 @@ class _SbomTreePanelState extends State<SbomTreePanel>
   @override
   void initState() {
     super.initState();
-    _autoLoad(widget.outputFiles);
+    // Différé après le premier frame : _autoLoad → _loadFile appelle
+    // setState() avant tout "await", donc de façon synchrone si invoqué
+    // directement depuis initState (avant que le widget ait fini de monter).
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _autoLoad(widget.outputFiles));
   }
 
   @override

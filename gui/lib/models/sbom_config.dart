@@ -5,11 +5,13 @@ const _formatExtensions = {
   'json': '.custom.json',
   'markdown': '.md',
   'asciidoc': '.adoc',
+  'html': '.html',
+  'csv': '.csv',
 };
 
 String formatExtension(String fmt) => _formatExtensions[fmt] ?? '.json';
 
-const allFormats = ['cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc'];
+const allFormats = ['cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'];
 
 const formatLabels = {
   'cyclonedx': 'CycloneDX',
@@ -18,6 +20,8 @@ const formatLabels = {
   'json': 'JSON personnalisé',
   'markdown': 'Markdown',
   'asciidoc': 'AsciiDoc',
+  'html': 'HTML',
+  'csv': 'CSV',
 };
 
 const allOciTools = ['syft', 'trivy', 'skopeo'];

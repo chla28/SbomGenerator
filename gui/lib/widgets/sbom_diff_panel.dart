@@ -37,6 +37,7 @@ class _SbomInfo {
       final d = jsonDecode(raw) as Map<String, dynamic>;
       if (d['bomFormat'] == 'CycloneDX') return _cdx(d);
       if (d.containsKey('spdxVersion')) return _spdx(d);
+      if (d.containsKey('@graph')) return _spdx3(d);
     } catch (_) {}
     return null;
   }
@@ -98,6 +99,40 @@ class _SbomInfo {
       components: pkgs,
     );
   }
+
+  static _SbomInfo _spdx3(Map<String, dynamic> d) {
+    final graph = (d['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
+    final doc = graph.firstWhere(
+      (e) => e['type'] == 'SpdxDocument',
+      orElse: () => const {},
+    );
+    final comps = graph.where((e) => e['type'] == 'software:Package').map((p) {
+      String purl = '';
+      for (final ref in (p['externalIdentifier'] as List? ?? [])) {
+        final r = ref as Map<String, dynamic>;
+        if (r['externalIdentifierType'] == 'purl') {
+          purl = r['identifier'] as String? ?? '';
+          break;
+        }
+      }
+      final license = p['concludedLicense'] as String? ??
+          p['declaredLicense'] as String? ??
+          '';
+      return _Comp(
+        name: p['name'] as String? ?? '',
+        version: p['software:packageVersion'] as String? ?? '',
+        type: 'package',
+        license: license == 'NOASSERTION' ? '' : license,
+        purl: purl,
+      );
+    }).toList();
+    final docName = doc['name'] as String?;
+    return _SbomInfo(
+      label: (docName == null || docName.isEmpty) ? 'SPDX 3.0' : docName,
+      format: 'SPDX 3.0 JSON-LD',
+      components: comps,
+    );
+  }
 }
 
 // ─── Résultat de comparaison ──────────────────────────────────────────────────
@@ -122,14 +157,24 @@ class _DiffEntry {
       compA != null && compB != null && compA!.license != compB!.license;
 }
 
+// Clé d'identité = purl sans la version (pkg:type/name sans @version),
+// ou "name:type" si pas de purl. Alignée sur SbomDiffer._componentKey (CLI).
+String _diffKey(_Comp c) {
+  if (c.purl.isNotEmpty) {
+    final atIdx = c.purl.lastIndexOf('@');
+    return atIdx > 0 ? c.purl.substring(0, atIdx) : c.purl;
+  }
+  return '${c.name.toLowerCase()}:${c.type.toLowerCase()}';
+}
+
 List<_DiffEntry> _computeDiff(_SbomInfo a, _SbomInfo b) {
   final mapA = <String, _Comp>{};
   for (final c in a.components) {
-    mapA[c.name.toLowerCase()] = c;
+    mapA[_diffKey(c)] = c;
   }
   final mapB = <String, _Comp>{};
   for (final c in b.components) {
-    mapB[c.name.toLowerCase()] = c;
+    mapB[_diffKey(c)] = c;
   }
 
   final allKeys = {...mapA.keys, ...mapB.keys}.toList()..sort();

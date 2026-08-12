@@ -1,0 +1,146 @@
+import 'package:sbom_generator/models.dart';
+import 'package:sbom_generator/spdx_generator.dart';
+import 'package:test/test.dart';
+
+RpmPackage _pkg({
+  required String name,
+  String version = '1.0',
+  String release = '1.el9',
+  String license = 'MIT',
+  String vendor = '',
+  String url = '',
+}) =>
+    RpmPackage(
+      name: name,
+      version: version,
+      release: release,
+      arch: 'x86_64',
+      epoch: '(none)',
+      license: license,
+      vendor: vendor,
+      url: url,
+      buildTime: '',
+      summary: '',
+      requires: const [],
+      provides: const [],
+    );
+
+void main() {
+  final generator = SpdxGenerator();
+
+  group('SpdxGenerator.generate — enveloppe du document', () {
+    test('produit un document SPDX-2.3 valide', () {
+      final sbom = generator.generate([_pkg(name: 'foo')], []);
+      expect(sbom['spdxVersion'], 'SPDX-2.3');
+      expect(sbom['SPDXID'], 'SPDXRef-DOCUMENT');
+      expect(sbom['dataLicense'], 'CC0-1.0');
+      expect(sbom['documentNamespace'], startsWith('https://sbom.local/spdx/'));
+    });
+
+    test('utilise le nom de document fourni', () {
+      final sbom = generator.generate([_pkg(name: 'foo')], [],
+          documentName: 'Mon SBOM');
+      expect(sbom['name'], 'Mon SBOM');
+    });
+
+    test('nom par défaut si non fourni', () {
+      final sbom = generator.generate([_pkg(name: 'foo')], []);
+      expect(sbom['name'], 'Package Set SBOM');
+    });
+  });
+
+  group('SpdxGenerator.generate — paquets', () {
+    test('génère un package par paquet, avec purl en externalRefs', () {
+      final sbom = generator.generate([_pkg(name: 'foo', version: '1.2.3')], []);
+      final packages = sbom['packages'] as List;
+      expect(packages, hasLength(1));
+      final pkg = packages.single as Map<String, dynamic>;
+      expect(pkg['name'], 'foo');
+      expect(pkg['versionInfo'], contains('1.2.3'));
+      final refs = pkg['externalRefs'] as List;
+      expect(refs, hasLength(1));
+      expect((refs.single as Map)['referenceType'], 'purl');
+    });
+
+    test('licence normalisée en expression SPDX', () {
+      final sbom = generator.generate(
+          [_pkg(name: 'foo', license: 'MIT')], []);
+      final pkg = (sbom['packages'] as List).single as Map<String, dynamic>;
+      expect(pkg['licenseConcluded'], isNot('NOASSERTION'));
+    });
+
+    test('licence absente devient NOASSERTION', () {
+      final sbom = generator.generate([_pkg(name: 'foo', license: '')], []);
+      final pkg = (sbom['packages'] as List).single as Map<String, dynamic>;
+      expect(pkg['licenseConcluded'], 'NOASSERTION');
+      expect(pkg['licenseDeclared'], 'NOASSERTION');
+    });
+
+    test('downloadLocation NOASSERTION si url absente', () {
+      final sbom = generator.generate([_pkg(name: 'foo', url: '')], []);
+      final pkg = (sbom['packages'] as List).single as Map<String, dynamic>;
+      expect(pkg['downloadLocation'], 'NOASSERTION');
+    });
+
+    test('downloadLocation utilise url si fournie', () {
+      final sbom = generator
+          .generate([_pkg(name: 'foo', url: 'https://example.org/foo')], []);
+      final pkg = (sbom['packages'] as List).single as Map<String, dynamic>;
+      expect(pkg['downloadLocation'], 'https://example.org/foo');
+    });
+
+    test('supplier renseigné uniquement si vendor présent', () {
+      final withVendor = generator
+          .generate([_pkg(name: 'foo', vendor: 'ACME')], []);
+      final pkgWith =
+          (withVendor['packages'] as List).single as Map<String, dynamic>;
+      expect(pkgWith['supplier'], 'Organization: ACME');
+
+      final withoutVendor = generator.generate([_pkg(name: 'foo')], []);
+      final pkgWithout =
+          (withoutVendor['packages'] as List).single as Map<String, dynamic>;
+      expect(pkgWithout.containsKey('supplier'), isFalse);
+    });
+  });
+
+  group('SpdxGenerator.generate — relations', () {
+    test('une relation DESCRIBES par paquet', () {
+      final sbom = generator
+          .generate([_pkg(name: 'foo'), _pkg(name: 'bar')], []);
+      final rels = (sbom['relationships'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((r) => r['relationshipType'] == 'DESCRIBES')
+          .toList();
+      expect(rels, hasLength(2));
+      expect(rels.every((r) => r['spdxElementId'] == 'SPDXRef-DOCUMENT'), isTrue);
+    });
+
+    test('les dépendances produisent des relations DEPENDS_ON', () {
+      final foo = _pkg(name: 'foo');
+      final bar = _pkg(name: 'bar');
+      final deps = [
+        PackageDependency(sourceRef: foo.bomRef, dependsOn: [bar.bomRef]),
+      ];
+      final sbom = generator.generate([foo, bar], deps);
+      final dependsOn = (sbom['relationships'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((r) => r['relationshipType'] == 'DEPENDS_ON')
+          .toList();
+      expect(dependsOn, hasLength(1));
+      expect(dependsOn.single['spdxElementId'], foo.spdxId);
+      expect(dependsOn.single['relatedSpdxElement'], bar.spdxId);
+    });
+
+    test('une dépendance vers une ref inconnue est ignorée', () {
+      final foo = _pkg(name: 'foo');
+      final deps = [
+        PackageDependency(sourceRef: foo.bomRef, dependsOn: ['inconnu']),
+      ];
+      final sbom = generator.generate([foo], deps);
+      final dependsOn = (sbom['relationships'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((r) => r['relationshipType'] == 'DEPENDS_ON');
+      expect(dependsOn, isEmpty);
+    });
+  });
+}

@@ -29,6 +29,7 @@ class _Component {
   static List<_Component> fromSbom(Map<String, dynamic> raw) {
     if (raw['bomFormat'] == 'CycloneDX') return _fromCdx(raw);
     if (raw.containsKey('spdxVersion')) return _fromSpdx(raw);
+    if (raw.containsKey('@graph')) return _fromSpdx3(raw);
     return [];
   }
 
@@ -84,6 +85,32 @@ class _Component {
         purl: purl,
         description: p['comment'] as String? ?? '',
         url: p['downloadLocation'] as String? ?? '',
+      );
+    }).where((c) => c.name.isNotEmpty).toList();
+  }
+
+  static List<_Component> _fromSpdx3(Map<String, dynamic> d) {
+    final graph = (d['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
+    return graph.where((e) => e['type'] == 'software:Package').map((p) {
+      String purl = '';
+      for (final ref in (p['externalIdentifier'] as List? ?? [])) {
+        final r = ref as Map<String, dynamic>;
+        if (r['externalIdentifierType'] == 'purl') {
+          purl = r['identifier'] as String? ?? '';
+          break;
+        }
+      }
+      final license = p['concludedLicense'] as String? ??
+          p['declaredLicense'] as String? ??
+          '';
+      return _Component(
+        name: p['name'] as String? ?? '',
+        version: p['software:packageVersion'] as String? ?? '',
+        type: 'package',
+        license: license == 'NOASSERTION' ? '' : license,
+        purl: purl,
+        description: p['summary'] as String? ?? '',
+        url: p['software:downloadLocation'] as String? ?? '',
       );
     }).where((c) => c.name.isNotEmpty).toList();
   }
@@ -156,6 +183,14 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
       } else if (json.containsKey('spdxVersion')) {
         fmt = json['spdxVersion'] as String;
         docName = json['name'] as String?;
+      } else if (json.containsKey('@graph')) {
+        fmt = 'SPDX 3.0 JSON-LD';
+        final graph = (json['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
+        final doc = graph.firstWhere(
+          (e) => e['type'] == 'SpdxDocument',
+          orElse: () => const {},
+        );
+        docName = doc['name'] as String?;
       }
 
       setState(() {
