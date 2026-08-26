@@ -91,15 +91,16 @@ class GrypeRunner {
           controller.add(GrypeOutputEvent(jsonBuf.toString()));
         }
 
-        if (tmpFile != null && tmpFile.existsSync()) {
+        final tf = tmpFile;
+        if (tf != null && tf.existsSync()) {
           try {
-            final content = await tmpFile.readAsString();
+            final content = await tf.readAsString();
             if (!controller.isClosed && content.isNotEmpty) {
               controller.add(GrypeTemplateEvent(content));
             }
           } catch (_) {}
           try {
-            await tmpFile.delete();
+            await tf.delete();
           } catch (_) {}
         }
 

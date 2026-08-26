@@ -12,6 +12,7 @@ import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'quality_panel.dart';
 import 'sbom_diff_panel.dart';
+import 'sbom_licenses_panel.dart';
 import 'sbom_merge_panel.dart';
 import 'sbom_tree_panel.dart';
 import 'sbom_viewer_panel.dart';
@@ -74,7 +75,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 12, vsync: this);
+    _tabs = TabController(length: 13, vsync: this);
   }
 
   @override
@@ -324,6 +325,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(Icons.gavel_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Licences'),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Icon(Icons.manage_search_outlined, size: 16),
                     SizedBox(width: 6),
                     Text('Visionneuse'),
@@ -441,10 +452,13 @@ class _ResultsPanelState extends State<ResultsPanel>
               // Tab 9 : Fusion SBOM
               SbomMergePanel(outputFiles: widget.outputFiles),
 
-              // Tab 10 : Visionneuse SBOM
+              // Tab 10 : Licences SBOM
+              SbomLicensesPanel(outputFiles: widget.outputFiles),
+
+              // Tab 11 : Visionneuse SBOM
               const SbomViewerPanel(),
 
-              // Tab 11 : Aperçu SBOM
+              // Tab 12 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,

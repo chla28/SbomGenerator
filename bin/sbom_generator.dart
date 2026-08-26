@@ -27,6 +27,7 @@ import 'package:sbom_generator/yarn_parser.dart';
 import 'package:sbom_generator/maven_parser.dart';
 import 'package:sbom_generator/csv_generator.dart';
 import 'package:sbom_generator/sbom_reader.dart';
+import 'package:sbom_generator/license_report_generator.dart';
 
 const _version = '1.0.0';
 
@@ -66,6 +67,12 @@ Future<void> main(List<String> arguments) async {
   // Sous-commande `validate` : valide la structure d'un fichier SBOM
   if (arguments.isNotEmpty && arguments.first == 'validate') {
     await _runValidate(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `licenses` : génère un rapport de licences AsciiDoc
+  if (arguments.isNotEmpty && arguments.first == 'licenses') {
+    await _runLicenses(arguments.sublist(1));
     return;
   }
 
@@ -1763,6 +1770,94 @@ Usage:
 
 Formats source supportés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD
 Formats cible supportés  : cyclonedx, spdx, spdx3, json, markdown, asciidoc, html, csv
+
+${parser.usage}
+''');
+}
+
+// ── Sous-commande licenses ─────────────────────────────────────────────────────
+
+Future<void> _runLicenses(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('input', abbr: 'i', mandatory: true,
+        help: 'Fichier SBOM source (CycloneDX JSON ou SPDX JSON/JSON-LD).')
+    ..addOption('output', abbr: 'o', mandatory: true,
+        help: 'Fichier AsciiDoc de sortie (ex : licences.adoc).')
+    ..addOption('name', abbr: 'n',
+        help: 'Nom du document (remplace celui du fichier source).')
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('licenses: ${e.message}');
+    _printLicensesUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) { _printLicensesUsage(parser); exit(0); }
+
+  final inputPath = args['input'] as String;
+  final outputPath = args['output'] as String;
+  final docName = args['name'] as String?;
+
+  if (!await File(inputPath).exists()) {
+    stderr.writeln('licenses: fichier introuvable : $inputPath');
+    exit(1);
+  }
+
+  final Map<String, dynamic> json;
+  try {
+    json = await SbomReader.loadJson(inputPath);
+  } catch (e) {
+    stderr.writeln('licenses: impossible de lire le JSON : $e');
+    exit(1);
+  }
+
+  final reader = SbomReader();
+  final format = SbomReader.detectFormat(json);
+  if (format == SbomFormat.unknown) {
+    stderr.writeln('licenses: format SBOM non reconnu dans $inputPath');
+    stderr.writeln('  Formats supportés : CycloneDX JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD');
+    exit(1);
+  }
+
+  final List<Package> packages;
+  try {
+    packages = reader.read(json);
+  } catch (e) {
+    stderr.writeln('licenses: erreur de lecture : $e');
+    exit(1);
+  }
+
+  final name = docName ?? reader.documentName(json);
+  print('Rapport de licences : $inputPath (${packages.length} composant(s))');
+
+  try {
+    await LicenseReportGenerator()
+        .writeToFile(packages, outputPath, documentName: name);
+  } catch (e) {
+    stderr.writeln('licenses: échec de l\'écriture : $e');
+    exit(1);
+  }
+
+  final sz = await File(outputPath).length();
+  print('→ $outputPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
+}
+
+void _printLicensesUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator licenses – Génère un rapport de licences AsciiDoc à partir d'un fichier SBOM.
+
+Le rapport regroupe les paquets par licence, avec un résumé et des
+avertissements pour les licences copyleft (GPL/AGPL/LGPL/MPL/EPL/CDDL/CPL/EUPL)
+et les paquets sans licence détectée.
+
+Usage:
+  sbom_generator licenses -i sbom.cdx.json -o licences.adoc
+  sbom_generator licenses -i sbom.spdx.json -o licences.adoc -n "Mon projet"
+
+Formats source supportés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD
 
 ${parser.usage}
 ''');
