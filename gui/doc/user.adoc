@@ -116,7 +116,8 @@ Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 
 |`asciidoctor-pdf`
 |Non
-|Conversion automatique du rapport AsciiDoc en PDF
+|Conversion automatique en PDF du rapport AsciiDoc (SBOM, ou export de
+vulnérabilités depuis Grype/OSV-Scanner/Trivy)
 
 |`sbomqs`
 |Non
@@ -989,6 +990,14 @@ par sévérité décroissante (Critical en premier).
 au format RFC 4180. Colonnes : Sévérité, CVE/ID, Paquet, Version installée,
 Version corrigée, Type.
 
+*Export AsciiDoc + PDF* : le bouton ⬥ (à côté de l'export CSV) exporte la
+même liste filtrée dans un rapport AsciiDoc — résumé chiffré (nombre de
+vulnérabilités affichées, décompte par sévérité, filtre de date appliqué le
+cas échéant) suivi du tableau détaillé — puis tente automatiquement sa
+conversion en PDF via `asciidoctor-pdf`. Si l'outil n'est pas installé, le
+fichier `.adoc` reste produit et un message l'indique. L'emplacement de
+sortie est choisi via une boîte de dialogue.
+
 *Filtres par sévérité* : cliquez sur un ou plusieurs badges pour n'afficher que
 les vulnérabilités du niveau correspondant. Le bouton *Tout voir* efface les
 filtres actifs. Seuls les badges correspondant à des sévérités présentes dans
@@ -1127,6 +1136,11 @@ filtres par sévérité, puis liste des vulnérabilités.
 *Export CSV* : le bouton ⬇ exporte la vue filtrée. Colonnes : Sévérité,
 CVE/ID, Paquet, Version installée, Version corrigée, Écosystème.
 
+*Export AsciiDoc + PDF* : le bouton ⬥ exporte la même vue filtrée dans un
+rapport AsciiDoc (résumé par sévérité + tableau détaillé), avec conversion
+PDF automatique si `asciidoctor-pdf` est installé — voir la description
+complète dans l'onglet Grype (<<sec-vue-table>>).
+
 *Filtre par date* : même barre que l'onglet Grype (voir <<sec-vue-table>>).
 Le champ *Publication* correspond à `published` du JSON OSV, le champ
 *Modification* à `modified`. L'option *Propager* copie le filtre vers
@@ -1228,10 +1242,15 @@ trivy sbom --format json --quiet \
 === Résultats
 
 Même interface que les onglets Grype et OSV-Scanner : barre de recherche
-+ tri + export CSV, filtres par sévérité, puis liste des vulnérabilités.
++ tri + export CSV/AsciiDoc+PDF, filtres par sévérité, puis liste des
+vulnérabilités.
 
 *Export CSV* (bouton ⬇) : colonnes Sévérité, CVE/ID, Paquet, Version
 installée, Version corrigée, Titre.
+
+*Export AsciiDoc + PDF* (bouton ⬥) : même rapport que sur les onglets
+Grype/OSV-Scanner (résumé par sévérité + tableau détaillé, conversion PDF
+automatique si `asciidoctor-pdf` est installé) — voir <<sec-vue-table>>.
 
 La colonne *Titre* correspond au champ `Title` du JSON Trivy (description
 courte de la CVE). Elle apparaît en sous-titre de chaque entrée dans la
@@ -2331,7 +2350,10 @@ pour définir manuellement la licence des paquets non reconnus.
 
 === La conversion PDF échoue
 
-*Symptôme* : le message `asciidoctor-pdf introuvable` apparaît dans les logs.
+*Symptôme* : le message `asciidoctor-pdf introuvable` apparaît dans les logs
+(génération SBOM) ou dans le message de confirmation (export AsciiDoc + PDF
+d'un onglet Grype/OSV-Scanner/Trivy — le fichier `.adoc` est alors tout de
+même produit).
 
 *Solution* : installez `asciidoctor-pdf` (voir <<_installer_asciidoctor_pdf_optionnel>>).
 

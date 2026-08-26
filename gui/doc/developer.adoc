@@ -125,6 +125,8 @@ gui/
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
+│       ├── vuln_shared.dart          # VulnRow, VulnTableView : tableau de vulnérabilités
+│       │                             #   partagé (tri/filtre/recherche/export CSV+AsciiDoc+PDF)
 │       ├── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
 │       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
@@ -691,16 +693,10 @@ Structure interne :
 `_OsvPanelState` appelle `VersionService.checkOsv()` dans `initState()`,
 identique au pattern Grype.
 
-`_VulnTableView` (sous-widget de l'onglet Vulnérabilités) maintient :
-
-* `_searchCtrl` / `_searchTerm` — champ de recherche plein-texte (200 px)
-* `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
-  — valeur initiale : `_sortAsc = true` (Critical en premier, même convention que Grype et Trivy)
-* Getter `_filtered` — applique filtres sévérité + recherche + filtre date + tri
-* `_csv()` + `_exportCsv()` — export RFC 4180 avec `FilePicker.platform.saveFile()`
-* En-têtes de colonne cliquables (`_SortHeader`) sans paramètre `width`
-  (contrairement à Grype où la colonne sévérité a une largeur fixe)
-* `_DateFilterBar` + `_DateChip` — même structure que `grype_panel.dart`
+L'onglet Vulnérabilités affiche `VulnTableView<OsvVuln>` (voir <<sec-vuln-shared>>
+pour le composant partagé) instancié avec `toolName: 'OSV-Scanner'`,
+`csvHeader`/`csvRow` propres aux colonnes OSV, `extraColumnHeader:
+'ÉCOSYSTÈME'`.
 
 `OsvVuln` est un modèle de données parsé depuis le JSON OSV :
 `results[].packages[].vulnerabilities[]`. La sévérité est extraite depuis
@@ -757,10 +753,11 @@ Paramètres :
 * `void Function(CveDateFilter)? onDateFilterChanged` — callback à chaque modification
 * `void Function(CveDateFilter)? onPropagate` — copie le filtre vers Grype et OSV
 
-`_VulnTableView` — même structure que dans `osv_panel.dart` (recherche, tri,
-export CSV, `_DateFilterBar`). Les colonnes CSV sont : Sévérité, CVE/ID, Paquet,
-Version installée, Version corrigée, Titre. Les chaînes de sévérité sont en
-majuscules (`CRITICAL`, `HIGH`…) contrairement à Grype (`Critical`, `High`…).
+`VulnTableView<TrivyVuln>` (voir <<sec-vuln-shared>>) instancié avec
+`toolName: 'Trivy'`, `descriptionOf: (v) => v.title`. Les colonnes CSV sont :
+Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Titre. Les
+chaînes de sévérité sont en majuscules (`CRITICAL`, `HIGH`…) contrairement à
+Grype (`Critical`, `High`…).
 
 `TrivyVuln` est parsé depuis `Results[].Vulnerabilities[]` du JSON Trivy.
 Le champ `Title` est affiché en sous-titre de chaque entrée.
@@ -1198,7 +1195,7 @@ Paramètres :
   chaque analyse réussie ; `ResultsPanel` l'utilise pour alimenter `DashboardPanel`
 * `CveDateFilter dateFilter` — filtre temporel courant, transmis depuis `ResultsPanel`
 * `void Function(CveDateFilter)? onDateFilterChanged` — callback appelé à chaque
-  modification du filtre dans la barre `_DateFilterBar`
+  modification du filtre dans la barre `DateFilterBar`
 * `void Function(CveDateFilter)? onPropagate` — callback appelé par le bouton
   "Propager aux autres onglets" ; `ResultsPanel` l'utilise pour écraser les
   filtres des deux autres panneaux
@@ -1219,11 +1216,11 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 
 |0
 |Table (N)
-|`_VulnTableView` — `_DateFilterBar` + recherche + tri + filtres sévérité + export CSV
+|`VulnTableView<GrypeVuln>` — `DateFilterBar` + recherche + tri + filtres sévérité + export CSV/AsciiDoc+PDF (voir <<sec-vuln-shared>>)
 
 |1
 |JSON
-|`_JsonView` — JSON brut formaté (fond noir)
+|`JsonView` — JSON brut formaté (fond noir)
 
 |2
 |Template
@@ -1236,26 +1233,124 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 * `modifiedDate` (`DateTime?`) — depuis `vuln['lastModifiedDate']`
 * Les deux champs sont absents de nombreux résultats Grype : `null` est normal.
 
-`_VulnTableView` est un `StatefulWidget` qui maintient :
+L'instance `VulnTableView<GrypeVuln>` est construite avec `toolName: 'Grype'`,
+`severityOrder: ['Critical', 'High', 'Medium', 'Low', 'Negligible']`,
+`csvHeader`/`csvRow` pour les colonnes Sévérité, CVE/ID, Paquet, Version
+installée, Version corrigée, Type, et `extraColumnHeader: 'TYPE'` /
+`extraOf: (v) => v.packageType`. Le composant lui-même — recherche, tri,
+filtres, `DateFilterBar`, exports — est documenté une seule fois en
+<<sec-vuln-shared>> puisqu'il est strictement identique pour Grype, OSV et
+Trivy.
 
-* `_searchCtrl` / `_searchTerm` — champ de recherche 200 px
-* `_sortCol` (`enum _SortCol { severity, cveId, package }`) et `_sortAsc`
-  — valeur initiale : `_sortAsc = true` (ascendant par `_sevOrd`, Critical=0 en premier)
-* `_activeFilters` (`Set<String>`) — filtres sévérité actifs (vide = tout afficher)
-* Getter `_filtered` — applique filtres sévérité + recherche + filtre date + tri
-* `_csv()` + `_exportCsv()` — export RFC 4180 via `FilePicker.platform.saveFile()`
-  Colonnes : Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Type
-* En-têtes de colonne `_SortHeader` avec paramètre optionnel `width` pour la
-  colonne sévérité (largeur fixe 120 px, contrairement à OSV et Trivy)
+[[sec-vuln-shared]]
+== `widgets/vuln_shared.dart` — Composants partagés entre Grype, OSV et Trivy
 
-`_DateFilterBar` (widget interne défini en bas du fichier) :
+Les trois onglets de scan de vulnérabilités affichaient jusqu'à une session
+antérieure un tableau trié/filtré/exportable dupliqué presque à l'identique
+dans chaque fichier de panneau. `vuln_shared.dart` factorise ce socle commun ;
+seuls les champs propres à chaque outil restent dans `grype_panel.dart` /
+`osv_panel.dart` / `trivy_panel.dart` (modèle `XxxVuln`, formulaire de
+configuration, bannière de résultat).
 
-* `Row` avec : icône calendrier, label "Date CVE :", `SegmentedButton<CveDateField>`
-  (Publication / Modification / La plus récente), deux `_DateChip` (Après le… /
-  Avant le…), checkbox "Sans date", `Spacer`, `TextButton` "Propager aux autres onglets"
-* `_DateChip` est un `InkWell` avec bordure arrondie ; un clic ouvre `showDatePicker`
-  (`firstDate: 1999`, `lastDate: DateTime.now()`) ; le × intégré efface la borne
-* Tout changement appelle `widget.onDateFilterChanged` via `CveDateFilter.copyWith()`
+=== `VulnRow` — socle commun aux trois modèles de vulnérabilité
+
+[source,dart]
+----
+abstract class VulnRow {
+  String get id;
+  String get severity;
+  String get packageName;
+  String get installedVersion;
+  String get fixedVersion;
+  DateTime? get publishedDate;
+  DateTime? get modifiedDate;
+}
+----
+
+`GrypeVuln`, `OsvVuln` et `TrivyVuln` implémentent chacun cette interface
+(`implements VulnRow`) et restent des classes séparées — conservées
+distinctes plutôt qu'unifiées en une seule, car `DashboardPanel` et
+`ResultsPanel` les consomment avec leur type propre (champs additionnels :
+`packageType` pour Grype, `ecosystem` pour OSV, `title` pour Trivy).
+
+=== `VulnTableView<T extends VulnRow>`
+
+Widget générique paramétré par le type de vulnérabilité. Reçoit, en plus de
+`vulns`/`parseFailed`/`parseFailedMessage`/`severityOrder`/`dateFilter` :
+
+[cols="2,3", options="header"]
+|===
+|Paramètre |Rôle
+
+|`toolName` _(requis)_
+|Nom affiché dans le titre des rapports export AsciiDoc/PDF et de la boîte
+de dialogue d'export (`'Grype'`, `'OSV-Scanner'`, `'Trivy'`)
+
+|`csvDialogTitle`, `csvFileName`, `csvHeader`, `csvRow`
+|Paramétrage de l'export CSV — `csvHeader` sert aussi de source pour les
+en-têtes de colonnes du rapport AsciiDoc (`csvHeader.split(',')`)
+
+|`extraColumnHeader` / `extraOf`
+|Colonne optionnelle en fin de ligne (ex. "TYPE" pour Grype) ; `null` si
+l'outil n'a pas de champ de classification
+
+|`descriptionOf`
+|Texte descriptif optionnel en 2e ligne (ex. le titre de la CVE pour Trivy)
+|===
+
+`_VulnTableViewState<T>` maintient recherche, tri (`VulnSortCol`), filtres de
+sévérité (`_activeFilters`) et le filtre de date (délégué à
+`widget.dateFilter.matches(...)`) — le getter `_filtered` compose les quatre.
+
+=== Export CSV et AsciiDoc + PDF
+
+Deux boutons dans la barre d'outils, tous deux désactivés si `_filtered` est
+vide :
+
+* *Export CSV* (`Icons.download_outlined`) — `_exportCsv()` : écrit
+  `csvHeader` puis une ligne par élément de `_filtered` via `csvRow`,
+  échappement RFC 4180 (`csvEscape`), chemin choisi via
+  `FilePicker.saveFile(...)`.
+* *Export AsciiDoc + PDF* (`Icons.picture_as_pdf_outlined`) — `_exportAsciiDoc()` :
+  écrit un rapport AsciiDoc sur `_filtered` (donc après filtres
+  sévérité/recherche/date, comme le CSV) — résumé chiffré (décompte par
+  sévérité + filtre de date appliqué le cas échéant) suivi d'un tableau
+  détaillé dont les colonnes sont dérivées de `csvHeader`/`csvRow` (pas de
+  paramètres AsciiDoc dédiés : le CSV et l'AsciiDoc partagent la même
+  description de colonnes). Une fois le `.adoc` écrit, tente automatiquement
+  `Process.run('asciidoctor-pdf', [path, '-o', pdfPath])` — silencieux si
+  l'outil est absent (`catch` générique, message dans le `SnackBar` de
+  résultat) ou en échec (code retour non nul rapporté, `.adoc` conservé) ;
+  même philosophie que `HomeScreen._generatePdf()` (conversion PDF du
+  rapport SBOM principal), en plus compact car il n'y a pas de journal
+  persistant à alimenter — tout le retour utilisateur passe par le
+  `SnackBar`. `adocEscape(s)` échappe uniquement `|` (ambigu en tête de
+  cellule AsciiDoc) — plus simple que `csvEscape` car les valeurs exportées
+  (sévérité, CVE, nom de paquet, version) ne contiennent ni retour à la
+  ligne ni guillemet à échapper en pratique.
+
+=== `DateFilterBar` / `DateChip`
+
+* `DateFilterBar` : `Row` avec icône calendrier, label "Date CVE :",
+  `SegmentedButton<CveDateField>` (Publication / Modification / La plus
+  récente), deux `DateChip` (Après le… / Avant le…), checkbox "Sans date",
+  `Spacer`, `TextButton` "Propager aux autres onglets".
+* `DateChip` : `InkWell` avec bordure arrondie ; un clic ouvre
+  `showDatePicker` (`firstDate: 1999`, `lastDate: DateTime.now()`) ; le ×
+  intégré efface la borne.
+* Tout changement appelle `widget.onDateFilterChanged` via
+  `CveDateFilter.copyWith()` ; `onPropagate` recopie le filtre courant vers
+  les deux autres panneaux (lift-and-broadcast géré par `ResultsPanel`, voir
+  plus haut).
+
+=== `JsonView` / `SortHeader` / `SplitPickButton` / `ErrorBanner`
+
+Autres widgets partagés, sans état propre significatif : `JsonView` (rendu
+JSON brut sur fond noir), `SortHeader` (en-tête de colonne cliquable
+▲/▼, paramètre optionnel `width` non utilisé par `VulnTableView` — les trois
+panneaux ont désormais des colonnes de largeur uniforme), `SplitPickButton`
+(bouton de sélection de fichier avec menu "Type filtré"/"Tous les fichiers",
+basé sur `MenuAnchor`), `ErrorBanner` (bannière d'erreur rouge générique).
 
 === Flux de données
 
@@ -1304,7 +1399,7 @@ GrypeRunner.run(...)   →   Process.start('grype', args)
   ├── GrypeTemplateEvent(text)  →  setState() → _templateOutput, bascule tab 2
   └── GrypeDoneEvent(code)      →  setState() → _isRunning=false, _exitCode
 
-_VulnTableView.build()
+VulnTableView<GrypeVuln>.build()
   │ widget.dateFilter (CveDateFilter transmis depuis ResultsPanel)
   ▼
 getter _filtered
@@ -1313,9 +1408,9 @@ getter _filtered
   ├── filtre date (dateFilter.matches(v.publishedDate, v.modifiedDate))
   └── tri (_sortCol, _sortAsc)
 
-_DateFilterBar (interaction utilisateur)
+DateFilterBar (interaction utilisateur)
   │ onDateFilterChanged → ResultsPanel.setState() → _grypeFilter mis à jour
-  │   → GrypePanel reçoit le nouveau dateFilter → _VulnTableView se reconstruit
+  │   → GrypePanel reçoit le nouveau dateFilter → VulnTableView se reconstruit
   └── onPropagate → ResultsPanel.setState() → _osvFilter = _trivyFilter = filtre Grype
 ----
 
@@ -1568,8 +1663,8 @@ et extension de `copyWith()`.
 . Ajouter le champ dans `CveDateFilter` (ex. `final String? severity`)
 . Étendre le *sentinel* pattern dans `copyWith()` si le champ est nullable
 . Mettre à jour `matches()` avec la logique de filtrage
-. Propager le nouveau champ depuis `_DateFilterBar` (chaque panneau)
-  via `widget.onDateFilterChanged(widget.dateFilter.copyWith(…))`
+. Propager le nouveau champ depuis `DateFilterBar` (composant partagé,
+  <<sec-vuln-shared>>) via `widget.onDateFilterChanged(widget.dateFilter.copyWith(…))`
 . Mettre à jour `_filterByDate()` dans `bin/sbom_generator.dart` pour
   répliquer la même logique côté CLI
 

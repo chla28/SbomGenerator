@@ -29,7 +29,7 @@ Pour la description fonctionnelle complète de chaque onglet, voir `doc/user.ado
 | `osv-scanner` | Non | Détection de vulnérabilités (onglet OSV-Scanner) |
 | `sbomqs` | Non | Score de qualité du SBOM (onglet Qualité SBOM, ou option dans Configuration) |
 | `sbom-scorecard` | Non | Score de qualité du SBOM, référentiel complémentaire (onglet Qualité SBOM) |
-| `asciidoctor-pdf` | Non | Conversion du rapport AsciiDoc généré en PDF |
+| `asciidoctor-pdf` | Non | Conversion en PDF du rapport AsciiDoc généré (SBOM ou export de vulnérabilités Grype/OSV-Scanner/Trivy) |
 
 Tous les outils marqués « Non » sont optionnels : leur absence désactive uniquement la fonctionnalité correspondante, avec un message explicite dans l'interface, sans faire échouer le reste de l'application.
 
