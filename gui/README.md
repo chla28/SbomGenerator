@@ -1,6 +1,6 @@
 # sbom_generator_gui
 
-Interface graphique de bureau (Linux) pour **SBOM Generator**. Elle donne accès, sans ligne de commande, à l'ensemble du flux de travail autour de l'inventaire logiciel (SBOM) : configuration et lancement d'une génération, suivi de la progression, exploration des résultats, recherche de vulnérabilités connues, évaluation de la qualité du SBOM produit, comparaison entre deux inventaires, fusion de plusieurs inventaires, et consultation libre de tout fichier SBOM existant.
+Interface graphique de bureau (Linux) pour **SBOM Generator**. Elle donne accès, sans ligne de commande, à l'ensemble du flux de travail autour de l'inventaire logiciel (SBOM) : configuration et lancement d'une génération, suivi de la progression, exploration des résultats, recherche de vulnérabilités connues, évaluation de la qualité du SBOM produit, comparaison entre deux inventaires, fusion de plusieurs inventaires, génération d'un rapport de licences, et consultation libre de tout fichier SBOM existant.
 
 L'application n'effectue aucun traitement métier elle-même : elle orchestre des outils en ligne de commande externes (`sbom-generator`, `grype`, `osv-scanner`, `trivy`, `sbomqs`, `sbom-scorecard`, `asciidoctor-pdf`) et affiche leurs résultats.
 
@@ -10,7 +10,7 @@ L'application n'effectue aucun traitement métier elle-même : elle orchestre de
 
 Une fenêtre unique en deux zones :
 - un panneau **Configuration** (gauche) : formulaire de génération d'un SBOM (source de paquets ou image de conteneur OCI, formats de sortie, options), avec prévisualisation en direct de la commande équivalente et gestion de profils nommés ;
-- une zone **Résultats** (droite), organisée en 12 onglets : Progression, Résultats, Tableau de bord, Grype, OSV-Scanner, Trivy, Qualité SBOM, Arborescence, Comparaison, Fusion, Visionneuse, Aperçu.
+- une zone **Résultats** (droite), organisée en 13 onglets : Progression, Résultats, Tableau de bord, Grype, OSV-Scanner, Trivy, Qualité SBOM, Arborescence, Comparaison, Fusion, Licences, Visionneuse, Aperçu.
 
 Pour la description fonctionnelle complète de chaque onglet, voir `doc/user.adoc`.
 

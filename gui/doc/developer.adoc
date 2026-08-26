@@ -121,7 +121,7 @@ gui/
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 12 onglets
+│       ├── results_panel.dart        # Panneau droit : 13 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
@@ -130,6 +130,7 @@ gui/
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
 │       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
 │       ├── sbom_merge_panel.dart     # Onglet Fusion SBOM — fusionne plusieurs SBOM
+│       ├── sbom_licenses_panel.dart  # Onglet Licences SBOM — rapport AsciiDoc via `licenses`
 │       └── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
 ├── doc/
 │   ├── developer.adoc               # Ce document
@@ -139,6 +140,7 @@ gui/
 │   ├── config_panel_input_test.dart
 │   ├── dashboard_panel_test.dart
 │   ├── sbom_merge_panel_test.dart
+│   ├── sbom_licenses_panel_test.dart
 │   └── sbom_viewer_panel_test.dart
 └── pubspec.yaml
 ----
@@ -1008,6 +1010,33 @@ largeur disponible descend sous ~1250 px, ce qui se produit dès la taille
 par défaut d'un test Flutter (800×600). Voir <<sec-file-io-tests>>.
 ====
 
+[[sec-licenses-panel]]
+==== `widgets/sbom_licenses_panel.dart` — Onglet Licences SBOM
+
+`SbomLicensesPanel` est un `StatefulWidget` avec `AutomaticKeepAliveClientMixin`,
+construit sur le même modèle que `SbomMergePanel` (<<sec-merge-panel>>) : pas
+de parsing local du SBOM, délégation complète à `sbom-generator licenses`
+via `SbomRunner`.
+
+État de `_SbomLicensesPanelState` :
+
+* `String? _inputFile` — chemin du fichier source unique (contrairement à
+  `SbomMergePanel`, un seul fichier en entrée, pas de liste)
+* `_outputCtrl`, `_nameCtrl` — contrôleurs de texte pour `-o`/`-n`
+  (`_outputCtrl` initialisé à `licences.adoc`)
+* `_running`, `_exitCode`, `_resultPath`, `_logLines` — même rôle que dans
+  `SbomMergePanel`
+
+`_runLicenses()` construit les arguments `['licenses', '-i', _inputFile!,
+'-o', outputPath, if (nom) '-n', nom]`. Le bouton *Générer* est actif
+uniquement si `_inputFile != null` et `_outputCtrl.text` non vide.
+
+`_sbomFiles` (fichiers proposés dans le menu *Fichiers générés*) filtre
+`widget.outputFiles` sur les trois extensions SBOM lisibles par `licenses`
+(`.cdx.json`, `.spdx.json`, `.spdx3.jsonld`) — contrairement à
+`SbomMergePanel` qui exclut `.spdx3.jsonld` (SPDX 3.0 non supporté en entrée
+pour `merge`), `licenses` accepte les trois formats comme `diff`.
+
 ==== `widgets/sbom_viewer_panel.dart` — Onglet Visionneuse SBOM
 
 `SbomViewerPanel` est un `StatefulWidget` const permettant d'ouvrir et d'explorer
@@ -1057,7 +1086,7 @@ Sous-widgets privés :
 
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **12 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **13 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -1104,10 +1133,14 @@ Sous-widgets privés :
 |`SbomMergePanel` — fusionne plusieurs SBOM via `sbom-generator merge`
 
 |10
+|Licences
+|`SbomLicensesPanel` — rapport de licences AsciiDoc via `sbom-generator licenses`
+
+|11
 |Visionneuse
 |`SbomViewerPanel` — exploration interactive d'un fichier SBOM externe
 
-|11
+|12
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===
@@ -1408,7 +1441,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 12, vsync: this);  // ResultsPanel : 12 onglets
+    _tabs = TabController(length: 13, vsync: this);  // ResultsPanel : 13 onglets
   }
 
   @override
@@ -1482,17 +1515,17 @@ Stream<GrypeEvent> run({
 
 === Ajouter un onglet dans ResultsPanel
 
-Le `TabController` est actuellement à `length: 12` (Progression, Résultats,
+Le `TabController` est actuellement à `length: 13` (Progression, Résultats,
 Tableau de bord, Grype, OSV-Scanner, Trivy, Qualité SBOM, Arborescence,
-Comparaison, Fusion, Visionneuse, Aperçu). Exemple réel : l'ajout de l'onglet
-*Fusion* (`SbomMergePanel`, 10^e^ → 12^e^ onglet) a suivi exactement ces
-étapes.
+Comparaison, Fusion, Licences, Visionneuse, Aperçu). Exemple réel : l'ajout
+de l'onglet *Licences* (`SbomLicensesPanel`, 11^e^ → 13^e^ onglet) a suivi
+exactement ces étapes.
 
 . Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
 +
 [source,dart]
 ----
-_tabs = TabController(length: 12, vsync: this);  // était 11
+_tabs = TabController(length: 13, vsync: this);  // était 12
 ----
 
 . Ajouter un `Tab(...)` dans le `TabBar`, à la position choisie :
@@ -1523,8 +1556,9 @@ MonNouveauWidget(outputFiles: widget.outputFiles),
   paramètre correspondant à `ResultsPanel` et le propager depuis `home_screen.dart`.
 
 . Si le nouvel onglet appelle le CLI, réutiliser `SbomRunner` (`services/sbom_runner.dart`)
-  plutôt que d'écrire un nouveau service `Process.start` — c'est ce que fait
-  `SbomMergePanel` pour `sbom-generator merge` (voir <<sec-merge-panel>>).
+  plutôt que d'écrire un nouveau service `Process.start` — c'est ce que font
+  `SbomMergePanel` pour `sbom-generator merge` (voir <<sec-merge-panel>>) et
+  `SbomLicensesPanel` pour `sbom-generator licenses` (voir <<sec-licenses-panel>>).
 
 === Ajouter un filtre au modèle `CveDateFilter`
 
@@ -1688,6 +1722,22 @@ await tmpFile.delete();
 
 Si grype ne supporte pas la syntaxe `-o template=<fichier>` (versions < 0.65),
 une alternative est de lancer grype deux fois séquentiellement.
+
+[NOTE]
+====
+Le snippet ci-dessus simplifie un détail important : `tmpFile` est en
+réalité `File?` (`null` quand aucun template n'est demandé), déclaré comme
+variable locale mutable puis capturé par **deux** closures imbriquées
+(`Process.start(...).then((process) { … process.exitCode.then((code) async {
+… }); })`). Le vérificateur de types Dart ne promeut pas de manière fiable
+une variable mutable capturée à travers plusieurs closures/`await` — un test
+`if (tmpFile != null && tmpFile.existsSync())` suffisait pour `.existsSync()`
+juste après, mais échouait à la compilation sur `tmpFile.delete()` un peu
+plus loin (`tmpFile` retombait à `File?`). Correction : rebinder dans une
+variable locale `final` au point d'usage — `final tf = tmpFile; if (tf !=
+null && tf.existsSync()) { … tf.delete(); }` — qui reste promue de façon
+stable puisqu'elle n'est jamais réassignée.
+====
 
 === Stream vs Future pour les processus externes
 

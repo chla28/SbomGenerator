@@ -70,6 +70,7 @@ sbom_generator -i <fichier> -I <image-oci> [options]
 sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
+sbom_generator licenses -i <sbom-source> -o <licences.adoc>
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
 ```
@@ -429,6 +430,24 @@ Convertit un fichier SBOM existant vers un ou plusieurs formats sans re-scanner 
 
 Formats source acceptés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD.
 
+### Rapport de licences (`licenses`)
+
+Génère un rapport de conformité des licences au format AsciiDoc, regroupé par licence plutôt que par paquet :
+
+```bash
+./sbom_generator licenses -i sbom.cdx.json -o licences.adoc
+
+./sbom_generator licenses -i sbom.spdx.json -o licences.adoc -n "Mon projet"
+```
+
+Le rapport commence par un résumé (paquets analysés, licences distinctes,
+paquets sous licence copyleft fort/faible, paquets sans licence détectée),
+suivi d'un avertissement listant les identifiants copyleft détectés (GPL,
+AGPL en copyleft fort ; LGPL, MPL, EPL, CDDL, CPL, EUPL en copyleft faible —
+détection heuristique par identifiant SPDX, pas une analyse juridique), puis
+d'une section par licence avec la liste des paquets concernés. Formats
+source acceptés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD.
+
 ### Validation de SBOM (`validate`)
 
 Vérifie la conformité structurelle d'un ou plusieurs fichiers SBOM :
@@ -635,7 +654,7 @@ NTIA 2025 RFC   : 10.0/10  A
 ```
 sbom_generator/
 ├── bin/
-│   └── sbom_generator.dart        # Point d'entrée CLI (sous-commandes : diff, merge, convert, validate, scan)
+│   └── sbom_generator.dart        # Point d'entrée CLI (sous-commandes : diff, merge, convert, licenses, validate, scan)
 ├── lib/
 │   ├── models.dart                 # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
 │   ├── rpm_parser.dart             # Interrogation rpm + résolution dépendances
@@ -655,6 +674,7 @@ sbom_generator/
 │   ├── sbom_diff.dart              # Comparaison de SBOM (sous-commande diff)
 │   ├── sbom_merger.dart            # Fusion de SBOM (sous-commande merge)
 │   ├── sbom_reader.dart            # Lecteur SBOM (CycloneDX/SPDX) → List<Package>
+│   ├── license_report_generator.dart # Rapport de licences AsciiDoc (sous-commande licenses)
 │   ├── policy_checker.dart         # Licences interdites + score qualité CI/CD
 │   ├── cyclonedx_generator.dart    # Générateur CycloneDX 1.6/1.7
 │   ├── spdx_generator.dart         # Générateur SPDX 2.3

@@ -69,14 +69,15 @@ Parser Parser Parser Parser Parser Parser
    cosign sign-blob     (--sign, best-effort)
 ```
 
-En complément de la génération, quatre sous-commandes réutilisent tout ou
+En complément de la génération, six sous-commandes réutilisent tout ou
 partie du pipeline sans reconstruire un SBOM depuis les paquets :
 
 | Sous-commande | Fichier(s) impliqué(s) | Rôle |
 |---|---|---|
-| `diff <a> <b>` | `sbom_diff.dart` | Compare deux SBOM CycloneDX (ajouts/suppressions/mises à jour) |
-| `merge <a> <b> …` | `sbom_merger.dart` | Fusionne plusieurs SBOM CycloneDX en un seul, déduplication par PURL |
+| `diff <a> <b>` | `sbom_diff.dart` | Compare deux SBOM CycloneDX ou SPDX (2.x/3.0) (ajouts/suppressions/mises à jour) |
+| `merge <a> <b> …` | `sbom_merger.dart` | Fusionne plusieurs SBOM CycloneDX ou SPDX 2.x en un seul, déduplication par PURL |
 | `convert -i <a> -f <fmt>` | `sbom_reader.dart` + générateurs | Relit un SBOM existant et le réexporte vers un/plusieurs formats |
+| `licenses -i <a> -o <adoc>` | `sbom_reader.dart` + `license_report_generator.dart` | Rapport AsciiDoc des licences, regroupé par licence, avec alertes copyleft |
 | `validate <a> [<b>…]` | (inline dans `bin/sbom_generator.dart`) | Vérifie la structure minimale d'un ou plusieurs SBOM |
 | `scan --sbom <a>` | (inline dans `bin/sbom_generator.dart`) | Interroge grype/osv-scanner/trivy sur un SBOM déjà généré, filtre par date |
 
@@ -685,10 +686,10 @@ déclarations de version sans dépendance effective ou des plugins.
 
 | Méthode | Entrée | Sortie |
 |---|---|---|
-| `diff(Map a, Map b)` | Deux SBOM CycloneDX JSON parsés | `SbomDiffResult` |
+| `diff(Map a, Map b)` | Deux SBOM CycloneDX ou SPDX (2.x/3.0) JSON parsés | `SbomDiffResult` |
 | `printDiff(result)` | `SbomDiffResult` | Sortie ANSI colorée (vert=ajout, rouge=suppression, jaune=mise à jour) |
 | `toJson(result)` | `SbomDiffResult` | `Map<String, dynamic>` avec section `summary` |
-| `loadFile(path)` | Chemin fichier | `Future<Map<String, dynamic>>` |
+| `loadFile(path)` | Chemin fichier | `Future<Map<String, dynamic>>` (méthode statique — les trois autres sont des méthodes d'instance) |
 
 ```dart
 class SbomDiffResult {
@@ -698,15 +699,16 @@ class SbomDiffResult {
 }
 ```
 
-**Algorithme** : indexation par `_componentKey()` = `purl` sans le segment
-`@version` si présent, sinon `name:type`. Comparaison des deux index : absent
-de A = ajout, absent de B = suppression, présent des deux côtés avec version
-différente = mise à jour. Résultat trié par nom.
-
-> `_indexComponents` lit uniquement `sbom['components']` (clé propre à
-> CycloneDX) : comparer deux fichiers SPDX ne lève pas d'erreur mais ne
-> produit aucune comparaison exploitable, faute de composants reconnus dans
-> cette structure.
+**Algorithme** : `_indexComponents()` dispatche vers `_indexCycloneDxComponents`
+(clé `components[]`), `_indexSpdxComponents` (`spdxVersion` présent, clé
+`packages[]`) ou `_indexSpdx3Components` (`@graph` présent, nodes de type
+`software_Package`), puis indexe chaque composant par `_componentKey()` =
+`purl` sans le segment `@version` si présent, sinon `name:type`. Comparaison
+des deux index : absent de A = ajout, absent de B = suppression, présent des
+deux côtés avec version différente = mise à jour. Résultat trié par nom. Les
+deux fichiers comparés peuvent être dans des formats différents (ex. l'un en
+CycloneDX, l'autre en SPDX 3.0) — seule l'identité du composant (`purl`/nom)
+compte, pas le format d'origine.
 
 ---
 
@@ -718,7 +720,11 @@ class SbomMerger {
 }
 ```
 
-**Algorithme** :
+`merge()` (méthode d'instance, pas statique) dispatche vers `_mergeCycloneDx`
+ou `_mergeSpdx` selon que le premier SBOM fourni contient `spdxVersion`. Le
+format de sortie suit toujours celui du **premier** fichier.
+
+**`_mergeCycloneDx`** :
 1. Le premier SBOM sert de base (préserve `metadata`).
 2. Pour chaque SBOM suivant : déduplication des `components` par `purl`
    (puis par `bom-ref` si PURL absent), déduplication des `dependencies` par
@@ -727,7 +733,15 @@ class SbomMerger {
 3. Nouveau `serialNumber` (UUID v4) généré pour le document fusionné.
 4. `documentName` écrase `metadata.component.name` si fourni.
 
-Seul le format CycloneDX JSON est supporté en entrée et en sortie.
+**`_mergeSpdx`** : même principe pour SPDX 2.3 — déduplication des
+`packages[]` par `purl` puis `SPDXID`, des `relationships[]` par triple clé
+(`spdxElementId`, `relationshipType`, `relatedSpdxElement`), nouveau document
+SPDX 2.3 reconstruit.
+
+SPDX 3.0 (JSON-LD) n'est pas supporté en entrée pour `merge` (seul `diff` le
+lit) ; tous les fichiers source doivent être dans le même format que le
+premier fourni — un format différent n'est pas détecté comme erreur mais
+produit une fusion incomplète.
 
 ---
 
@@ -753,6 +767,40 @@ static SbomFormat detectFormat(Map<String, dynamic> json) {
 `license`, `vendor`, `url`, `sha256` (si présent), et infère `packageType`
 via `_purlToType(purl)` (préfixe `pkg:rpm/`, `pkg:golang/`, `pkg:npm/`,
 `pkg:maven/`, `pkg:pypi/`, `pkg:cargo/`, `pkg:apk/`, `pkg:deb/`, sinon `'source'`).
+
+---
+
+## `lib/license_report_generator.dart` — Rapport de licences (sous-commande `licenses`)
+
+```dart
+class LicenseReportGenerator {
+  Future<void> writeToFile(List<Package> packages, String outputPath, {String? documentName});
+}
+```
+
+Regroupe les paquets par `pkg.license` **exacte** (clé = chaîne telle que
+présente dans le SBOM source, y compris les expressions composées `A AND B`
+fréquentes sur les paquets Debian/RPM) et écrit un rapport AsciiDoc : résumé
+chiffré, avertissement copyleft, section détaillée par licence, section des
+paquets sans licence détectée.
+
+`_classify(license)` : heuristique par sous-chaîne sur l'expression
+(insensible à la casse) — `AGPL` ou `GPL` non précédé d'une lettre (regex
+`(?<![A-Z])GPL`, pour ne pas confondre avec `LGPL`) → `strongCopyleft` ;
+`LGPL`/`MPL`/`EPL`/`CDDL`/`CPL`/`EUPL` → `weakCopyleft` ; sinon `permissive`
+(ou `unknown` si la chaîne est vide). Cette classification s'applique sur
+l'expression **entière**, donc une expression composée contenant un seul
+token copyleft (ex. `BSD-3-Clause AND GPL-2.0-only AND MIT`) classe tout le
+groupe en copyleft.
+
+`_copyleftTokens(license, target)` : découpe une expression composée sur
+`AND`/`OR` et ne retient que les tokens dont la classification individuelle
+correspond à `target`. Utilisé uniquement pour la liste d'avertissement en
+tête de rapport — le regroupement par section, lui, garde l'expression
+complète telle que déclarée. Sans cette étape, un SBOM Debian réel (licences
+systématiquement concaténées) produit un avertissement listant des dizaines
+de chaînes composées illisibles plutôt que les identifiants copyleft
+individuels concernés.
 
 ---
 
@@ -864,7 +912,7 @@ La boucle de résolution de dépendances est sautée si **tous** les formats
 demandés sont `markdown`, `asciidoc` ou `html` (formats tabulaires qui
 n'exploitent pas cette information).
 
-### Sous-commandes `diff`, `merge`, `convert`, `validate`
+### Sous-commandes `diff`, `merge`, `convert`, `validate`, `licenses`
 
 Routées avant le parsing principal des options :
 
@@ -873,6 +921,7 @@ if (arguments.first == 'diff')     { await _runDiff(arguments.sublist(1));     r
 if (arguments.first == 'merge')    { await _runMerge(arguments.sublist(1));    return; }
 if (arguments.first == 'convert')  { await _runConvert(arguments.sublist(1));  return; }
 if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); return; }
+if (arguments.first == 'licenses') { await _runLicenses(arguments.sublist(1)); return; }
 if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     return; }
 ```
 
@@ -902,6 +951,10 @@ if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     r
   d'un node `SpdxDocument` pour SPDX 3.0). Code retour : `0` si tous
   valides, `1` sinon (fichier introuvable ou JSON illisible compte comme
   invalide sans interrompre la vérification des autres fichiers).
+- **`_runLicenses(args)`** : `-i <source>` (obligatoire), `-o <sortie>`
+  (obligatoire), `-n <nom>` optionnel. Même chargement que `_runConvert`
+  (`SbomReader.loadJson()` + `SbomReader().read(json)`), puis délègue tout le
+  regroupement/formatage à `LicenseReportGenerator().writeToFile()`.
 
 ### Sous-commande `scan` — analyse de vulnérabilités
 
@@ -1394,7 +1447,7 @@ dart test test/unit/                 # tests unitaires seuls
 dart test test/integration/          # tests d'intégration seuls
 ```
 
-Au moment de la rédaction : **223 tests** au total (204 unitaires + 19
+Au moment de la rédaction : **231 tests** au total (212 unitaires + 19
 d'intégration, dont 6 sautées automatiquement dans un environnement sans
 `rpm` installé ou sans les archives OCI de test — `keycloak_26.tar` n'est
 pas versionné). Comptage vérifié via `dart test -r compact`.
@@ -1424,6 +1477,7 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `sbom_reader_test.dart` | détection de format, relecture CycloneDX |
 | `sbom_diff_test.dart` | clé purl/name:type, CycloneDX/SPDX 2.3/SPDX 3.0, comparaison inter-format |
 | `sbom_merger_test.dart` | dédup CycloneDX (purl/bom-ref) et SPDX 2.3 (purl/SPDXID), fusion des relations |
+| `license_report_generator_test.dart` | regroupement par licence, classification copyleft fort/faible, découpage des expressions composées, paquets sans licence |
 
 ### Suite d'intégration (`test/integration/`)
 
@@ -1450,7 +1504,8 @@ sautent automatiquement plutôt que d'échouer (voir `dart test` ci-dessus).
       `.jar` + `requirements.txt` + `--image`
 - [ ] Test avec manifestes Go (`go.sum`, `go.mod`), npm
       (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
-- [ ] Test des sous-commandes `diff`, `merge`, `convert`, `validate`, `scan`
+- [ ] Test des sous-commandes `diff`, `merge`, `convert`, `validate`,
+      `licenses`, `scan`
 - [ ] Si modification de `--rpm-dir` : vérifier résolution exacte (NEVRA),
       résolution par nom, avertissement multi-match, fallback `rpm -q`
 - [ ] Le SBOM CycloneDX passe `sbom_schema_valid: 10.0` dans sbomqs

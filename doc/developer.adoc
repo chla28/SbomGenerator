@@ -56,6 +56,7 @@ Parser Parser Parser Parser Parser             Parser
    SbomDiffer  ◄── sous-commande diff
    SbomMerger  ◄── sous-commande merge
    SbomReader  ◄── sous-commande convert (source SBOM → List<Package>)
+   LicenseReportGenerator ◄── sous-commande licenses (rapport AsciiDoc)
               │
               ▼
 ┌─────────────────────────────────────────────┐
@@ -1129,6 +1130,75 @@ documents — une collision reste théoriquement possible si un document
 externe réutilise un `SPDXID` générique pour un autre paquet.
 ====
 
+== `lib/license_report_generator.dart` — Rapport de licences (sous-commande `licenses`)
+
+=== `LicenseReportGenerator`
+
+[source,dart]
+----
+class LicenseReportGenerator {
+  Future<void> writeToFile(
+    List<Package> packages,
+    String outputPath, {
+    String? documentName,
+  });
+}
+----
+
+Regroupe les paquets par `pkg.license` **exacte** — la chaîne telle que
+présente dans le SBOM source, y compris les expressions composées
+(`A AND B AND …`, fréquentes sur les paquets Debian/RPM dont toutes les
+licences trouvées dans les sources sont concaténées) — et écrit un rapport
+AsciiDoc en quatre parties : résumé chiffré, avertissement copyleft, section
+détaillée par licence, section des paquets sans licence détectée.
+
+=== Classification copyleft
+
+`_classify(license)` applique une heuristique par sous-chaîne sur
+l'expression entière (insensible à la casse) :
+
+[cols="2,3", options="header"]
+|===
+|Catégorie |Condition
+
+|`strongCopyleft`
+|contient `AGPL`, ou `GPL` non précédé d'une lettre — regex `(?<![A-Z])GPL`, pour ne pas confondre avec `LGPL`
+
+|`weakCopyleft`
+|contient `LGPL`, `MPL`, `EPL`, `CDDL`, `CPL` ou `EUPL`
+
+|`permissive`
+|aucun des marqueurs ci-dessus
+
+|`unknown`
+|chaîne vide
+|===
+
+Cette classification s'applique sur l'expression **entière** : une expression
+composée contenant un seul token copyleft (ex. `BSD-3-Clause AND
+GPL-2.0-only AND MIT`) classe tout le groupe en copyleft — ce comportement
+est voulu, la présence d'un composant copyleft dans le mélange suffit à
+déclencher l'avertissement.
+
+[NOTE]
+====
+`_copyleftTokens(license, target)` découpe une expression composée sur
+`AND`/`OR` et ne retient que les tokens dont la classification *individuelle*
+correspond à `target`. Cette étape sert uniquement à construire la liste
+d'identifiants de l'avertissement en tête de rapport — le regroupement par
+section garde toujours l'expression complète telle que déclarée.
+
+Sans cette étape, un SBOM Debian réel (licences systématiquement
+concaténées) produit un avertissement listant des dizaines de chaînes
+composées entières, illisibles, plutôt que les identifiants copyleft
+individuels réellement en cause. Constaté en testant la commande sur un SBOM
+Trivy de 157 paquets nginx/Debian : sans le découpage, l'avertissement
+tenait sur une seule ligne de plusieurs milliers de caractères.
+====
+
+La classification copyleft est une heuristique de repérage destinée à
+attirer l'attention, pas une analyse juridique.
+
 == `lib/policy_checker.dart` — Contrôle de politiques CI/CD
 
 === `PolicyChecker`
@@ -1493,7 +1563,7 @@ sont entourées de guillemets doubles, et les guillemets internes sont doublés.
 == `lib/sbom_reader.dart` — Lecteur SBOM
 
 Relit un fichier SBOM JSON existant et reconstruit une `List<Package>`.
-Utilisé par la sous-commande `convert`.
+Utilisé par les sous-commandes `convert` et `licenses`.
 
 === `SbomFormat` enum
 
@@ -1750,7 +1820,7 @@ La boucle de résolution de dépendances est skippée si *tous* les formats
 demandés sont `markdown` ou `asciidoc` (les deux formats tabulaires ne
 nécessitent pas les relations de dépendances).
 
-=== Sous-commandes `diff`, `merge`, `convert`, `validate` et `scan` _(nouveau)_
+=== Sous-commandes `diff`, `merge`, `convert`, `licenses`, `validate` et `scan` _(nouveau)_
 
 Routage avant le parsing principal :
 
@@ -1760,6 +1830,7 @@ if (arguments.first == 'diff')     { await _runDiff(arguments.sublist(1));     r
 if (arguments.first == 'merge')    { await _runMerge(arguments.sublist(1));    return; }
 if (arguments.first == 'convert')  { await _runConvert(arguments.sublist(1));  return; }
 if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); return; }
+if (arguments.first == 'licenses') { await _runLicenses(arguments.sublist(1)); return; }
 if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     return; }
 ----
 
@@ -1790,6 +1861,17 @@ final pkgs  = SbomReader().read(json);
 final docName = nameOpt ?? SbomReader().documentName(json) ?? 'converted';
 // puis switch (fmt) { case 'cyclonedx': … case 'csv': … }
 ----
+
+*`_runLicenses(args)`* : génère un rapport de licences AsciiDoc à partir d'un
+SBOM existant.
+
+Options : `-i <source>` (obligatoire), `-o <sortie>` (obligatoire), `-n <nom>`
+(nom du document).
+
+Implémentation : même chargement que `_runConvert` (`SbomReader.loadJson()` +
+`SbomReader().read(json)`), puis délègue tout le regroupement/formatage à
+`LicenseReportGenerator().writeToFile()` — voir
+`lib/license_report_generator.dart` plus haut.
 
 *`_runValidate(args)`* : vérifie la conformité structurelle d'un ou plusieurs
 fichiers SBOM (champs obligatoires) sans dépendance externe.
@@ -2785,8 +2867,8 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (223 au total)
-dart test test/unit/                 # tests unitaires seuls (204)
+dart test                            # tous les tests (231 au total)
+dart test test/unit/                 # tests unitaires seuls (212)
 dart test test/integration/          # tests d'intégration (19, dont certains
                                       # sautés automatiquement selon l'environnement)
 ----
@@ -2880,6 +2962,12 @@ inter-format), toJson
 |`test/unit/sbom_merger_test.dart`
 |12
 |dédup CycloneDX (purl/bom-ref/dependencies) et SPDX 2.3 (purl/SPDXID/relationships)
+
+|`test/unit/license_report_generator_test.dart`
+|8
+|regroupement par licence exacte, classification copyleft fort (GPL/AGPL) vs
+faible (LGPL/…), découpage des expressions composées pour l'avertissement,
+paquets sans licence
 |===
 
 === Suite d'intégration
@@ -2916,12 +3004,13 @@ sans faire échouer la suite.
 
 * [ ] `dart analyze lib/ bin/ test/` passe sans erreur ni avertissement (`No issues found!`)
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
-* [ ] `dart test` — tous les 223 tests verts (204 unitaires + 19 intégration ;
+* [ ] `dart test` — tous les 231 tests verts (212 unitaires + 19 intégration ;
   certains tests d'intégration se sautent proprement selon l'environnement)
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
 * [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + .jar + requirements.txt + `--image`
 * [ ] Test avec manifestes Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
 * [ ] Test sous-commande `convert` : CycloneDX → SPDX, SPDX → CycloneDX, tous → CSV
+* [ ] Test sous-commande `licenses` : regroupement, avertissement copyleft, paquets sans licence
 * [ ] Test sous-commande `validate` : fichier valide, invalide, strict mode
 * [ ] Test sous-commande `scan` : chaque scanner (`grype`, `osv`, `trivy`, `all`),
   filtres de date, `--include-undated`
