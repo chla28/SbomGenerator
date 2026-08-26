@@ -341,6 +341,7 @@ class _TrivyPanelState extends State<TrivyPanel>
                   severityOrder: const [
                     'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'
                   ],
+                  toolName: 'Trivy',
                   csvDialogTitle: 'Exporter les vulnérabilités Trivy',
                   csvFileName: 'trivy_vulns.csv',
                   csvHeader:

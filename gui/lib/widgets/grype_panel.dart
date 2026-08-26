@@ -417,6 +417,7 @@ class _GrypePanelState extends State<GrypePanel>
                   severityOrder: const [
                     'Critical', 'High', 'Medium', 'Low', 'Negligible'
                   ],
+                  toolName: 'Grype',
                   csvDialogTitle: 'Exporter les vulnérabilités Grype',
                   csvFileName: 'grype_vulns.csv',
                   csvHeader:

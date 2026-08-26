@@ -46,6 +46,26 @@ String csvEscape(String s) {
   return s;
 }
 
+// ─── Export AsciiDoc + PDF ──────────────────────────────────────────────────
+
+/// Échappe une valeur pour une cellule de tableau AsciiDoc : "|" en début de
+/// contenu y est ambigu (nouvelle cellule), on l'échappe systématiquement.
+String adocEscape(String s) => s.replaceAll('|', '\\|');
+
+String _dateFilterSummary(CveDateFilter f) {
+  final fieldLabel = switch (f.field) {
+    CveDateField.published => 'publication',
+    CveDateField.modified => 'dernière modification',
+    CveDateField.latest => 'plus récente des deux',
+  };
+  final parts = <String>[];
+  if (f.after != null) parts.add('après ${f.after!.toIso8601String().split('T').first}');
+  if (f.before != null) parts.add('avant ${f.before!.toIso8601String().split('T').first}');
+  final bounds = parts.isEmpty ? 'aucune borne' : parts.join(', ');
+  final undated = f.includeUndated ? ', dont sans date connue' : '';
+  return '$fieldLabel — $bounds$undated';
+}
+
 // ─── Bannière d'erreur ──────────────────────────────────────────────────────
 
 class ErrorBanner extends StatelessWidget {
@@ -473,6 +493,10 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
   /// outil (la casse diffère selon l'outil : "Critical" vs "CRITICAL").
   final List<String> severityOrder;
 
+  /// Nom de l'outil tel qu'affiché dans les rapports exportés (ex. "Grype",
+  /// "OSV-Scanner", "Trivy").
+  final String toolName;
+
   final String csvDialogTitle;
   final String csvFileName;
   final String csvHeader;
@@ -497,6 +521,7 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
     this.parseFailed = false,
     required this.parseFailedMessage,
     required this.severityOrder,
+    required this.toolName,
     required this.csvDialogTitle,
     required this.csvFileName,
     required this.csvHeader,
@@ -591,6 +616,86 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('${rows.length} vulnérabilité(s) exportée(s) → $path'),
         duration: const Duration(seconds: 4),
+      ));
+    }
+  }
+
+  Future<void> _exportAsciiDoc(BuildContext context) async {
+    final rows = _filtered;
+    final path = await FilePicker.saveFile(
+      dialogTitle: 'Exporter le rapport ${widget.toolName} (AsciiDoc + PDF)',
+      fileName: widget.csvFileName.replaceAll(RegExp(r'\.csv$'), '.adoc'),
+      type: FileType.custom,
+      allowedExtensions: ['adoc'],
+    );
+    if (path == null || !context.mounted) return;
+
+    final counts = <String, int>{};
+    for (final v in rows) {
+      counts[v.severity] = (counts[v.severity] ?? 0) + 1;
+    }
+    final columns = widget.csvHeader.split(',');
+
+    final buf = StringBuffer();
+    buf.writeln('= Rapport de vulnérabilités — ${widget.toolName}');
+    buf.writeln(':doctype: article');
+    buf.writeln(':toc:');
+    buf.writeln(':toclevels: 1');
+    buf.writeln(':icons: font');
+    buf.writeln();
+    buf.writeln('== Résumé');
+    buf.writeln();
+    buf.writeln('[cols="<3,<1",options="header"]');
+    buf.writeln('|===');
+    buf.writeln('| Indicateur | Valeur');
+    buf.writeln('| Vulnérabilités affichées | ${rows.length}');
+    for (final s in widget.severityOrder) {
+      if (counts.containsKey(s)) buf.writeln('| $s | ${counts[s]}');
+    }
+    if (widget.dateFilter.hasConstraints) {
+      buf.writeln(
+          '| Filtre de date appliqué | ${_dateFilterSummary(widget.dateFilter)}');
+    }
+    buf.writeln('|===');
+    buf.writeln();
+    buf.writeln('== Détail');
+    buf.writeln();
+    buf.writeln(
+        '[cols="${List.filled(columns.length, "<1").join(',')}",options="header"]');
+    buf.writeln('|===');
+    buf.writeln('| ${columns.join(' | ')}');
+    buf.writeln();
+    for (final v in rows) {
+      buf.writeln('| ${widget.csvRow(v).map(adocEscape).join(' | ')}');
+    }
+    buf.writeln('|===');
+    buf.writeln();
+    buf.writeln(
+        '_Généré par sbom_generator_gui — ${rows.length} vulnérabilité(s)._');
+
+    await File(path).writeAsString(buf.toString());
+    if (!context.mounted) return;
+
+    final pdfPath = path.endsWith('.adoc')
+        ? '${path.substring(0, path.length - 5)}.pdf'
+        : '$path.pdf';
+
+    try {
+      final result = await Process.run('asciidoctor-pdf', [path, '-o', pdfPath]);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.exitCode == 0
+            ? '${rows.length} vulnérabilité(s) exportée(s) → $path et $pdfPath'
+            : '${rows.length} vulnérabilité(s) exportée(s) → $path '
+                '(échec conversion PDF, code ${result.exitCode})'),
+        duration: const Duration(seconds: 5),
+      ));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${rows.length} vulnérabilité(s) exportée(s) → $path '
+            '(asciidoctor-pdf introuvable, PDF non généré)'),
+        duration: const Duration(seconds: 5),
       ));
     }
   }
@@ -707,6 +812,12 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                 tooltip: 'Exporter CSV',
                 onPressed:
                     _filtered.isEmpty ? null : () => _exportCsv(context),
+              ),
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                tooltip: 'Exporter en AsciiDoc + PDF',
+                onPressed:
+                    _filtered.isEmpty ? null : () => _exportAsciiDoc(context),
               ),
             ],
           ),

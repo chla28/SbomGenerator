@@ -388,6 +388,7 @@ class _OsvPanelState extends State<OsvPanel>
                   severityOrder: const [
                     'Critical', 'High', 'Medium', 'Low', 'Unknown'
                   ],
+                  toolName: 'OSV-Scanner',
                   csvDialogTitle: 'Exporter les vulnérabilités OSV-Scanner',
                   csvFileName: 'osv_vulns.csv',
                   csvHeader:
