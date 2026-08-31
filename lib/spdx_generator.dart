@@ -11,6 +11,13 @@ class SpdxGenerator {
     List<Package> packages,
     List<PackageDependency> dependencies, {
     String? documentName,
+
+    /// OS de base de l'image de conteneur source (voir [OsInfo]), si connu.
+    /// Ajoute un paquet `primaryPackagePurpose: "OPERATING-SYSTEM"` distinct
+    /// des paquets applicatifs — même justification que côté CycloneDX (voir
+    /// `CycloneDxGenerator.generate`) : sans lui, Trivy en mode `trivy sbom`
+    /// n'évalue pas les CVE des paquets système.
+    OsInfo? osInfo,
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
     final docUuid = generateUuidV4();
@@ -22,6 +29,13 @@ class SpdxGenerator {
 
     final relationships =
         _buildRelationships(packages, dependencies, refToSpdxId);
+    if (osInfo != null) {
+      relationships.insert(0, {
+        'spdxElementId': 'SPDXRef-DOCUMENT',
+        'relationshipType': 'DESCRIBES',
+        'relatedSpdxElement': _osSpdxId(osInfo),
+      });
+    }
 
     return {
       'SPDXID': 'SPDXRef-DOCUMENT',
@@ -34,10 +48,53 @@ class SpdxGenerator {
       'name': documentName ?? 'Package Set SBOM',
       'dataLicense': 'CC0-1.0',
       'documentNamespace': docNamespace,
-      'packages': [for (final pkg in packages) _packageToSpdx(pkg)],
+      'packages': [
+        if (osInfo != null) _osToSpdx(osInfo),
+        for (final pkg in packages) _packageToSpdx(pkg),
+      ],
       'relationships': relationships,
     };
   }
+
+  // ── OS de base (image de conteneur) ───────────────────────────────────────
+
+  // Le préfixe `SPDXRef-OperatingSystem-` (plutôt que `SPDXRef-Package-`)
+  // est ce que Trivy reconnaît pour associer ce paquet à la classe de
+  // vulnérabilités "os-pkgs" en mode `trivy sbom` — vérifié empiriquement :
+  // `primaryPackagePurpose: "OPERATING-SYSTEM"` seul, avec un SPDXID
+  // `SPDXRef-Package-...`, ne suffit pas (0 CVE os-pkgs détectée) ; changer
+  // uniquement le préfixe du SPDXID en `SPDXRef-OperatingSystem-` suffit.
+  // Suit la convention observée dans la sortie SPDX native de trivy
+  // (`SPDXRef-OperatingSystem-<hash>`).
+  String _osSpdxId(OsInfo os) => 'SPDXRef-OperatingSystem-${_safeId(os.id)}';
+
+  /// Paquet `primaryPackagePurpose: "OPERATING-SYSTEM"` — voir [OsInfo].
+  Map<String, dynamic> _osToSpdx(OsInfo os) {
+    final pkg = <String, dynamic>{
+      'SPDXID': _osSpdxId(os),
+      'name': os.id,
+      'versionInfo': os.version,
+      'downloadLocation': 'NOASSERTION',
+      'filesAnalyzed': false,
+      'primaryPackagePurpose': 'OPERATING-SYSTEM',
+      'licenseConcluded': 'NOASSERTION',
+      'licenseDeclared': 'NOASSERTION',
+      'copyrightText': 'NOASSERTION',
+    };
+    if (_hasValue(os.prettyName ?? '')) pkg['summary'] = os.prettyName;
+    if (_hasValue(os.cpe ?? '')) {
+      pkg['externalRefs'] = [
+        {
+          'referenceCategory': 'SECURITY',
+          'referenceType': 'cpe23Type',
+          'referenceLocator': os.cpe,
+        }
+      ];
+    }
+    return pkg;
+  }
+
+  String _safeId(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '-');
 
   List<Map<String, dynamic>> _buildRelationships(
     List<Package> packages,
@@ -138,8 +195,10 @@ class SpdxGenerator {
     List<PackageDependency> dependencies,
     String outputPath, {
     String? documentName,
+    OsInfo? osInfo,
   }) async {
-    final sbom = generate(packages, dependencies, documentName: documentName);
+    final sbom = generate(packages, dependencies,
+        documentName: documentName, osInfo: osInfo);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

@@ -209,7 +209,12 @@ void main() {
         return;
       }
 
-      final pkgs = await OciParser().parseImage(_keycloakTar, 'skopeo');
+      final result = await OciParser().parseImage(_keycloakTar, 'skopeo');
+      final pkgs = result.packages;
+
+      // skopeo ne lit pas /etc/os-release : pas d'OS détecté (voir
+      // OciParser._parseSkopeo).
+      expect(result.os, isNull);
 
       // Keycloak = paquets RPM (OS) + paquets Java/Maven (application)
       expect(pkgs.length, greaterThan(40));

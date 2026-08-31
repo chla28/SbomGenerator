@@ -285,6 +285,13 @@ find /mnt/BaseOS/Packages -name '*.rpm' > rpm_files.txt
 ./sbom_generator -I nginx:latest -f cyclonedx -n "nginx" -o nginx.cdx.json
 ```
 
+Avec les backends `syft` et `trivy` (pas `skopeo`), le SBOM CycloneDX/SPDX
+généré inclut un composant dédié pour l'OS de base de l'image — nécessaire
+pour qu'un outil comme Trivy (`trivy sbom`), rescanné plus tard sur ce
+fichier, évalue aussi les CVE des paquets système (RPM/DEB/APK), pas
+seulement celles des paquets applicatifs. Sans ce composant, ces CVE
+seraient silencieusement absentes du résultat.
+
 ### Analyse d'une archive tar exportée avec docker save
 
 ```bash

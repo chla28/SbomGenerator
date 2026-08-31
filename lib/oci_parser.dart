@@ -14,6 +14,12 @@ enum OciRefType {
   ociLayout,
 }
 
+/// Résultat de [OciParser.parseImage] : les paquets détectés, et — si le
+/// backend l'expose (syft, trivy ; pas skopeo, voir [OciParser._parseSkopeo])
+/// — l'OS de base de l'image, pour générer un composant dédié dans les SBOM
+/// CycloneDX/SPDX (voir [OsInfo]).
+typedef OciParseResult = ({List<Package> packages, OsInfo? os});
+
 /// Parse les paquets présents dans une image OCI via syft, trivy ou skopeo.
 class OciParser {
   // ── Détection automatique du format ─────────────────────────────────────────
@@ -29,7 +35,7 @@ class OciParser {
 
   // ── Point d'entrée principal ─────────────────────────────────────────────────
 
-  Future<List<Package>> parseImage(
+  Future<OciParseResult> parseImage(
     String imageRef,
     String tool, {
     bool verbose = false,
@@ -134,7 +140,7 @@ class OciParser {
 
   // ── Backend Syft ─────────────────────────────────────────────────────────────
 
-  Future<List<Package>> _parseSyft(String imageRef,
+  Future<OciParseResult> _parseSyft(String imageRef,
       {bool verbose = false}) async {
     final refType = detectRefType(imageRef);
     final syftRef = switch (refType) {
@@ -166,8 +172,74 @@ class OciParser {
           _syftArtifactToPackage(a as Map<String, dynamic>, imageRef);
       if (pkg != null) packages.add(pkg);
     }
-    return packages;
+    return (packages: packages, os: _syftDistroToOsInfo(data));
   }
+
+  /// Extrait l'OS de base depuis le champ racine `distro` de syft (absent si
+  /// syft n'a pas pu détecter de base OS, ex. image `scratch`/distroless).
+  ///
+  /// L'`id` de syft suit la convention `/etc/os-release` (`rhel`, `ol`,
+  /// `almalinux`…) — traduit vers la famille interne attendue par Trivy pour
+  /// reconnaître le composant `operating-system` d'un SBOM CycloneDX/SPDX,
+  /// voir [_toTrivyOsFamily].
+  OsInfo? _syftDistroToOsInfo(Map<String, dynamic> data) {
+    final distro = data['distro'] as Map<String, dynamic>?;
+    if (distro == null) return null;
+    final id = (distro['id'] as String?) ?? '';
+    final version = (distro['versionID'] as String?) ?? '';
+    if (id.isEmpty || version.isEmpty) return null;
+    return OsInfo(
+      id: _toTrivyOsFamily(id),
+      version: version,
+      prettyName: distro['prettyName'] as String?,
+      cpe: distro['cpeName'] as String?,
+    );
+  }
+
+  /// Table de correspondance entre l'`id` de distribution façon os-release
+  /// (utilisé par syft, ex. `rhel`, `ol`, `almalinux`) et le nom de famille
+  /// interne attendu par Trivy pour reconnaître un composant CycloneDX/SPDX
+  /// `operating-system` (ex. `redhat`, `oracle`, `alma`) — sans cette
+  /// traduction, Trivy en mode `trivy sbom` n'associe le composant à aucune
+  /// base CVE connue et ignore silencieusement toute la classe "os-pkgs"
+  /// (vérifié empiriquement : `name: "rhel"` → 0 CVE os-pkgs détectée,
+  /// `name: "redhat"` → détection correcte).
+  ///
+  /// Source : `pkg/fanal/analyzer/os/release/release.go` (`idToOSFamily`)
+  /// du dépôt aquasecurity/trivy. Les identifiants absents de cette table
+  /// (`debian`, `ubuntu`…) sont déjà identiques à la famille Trivy attendue
+  /// et passent inchangés ; `amzn` (Amazon Linux) n'a pas d'équivalent
+  /// documenté dans cette table côté Trivy (détection version-dépendante
+  /// propre à ce backend) et reste donc lui aussi inchangé, en best-effort.
+  static const _trivyOsFamilyById = {
+    'rhel': 'redhat',
+    'centos': 'centos',
+    'rocky': 'rocky',
+    'almalinux': 'alma',
+    'ol': 'oracle',
+    'fedora': 'fedora',
+    'alpine': 'alpine',
+    'bottlerocket': 'bottlerocket',
+    'opensuse-tumbleweed': 'opensuse-tumbleweed',
+    'opensuse-leap': 'opensuse-leap',
+    'opensuse': 'opensuse-leap',
+    'sles': 'sles',
+    'sle-micro': 'slem',
+    'sl-micro': 'slem',
+    'sle-micro-rancher': 'slem',
+    'photon': 'photon',
+    'wolfi': 'wolfi',
+    'chainguard': 'chainguard',
+    'azurelinux': 'azurelinux',
+    'mariner': 'cbl-mariner',
+    'echo': 'echo',
+    'minimos': 'minimos',
+    'coreos': 'coreos',
+    'activestate': 'activestate',
+  };
+
+  String _toTrivyOsFamily(String id) =>
+      _trivyOsFamilyById[id.toLowerCase()] ?? id.toLowerCase();
 
   OciPackage? _syftArtifactToPackage(
       Map<String, dynamic> a, String imageRef) {
@@ -232,7 +304,7 @@ class OciParser {
 
   // ── Backend Trivy ─────────────────────────────────────────────────────────────
 
-  Future<List<Package>> _parseTrivy(String imageRef,
+  Future<OciParseResult> _parseTrivy(String imageRef,
       {bool verbose = false}) async {
     final refType = detectRefType(imageRef);
 
@@ -278,7 +350,19 @@ class OciParser {
         if (p != null) packages.add(p);
       }
     }
-    return packages;
+    return (packages: packages, os: _trivyMetadataToOsInfo(data));
+  }
+
+  /// Extrait l'OS de base depuis `Metadata.OS` de trivy (absent si trivy n'a
+  /// pas pu détecter de base OS, ex. image `scratch`/distroless).
+  OsInfo? _trivyMetadataToOsInfo(Map<String, dynamic> data) {
+    final os = (data['Metadata'] as Map<String, dynamic>?)?['OS']
+        as Map<String, dynamic>?;
+    if (os == null) return null;
+    final id = (os['Family'] as String?) ?? '';
+    final version = (os['Name'] as String?) ?? '';
+    if (id.isEmpty || version.isEmpty) return null;
+    return OsInfo(id: id, version: version);
   }
 
   OciPackage? _trivyPkgToPackage(
@@ -400,7 +484,10 @@ class OciParser {
   // L'extraction des layers est séquentielle (base → final) ; chaque layer
   // écrase les fichiers précédents, ce qui donne l'état final du système.
 
-  Future<List<Package>> _parseSkopeo(String imageRef,
+  // Contrairement à syft/trivy, ce backend n'identifie pas l'OS de base
+  // (parsing manuel dpkg/rpm/apk sans lecture d'/etc/os-release) : os: null
+  // dans le résultat — le SBOM produit n'aura donc pas de composant OS dédié.
+  Future<OciParseResult> _parseSkopeo(String imageRef,
       {bool verbose = false}) async {
     final refType = detectRefType(imageRef);
 
@@ -477,7 +564,7 @@ class OciParser {
             'skopeo : aucune base de paquets reconnue dans les layers.');
       }
 
-      return packages;
+      return (packages: packages, os: null);
     } finally {
       // Certains fichiers extraits des layers OCI peuvent avoir des permissions
       // restrictives (chmod 000) qui font échouer Directory.delete(recursive).
@@ -1039,3 +1126,15 @@ Future<List<Package>> ociParserParseRpmRoot(
 OciPackage? ociParserTrivyPkgToPackage(
         Map<String, dynamic> pkgJson, String ecosystemType, String imageRef) =>
     OciParser()._trivyPkgToPackage(pkgJson, ecosystemType, imageRef);
+
+/// Appelle [OciParser._syftDistroToOsInfo] depuis les tests, sur un objet
+/// JSON syft (racine `syft <image> --output json`) déjà décodé, sans
+/// lancer syft.
+OsInfo? ociParserSyftDistroToOsInfo(Map<String, dynamic> syftJson) =>
+    OciParser()._syftDistroToOsInfo(syftJson);
+
+/// Appelle [OciParser._trivyMetadataToOsInfo] depuis les tests, sur un
+/// objet JSON trivy (racine `trivy image --format json`) déjà décodé, sans
+/// lancer trivy.
+OsInfo? ociParserTrivyMetadataToOsInfo(Map<String, dynamic> trivyJson) =>
+    OciParser()._trivyMetadataToOsInfo(trivyJson);

@@ -69,6 +69,13 @@ class CycloneDxGenerator {
     String? tlp,
     String? citationSource,
     Map<String, PatentAssertion>? patentsByPackageName,
+
+    /// OS de base de l'image de conteneur source (voir [OsInfo]), si connu.
+    /// Ajoute un composant `type: "operating-system"` distinct des paquets
+    /// applicatifs — nécessaire pour que des consommateurs comme Trivy en
+    /// mode `trivy sbom` évaluent aussi les CVE des paquets système
+    /// (RPM/DEB/APK), et pas seulement celles des paquets applicatifs.
+    OsInfo? osInfo,
   }) {
     if (!supportedSpecVersions.contains(specVersion)) {
       throw ArgumentError(
@@ -132,6 +139,7 @@ class CycloneDxGenerator {
       'metadata': _buildMetadata(now, documentName, author, organization,
           tlp: tlp, extraTool: citationSource),
       'components': [
+        if (osInfo != null) _buildOsComponent(osInfo),
         for (final pkg in packages)
           _packageToComponent(pkg, patents[pkg.name], orgName),
       ],
@@ -170,6 +178,7 @@ class CycloneDxGenerator {
     String? tlp,
     String? citationSource,
     Map<String, PatentAssertion>? patentsByPackageName,
+    OsInfo? osInfo,
   }) async {
     final sbom = generate(
       packages,
@@ -181,6 +190,7 @@ class CycloneDxGenerator {
       tlp: tlp,
       citationSource: citationSource,
       patentsByPackageName: patentsByPackageName,
+      osInfo: osInfo,
     );
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
@@ -280,6 +290,27 @@ class CycloneDxGenerator {
 
   String _patentBomRef(String patentNumber) =>
       'patent-${_cpeToken(patentNumber)}';
+
+  // ── Composant OS de base (image de conteneur) ─────────────────────────────
+
+  /// Composant `type: "operating-system"` distinct des paquets applicatifs —
+  /// voir [OsInfo] pour la justification (nécessaire à Trivy en mode
+  /// `trivy sbom` pour évaluer les CVE des paquets système).
+  Map<String, dynamic> _buildOsComponent(OsInfo os) {
+    final component = <String, dynamic>{
+      'type': 'operating-system',
+      'bom-ref': 'os-${_cpeToken(os.id)}',
+      'name': os.id,
+      'version': os.version,
+    };
+    if (_hasValue(os.prettyName ?? '')) {
+      component['description'] = os.prettyName;
+    }
+    if (_hasValue(os.cpe ?? '')) {
+      component['cpe'] = os.cpe;
+    }
+    return component;
+  }
 
   // ── Component ──────────────────────────────────────────────────────────────
 

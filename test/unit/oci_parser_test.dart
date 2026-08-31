@@ -130,4 +130,59 @@ void main() {
       expect('upstream='.allMatches(pkg.purl).length, 1);
     });
   });
+
+  group('OciParser (backend syft) — OS de base', () {
+    test('traduit l\'id os-release rhel vers la famille Trivy redhat', () {
+      final os = ociParserSyftDistroToOsInfo({
+        'distro': {
+          'id': 'rhel',
+          'versionID': '9.6',
+          'prettyName': 'Red Hat Enterprise Linux 9.6 (Plow)',
+          'cpeName': 'cpe:/o:redhat:enterprise_linux:9::baseos',
+        },
+      })!;
+
+      // rhel → redhat : sans cette traduction, Trivy en mode `trivy sbom`
+      // n'associe le composant à aucune base CVE connue (vérifié
+      // empiriquement contre une image réelle).
+      expect(os.id, 'redhat');
+      expect(os.version, '9.6');
+      expect(os.prettyName, 'Red Hat Enterprise Linux 9.6 (Plow)');
+      expect(os.cpe, 'cpe:/o:redhat:enterprise_linux:9::baseos');
+    });
+
+    test('laisse inchangé un id déjà identique à la famille Trivy (debian)',
+        () {
+      final os = ociParserSyftDistroToOsInfo({
+        'distro': {'id': 'debian', 'versionID': '13'},
+      })!;
+      expect(os.id, 'debian');
+    });
+
+    test('retourne null quand syft n\'a détecté aucune base OS (scratch)',
+        () {
+      expect(ociParserSyftDistroToOsInfo({}), isNull);
+      expect(ociParserSyftDistroToOsInfo({'distro': null}), isNull);
+    });
+  });
+
+  group('OciParser (backend trivy) — OS de base', () {
+    test('reprend Metadata.OS.Family tel quel (déjà la famille Trivy)', () {
+      final os = ociParserTrivyMetadataToOsInfo({
+        'Metadata': {
+          'OS': {'Family': 'redhat', 'Name': '9.6'},
+        },
+      })!;
+      expect(os.id, 'redhat');
+      expect(os.version, '9.6');
+    });
+
+    test('retourne null quand trivy n\'a détecté aucune base OS (scratch)',
+        () {
+      expect(ociParserTrivyMetadataToOsInfo({}), isNull);
+      expect(
+          ociParserTrivyMetadataToOsInfo({'Metadata': <String, dynamic>{}}),
+          isNull);
+    });
+  });
 }

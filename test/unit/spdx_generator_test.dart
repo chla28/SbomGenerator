@@ -143,4 +143,56 @@ void main() {
       expect(dependsOn, isEmpty);
     });
   });
+
+  group('SpdxGenerator.generate — paquet OS de base (osInfo)', () {
+    const os = OsInfo(
+      id: 'redhat',
+      version: '9.6',
+      prettyName: 'Red Hat Enterprise Linux 9.6 (Plow)',
+      cpe: 'cpe:/o:redhat:enterprise_linux:9::baseos',
+    );
+
+    test(
+        'ajoute un paquet primaryPackagePurpose: OPERATING-SYSTEM avec un '
+        'SPDXID préfixé SPDXRef-OperatingSystem-', () {
+      final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
+      final packages = (sbom['packages'] as List).cast<Map<String, dynamic>>();
+
+      final osPkg = packages.firstWhere(
+          (p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM');
+      // Le préfixe SPDXRef-OperatingSystem- (et non SPDXRef-Package-) est
+      // ce que Trivy reconnaît pour la classe "os-pkgs" en mode
+      // `trivy sbom` — vérifié empiriquement, voir spdx_generator.dart.
+      expect(osPkg['SPDXID'], startsWith('SPDXRef-OperatingSystem-'));
+      expect(osPkg['name'], 'redhat');
+      expect(osPkg['versionInfo'], '9.6');
+      expect(osPkg['summary'], os.prettyName);
+      expect(packages.length, 2); // OS + 1 paquet
+    });
+
+    test('ajoute une relation DESCRIBES vers le paquet OS', () {
+      final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
+      final packages =
+          (sbom['packages'] as List).cast<Map<String, dynamic>>();
+      final osSpdxId = packages
+          .firstWhere((p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM')
+          ['SPDXID'];
+
+      final describes = (sbom['relationships'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((r) =>
+              r['relationshipType'] == 'DESCRIBES' &&
+              r['relatedSpdxElement'] == osSpdxId);
+      expect(describes, hasLength(1));
+    });
+
+    test('aucun paquet OS quand osInfo est absent', () {
+      final sbom = generator.generate([_pkg(name: 'bash')], []);
+      final packages = (sbom['packages'] as List).cast<Map<String, dynamic>>();
+      expect(
+          packages.any((p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM'),
+          isFalse);
+      expect(packages.length, 1);
+    });
+  });
 }

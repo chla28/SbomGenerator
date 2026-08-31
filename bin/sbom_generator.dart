@@ -430,6 +430,7 @@ Future<void> main(List<String> arguments) async {
 
   // --- Analyse OCI image ---
   final ociPackages = <Package>[];
+  OsInfo? ociOs;
   if (imageRef != null) {
     // Vérifier la disponibilité de l'outil OCI
     final ociCheck = await Process.run(ociTool, ['--version']);
@@ -450,9 +451,14 @@ Future<void> main(List<String> arguments) async {
     print('Analyse de l\'image OCI ($refTypeLabel) via $ociTool : $imageRef…');
 
     try {
-      ociPackages.addAll(
-          await OciParser().parseImage(imageRef, ociTool, verbose: verbose));
+      final ociResult =
+          await OciParser().parseImage(imageRef, ociTool, verbose: verbose);
+      ociPackages.addAll(ociResult.packages);
+      ociOs = ociResult.os;
       print('${ociPackages.length} paquet(s) trouvé(s) dans l\'image.');
+      if (verbose && ociOs != null) {
+        print('OS de base détecté : ${ociOs.id} ${ociOs.version}');
+      }
     } catch (e) {
       _err('Échec de l\'analyse OCI : $e');
       exit(1);
@@ -688,13 +694,16 @@ Future<void> main(List<String> arguments) async {
               specVersion: cycloneDxVersion,
               tlp: tlp,
               citationSource: citationSource,
-              patentsByPackageName: patentMap);
+              patentsByPackageName: patentMap,
+              osInfo: ociOs);
         case 'spdx':
           await SpdxGenerator().writeToFile(
-              uniquePackages, dependencies, outPath, documentName: docName);
+              uniquePackages, dependencies, outPath,
+              documentName: docName, osInfo: ociOs);
         case 'spdx3':
           await Spdx3Generator().writeToFile(
-              uniquePackages, dependencies, outPath, documentName: docName);
+              uniquePackages, dependencies, outPath,
+              documentName: docName, osInfo: ociOs);
         case 'json':
           await SimpleJsonGenerator().writeToFile(
               uniquePackages, dependencies, outPath, documentName: docName);

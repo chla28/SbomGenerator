@@ -34,6 +34,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Scan des JARs Maven dans le backend skopeo
 
 ### Fixed
+- Un SBOM CycloneDX/SPDX généré depuis une image de conteneur (`--image`, backends
+  syft/trivy) n'identifiait jamais l'OS de base — Trivy en mode `trivy sbom` ignorait
+  alors silencieusement toute la classe de vulnérabilités « os-pkgs » (paquets système
+  RPM/DEB/APK), même si chaque paquet portait déjà `distro=...` dans son propre purl :
+  sur une image Keycloak (UBI 9) réelle, `trivy sbom` ne retrouvait que 146 CVE contre
+  253 pour `trivy image` sur la même image (101 CVE `os-pkgs` manquantes). `OciParser`
+  extrait désormais l'OS de base (`distro` de syft, `Metadata.OS` de trivy) et
+  `CycloneDxGenerator`/`SpdxGenerator`/`Spdx3Generator` ajoutent un composant dédié
+  (`type: "operating-system"` / `primaryPackagePurpose: "OPERATING-SYSTEM"`). Deux
+  exigences non documentées de Trivy, isolées par bissection : le nom doit suivre sa
+  taxonomie interne (`redhat`, pas `rhel` comme chez syft — table de correspondance
+  ajoutée) et, côté SPDX, le SPDXID doit être préfixé `SPDXRef-OperatingSystem-` (pas
+  `SPDXRef-Package-`). Backend skopeo non couvert (ne lit pas `/etc/os-release`).
 - Les modules « core » de Spring Framework (`spring-core`, `spring-webmvc`, `spring-tx`…)
   extraits d'un `.jar` recevaient un groupId erroné (`spring.core` au lieu du vrai
   `org.springframework`, déduit à tort d'un `Automatic-Module-Name` qui n'est pas un

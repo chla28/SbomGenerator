@@ -146,4 +146,50 @@ void main() {
       expect(dependsOn, isEmpty);
     });
   });
+
+  group('Spdx3Generator.generate — élément OS de base (osInfo)', () {
+    const os = OsInfo(
+      id: 'redhat',
+      version: '9.6',
+      prettyName: 'Red Hat Enterprise Linux 9.6 (Plow)',
+      cpe: 'cpe:/o:redhat:enterprise_linux:9::baseos',
+    );
+
+    test(
+        'ajoute un élément software:Package avec '
+        'software:primaryPurpose: operatingSystem', () {
+      final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
+      final osElems = _findAllType(sbom, 'software:Package')
+          .where((e) => e['software:primaryPurpose'] == 'operatingSystem')
+          .toList();
+
+      expect(osElems, hasLength(1));
+      final elem = osElems.single;
+      expect(elem['name'], 'redhat');
+      expect(elem['software:packageVersion'], '9.6');
+      expect(elem['summary'], os.prettyName);
+    });
+
+    test('inclut l\'élément OS dans rootElement et la relation describes',
+        () {
+      final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
+      final doc = _findType(sbom, 'SpdxDocument');
+      final osSpdxId = _findAllType(sbom, 'software:Package')
+          .firstWhere((e) => e['software:primaryPurpose'] == 'operatingSystem')
+          ['spdxId'];
+
+      expect(doc['rootElement'], contains(osSpdxId));
+
+      final describes = _findAllType(sbom, 'Relationship')
+          .singleWhere((r) => r['relationshipType'] == 'describes');
+      expect((describes['to'] as List), contains(osSpdxId));
+    });
+
+    test('aucun élément OS quand osInfo est absent', () {
+      final sbom = generator.generate([_pkg(name: 'bash')], []);
+      final osElems = _findAllType(sbom, 'software:Package')
+          .where((e) => e['software:primaryPurpose'] == 'operatingSystem');
+      expect(osElems, isEmpty);
+    });
+  });
 }

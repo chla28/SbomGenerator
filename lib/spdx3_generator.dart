@@ -14,6 +14,12 @@ class Spdx3Generator {
     List<Package> packages,
     List<PackageDependency> dependencies, {
     String? documentName,
+
+    /// OS de base de l'image de conteneur source (voir [OsInfo]), si connu.
+    /// Ajoute un élément `software:primaryPurpose: "operatingSystem"`
+    /// distinct des paquets applicatifs — même justification que côté
+    /// CycloneDX (voir `CycloneDxGenerator.generate`).
+    OsInfo? osInfo,
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
     final base = 'https://sbom.local/spdx3/${generateUuidV4()}';
@@ -25,6 +31,7 @@ class Spdx3Generator {
     final pkgIds = {
       for (final pkg in packages) pkg.bomRef: '$base#${pkg.spdxId}',
     };
+    final osId = osInfo != null ? '$base#os-${_safeId(osInfo.id)}' : null;
 
     final graph = <Map<String, dynamic>>[];
 
@@ -46,14 +53,23 @@ class Spdx3Generator {
 
     final vendorIds = _buildVendorElements(packages, base, ciId, graph);
 
+    final rootElements = [
+      if (osId != null) osId,
+      ...pkgIds.values,
+    ];
+
     graph.add({
       'type': 'SpdxDocument',
       'spdxId': docId,
       'creationInfo': ciId,
       'name': documentName ?? 'Package Set SBOM',
       'profileConformance': ['core', 'software'],
-      'rootElement': pkgIds.values.toList(),
+      'rootElement': rootElements,
     });
+
+    if (osInfo != null) {
+      graph.add(_osToElement(osInfo, spdxId: osId!, ciId: ciId));
+    }
 
     for (final pkg in packages) {
       graph.add(_packageToElement(
@@ -69,7 +85,7 @@ class Spdx3Generator {
       'spdxId': '$base#rel-describes',
       'creationInfo': ciId,
       'from': docId,
-      'to': pkgIds.values.toList(),
+      'to': rootElements,
       'relationshipType': 'describes',
     });
 
@@ -117,6 +133,30 @@ class Spdx3Generator {
       });
     }
     return seen;
+  }
+
+  /// Élément `software:primaryPurpose: "operatingSystem"` — voir [OsInfo].
+  Map<String, dynamic> _osToElement(
+    OsInfo os, {
+    required String spdxId,
+    required String ciId,
+  }) {
+    final elem = <String, dynamic>{
+      'type': 'software:Package',
+      'spdxId': spdxId,
+      'creationInfo': ciId,
+      'name': os.id,
+      'software:packageVersion': os.version,
+      'software:primaryPurpose': 'operatingSystem',
+      'copyrightText': 'NOASSERTION',
+    };
+    if (_hasValue(os.prettyName ?? '')) elem['summary'] = os.prettyName;
+    if (_hasValue(os.cpe ?? '')) {
+      elem['externalIdentifier'] = [
+        {'externalIdentifierType': 'cpe23', 'identifier': os.cpe},
+      ];
+    }
+    return elem;
   }
 
   Map<String, dynamic> _packageToElement(
@@ -198,8 +238,10 @@ class Spdx3Generator {
     List<PackageDependency> dependencies,
     String outputPath, {
     String? documentName,
+    OsInfo? osInfo,
   }) async {
-    final sbom = generate(packages, dependencies, documentName: documentName);
+    final sbom = generate(packages, dependencies,
+        documentName: documentName, osInfo: osInfo);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

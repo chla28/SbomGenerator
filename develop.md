@@ -23,7 +23,7 @@ Le programme suit un pipeline concurrent, capable de combiner plusieurs sources
         │                                                       │
         ▼                                                       ▼
 ┌────────────────────────────────────────────┐        OciParser (syft / trivy / skopeo)
-│  bin/sbom_generator.dart                    │        → List<OciPackage>
+│  bin/sbom_generator.dart                    │        → { packages: List<OciPackage>, os: OsInfo? }
 │  (main + _Semaphore + _printProgress)       │                │
 │  1. Lecture + validation CLI                │◄───────────────┘
 │  2. Détection du type par extension         │
@@ -117,6 +117,22 @@ abstract class Package {
   String get packageType;   // 'rpm' | 'pypi' | 'source' | 'deb' | 'maven' | 'golang' | 'npm' | …
 }
 ```
+
+### Classe `OsInfo` (hors hiérarchie `Package`)
+
+```dart
+class OsInfo {
+  final String id;          // ex. 'redhat', 'debian', 'alpine'
+  final String version;     // ex. '9.6', '13.5'
+  final String? prettyName; // ex. 'Red Hat Enterprise Linux 9.6 (Plow)'
+  final String? cpe;
+}
+```
+
+OS de base d'une image de conteneur, extrait par `OciParser.parseImage()`
+(voir `lib/oci_parser.dart` plus bas) quand `--image` utilise le backend
+syft ou trivy. Sert à générer un composant dédié dans les SBOM
+CycloneDX/SPDX — voir la section `OsInfo` sous `lib/oci_parser.dart`.
 
 La fonction utilitaire de bibliothèque `_safeId(String s)` remplace tout
 caractère hors `[a-zA-Z0-9._-]` par `-`. Elle est utilisée dans les
@@ -520,14 +536,15 @@ Détecté automatiquement par `OciParser.detectRefType(String ref)` :
 
 ### `OciParser`
 
-Point d'entrée : `Future<List<Package>> parseImage(String imageRef, String tool, {bool verbose})`.
+Point d'entrée : `Future<OciParseResult> parseImage(String imageRef, String tool, {bool verbose})`,
+où `OciParseResult = ({List<Package> packages, OsInfo? os})` (record Dart 3).
 Dispatch vers l'un des trois backends selon `tool` :
 
 | Backend | Mécanisme |
 |---|---|
-| `'syft'` | `syft <ref> --output json` ; lit `artifacts[].{name, version, type, purl, licenses, metadata}` |
-| `'trivy'` | `trivy image --format json --quiet --list-all-pkgs <ref>` ; lit `Results[].{Type, Packages[]}` |
-| `'skopeo'` | Copie via `skopeo copy` en OCI layout → extraction des layers tar → détection de la base de paquets installée |
+| `'syft'` | `syft <ref> --output json` ; lit `artifacts[].{name, version, type, purl, licenses, metadata}` + `distro` (OS de base) |
+| `'trivy'` | `trivy image --format json --quiet --list-all-pkgs <ref>` ; lit `Results[].{Type, Packages[]}` + `Metadata.OS` (OS de base) |
+| `'skopeo'` | Copie via `skopeo copy` en OCI layout → extraction des layers tar → détection de la base de paquets installée (`os: null` — ne lit pas `/etc/os-release`) |
 
 **Backend Syft** : la référence est adaptée selon `OciRefType`
 (`docker-archive:<path>` pour `tar`, `oci-dir:<path>` pour `ociLayout`,
@@ -537,6 +554,34 @@ référence telle quelle pour `registry`). Les licences syft sont des objets
 **Backend Trivy** : lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et
 le normalise via `_normalizeTrivyType()` vers les écosystèmes de
 `packageType`. Le PURL est lu depuis `Identifier.PURL` (trivy ≥ 0.38).
+
+#### `OsInfo` — OS de base de l'image (`_syftDistroToOsInfo` / `_trivyMetadataToOsInfo`)
+
+`OciParser` extrait l'OS de base de l'image (`lib/models.dart`, classe
+`OsInfo { id, version, prettyName?, cpe? }`) pour permettre à
+`CycloneDxGenerator`/`SpdxGenerator`/`Spdx3Generator` de générer un
+composant `operating-system` dédié dans le SBOM. Sans lui, un consommateur
+comme Trivy en mode `trivy sbom` ignore silencieusement toute la classe de
+vulnérabilités « os-pkgs » (paquets système RPM/DEB/APK) — voir le CHANGELOG
+pour le détail de ce bug et sa correction, découverte sur une image
+Keycloak réelle (101 CVE `os-pkgs` manquantes sur 253).
+
+Deux exigences non documentées de Trivy, isolées empiriquement (bissection
+sur un SBOM réel, cf. `pkg/fanal/analyzer/os/release/release.go` du dépôt
+aquasecurity/trivy pour la table de référence) :
+
+- Le champ `name`/`id` du composant OS doit suivre la taxonomie interne de
+  Trivy (`redhat`, `oracle`, `alma`…), pas l'`id` `/etc/os-release` que syft
+  expose tel quel (`rhel`, `ol`, `almalinux`…). `_toTrivyOsFamily()` traduit
+  via une table de correspondance (`_trivyOsFamilyById`) construite depuis
+  la fonction `idToOSFamily` de Trivy ; les identifiants absents (`debian`,
+  `ubuntu`…) sont déjà identiques à la famille Trivy attendue et passent
+  inchangés. Le backend trivy n'a pas besoin de cette traduction : `Metadata.OS.Family`
+  est déjà dans la taxonomie interne de Trivy.
+- Côté SPDX 2.3, le `SPDXID` du paquet OS doit être préfixé
+  `SPDXRef-OperatingSystem-` (pas `SPDXRef-Package-`) pour que Trivy le
+  reconnaisse — `primaryPackagePurpose: "OPERATING-SYSTEM"` seul ne suffit
+  pas, vérifié empiriquement.
 
 **Backend Skopeo** — le seul entièrement « fait maison » :
 1. `skopeo copy <src> oci:<tmpDir>:image` (sauf si `ociLayout` déjà présent)
@@ -1083,6 +1128,7 @@ Map<String, dynamic> generate(List<Package> packages, List<PackageDependency> de
   String? tlp,                             // distributionConstraints.tlp (1.7)
   String? citationSource,                  // citations[] attributedTo (1.7)
   Map<String, PatentAssertion>? patentsByPackageName,  // patentAssertions (1.7)
+  OsInfo? osInfo,                          // composant operating-system (--image)
 })
 ```
 
@@ -1127,22 +1173,46 @@ Le CPE n'est généré que pour les `RpmPackage`.
 
 Délégué à `LicenseNormalizer.toCycloneDxLicenses(pkg.license)`.
 
+### Composant OS de base (`osInfo`, `--image`)
+
+Quand `osInfo` (voir `OsInfo` dans `lib/oci_parser.dart`) est fourni,
+`_buildOsComponent()` ajoute en tête de `components[]` un composant
+`type: "operating-system"` (`name`, `version`, `description`, `cpe`)
+distinct des paquets applicatifs — nécessaire pour que Trivy en mode
+`trivy sbom` évalue aussi les CVE des paquets système (voir la section
+`OsInfo` sous `lib/oci_parser.dart` plus haut). `osInfo` est `null` pour
+toute génération sans `--image` (ou avec le backend skopeo).
+
 ---
 
 ## `lib/spdx_generator.dart` — Générateur SPDX 2.3
 
-Signature : `List<Package>`. Normalisation via
+Signature : `List<Package>`, plus `osInfo` (`OsInfo?`, optionnel). Normalisation via
 `LicenseNormalizer.toSpdxExpression()`. Annotation type-aware selon le type
 concret de `Package` (RPM : `arch`/`epoch`/`release` ; Python/source :
 `platform` ; Debian : `arch`).
+
+Quand `osInfo` est fourni, `_osToSpdx()` ajoute un paquet
+`primaryPackagePurpose: "OPERATING-SYSTEM"` (SPDXID préfixé
+`SPDXRef-OperatingSystem-`, requis par Trivy — voir la section `OsInfo`
+sous `lib/oci_parser.dart`) avec une relation `DESCRIBES` depuis
+`SPDXRef-DOCUMENT`.
 
 ---
 
 ## `lib/spdx3_generator.dart` — Générateur SPDX 3.0 JSON-LD
 
-Signature : `List<Package>`. Même logique d'annotation que SPDX 2.3.
+Signature : `List<Package>`, plus `osInfo` (`OsInfo?`, optionnel). Même logique d'annotation que SPDX 2.3.
 `_buildVendorElements` crée un nœud `Organization` par valeur unique de
 `pkg.vendor` (fonctionne pour tous les types de paquet).
+
+Quand `osInfo` est fourni, `_osToElement()` ajoute un élément
+`software:Package` avec `software:primaryPurpose: "operatingSystem"`,
+inclus dans `rootElement` du `SpdxDocument` et dans la relation `describes`.
+Représentation correcte selon la spec SPDX 3.0, mais **Trivy ne sait pas
+lire de SBOM SPDX 3.0 JSON-LD du tout** (`trivy sbom` échoue avec `SBOM
+decode error: unknown scanning is not yet supported`, indépendamment de ce
+composant) — limitation de Trivy, sans rapport avec `sbom_generator`.
 
 ---
 
@@ -1447,7 +1517,7 @@ dart test test/unit/                 # tests unitaires seuls
 dart test test/integration/          # tests d'intégration seuls
 ```
 
-Au moment de la rédaction : **231 tests** au total (212 unitaires + 19
+Au moment de la rédaction : **244 tests** au total (225 unitaires + 19
 d'intégration, dont 6 sautées automatiquement dans un environnement sans
 `rpm` installé ou sans les archives OCI de test — `keycloak_26.tar` n'est
 pas versionné). Comptage vérifié via `dart test -r compact`.
@@ -1468,11 +1538,11 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `yarn_parser_test.dart` | yarn v1 classique, yarn v2+ Berry, PURLs |
 | `maven_parser_test.dart` | extraction, scope test/system, dependencyManagement, PURL |
 | `jar_parser_test.dart` | identité propre, dépendances relocalisées (uber-jar), overrides Spring |
-| `oci_parser_test.dart` | `OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`) |
+| `oci_parser_test.dart` | `OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`), reconstruction version/PURL upstream (backend trivy), extraction OS de base + traduction de famille (`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`) |
 | `csv_generator_test.dart` | en-têtes, tri, échappement RFC 4180 |
-| `cyclonedx_generator_test.dart` | spec 1.6/1.7, TLP, citations, brevets |
-| `spdx_generator_test.dart` | enveloppe SPDX-2.3, paquets, licences, relations DESCRIBES/DEPENDS_ON |
-| `spdx3_generator_test.dart` | enveloppe JSON-LD, paquets, Organization partagée, relations describes/dependsOn |
+| `cyclonedx_generator_test.dart` | spec 1.6/1.7, TLP, citations, brevets, composant OS de base (`osInfo`) |
+| `spdx_generator_test.dart` | enveloppe SPDX-2.3, paquets, licences, relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`) |
+| `spdx3_generator_test.dart` | enveloppe JSON-LD, paquets, Organization partagée, relations describes/dependsOn, élément OS de base (`osInfo`) |
 | `policy_checker_test.dart` | correspondance de licences interdites |
 | `sbom_reader_test.dart` | détection de format, relecture CycloneDX |
 | `sbom_diff_test.dart` | clé purl/name:type, CycloneDX/SPDX 2.3/SPDX 3.0, comparaison inter-format |
@@ -1519,7 +1589,10 @@ sautent automatiquement plutôt que d'échouer (voir `dart test` ci-dessus).
 - [ ] Si modification de `_capabilityName` : vérifier
       `python3dist(lxml) >= 3.0` → `python3dist(lxml)`
 - [ ] Si modification de `OciParser`/`--image`/`--oci-tool` : tester les
-      trois backends (syft, trivy, skopeo) avec registre, tar et OCI layout
+      trois backends (syft, trivy, skopeo) avec registre, tar et OCI layout ;
+      si la détection d'OS (`OsInfo`) est touchée, revérifier avec
+      `trivy sbom` sur le SBOM produit que la classe "os-pkgs" est bien
+      détectée (pas seulement que le composant OS est présent dans le JSON)
 - [ ] Si ajout d'un type de paquet : mettre à jour `models.dart`, tous les
       générateurs (`if (pkg is …)`), `bin/sbom_generator.dart` (dispatch +
       vérification d'outil) et ce document

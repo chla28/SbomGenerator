@@ -5,6 +5,41 @@ String _safeId(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '-');
 String _normalizePyName(String name) =>
     name.toLowerCase().replaceAll(RegExp(r'[-_.]+'), '-');
 
+// ── OS de base d'une image de conteneur ─────────────────────────────────────
+
+/// Système d'exploitation de base d'une image de conteneur, tel que détecté
+/// par le backend OCI (syft ou trivy — voir [OciParser.parseImage]).
+///
+/// Sert à générer un composant dédié dans les SBOM CycloneDX (`type:
+/// "operating-system"`) et SPDX (`primaryPackagePurpose:
+/// "OPERATING-SYSTEM"` / `software:primaryPurpose: "operatingSystem"`).
+/// Sans lui, un consommateur comme Trivy en mode `trivy sbom` ignore
+/// silencieusement toute la classe de vulnérabilités "os-pkgs" (paquets
+/// système RPM/DEB/APK), même si chaque paquet individuel porte déjà
+/// `distro=...` dans son propre purl — Trivy exige spécifiquement ce
+/// composant séparé pour savoir quelle base de données CVE interroger.
+class OsInfo {
+  /// Identifiant court de la distribution, ex. `rhel`, `debian`, `alpine`.
+  final String id;
+
+  /// Version de la distribution, ex. `9.6`, `13.5`.
+  final String version;
+
+  /// Nom complet lisible, ex. `Red Hat Enterprise Linux 9.6 (Plow)`.
+  final String? prettyName;
+
+  /// CPE de la distribution, si connu (ex.
+  /// `cpe:2.3:o:redhat:enterprise_linux:9:*:baseos:*:*:*:*:*`).
+  final String? cpe;
+
+  const OsInfo({
+    required this.id,
+    required this.version,
+    this.prettyName,
+    this.cpe,
+  });
+}
+
 // ── Abstract base ────────────────────────────────────────────────────────────
 
 abstract class Package {

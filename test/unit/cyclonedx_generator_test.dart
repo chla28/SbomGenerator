@@ -253,4 +253,39 @@ void main() {
       expect(component['name'], 'bash');
     });
   });
+
+  group('CycloneDxGenerator.generate — composant OS de base (osInfo)', () {
+    const os = OsInfo(
+      id: 'redhat',
+      version: '9.6',
+      prettyName: 'Red Hat Enterprise Linux 9.6 (Plow)',
+      cpe: 'cpe:/o:redhat:enterprise_linux:9::baseos',
+    );
+
+    test('ajoute un composant type: operating-system en tête de components',
+        () {
+      final sbom =
+          generator.generate([_rpm(name: 'bash')], [], osInfo: os);
+      final components = sbom['components'] as List;
+
+      // En tête : c'est ce composant que Trivy (et les autres consommateurs)
+      // doivent trouver pour évaluer les CVE des paquets système — voir
+      // OsInfo dans lib/models.dart.
+      final osComponent = components.first as Map;
+      expect(osComponent['type'], 'operating-system');
+      expect(osComponent['name'], 'redhat');
+      expect(osComponent['version'], '9.6');
+      expect(osComponent['description'], os.prettyName);
+      expect(osComponent['cpe'], os.cpe);
+      expect(components.length, 2); // OS + 1 paquet
+    });
+
+    test('aucun composant OS quand osInfo est absent (image sans base OS '
+        'détectée, ex. scratch, ou source non-image)', () {
+      final sbom = generator.generate([_rpm(name: 'bash')], []);
+      final components = sbom['components'] as List;
+      expect(components.any((c) => c['type'] == 'operating-system'), isFalse);
+      expect(components.length, 1);
+    });
+  });
 }
