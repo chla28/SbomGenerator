@@ -523,6 +523,23 @@ trivy image --format json --quiet \
 trivy image [...] --input <target>   # archive ou répertoire OCI local
 ----
 
+NOTE: Il est attendu que le mode SBOM (sur un SBOM généré par
+`sbom_generator` avec le backend syft) et le mode image de `TrivyRunner`
+ne rapportent pas exactement les mêmes CVE Java pour la même image — ce
+n'est pas un bug de ce fichier ni de `oci_parser.dart`. L'analyseur de
+jars intégré à Trivy identifie un jar via `pom.properties`, puis
+`MANIFEST.MF`, puis un lookup SHA-1 dans sa base `trivy-java-db`
+(indexée depuis Maven Central), et abandonne silencieusement le paquet si
+les trois échouent — ce qui arrive pour des jars rebuilds internes (ex.
+Red Hat `.redhat-000xx`) sans `pom.properties` et absents de Maven
+Central. Le cataloguer de syft, utilisé pour produire nos SBOM, sait
+retrouver ces paquets en parsant le nom de fichier
+`<groupId>.<artifactId>-<version>.jar`. Vérifié sur une image
+RHEL 9.6/Keycloak : `trivy sbom` trouvait 3 CVE HIGH
+(`micrometer-core`, `postgresql`) absentes de `trivy image` en direct.
+Voir `user.adoc`, section « Pourquoi Grype, OSV-Scanner et Trivy ne
+trouvent pas les mêmes CVE ».
+
 [[sec-version-service]]
 ==== `services/version_service.dart` — Version installée + mise à jour GitHub
 

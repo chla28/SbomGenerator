@@ -1271,6 +1271,15 @@ en mode *Image de conteneur*, via `trivy image` (une archive ou un
 répertoire local est alors passé via `--input`, une référence de registre
 en argument direct).
 
+NOTE: Sur un SBOM CycloneDX/SPDX généré par `sbom_generator` avec le
+backend `syft`, il est normal que le mode *Fichier SBOM* trouve quelques
+CVE Java de *plus* que le mode *Image de conteneur* sur la même image —
+ce n'est pas un faux positif du SBOM, mais une sous-détection de
+l'analyseur de jars intégré à Trivy pour les jars sans `pom.properties`
+(ex. rebuilds internes Red Hat), que le cataloguer de syft détecte via le
+nom de fichier là où Trivy échoue. Voir <<sec-pourquoi-ecarts-scanners>>
+pour le détail avec des chiffres réels.
+
 === Options de scan
 
 ==== Filtre de sévérités (`--severity`)
@@ -1615,6 +1624,24 @@ Aucun des deux scanners n'est « la » vérité : chacun a sa base et sa
 granularité de correspondance propres. C'est précisément la raison d'être
 de cet onglet — voir l'union des trois scanners plutôt que se fier à un
 seul pour maximiser la couverture de détection.
+
+Un écart peut aussi apparaître avec un *seul et même* scanner selon qu'on
+lui donne un SBOM ou l'image directement — typiquement dans l'onglet
+Trivy (voir <<sec-onglet-trivy-source>>) entre les modes *Fichier SBOM*
+(`trivy sbom`) et *Image de conteneur* (`trivy image`). Sur cette même
+image Keycloak, `trivy sbom` sur un SBOM généré avec le backend `syft`
+trouvait 3 CVE HIGH (`micrometer-core`, `postgresql`) absentes de
+`trivy image` en direct : l'analyseur de jars intégré à Trivy identifie
+un jar via `pom.properties`, puis `MANIFEST.MF`, puis un lookup SHA-1
+dans sa base `trivy-java-db` (indexée depuis Maven Central) — et abandonne
+silencieusement le paquet si les trois échouent, ce qui arrive pour des
+jars rebuilds internes (ex. `.redhat-000xx`) sans `pom.properties` et
+absents de Maven Central. Le cataloguer de syft, lui, sait retrouver ces
+paquets en parsant le nom de fichier `<groupId>.<artifactId>-<version>.jar`
+(convention du packaging Quarkus « fast-jar » de cette image). Là encore,
+ce n'est pas le SBOM qui invente des CVE : c'est `trivy image` qui en
+manque quelques-unes que `trivy sbom` retrouve grâce à la détection plus
+complète de syft.
 
 [[sec-dashboard-export]]
 === Export AsciiDoc + PDF

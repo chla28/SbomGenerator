@@ -292,6 +292,22 @@ fichier, évalue aussi les CVE des paquets système (RPM/DEB/APK), pas
 seulement celles des paquets applicatifs. Sans ce composant, ces CVE
 seraient silencieusement absentes du résultat.
 
+**À l'inverse**, il est normal qu'un SBOM généré avec le backend `syft`
+fasse remonter, une fois passé dans `trivy sbom`, quelques CVE Java en
+plus que `trivy image` sur la même image directement — ce n'est pas un
+faux positif du SBOM, mais une sous-détection de l'analyseur de jars
+intégré à Trivy. Vérifié sur une image RHEL 9.6/Keycloak : 3 CVE HIGH
+(`micrometer-core`, `postgresql`) trouvées via le SBOM mais absentes de
+`trivy image` en direct. Cause : Trivy identifie un jar Maven via
+`pom.properties`, puis `MANIFEST.MF`, puis un lookup SHA-1 dans sa base
+`trivy-java-db` (indexée depuis Maven Central) ; des jars rebuilds
+internes Red Hat (`.redhat-000xx`) n'ont pas de `pom.properties` et sont
+absents de Maven Central, donc Trivy abandonne silencieusement le paquet.
+Syft, lui, sait parser le nom de fichier
+`<groupId>.<artifactId>-<version>.jar` (convention du packaging Quarkus
+« fast-jar » de cette image) et détecte ces paquets là où Trivy échoue.
+Voir `doc/usage.adoc` pour le détail.
+
 ### Analyse d'une archive tar exportée avec docker save
 
 ```bash
