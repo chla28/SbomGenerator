@@ -508,6 +508,21 @@ demandé est signalée sans faire échouer les autres. Codes de retour : `0` =
 aucune vulnérabilité dans la plage demandée, `1` = au moins une trouvée (ou
 erreur de scanner).
 
+**Pourquoi les scanners ne trouvent pas les mêmes CVE** : avec `--scanner
+all`, une bonne partie des CVE sont normalement signalées par un seul
+outil. Cause principale : nomenclature d'identifiant différente — sur les
+paquets Java, Grype nomme ses trouvailles en `GHSA-*` (GitHub Security
+Advisories, sa source principale pour ce langage) tandis que Trivy préfère
+le CVE correspondant ; c'est la même vulnérabilité sous deux noms
+différents (Grype liste le CVE lié dans `relatedVulnerabilities`). Sur une
+image RHEL 9.6/Keycloak de référence, l'accord brut entre Grype et Trivy
+n'était que de 72 CVE communes sur ~210 identifiants uniques de chaque
+côté ; après résolution des alias `GHSA-*` → CVE côté Java, il montait à
+~98 % (les paquets RPM, où les deux outils utilisent nativement le CVE,
+étaient déjà d'accord à ~94 %). Le résidu s'explique par la
+fraîcheur/couverture différente des bases de vulnérabilités (Anchore DB
+pour Grype, `trivy-db` pour Trivy). Voir `doc/usage.adoc` pour le détail.
+
 ---
 
 ## Ce que contient le SBOM généré

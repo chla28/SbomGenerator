@@ -966,6 +966,22 @@ eux-mêmes — c'est un widget de visualisation pure qui consomme les données
 déjà parsées par les autres panels. Il lance en revanche `asciidoctor-pdf`
 pour la conversion PDF de son propre export (voir ci-dessous).
 
+NOTE: Un nombre élevé de lignes `isIsolated` n'est pas le signe d'un bug
+dans un des runners — c'est un comportement attendu des outils externes.
+Sur l'écosystème Java, Grype identifie ses trouvailles par `GHSA-*`
+(GitHub Security Advisories, sa source principale pour ce langage) alors
+que Trivy préfère l'identifiant CVE correspondant : `_crossScannerRows`
+compare des chaînes brutes (`vulnerability.id` / `VulnerabilityID`), donc
+la même vulnérabilité sous deux alias apparaît comme deux lignes isolées
+distinctes plutôt qu'une seule ligne partagée. Le reste de l'écart
+(quelques CVE de chaque côté même après résolution des alias) vient de la
+fraîcheur/couverture des bases de vulnérabilités respectives (Anchore DB
+pour Grype, `trivy-db` pour Trivy) — voir l'explication utilisateur
+détaillée avec chiffres réels dans `user.adoc`, section « Pourquoi Grype,
+OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ». Aucune résolution
+d'alias GHSA↔CVE n'est effectuée côté GUI :
+le tableau reflète fidèlement le vocabulaire de chaque scanner.
+
 [[sec-dashboard-export]]
 ===== `_crossScannerRows` / `_exportDashboard` — export AsciiDoc + PDF
 

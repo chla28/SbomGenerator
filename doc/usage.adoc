@@ -803,6 +803,34 @@ scanners demandés (`--scanner all`) de s'exécuter.
 Codes de retour : `0` = aucune CVE dans la plage demandée (tous scanners
 confondus), `1` = au moins une CVE trouvée, ou erreur de scanner.
 
+=== Pourquoi les scanners ne trouvent pas les mêmes CVE
+
+Avec `--scanner all`, il est normal qu'une bonne partie des CVE ne soient
+signalées que par un seul des trois outils. Sur une même image (RHEL 9.6,
+Keycloak) analysée directement par Grype et par Trivy, une comparaison
+brute des identifiants ne fait ressortir que 72 CVE communes sur ~210
+identifiants uniques de chaque côté — un écart qui a deux causes :
+
+* *Nomenclature d'identifiant différente (cause principale)* — sur les
+  paquets Java (JAR/Maven), Grype nomme ses trouvailles avec l'identifiant
+  GitHub Security Advisory (`GHSA-xxxx-xxxx-xxxx`, sa source principale
+  pour cet écosystème) tandis que Trivy préfère le CVE correspondant. C'est
+  la même vulnérabilité sous deux noms différents. Sur cette image, l'accord
+  brut n'était que de 2 CVE Java sur ~135 de chaque côté ; une fois les
+  `GHSA-*` de Grype résolus vers leur CVE lié (champ
+  `relatedVulnerabilities` de la sortie JSON de Grype), l'accord monte à
+  132/135 (~98 %). Sur les paquets RPM (base OS), où les deux outils
+  utilisent nativement l'identifiant CVE, l'accord était déjà direct à
+  ~94 % (70 CVE communes sur ~75 de chaque côté).
+* *Écarts réels résiduels* — Grype (base Anchore) et Trivy (`trivy-db`)
+  republient leurs bases de vulnérabilités à des rythmes et depuis des
+  sources pas parfaitement identiques (NVD, GHSA, OVAL/CSAF Red Hat…). Un
+  CVE tout juste publié, ou pas encore mappé au CPE exact d'un paquet, peut
+  apparaître chez l'un avant l'autre.
+
+Aucun des deux scanners n'est « la » vérité : `--scanner all` sert
+précisément à obtenir l'union des trois plutôt que de se fier à un seul.
+
 === Pipeline complet : génération + validation qualité
 
 [source,bash]
