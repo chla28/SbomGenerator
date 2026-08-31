@@ -944,20 +944,55 @@ Il n'y a pas de flutter state local : tout est calculé à chaque `build()`.
 
 Structure :
 
-* `_GlobalSummary` — bandeau : nombre de scanners actifs, union des CVE IDs,
-  nombre de CVE communes à ≥ 2 scanners
+* `_GlobalSummary` — bandeau : nombre de scanners exécutés, nombre de CVE
+  *uniques* tous scanners confondus (`allIds.length`, union complète — voir
+  ci-dessous), et le bouton d'export AsciiDoc + PDF (`onExport`, `null` tant
+  qu'aucun scanner n'a tourné)
 * `_ScannerCard` × 3 — une carte par scanner avec `_SeverityBar` (barres
   empilées `Expanded(flex: N)` colorées) et `_SevRow` (un rang par sévérité)
-* `_CrossScannerSection` — liste complète des CVE présentes dans ≥ 2 scanners,
-  triées par sévérité décroissante, colonnes : SÉVÉRITÉ / CVE ID / Grype ✓ / OSV ✓ / Trivy ✓
+* `_CrossScannerSection` — liste complète des CVE vues par *au moins un*
+  scanner (pas seulement celles communes à plusieurs — c'est justement en
+  gardant les CVE isolées qu'on repère les écarts de détection entre
+  scanners), triées par sévérité décroissante, colonnes : SÉVÉRITÉ / CVE ID
+  / Grype ✓ / OSV ✓ / Trivy ✓. Une CVE vue par un seul scanner alors que
+  plusieurs ont tourné (`isIsolated`) porte un marqueur visuel distinct
+  (bordure ambre + icône, tooltip « Vu par un seul scanner sur N »).
 
-La logique "CVE communes" est calculée dans `_CrossScannerSection.build()` :
-union des IDs par scanner → compter les scanners par ID → garder ceux avec count ≥ 2.
 Toutes les entrées sont affichées via un `for` loop dans un `Column` ; le défilement
 est assuré par le `SingleChildScrollView` qui enveloppe l'ensemble du `DashboardPanel`.
 
-NOTE: `DashboardPanel` ne lance aucun processus externe. C'est un widget de
-visualisation pure qui consomme les données déjà parsées par les autres panels.
+NOTE: `DashboardPanel` ne lance aucun processus externe pour les scans
+eux-mêmes — c'est un widget de visualisation pure qui consomme les données
+déjà parsées par les autres panels. Il lance en revanche `asciidoctor-pdf`
+pour la conversion PDF de son propre export (voir ci-dessous).
+
+[[sec-dashboard-export]]
+===== `_crossScannerRows` / `_exportDashboard` — export AsciiDoc + PDF
+
+Contrairement à `VulnTableView` (grype/osv/trivy_panel.dart, voir
+<<sec-vuln-shared>>), le tableau de bord n'a pas de liste ligne-par-ligne
+unique, filtrable/triable, à exporter : c'est une vue composite (résumé +
+3 cartes + tableau croisé). L'export reproduit donc l'intégralité de ce qui
+est affiché à l'écran plutôt qu'une sélection filtrée.
+
+`_crossScannerRows(grypeVulns, osvVulns, trivyVulns)` — fonction top-level
+(pas une méthode de `_CrossScannerSection`) qui calcule l'union triée des
+CVE avec leur présence par scanner, sous forme de `typedef _CrossRowData
+= ({String id, String severity, bool inGrype, bool inOsv, bool inTrivy})`.
+Extraite du corps de `_CrossScannerSection.build()` pour être appelée aussi
+par `_exportDashboard`, garantissant que le rapport exporté correspond
+exactement au tableau affiché (aucune logique dupliquée entre les deux).
+
+`_exportDashboard(context, {scansRun, uniqueIds, grype, osv, trivy,
+crossRows})` construit le rapport AsciiDoc en trois sections (`== Résumé
+global`, `== Répartition par scanner` avec un `=== <Nom>` par scanner et
+son décompte par sévérité via `DashboardPanel._countByKey` — méthode privée
+statique, accessible car même fichier —, `== Comparaison inter-scanners`
+reprenant `crossRows`), puis suit exactement le même patron que
+`_VulnTableViewState._exportAsciiDoc()` (voir <<sec-vuln-shared>>) :
+écriture du `.adoc` via `FilePicker.saveFile`, tentative de conversion
+`Process.run('asciidoctor-pdf', [path, '-o', pdfPath])`, retour utilisateur
+via `SnackBar` (succès, échec de conversion, ou outil absent).
 
 ==== `widgets/sbom_tree_panel.dart` — Onglet Arborescence SBOM
 

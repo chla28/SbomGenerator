@@ -98,4 +98,51 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+      'le bouton "Exporter en AsciiDoc + PDF" est désactivé tant qu\'aucun '
+      'scanner n\'a été exécuté', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: DashboardPanel(
+          grypeVulns: null,
+          osvVulns: null,
+          trivyVulns: null,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.picture_as_pdf_outlined));
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets(
+      'le bouton "Exporter en AsciiDoc + PDF" se réactive dès qu\'un '
+      'scanner a été exécuté (même sans vulnérabilité trouvée)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: DashboardPanel(
+          grypeVulns: [], // scanner exécuté, aucune vulnérabilité trouvée
+          osvVulns: null,
+          trivyVulns: null,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.picture_as_pdf_outlined));
+    expect(button.onPressed, isNotNull);
+  });
 }

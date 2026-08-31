@@ -1529,9 +1529,9 @@ naviguer entre chaque onglet. Il se peuple automatiquement après l'exécution
 des analyses.
 
 ----
-  ┌─ Synthèse globale ────────────────────────────────────────────────────┐
-  │  3 scanners exécutés  •  87 CVE uniques  •  5 CVE communes (≥ 2)     │
-  └───────────────────────────────────────────────────────────────────────┘
+  ┌─ Synthèse globale ─────────────────────────────────────────────  [⬥]─┐
+  │  3 scanners exécutés  •  87 CVE uniques                              │
+  └────────────────────────────────────────────────────────────────────┘
 
   ┌─ Grype (42) ───────────┐  ┌─ OSV-Scanner (31) ─────┐  ┌─ Trivy (38) ─────┐
   │ CRITICAL  ██  5        │  │ CRITICAL  █   3         │  │ CRITICAL  ██  4   │
@@ -1540,9 +1540,10 @@ des analyses.
   │ LOW       █   5        │  │ LOW       █   3         │  │ LOW       █   4   │
   └────────────────────────┘  └────────────────────────┘  └──────────────────┘
 
-  ┌─ CVE présentes dans ≥ 2 scanners ────────────────────────────────────┐
+  ┌─ Comparaison inter-scanners (87 CVE) ─────────────────────────────────┐
   │ CRITICAL  CVE-2021-3711   Grype ✓  OSV ✓  Trivy ✓                   │
   │ HIGH      CVE-2023-38545  Grype ✓  OSV ✓  Trivy ✗                   │
+  │ ⚠ MEDIUM  CVE-2024-9999   Grype ✓  OSV ✗  Trivy ✗                   │
   └──────────────────────────────────────────────────────────────────────┘
 ----
 
@@ -1557,21 +1558,49 @@ Les cartes des scanners non encore exécutés affichent un message d'invite.
 
 === Synthèse globale
 
-La bandeau supérieur indique :
+Le bandeau supérieur indique :
 
-* Le nombre de scanners ayant produit des résultats
-* Le nombre total de CVE uniques (union des identifiants de tous les scanners)
-* Le nombre de CVE communes à au moins deux scanners
+* Le nombre de scanners ayant produit des résultats (sur 3)
+* Le nombre total de CVE *uniques* (union des identifiants de tous les
+  scanners exécutés)
+* Le bouton ⬥ d'export AsciiDoc + PDF (voir <<sec-dashboard-export>>)
 
-=== CVE communes multi-scanners
+=== Comparaison inter-scanners
 
-Le tableau en bas liste *toutes* les vulnérabilités détectées par au moins deux
-scanners, triées par sévérité décroissante. Une coche ✓ / ✗ indique la présence
-ou l'absence dans chaque scanner.
+Le tableau en bas liste *toutes* les vulnérabilités détectées par *au moins
+un* scanner — pas seulement celles communes à plusieurs : c'est justement en
+gardant les CVE isolées (vues par un seul scanner alors que plusieurs ont
+tourné) qu'on repère les écarts de détection entre outils. Ces lignes
+isolées portent une bordure ambre, une icône ⚠ et un tooltip « Vu par un
+seul scanner sur N » pour les distinguer d'un coup d'œil. Les lignes sont
+triées par sévérité décroissante ; une coche ✓ / — indique la présence ou
+l'absence dans chaque scanner.
 
 Si la liste dépasse la hauteur disponible, l'ascenseur vertical de l'onglet
 permet de tout parcourir — faites défiler vers le bas à l'intérieur de l'onglet
 Tableau de bord.
+
+[[sec-dashboard-export]]
+=== Export AsciiDoc + PDF
+
+Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte un
+rapport reprenant l'intégralité de la vue affichée :
+
+* le résumé global (scanners exécutés, CVE uniques) ;
+* pour chaque scanner : sa répartition par sévérité (ou « Non exécuté » /
+  « Aucune vulnérabilité détectée » selon le cas) ;
+* le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
+  présence par outil).
+
+Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n'y a ici qu'une seule
+vue de synthèse — pas de lignes filtrées/triées individuellement à exporter.
+
+Le bouton reste désactivé tant qu'aucun scanner n'a été exécuté. Une fois le
+fichier `.adoc` écrit (emplacement choisi via une boîte de dialogue), la
+conversion en PDF via `asciidoctor-pdf` est tentée automatiquement ; si
+l'outil n'est pas installé, le fichier `.adoc` reste produit et un message
+l'indique — même comportement que l'export des onglets de scan (voir
+<<sec-vue-table>>).
 
 NOTE: Le Tableau de bord se met à jour automatiquement chaque fois qu'une analyse
 est lancée dans un onglet scanner. Aucune action supplémentaire n'est requise.

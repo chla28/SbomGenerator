@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'trivy_panel.dart';
+import 'vuln_shared.dart' show adocEscape;
 
 // ─── Tableau de bord de synthèse ─────────────────────────────────────────────
 
@@ -55,6 +59,17 @@ class DashboardPanel extends StatelessWidget {
             grypeCount: grype?.length,
             osvCount: osv?.length,
             trivyCount: trivy?.length,
+            onExport: scansRun == 0
+                ? null
+                : () => _exportDashboard(
+                      context,
+                      scansRun: scansRun,
+                      uniqueIds: allIds.length,
+                      grype: grype,
+                      osv: osv,
+                      trivy: trivy,
+                      crossRows: _crossScannerRows(grype, osv, trivy),
+                    ),
           ),
 
           const SizedBox(height: 20),
@@ -119,6 +134,191 @@ class DashboardPanel extends StatelessWidget {
   }
 }
 
+// ─── Comparaison inter-scanners : calcul partagé (widget + export) ─────────
+//
+// Union complète : toutes les CVE vues par au moins un scanner, pas
+// seulement celles communes à plusieurs — c'est justement en gardant les
+// CVE isolées qu'on repère les écarts de détection entre scanners. Triée
+// par sévérité max (depuis grype en priorité). Utilisée à la fois par
+// _CrossScannerSection (affichage) et _exportDashboard (rapport AsciiDoc),
+// pour que le rapport exporté reflète exactement le tableau affiché.
+typedef _CrossRowData = ({
+  String id,
+  String severity,
+  bool inGrype,
+  bool inOsv,
+  bool inTrivy,
+});
+
+List<_CrossRowData> _crossScannerRows(
+  List<GrypeVuln>? grypeVulns,
+  List<OsvVuln>? osvVulns,
+  List<TrivyVuln>? trivyVulns,
+) {
+  final grypeIds = grypeVulns?.map((v) => v.id).toSet() ?? {};
+  final osvIds = osvVulns?.map((v) => v.id).toSet() ?? {};
+  final trivyIds = trivyVulns?.map((v) => v.id).toSet() ?? {};
+  final crossIds = {...grypeIds, ...osvIds, ...trivyIds}.toList();
+
+  final grypeMap = {for (final v in grypeVulns ?? []) v.id: v.severity};
+  final osvMap = {for (final v in osvVulns ?? []) v.id: v.severity};
+  final trivyMap = {for (final v in trivyVulns ?? []) v.id: v.severity};
+
+  int sevOrd(String? s) => switch ((s ?? '').toLowerCase()) {
+        'critical' => 0,
+        'high' => 1,
+        'medium' => 2,
+        'low' => 3,
+        _ => 4,
+      };
+
+  crossIds.sort((a, b) {
+    final sa = [grypeMap[a], osvMap[a], trivyMap[a]]
+        .map((s) => sevOrd(s))
+        .reduce((x, y) => x < y ? x : y);
+    final sb = [grypeMap[b], osvMap[b], trivyMap[b]]
+        .map((s) => sevOrd(s))
+        .reduce((x, y) => x < y ? x : y);
+    return sa.compareTo(sb);
+  });
+
+  return [
+    for (final id in crossIds)
+      (
+        id: id,
+        severity: grypeMap[id] ?? osvMap[id] ?? trivyMap[id] ?? '',
+        inGrype: grypeIds.contains(id),
+        inOsv: osvIds.contains(id),
+        inTrivy: trivyIds.contains(id),
+      ),
+  ];
+}
+
+// ─── Export AsciiDoc + PDF ────────────────────────────────────────────────
+//
+// Contrairement à VulnTableView (grype/osv/trivy_panel.dart), le tableau de
+// bord n'a pas de liste ligne-par-ligne unique à exporter : le rapport
+// reproduit donc l'ensemble de ce qui est affiché à l'écran — résumé
+// global, répartition par sévérité pour chaque scanner, puis comparaison
+// inter-scanners complète.
+Future<void> _exportDashboard(
+  BuildContext context, {
+  required int scansRun,
+  required int uniqueIds,
+  required List<GrypeVuln>? grype,
+  required List<OsvVuln>? osv,
+  required List<TrivyVuln>? trivy,
+  required List<_CrossRowData> crossRows,
+}) async {
+  final path = await FilePicker.saveFile(
+    dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
+    fileName: 'dashboard_synthese.adoc',
+    type: FileType.custom,
+    allowedExtensions: ['adoc'],
+  );
+  if (path == null || !context.mounted) return;
+
+  final buf = StringBuffer();
+  buf.writeln('= Rapport de synthèse — Tableau de bord des vulnérabilités');
+  buf.writeln(':doctype: article');
+  buf.writeln(':toc:');
+  buf.writeln(':toclevels: 1');
+  buf.writeln(':icons: font');
+  buf.writeln();
+
+  buf.writeln('== Résumé global');
+  buf.writeln();
+  buf.writeln('[cols="<3,<1",options="header"]');
+  buf.writeln('|===');
+  buf.writeln('| Indicateur | Valeur');
+  buf.writeln('| Scanners exécutés | $scansRun / 3');
+  buf.writeln('| CVE uniques (tous scanners confondus) | $uniqueIds');
+  buf.writeln('|===');
+  buf.writeln();
+
+  buf.writeln('== Répartition par scanner');
+  buf.writeln();
+  for (final scanner in [
+    ('Grype', grype),
+    ('OSV-Scanner', osv),
+    ('Trivy', trivy),
+  ]) {
+    final (name, vulns) = scanner;
+    buf.writeln('=== $name');
+    buf.writeln();
+    if (vulns == null) {
+      buf.writeln('_Non exécuté._');
+    } else if (vulns.isEmpty) {
+      buf.writeln('Aucune vulnérabilité détectée.');
+    } else {
+      final counts =
+          DashboardPanel._countByKey(vulns.map((v) => v.severity));
+      buf.writeln('[cols="<2,<1",options="header"]');
+      buf.writeln('|===');
+      buf.writeln('| Sévérité | Nombre');
+      for (final s in ['critical', 'high', 'medium', 'low']) {
+        if ((counts[s] ?? 0) > 0) {
+          buf.writeln('| ${s[0].toUpperCase()}${s.substring(1)} | ${counts[s]}');
+        }
+      }
+      final other = counts.entries
+          .where((e) =>
+              !const {'critical', 'high', 'medium', 'low'}.contains(e.key))
+          .fold(0, (s, e) => s + e.value);
+      if (other > 0) buf.writeln('| Autre | $other');
+      buf.writeln('| *Total* | *${vulns.length}*');
+      buf.writeln('|===');
+    }
+    buf.writeln();
+  }
+
+  buf.writeln('== Comparaison inter-scanners');
+  buf.writeln();
+  if (crossRows.isEmpty) {
+    buf.writeln('_Aucune CVE détectée par les scanners exécutés._');
+  } else {
+    buf.writeln('[cols="<1,<3,^1,^1,^1",options="header"]');
+    buf.writeln('|===');
+    buf.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy');
+    for (final row in crossRows) {
+      buf.writeln('| ${adocEscape(row.severity.isEmpty ? '?' : row.severity)} '
+          '| ${adocEscape(row.id)} '
+          '| ${row.inGrype ? '✓' : '—'} '
+          '| ${row.inOsv ? '✓' : '—'} '
+          '| ${row.inTrivy ? '✓' : '—'}');
+    }
+    buf.writeln('|===');
+  }
+  buf.writeln();
+  buf.writeln('_Généré par sbom_generator_gui._');
+
+  await File(path).writeAsString(buf.toString());
+  if (!context.mounted) return;
+
+  final pdfPath = path.endsWith('.adoc')
+      ? '${path.substring(0, path.length - 5)}.pdf'
+      : '$path.pdf';
+
+  try {
+    final result = await Process.run('asciidoctor-pdf', [path, '-o', pdfPath]);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.exitCode == 0
+          ? 'Tableau de bord exporté → $path et $pdfPath'
+          : 'Tableau de bord exporté → $path '
+              '(échec conversion PDF, code ${result.exitCode})'),
+      duration: const Duration(seconds: 5),
+    ));
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Tableau de bord exporté → $path '
+          '(asciidoctor-pdf introuvable, PDF non généré)'),
+      duration: const Duration(seconds: 5),
+    ));
+  }
+}
+
 // ─── Synthèse globale ─────────────────────────────────────────────────────────
 
 class _GlobalSummary extends StatelessWidget {
@@ -128,12 +328,17 @@ class _GlobalSummary extends StatelessWidget {
   final int? osvCount;
   final int? trivyCount;
 
+  /// Exporte la synthèse en AsciiDoc + PDF. `null` désactive le bouton
+  /// (aucun scanner exécuté, rien à exporter).
+  final VoidCallback? onExport;
+
   const _GlobalSummary({
     required this.uniqueIds,
     required this.scansRun,
     required this.grypeCount,
     required this.osvCount,
     required this.trivyCount,
+    this.onExport,
   });
 
   @override
@@ -170,7 +375,13 @@ class _GlobalSummary extends StatelessWidget {
             if (scansRun > 0) ...[
               _StatBadge(label: 'CVE uniques', value: uniqueIds,
                   color: uniqueIds == 0 ? Colors.green : Colors.red[700]!),
+              const SizedBox(width: 8),
             ],
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: 'Exporter en AsciiDoc + PDF',
+              onPressed: onExport,
+            ),
           ],
         ),
       ),
@@ -487,40 +698,12 @@ class _CrossScannerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // CVEs par scanner
-    final grypeIds = grypeVulns?.map((v) => v.id).toSet() ?? {};
-    final osvIds = osvVulns?.map((v) => v.id).toSet() ?? {};
-    final trivyIds = trivyVulns?.map((v) => v.id).toSet() ?? {};
+    // Union complète : toutes les CVE vues par au moins un scanner, triées
+    // par sévérité max — voir _crossScannerRows (partagé avec l'export
+    // AsciiDoc + PDF pour que le rapport reflète exactement ce tableau).
+    final rows = _crossScannerRows(grypeVulns, osvVulns, trivyVulns);
 
-    // Union complète : toutes les CVE vues par au moins un scanner, pas
-    // seulement celles communes à plusieurs — c'est justement en gardant
-    // les CVE isolées qu'on repère les écarts de détection entre scanners.
-    final crossIds = {...grypeIds, ...osvIds, ...trivyIds}.toList();
-
-    if (crossIds.isEmpty) return const SizedBox.shrink();
-
-    // Trier par sévérité max (depuis grype en priorité)
-    final grypeMap = {for (final v in grypeVulns ?? []) v.id: v.severity};
-    final osvMap = {for (final v in osvVulns ?? []) v.id: v.severity};
-    final trivyMap = {for (final v in trivyVulns ?? []) v.id: v.severity};
-
-    int sevOrd(String? s) => switch ((s ?? '').toLowerCase()) {
-          'critical' => 0,
-          'high' => 1,
-          'medium' => 2,
-          'low' => 3,
-          _ => 4,
-        };
-
-    crossIds.sort((a, b) {
-      final sa = [grypeMap[a], osvMap[a], trivyMap[a]]
-          .map((s) => sevOrd(s))
-          .reduce((x, y) => x < y ? x : y);
-      final sb = [grypeMap[b], osvMap[b], trivyMap[b]]
-          .map((s) => sevOrd(s))
-          .reduce((x, y) => x < y ? x : y);
-      return sa.compareTo(sb);
-    });
+    if (rows.isEmpty) return const SizedBox.shrink();
 
     return Card(
       child: Padding(
@@ -533,7 +716,7 @@ class _CrossScannerSection extends StatelessWidget {
                 const Icon(Icons.join_inner, size: 18, color: Colors.deepOrange),
                 const SizedBox(width: 8),
                 Text(
-                  'Comparaison inter-scanners (${crossIds.length} CVE)',
+                  'Comparaison inter-scanners (${rows.length} CVE)',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
                 ),
@@ -575,13 +758,13 @@ class _CrossScannerSection extends StatelessWidget {
               ),
             ),
             // Lignes — toutes affichées, le SingleChildScrollView parent gère le défilement
-            for (final id in crossIds)
+            for (final row in rows)
               _CrossRow(
-                id: id,
-                inGrype: grypeIds.contains(id),
-                inOsv: osvIds.contains(id),
-                inTrivy: trivyIds.contains(id),
-                severity: grypeMap[id] ?? osvMap[id] ?? trivyMap[id] ?? '',
+                id: row.id,
+                inGrype: row.inGrype,
+                inOsv: row.inOsv,
+                inTrivy: row.inTrivy,
+                severity: row.severity,
                 scansRun: scansRun,
               ),
           ],
