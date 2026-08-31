@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-31
+
 ### Added
 - Support de CycloneDX 1.7 en plus de 1.6 (`--cyclonedx-version`) : classification TLP
   (`--tlp`), déclarations de brevets par paquet (`--patent-map`) et attribution automatique

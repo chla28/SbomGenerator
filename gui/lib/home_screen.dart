@@ -318,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'SBOM Generator',
-      applicationVersion: '1.0.0',
+      applicationVersion: '1.1.0',
       applicationIcon: const Icon(Icons.assignment_outlined, size: 48),
       children: const [
         Text(

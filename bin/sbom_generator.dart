@@ -29,7 +29,7 @@ import 'package:sbom_generator/csv_generator.dart';
 import 'package:sbom_generator/sbom_reader.dart';
 import 'package:sbom_generator/license_report_generator.dart';
 
-const _version = '1.0.0';
+const _version = '1.1.0';
 
 const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
