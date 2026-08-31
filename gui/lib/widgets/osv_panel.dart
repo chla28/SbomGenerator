@@ -29,6 +29,8 @@ class OsvVuln implements VulnRow {
   final DateTime? publishedDate;
   @override
   final DateTime? modifiedDate;
+  @override
+  final int occurrenceCount;
 
   const OsvVuln({
     required this.id,
@@ -39,7 +41,22 @@ class OsvVuln implements VulnRow {
     required this.ecosystem,
     this.publishedDate,
     this.modifiedDate,
+    this.occurrenceCount = 1,
   });
+
+  /// Reconstruit cette entrée avec un nombre d'occurrences fusionnées — voir
+  /// [dedupeVulns].
+  OsvVuln withOccurrenceCount(int count) => OsvVuln(
+        id: id,
+        severity: severity,
+        packageName: packageName,
+        installedVersion: installedVersion,
+        fixedVersion: fixedVersion,
+        ecosystem: ecosystem,
+        publishedDate: publishedDate,
+        modifiedDate: modifiedDate,
+        occurrenceCount: count,
+      );
 
   static String _normalizeSeverity(String s) {
     return switch (s.toLowerCase()) {
@@ -308,7 +325,12 @@ class _OsvPanelState extends State<OsvPanel>
         switch (event) {
           case OsvOutputEvent(:final jsonOutput):
             try {
-              final vulns = OsvVuln.fromJson(jsonOutput);
+              final raw = OsvVuln.fromJson(jsonOutput);
+              // Fusionne les doublons visuels : une même bibliothèque peut
+              // être détectée à plusieurs emplacements (ex. jar autonome +
+              // copie shadée dans un autre jar) avec la même sévérité/CVE/
+              // paquet/version — voir dedupeVulns dans vuln_shared.dart.
+              final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
@@ -420,7 +442,7 @@ class _OsvPanelState extends State<OsvPanel>
                   csvDialogTitle: 'Exporter les vulnérabilités OSV-Scanner',
                   csvFileName: 'osv_vulns.csv',
                   csvHeader:
-                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Écosystème',
+                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Écosystème,Emplacements',
                   csvRow: (v) => [
                     v.severity,
                     v.id,
@@ -428,6 +450,7 @@ class _OsvPanelState extends State<OsvPanel>
                     v.installedVersion,
                     v.fixedVersion,
                     v.ecosystem,
+                    '${v.occurrenceCount}',
                   ],
                   extraColumnHeader: 'ÉCOSYSTÈME',
                   extraOf: (v) => v.ecosystem,

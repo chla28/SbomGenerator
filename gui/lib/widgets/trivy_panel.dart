@@ -29,6 +29,8 @@ class TrivyVuln implements VulnRow {
   final DateTime? publishedDate;
   @override
   final DateTime? modifiedDate;
+  @override
+  final int occurrenceCount;
 
   const TrivyVuln({
     required this.id,
@@ -39,7 +41,22 @@ class TrivyVuln implements VulnRow {
     required this.title,
     this.publishedDate,
     this.modifiedDate,
+    this.occurrenceCount = 1,
   });
+
+  /// Reconstruit cette entrée avec un nombre d'occurrences fusionnées — voir
+  /// [dedupeVulns].
+  TrivyVuln withOccurrenceCount(int count) => TrivyVuln(
+        id: id,
+        severity: severity,
+        packageName: packageName,
+        installedVersion: installedVersion,
+        fixedVersion: fixedVersion,
+        title: title,
+        publishedDate: publishedDate,
+        modifiedDate: modifiedDate,
+        occurrenceCount: count,
+      );
 
   static int _order(String s) => switch (s.toLowerCase()) {
         'critical' => 0,
@@ -259,7 +276,12 @@ class _TrivyPanelState extends State<TrivyPanel>
         switch (event) {
           case TrivyOutputEvent(:final jsonOutput):
             try {
-              final vulns = TrivyVuln.fromJson(jsonOutput);
+              final raw = TrivyVuln.fromJson(jsonOutput);
+              // Fusionne les doublons visuels : une même bibliothèque peut
+              // être détectée à plusieurs emplacements (ex. jar autonome +
+              // copie shadée dans un autre jar) avec la même sévérité/CVE/
+              // paquet/version — voir dedupeVulns dans vuln_shared.dart.
+              final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
@@ -387,7 +409,7 @@ class _TrivyPanelState extends State<TrivyPanel>
                   csvDialogTitle: 'Exporter les vulnérabilités Trivy',
                   csvFileName: 'trivy_vulns.csv',
                   csvHeader:
-                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Titre',
+                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Titre,Emplacements',
                   csvRow: (v) => [
                     v.severity,
                     v.id,
@@ -395,6 +417,7 @@ class _TrivyPanelState extends State<TrivyPanel>
                     v.installedVersion,
                     v.fixedVersion,
                     v.title,
+                    '${v.occurrenceCount}',
                   ],
                   descriptionOf: (v) => v.title,
                   dateFilter: widget.dateFilter,

@@ -838,9 +838,9 @@ Paramètres :
 
 `VulnTableView<TrivyVuln>` (voir <<sec-vuln-shared>>) instancié avec
 `toolName: 'Trivy'`, `descriptionOf: (v) => v.title`. Les colonnes CSV sont :
-Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Titre. Les
-chaînes de sévérité sont en majuscules (`CRITICAL`, `HIGH`…) contrairement à
-Grype (`Critical`, `High`…).
+Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Titre,
+Emplacements. Les chaînes de sévérité sont en majuscules (`CRITICAL`,
+`HIGH`…) contrairement à Grype (`Critical`, `High`…).
 
 `TrivyVuln` est parsé depuis `Results[].Vulnerabilities[]` du JSON Trivy.
 Le champ `Title` est affiché en sous-titre de chaque entrée.
@@ -1328,11 +1328,11 @@ Les résultats sont affichés dans un second `TabController` à 3 onglets intern
 L'instance `VulnTableView<GrypeVuln>` est construite avec `toolName: 'Grype'`,
 `severityOrder: ['Critical', 'High', 'Medium', 'Low', 'Negligible']`,
 `csvHeader`/`csvRow` pour les colonnes Sévérité, CVE/ID, Paquet, Version
-installée, Version corrigée, Type, et `extraColumnHeader: 'TYPE'` /
-`extraOf: (v) => v.packageType`. Le composant lui-même — recherche, tri,
-filtres, `DateFilterBar`, exports — est documenté une seule fois en
-<<sec-vuln-shared>> puisqu'il est strictement identique pour Grype, OSV et
-Trivy.
+installée, Version corrigée, Type, Emplacements, et `extraColumnHeader:
+'TYPE'` / `extraOf: (v) => v.packageType`. Le composant lui-même —
+recherche, tri, filtres, `DateFilterBar`, dédoublonnage, exports — est
+documenté une seule fois en <<sec-vuln-shared>> puisqu'il est strictement
+identique pour Grype, OSV et Trivy.
 
 [[sec-vuln-shared]]
 == `widgets/vuln_shared.dart` — Composants partagés entre Grype, OSV et Trivy
@@ -1356,6 +1356,7 @@ abstract class VulnRow {
   String get fixedVersion;
   DateTime? get publishedDate;
   DateTime? get modifiedDate;
+  int get occurrenceCount;   // 1 = pas de fusion, voir dedupeVulns ci-dessous
 }
 ----
 
@@ -1363,7 +1364,62 @@ abstract class VulnRow {
 (`implements VulnRow`) et restent des classes séparées — conservées
 distinctes plutôt qu'unifiées en une seule, car `DashboardPanel` et
 `ResultsPanel` les consomment avec leur type propre (champs additionnels :
-`packageType` pour Grype, `ecosystem` pour OSV, `title` pour Trivy).
+`packageType` pour Grype, `ecosystem` pour OSV, `title` pour Trivy). Chacune
+porte aussi `occurrenceCount` (défaut `1`) et une méthode
+`withOccurrenceCount(int n)` qui reconstruit l'instance avec un compteur
+différent — utilisée uniquement par `dedupeVulns` (ci-dessous).
+
+[[sec-dedupe-vulns]]
+=== `dedupeVulns<T extends VulnRow>` — fusion des doublons visuels
+
+[source,dart]
+----
+List<T> dedupeVulns<T extends VulnRow>(
+  List<T> vulns,
+  T Function(T first, int count) withOccurrenceCount,
+)
+----
+
+Un même composant peut être détecté à plusieurs emplacements distincts d'une
+image/d'un SBOM — ex. `jackson-databind` présent en jar autonome *et*
+reshadé (embarqué) dans un fat jar comme `keycloak-admin-cli-*.jar` — avec
+exactement la même sévérité, le même identifiant de vulnérabilité, le même
+nom de paquet et la même version installée. `GrypeVuln`/`TrivyVuln` ne
+portant pas de champ « chemin », ces deux entrées légitimes et distinctes du
+scanner sont, à l'écran, visuellement indiscernables ; sans fusion elles
+apparaissent comme des doublons.
+
+`dedupeVulns` regroupe par la clé `(severity, id, packageName,
+installedVersion)`, jointes avec un octet NUL (`\u0000`) plutôt qu'un
+simple espace pour éviter toute collision si un champ contenait un
+espace, et conserve la première occurrence rencontrée, dont
+`withOccurrenceCount` reconstruit une copie avec le nombre d'occurrences
+fusionnées. L'ordre de première apparition est préservé (`Map` de Dart,
+insertion-ordered).
+
+Chaque panneau appelle `dedupeVulns` immédiatement après le parsing JSON,
+avant `setState()` :
+
+[source,dart]
+----
+final raw = GrypeVuln.fromJson(jsonOutput);
+final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
+setState(() { _jsonOutput = jsonOutput; _vulns = vulns; });
+widget.onVulnsChanged?.call(_vulns);
+----
+
+Ce point d'insertion unique suffit à propager la fusion *partout* sans
+logique supplémentaire ailleurs : `_vulns.length` (label d'onglet, bannière
+de synthèse), les compteurs par sévérité dans `VulnTableView` (calculés sur
+`widget.vulns`), les exports CSV/AsciiDoc (`_filtered` dérive de
+`widget.vulns`) et `DashboardPanel` (alimenté via `onVulnsChanged`) reçoivent
+tous la liste déjà fusionnée. Seule la vue JSON brut (`_jsonOutput`, non
+touchée) reste fidèle à la sortie complète et non fusionnée de l'outil —
+choix délibéré pour garder un canal de données 100% fidèle à des fins de
+débogage.
+
+Le badge *×N* affiché dans `VulnTableView` (à côté de l'identifiant, visible
+dès que `occurrenceCount > 1`) porte un tooltip expliquant la fusion.
 
 === `VulnTableView<T extends VulnRow>`
 
@@ -1428,7 +1484,10 @@ vide :
 * *Export CSV* (`Icons.download_outlined`) — `_exportCsv()` : écrit
   `csvHeader` puis une ligne par élément de `_filtered` via `csvRow`,
   échappement RFC 4180 (`csvEscape`), chemin choisi via
-  `FilePicker.saveFile(...)`.
+  `FilePicker.saveFile(...)`. `_filtered` dérive de `widget.vulns`, déjà
+  fusionné par `dedupeVulns` (voir <<sec-dedupe-vulns>>) : chaque panneau
+  ajoute une colonne « Emplacements » à `csvHeader`/`csvRow` reportant
+  `v.occurrenceCount`.
 * *Export AsciiDoc + PDF* (`Icons.picture_as_pdf_outlined`) — `_exportAsciiDoc()` :
   écrit un rapport AsciiDoc sur `_filtered` (donc après filtres
   sévérité/recherche/date, comme le CSV) — résumé chiffré (décompte par
@@ -1511,7 +1570,8 @@ GrypePanel._analyze()
 GrypeRunner.run(...)   →   Process.start('grype', args)
   │
   │ Stream<GrypeEvent>
-  ├── GrypeOutputEvent(json)    →  setState() → _vulns (GrypeVuln[]) avec publishedDate/modifiedDate
+  ├── GrypeOutputEvent(json)    →  dedupeVulns(...) (voir <<sec-dedupe-vulns>>)
+  │                                → setState() → _vulns (GrypeVuln[]) avec publishedDate/modifiedDate
   │                                widget.onVulnsChanged?.call(_vulns)
   │                                → ResultsPanel.setState() → _grypeVulns
   │                                  → DashboardPanel reçoit grypeVulns
@@ -1547,7 +1607,7 @@ OsvPanel._analyze()
 OsvRunner.run(...)   →   Process.start('osv-scanner', args)
   │
   │ Stream<OsvEvent>
-  ├── OsvOutputEvent(jsonOutput)  →  setState() → _vulns (OsvVuln[]), _jsonOutput
+  ├── OsvOutputEvent(jsonOutput)  →  dedupeVulns(...) → setState() → _vulns (OsvVuln[]), _jsonOutput
   │                                   widget.onVulnsChanged?.call(_vulns)
   │                                   → ResultsPanel.setState() → _osvVulns
   └── OsvDoneEvent(exitCode)      →  setState() → _isRunning=false
@@ -1568,7 +1628,7 @@ TrivyPanel._analyze()
 TrivyRunner.run(...)   →   Process.start('trivy', ['sbom'|'image', '--format', 'json', ...])
   │
   │ Stream<TrivyEvent>
-  ├── TrivyOutputEvent(jsonOutput)  →  setState() → _vulns (TrivyVuln[]), _jsonOutput
+  ├── TrivyOutputEvent(jsonOutput)  →  dedupeVulns(...) → setState() → _vulns (TrivyVuln[]), _jsonOutput
   │                                     widget.onVulnsChanged?.call(_vulns)
   │                                     → ResultsPanel.setState() → _trivyVulns
   └── TrivyDoneEvent(exitCode)      →  setState() → _isRunning=false

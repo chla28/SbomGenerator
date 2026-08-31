@@ -611,6 +611,42 @@ abstract class VulnRow {
   String get fixedVersion;
   DateTime? get publishedDate;
   DateTime? get modifiedDate;
+
+  /// Nombre d'emplacements distincts fusionnés dans cette entrée par
+  /// [dedupeVulns] (1 = pas de fusion). Une même bibliothèque peut être
+  /// détectée deux fois dans une image de conteneur — un jar autonome ET
+  /// une copie « shadée » (reshadée/embarquée) dans un autre jar, par
+  /// exemple — avec exactement la même sévérité/CVE/paquet/version : ces
+  /// occurrences sont fusionnées en une seule ligne affichée, avec ce
+  /// compteur, plutôt que montrées comme des doublons visuellement
+  /// indiscernables.
+  int get occurrenceCount;
+}
+
+/// Fusionne les entrées de [vulns] qui partagent (sévérité, identifiant,
+/// paquet, version installée) — un même composant vulnérable détecté à
+/// plusieurs emplacements distincts de l'image/du SBOM analysé — en une
+/// seule entrée par groupe, dont [VulnRow.occurrenceCount] porte le nombre
+/// d'occurrences fusionnées. [withOccurrenceCount] reconstruit une instance
+/// de [T] à partir de la première occurrence rencontrée et du compteur final
+/// (chaque modèle `XxxVuln` fournit sa propre méthode `withOccurrenceCount`,
+/// le type concret n'étant pas connu ici). L'ordre de première apparition
+/// est préservé.
+///
+/// Ne s'applique qu'aux vues dérivées (tableau, bannière, exports) : la vue
+/// JSON brut reste fidèle à la sortie complète et non déduplifiée de l'outil.
+List<T> dedupeVulns<T extends VulnRow>(
+  List<T> vulns,
+  T Function(T first, int count) withOccurrenceCount,
+) {
+  final merged = <String, ({T first, int count})>{};
+  for (final v in vulns) {
+    final key = [v.severity, v.id, v.packageName, v.installedVersion].join('\u0000');
+    final existing = merged[key];
+    merged[key] =
+        existing == null ? (first: v, count: 1) : (first: existing.first, count: existing.count + 1);
+  }
+  return [for (final e in merged.values) withOccurrenceCount(e.first, e.count)];
 }
 
 enum VulnSortCol { severity, cveId, package }
@@ -1038,26 +1074,63 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                               color: fg),
                         ),
                       ),
-                      title: Tooltip(
-                        message: 'Copier l\'identifiant',
-                        child: InkWell(
-                          onTap: () {
-                            Clipboard.setData(ClipboardData(text: v.id));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('CVE copié'),
-                                duration: Duration(seconds: 2),
+                      title: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Tooltip(
+                            message: 'Copier l\'identifiant',
+                            child: InkWell(
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: v.id));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('CVE copié'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                v.id,
+                                style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
                               ),
-                            );
-                          },
-                          child: Text(
-                            v.id,
-                            style: const TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600),
+                            ),
                           ),
-                        ),
+                          if (v.occurrenceCount > 1) ...[
+                            const SizedBox(width: 6),
+                            Tooltip(
+                              message:
+                                  'Ce composant est présent à ${v.occurrenceCount} '
+                                  'emplacements distincts de l\'image/du SBOM '
+                                  '(ex. une bibliothèque autonome et une copie '
+                                  'embarquée dans un autre paquet) — la même '
+                                  'vulnérabilité y a été fusionnée en une seule '
+                                  'ligne.',
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '×${v.occurrenceCount}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

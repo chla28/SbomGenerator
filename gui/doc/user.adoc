@@ -1002,6 +1002,19 @@ sévérité, puis la liste des vulnérabilités :
   └────────────┴──────────────────┴──────────────────┴───────────────┴──────┘
 ----
 
+*Fusion des doublons visuels* : un même composant peut être détecté à
+plusieurs emplacements distincts dans l'image/le SBOM analysé — par exemple
+une bibliothèque présente à la fois en jar autonome et reshadée (embarquée)
+dans un autre jar — avec exactement la même sévérité, le même CVE, le même
+paquet et la même version. Grype et Trivy remontent alors, à raison, deux
+résultats distincts, mais visuellement identiques dans ce tableau (aucune
+colonne n'affiche le chemin du fichier). Ces lignes sont donc fusionnées en
+une seule, avec un badge *×N* à côté de l'identifiant CVE — survolez-le pour
+voir le nombre d'emplacements réels. Cette fusion s'applique à la bannière
+de synthèse, aux compteurs de sévérité et aux exports (voir ci-dessous) ;
+seule la vue *JSON* (<<sec-vue-json>>) reste fidèle à la sortie complète et
+non fusionnée de l'outil.
+
 *Recherche* : le champ de recherche filtre en temps réel sur le nom du paquet,
 l'identifiant CVE, la version ou le type.
 
@@ -1011,9 +1024,11 @@ indique la colonne et le sens de tri actifs. Par défaut, les résultats sont tr
 par sévérité décroissante (Critical en premier).
 
 *Export CSV* : le bouton ⬇ (téléchargement) exporte la liste filtrée en cours
-(tenant compte de la recherche et des filtres sévérité) dans un fichier `.csv`
-au format RFC 4180. Colonnes : Sévérité, CVE/ID, Paquet, Version installée,
-Version corrigée, Type.
+(tenant compte de la recherche, des filtres sévérité, et déjà fusionnée —
+voir ci-dessus) dans un fichier `.csv` au format RFC 4180. Colonnes :
+Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Type,
+Emplacements (nombre d'occurrences fusionnées, `1` si le composant n'est
+présent qu'à un seul endroit).
 
 *Export AsciiDoc + PDF* : le bouton ⬥ (à côté de l'export CSV) exporte la
 même liste filtrée dans un rapport AsciiDoc — résumé chiffré (nombre de
@@ -1179,8 +1194,12 @@ filtres par sévérité, puis liste des vulnérabilités.
 
 *Recherche et tri* : identiques à l'onglet Grype (voir <<sec-vue-table>>).
 
-*Export CSV* : le bouton ⬇ exporte la vue filtrée. Colonnes : Sévérité,
-CVE/ID, Paquet, Version installée, Version corrigée, Écosystème.
+*Fusion des doublons visuels* : même comportement (badge ×N) que l'onglet
+Grype — voir <<sec-vue-table>>.
+
+*Export CSV* : le bouton ⬇ exporte la vue filtrée (déjà fusionnée).
+Colonnes : Sévérité, CVE/ID, Paquet, Version installée, Version corrigée,
+Écosystème, Emplacements.
 
 *Export AsciiDoc + PDF* : le bouton ⬥ exporte la même vue filtrée dans un
 rapport AsciiDoc (résumé par sévérité + tableau détaillé), avec conversion
@@ -1310,11 +1329,11 @@ trivy image --format json --quiet [...] --input /chemin/vers/image.tar
 === Résultats
 
 Même interface que les onglets Grype et OSV-Scanner : barre de recherche
-+ tri + export CSV/AsciiDoc+PDF, filtres par sévérité, puis liste des
-vulnérabilités.
++ tri + export CSV/AsciiDoc+PDF, filtres par sévérité, fusion des doublons
+visuels (badge ×N, voir <<sec-vue-table>>), puis liste des vulnérabilités.
 
 *Export CSV* (bouton ⬇) : colonnes Sévérité, CVE/ID, Paquet, Version
-installée, Version corrigée, Titre.
+installée, Version corrigée, Titre, Emplacements.
 
 *Export AsciiDoc + PDF* (bouton ⬥) : même rapport que sur les onglets
 Grype/OSV-Scanner (résumé par sévérité + tableau détaillé, conversion PDF

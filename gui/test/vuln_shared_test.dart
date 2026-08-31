@@ -72,4 +72,108 @@ void main() {
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsNothing);
     expect(find.byIcon(Icons.download_outlined), findsNothing);
   });
+
+  group('dedupeVulns', () {
+    const sample = GrypeVuln(
+      id: 'CVE-2026-54513',
+      severity: 'Critical',
+      packageName: 'jackson-databind',
+      installedVersion: '2.17.2.redhat-00004',
+      fixedVersion: '',
+      packageType: 'java-archive',
+    );
+
+    test(
+        'fusionne les entrées partageant sévérité/id/paquet/version '
+        '(même bibliothèque détectée à plusieurs emplacements de l\'image)',
+        () {
+      final result = dedupeVulns<GrypeVuln>(
+        [sample, sample],
+        (v, n) => v.withOccurrenceCount(n),
+      );
+
+      expect(result, hasLength(1));
+      expect(result.single.occurrenceCount, 2);
+      expect(result.single.id, sample.id);
+    });
+
+    test('ne fusionne pas des entrées dont un des 4 champs clés diffère', () {
+      final autre = sample.withOccurrenceCount(1); // même clé, count=1 explicite
+      final versionDifferente = GrypeVuln(
+        id: sample.id,
+        severity: sample.severity,
+        packageName: sample.packageName,
+        installedVersion: '2.17.2.redhat-00005', // diffère
+        fixedVersion: '',
+        packageType: 'java-archive',
+      );
+
+      final result = dedupeVulns<GrypeVuln>(
+        [autre, versionDifferente],
+        (v, n) => v.withOccurrenceCount(n),
+      );
+
+      expect(result, hasLength(2));
+      expect(result.every((v) => v.occurrenceCount == 1), isTrue);
+    });
+
+    test('préserve l\'ordre de première apparition', () {
+      const high = GrypeVuln(
+        id: 'CVE-1',
+        severity: 'High',
+        packageName: 'a',
+        installedVersion: '1.0',
+        fixedVersion: '',
+        packageType: 'rpm',
+      );
+      const low = GrypeVuln(
+        id: 'CVE-2',
+        severity: 'Low',
+        packageName: 'b',
+        installedVersion: '1.0',
+        fixedVersion: '',
+        packageType: 'rpm',
+      );
+
+      final result = dedupeVulns<GrypeVuln>(
+        [high, low, high],
+        (v, n) => v.withOccurrenceCount(n),
+      );
+
+      expect(result.map((v) => v.id), ['CVE-1', 'CVE-2']);
+      expect(result.first.occurrenceCount, 2);
+      expect(result.last.occurrenceCount, 1);
+    });
+  });
+
+  testWidgets(
+      'le badge ×N s\'affiche uniquement quand occurrenceCount > 1',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_table(const [
+      GrypeVuln(
+        id: 'CVE-2026-54513',
+        severity: 'Critical',
+        packageName: 'jackson-databind',
+        installedVersion: '2.17.2',
+        fixedVersion: '',
+        packageType: 'java-archive',
+        occurrenceCount: 2,
+      ),
+      GrypeVuln(
+        id: 'CVE-2024-0001',
+        severity: 'High',
+        packageName: 'openssl',
+        installedVersion: '3.0.1',
+        fixedVersion: '3.0.9',
+        packageType: 'rpm',
+      ),
+    ]));
+    await tester.pumpAndSettle();
+
+    expect(find.text('×2'), findsOneWidget);
+  });
 }
