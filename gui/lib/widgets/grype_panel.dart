@@ -118,10 +118,15 @@ class _GrypePanelState extends State<GrypePanel>
   bool get wantKeepAlive => true;
   final _runner = GrypeRunner();
   final _fileCtrl = TextEditingController();
+  final _imageCtrl = TextEditingController();
+  final _imagePlatformCtrl = TextEditingController();
   final _configCtrl = TextEditingController();
   final _templateCtrl =
       TextEditingController(text: './grype_csv.tmpl');
   late final TabController _resultTabs;
+
+  // Source à analyser : fichier SBOM (par défaut) ou image de conteneur
+  ScanSourceKind _sourceKind = ScanSourceKind.sbomFile;
 
   // Options scan
   bool _platformLinux = true;
@@ -175,6 +180,8 @@ class _GrypePanelState extends State<GrypePanel>
   void dispose() {
     _runner.kill();
     _fileCtrl.dispose();
+    _imageCtrl.dispose();
+    _imagePlatformCtrl.dispose();
     _configCtrl.dispose();
     _templateCtrl.dispose();
     _resultTabs.dispose();
@@ -207,6 +214,24 @@ class _GrypePanelState extends State<GrypePanel>
     }
   }
 
+  Future<void> _pickImageArchive() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['tar', 'gz', 'tgz'],
+      dialogTitle: 'Choisir une archive image (docker save / OCI)',
+    );
+    if (result?.files.single.path != null) {
+      setState(() => _imageCtrl.text = result!.files.single.path!);
+    }
+  }
+
+  Future<void> _pickImageOciDir() async {
+    final dir = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Choisir un répertoire OCI layout',
+    );
+    if (dir != null) setState(() => _imageCtrl.text = dir);
+  }
+
   Future<void> _pickConfigFile({bool filtered = true}) async {
     final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
@@ -230,13 +255,20 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   void _analyze() {
-    final sbomFile = _fileCtrl.text.trim();
-    if (sbomFile.isEmpty) {
-      setState(() => _error = 'Veuillez sélectionner un fichier SBOM.');
+    final useImage = _sourceKind == ScanSourceKind.image;
+    final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    if (target.isEmpty) {
+      setState(() => _error = useImage
+          ? 'Veuillez indiquer une image à analyser.'
+          : 'Veuillez sélectionner un fichier SBOM.');
       return;
     }
-    if (!File(sbomFile).existsSync()) {
-      setState(() => _error = 'Fichier introuvable : $sbomFile');
+    // Une référence de registre (nginx:latest) n'est pas un chemin local :
+    // on ne vérifie l'existence que pour un fichier SBOM ou une archive/
+    // répertoire OCI local explicitement désigné comme tel (préfixe ./, /, ~).
+    if ((!useImage || looksLikeLocalPath(target)) && !File(target).existsSync()
+        && !Directory(target).existsSync()) {
+      setState(() => _error = 'Fichier introuvable : $target');
       return;
     }
 
@@ -254,12 +286,20 @@ class _GrypePanelState extends State<GrypePanel>
 
     _runner
         .run(
-          sbomFile: sbomFile,
+          target: target,
           failOn: _failOn.isEmpty ? null : _failOn,
           onlyFixed: _onlyFixed,
           configFile:
               _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-          platformLinux: _platformLinux,
+          // La case --platform linux (ci-dessous) vise le mode fichier SBOM,
+          // où grype l'ignore (source non-image) : ne pas l'appliquer en
+          // mode image, où 'linux' seul (sans arch) est rejeté par grype
+          // pour une image multi-plateforme — seul le champ dédié ci-dessous
+          // doit fixer la plateforme dans ce mode.
+          platformLinux: useImage ? false : _platformLinux,
+          platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
+              ? _imagePlatformCtrl.text.trim()
+              : null,
           addCpesIfNone: _addCpesIfNone,
           byCve: _byCve,
           distroVersion:
@@ -327,6 +367,12 @@ class _GrypePanelState extends State<GrypePanel>
       children: [
         _ConfigSection(
           fileCtrl: _fileCtrl,
+          imageCtrl: _imageCtrl,
+          imagePlatformCtrl: _imagePlatformCtrl,
+          sourceKind: _sourceKind,
+          onSourceKindChanged: (k) => setState(() => _sourceKind = k),
+          onPickImageArchive: _pickImageArchive,
+          onPickImageOciDir: _pickImageOciDir,
           configCtrl: _configCtrl,
           templateCtrl: _templateCtrl,
           platformLinux: _platformLinux,
@@ -457,6 +503,12 @@ class _GrypePanelState extends State<GrypePanel>
 
 class _ConfigSection extends StatelessWidget {
   final TextEditingController fileCtrl;
+  final TextEditingController imageCtrl;
+  final TextEditingController imagePlatformCtrl;
+  final ScanSourceKind sourceKind;
+  final ValueChanged<ScanSourceKind> onSourceKindChanged;
+  final VoidCallback onPickImageArchive;
+  final VoidCallback onPickImageOciDir;
   final TextEditingController configCtrl;
   final TextEditingController templateCtrl;
   final bool platformLinux;
@@ -486,6 +538,12 @@ class _ConfigSection extends StatelessWidget {
 
   const _ConfigSection({
     required this.fileCtrl,
+    required this.imageCtrl,
+    required this.imagePlatformCtrl,
+    required this.sourceKind,
+    required this.onSourceKindChanged,
+    required this.onPickImageArchive,
+    required this.onPickImageOciDir,
     required this.configCtrl,
     required this.templateCtrl,
     required this.platformLinux,
@@ -536,30 +594,67 @@ class _ConfigSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          // ── Fichier SBOM ──
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: fileCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Fichier SBOM',
-                    hintText: 'chemin/vers/sbom.cdx.json',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 13),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SplitPickButton(
-                filterLabel: '.json .jsonld',
-                onPickFiltered: onPickSbom,
-                onPickAll: onPickSbomAll,
-              ),
-            ],
+          // ── Source : fichier SBOM ou image de conteneur ──
+          ScanSourceToggle(
+            kind: sourceKind,
+            enabled: !isRunning,
+            onChanged: onSourceKindChanged,
           ),
+          const SizedBox(height: 8),
+          if (sourceKind == ScanSourceKind.sbomFile)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: fileCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Fichier SBOM',
+                      hintText: 'chemin/vers/sbom.cdx.json',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    style: const TextStyle(
+                        fontFamily: 'monospace', fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SplitPickButton(
+                  filterLabel: '.json .jsonld',
+                  onPickFiltered: onPickSbom,
+                  onPickAll: onPickSbomAll,
+                ),
+              ],
+            )
+          else ...[
+            ImageRefField(
+              controller: imageCtrl,
+              enabled: !isRunning,
+              onPickArchive: onPickImageArchive,
+              onPickOciDir: onPickImageOciDir,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 220,
+              child: TextField(
+                controller: imagePlatformCtrl,
+                enabled: !isRunning,
+                decoration: const InputDecoration(
+                  label: HelpLabel(
+                    'Plateforme',
+                    'Optionnel. Force la plateforme cible sur une\n'
+                        'image multi-architecture, ex. linux/arm64.\n'
+                        'Laisser vide = détection automatique par\n'
+                        'grype (la case --platform linux ci-dessous ne\n'
+                        's\'applique pas en mode image).',
+                  ),
+                  hintText: 'linux/amd64, linux/arm64…',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
 
           // ── Options de scan (3 checkboxes) ──
@@ -988,7 +1083,9 @@ class _GrypeEmptyHint extends StatelessWidget {
             Icon(Icons.security_outlined, size: 56, color: Colors.grey),
             SizedBox(height: 12),
             Text(
-              'Choisissez un fichier SBOM et lancez l\'analyse Grype',
+              'Choisissez un fichier SBOM ou une image de conteneur,\n'
+              'puis lancez l\'analyse Grype',
+              textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 15),
             ),
           ],

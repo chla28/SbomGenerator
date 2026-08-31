@@ -782,6 +782,7 @@ indépendamment d'une génération SBOM récente.
 
 ----
   ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
   │  Fichier SBOM : [ /projet/sbom.cdx.json                ] [Choisir]│
   │                                                                   │
   │  [x] --platform linux   [x] --add-cpes-if-none   [x] --by-cve   │
@@ -819,29 +820,53 @@ au démarrage :
 NOTE: La vérification interroge l'API GitHub. En l'absence de connexion
 réseau, seule la version installée est affichée, sans comparaison.
 
-=== Sélection du fichier SBOM
+[[sec-source-scan]]
+=== Sélection de la source à analyser
 
-Le champ *Fichier SBOM* est pré-rempli automatiquement avec le dernier fichier
-SBOM généré dans la session courante, en priorisant les formats reconnus par
-grype : `.cdx.json` (CycloneDX) puis `.spdx.json` (SPDX).
+Une bascule *Fichier SBOM / Image de conteneur* en haut du panneau permet de
+choisir ce que grype analyse. Ce choix, ainsi que le champ associé, est commun
+aux trois onglets de scan (Grype, OSV-Scanner, Trivy) — voir aussi
+<<sec-onglet-trivy-source>> et <<sec-onglet-osv-source>>.
 
-Vous pouvez saisir manuellement un chemin ou cliquer sur *Choisir* pour
-parcourir le système de fichiers. Les formats `.json` et `.jsonld` sont
+*Fichier SBOM* (mode par défaut) : le champ est pré-rempli automatiquement
+avec le dernier fichier SBOM généré dans la session courante, en priorisant
+les formats reconnus par grype : `.cdx.json` (CycloneDX) puis `.spdx.json`
+(SPDX). Vous pouvez saisir manuellement un chemin ou cliquer sur *Choisir*
+pour parcourir le système de fichiers. Les formats `.json` et `.jsonld` sont
 proposés dans le sélecteur.
 
 NOTE: Grype analyse le contenu du fichier, pas son extension.
 Un fichier CycloneDX renommé `.json` est reconnu correctement.
+
+*Image de conteneur* : le champ accepte trois formes de référence, toutes
+prises en charge par grype sans distinction de syntaxe côté application :
+
+* une référence de *registre*, ex. `nginx:latest`, `ghcr.io/org/app:tag` —
+  l'image est récupérée via la configuration Docker locale (`docker login`)
+  si le registre est privé, sans champ d'identifiants dédié dans l'application ;
+* une *archive* exportée par `docker save` (ou une archive OCI), via le
+  bouton dédié (extensions `.tar`, `.tar.gz`, `.tgz`) ;
+* un *répertoire au format OCI layout* (produit par exemple par `skopeo copy`),
+  via le second bouton dédié.
+
+Un champ optionnel *Plateforme* apparaît en mode image, pour forcer la
+plateforme cible sur une image multi-architecture (ex. `linux/arm64`).
+Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.
 
 === Options de scan
 
 ==== `--platform linux`
 
 Force grype à considérer la plateforme cible comme Linux lors de la
-résolution des vulnérabilités. Recommandé pour les SBOM issus de listes
-de paquets RPM ou DEB.
+résolution des vulnérabilités, en mode *Fichier SBOM* uniquement. Recommandé
+pour les SBOM issus de listes de paquets RPM ou DEB.
 
 Décochez cette option si vous analysez un SBOM issu d'un autre système
-(image Docker multi-plateforme, bibliothèques macOS…).
+(bibliothèques macOS…).
+
+NOTE: Cette case n'a aucun effet en mode *Image de conteneur* : elle est
+ignorée au profit du champ *Plateforme* décrit ci-dessus (`linux` seul, sans
+architecture, est d'ailleurs rejeté par grype sur une image multi-plateforme).
 
 ==== `--add-cpes-if-none`
 
@@ -1061,11 +1086,12 @@ Le bouton 📋 copie la sortie dans le presse-papiers.
 == Onglet OSV-Scanner — Analyse de vulnérabilités
 
 L'onglet *OSV-Scanner* utilise l'outil de Google pour rechercher les
-vulnérabilités à partir d'un fichier SBOM. Son interface est identique à
-celle de l'onglet Grype.
+vulnérabilités à partir d'un fichier SBOM ou d'une image de conteneur. Son
+interface est identique à celle de l'onglet Grype.
 
 ----
   ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
   │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
   │  Config toml  : [                               ] [Choisir ▾]   │
   │                                                      [Analyser]  │
@@ -1087,13 +1113,23 @@ configuration dès que la vérification de démarrage est terminée.
 `osv-scanner` doit être installé et accessible dans le PATH
 (voir <<_installer_osv_scanner_optionnel>>).
 
-=== Sélection du fichier SBOM
+[[sec-onglet-osv-source]]
+=== Sélection de la source à analyser
 
-Même comportement que dans l'onglet Grype : le champ est pré-rempli avec
-le dernier fichier généré. Le bouton *Choisir* propose :
+Même bascule *Fichier SBOM / Image de conteneur* que dans l'onglet Grype
+(voir <<sec-source-scan>>). En mode *Fichier SBOM*, le champ est pré-rempli
+avec le dernier fichier généré ; le bouton *Choisir* propose :
 
 * *Type filtré* : fichiers `.json` et `.jsonld`
 * *Tous les fichiers*
+
+En mode *Image de conteneur*, le champ accepte une référence de *registre*
+(ex. `nginx:latest`) ou une *archive* locale (`docker save`, via le bouton
+dédié) — au format `.tar`, `.tar.gz` ou `.tgz`.
+
+NOTE: Contrairement à Grype et Trivy, OSV-Scanner ne sait pas lire un
+répertoire au format OCI layout directement : seule l'archive est proposée
+ici. Il n'a pas non plus d'option de plateforme (`--platform`).
 
 === Configuration optionnelle (toml)
 
@@ -1103,11 +1139,21 @@ est optionnel.
 
 === Lancer l'analyse
 
-Cliquez sur *Analyser*. OSV-Scanner s'exécute avec les arguments :
+Cliquez sur *Analyser*. En mode *Fichier SBOM*, OSV-Scanner s'exécute avec :
 
 [source,bash]
 ----
 osv-scanner --format json --sbom /chemin/vers/sbom.cdx.json
+----
+
+En mode *Image de conteneur*, la sous-commande change (`--sbom` ne sait pas
+scanner une image) :
+
+[source,bash]
+----
+osv-scanner scan image --format json nginx:latest
+# ou, pour une archive locale :
+osv-scanner scan image --format json --archive /chemin/vers/image.tar
 ----
 
 Un code de retour 1 indique qu'au moins une vulnérabilité a été trouvée
@@ -1168,6 +1214,7 @@ supplémentaires par rapport à OSV-Scanner et Grype.
 
 ----
   ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
   │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
   │                                                                   │
   │  Sévérités : [CRITICAL] [HIGH] [MEDIUM] [LOW] [UNKNOWN]          │
@@ -1192,9 +1239,18 @@ dès que la vérification de démarrage est terminée.
 `trivy` doit être installé et accessible dans le PATH
 (voir <<_installer_trivy_optionnel>>).
 
-=== Sélection du fichier SBOM
+[[sec-onglet-trivy-source]]
+=== Sélection de la source à analyser
 
-Même comportement que les autres onglets d'analyse CVE.
+Même bascule *Fichier SBOM / Image de conteneur*, mêmes formats acceptés
+en mode image (registre, archive locale, répertoire OCI layout) que dans
+l'onglet Grype (voir <<sec-source-scan>>), y compris le champ optionnel
+*Plateforme* (`--platform`, ex. `linux/arm64`).
+
+En mode *Fichier SBOM*, Trivy est lancé via sa sous-commande `trivy sbom` ;
+en mode *Image de conteneur*, via `trivy image` (une archive ou un
+répertoire local est alors passé via `--input`, une référence de registre
+en argument direct).
 
 === Options de scan
 
@@ -1227,7 +1283,7 @@ Ce paramètre est optionnel. Le bouton *Choisir* propose un filtre
 
 === Commande équivalente
 
-Trivy est lancé avec les arguments :
+En mode *Fichier SBOM*, Trivy est lancé avec les arguments :
 
 [source,bash]
 ----
@@ -1237,6 +1293,18 @@ trivy sbom --format json --quiet \
   [--skip-db-update] \
   [--config trivy.yaml] \
   /chemin/vers/sbom.cdx.json
+----
+
+En mode *Image de conteneur* :
+
+[source,bash]
+----
+trivy image --format json --quiet \
+  [--severity CRITICAL,HIGH,...] [--ignore-unfixed] [--skip-db-update] \
+  [--config trivy.yaml] [--platform linux/arm64] \
+  nginx:latest
+# ou, pour une archive/un répertoire OCI local :
+trivy image --format json --quiet [...] --input /chemin/vers/image.tar
 ----
 
 === Résultats

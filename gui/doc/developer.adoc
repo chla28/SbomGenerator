@@ -114,9 +114,9 @@ gui/
 │   │   └── cve_date_filter.dart      # Filtre temporel CVE (CveDateFilter, CveDateField)
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
-│   │   ├── grype_runner.dart         # Exécute grype, stream d'événements
-│   │   ├── osv_runner.dart           # Exécute osv-scanner, stream d'événements
-│   │   ├── trivy_runner.dart         # Exécute trivy, stream d'événements
+│   │   ├── grype_runner.dart         # Exécute grype (SBOM ou image), stream d'événements
+│   │   ├── osv_runner.dart           # Exécute osv-scanner (SBOM ou image), stream d'événements
+│   │   ├── trivy_runner.dart         # Exécute trivy (SBOM ou image), stream d'événements
 │   │   ├── version_service.dart      # Détection version installée + dernière release GitHub
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
 │   └── widgets/
@@ -127,6 +127,7 @@ gui/
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
 │       ├── vuln_shared.dart          # VulnRow, VulnTableView : tableau de vulnérabilités
 │       │                             #   partagé (tri/filtre/recherche/export CSV+AsciiDoc+PDF)
+│       │                             #   + ScanSourceToggle/ImageRefField (source SBOM/image)
 │       ├── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
 │       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
@@ -143,6 +144,8 @@ gui/
 │   ├── dashboard_panel_test.dart
 │   ├── sbom_merge_panel_test.dart
 │   ├── sbom_licenses_panel_test.dart
+│   ├── vuln_shared_test.dart
+│   ├── scan_source_test.dart
 │   └── sbom_viewer_panel_test.dart
 └── pubspec.yaml
 ----
@@ -384,6 +387,38 @@ La sortie JSON arrive sur stdout (capturée dans `jsonBuf`).
 La sortie template est écrite dans un fichier temporaire, lue après exit,
 puis supprimée (voir <<sec-piege-tmpl>>).
 
+[[sec-scan-image]]
+===== Scan d'image de conteneur (Grype/OSV-Scanner/Trivy)
+
+Les trois panneaux de scan (voir <<sec-vuln-shared>>) offrent une bascule
+*Fichier SBOM / Image de conteneur*. Le paramètre `sbomFile` de `run()` a
+été renommé `target` dans les trois runners pour refléter ce double usage :
+chemin d'un fichier SBOM en mode par défaut, ou référence d'image (registre,
+archive locale, répertoire OCI layout) en mode image.
+
+`grype_runner.dart` n'a besoin d'aucune logique de branchement : grype
+détecte seul le type de source depuis l'argument positionnel (fichier SBOM,
+image de registre, archive `docker save`/OCI, répertoire OCI layout — voir
+`grype --help`). Seul un paramètre `platform` (`--platform`, ex.
+`linux/arm64`) a été ajouté, prioritaire sur le booléen `platformLinux`
+existant :
+
+[source,dart]
+----
+if (platform != null && platform.isNotEmpty) {
+  args.addAll(['--platform', platform]);
+} else if (platformLinux) {
+  args.addAll(['--platform', 'linux']);
+}
+----
+
+IMPORTANT: `grype_panel.dart` force `platformLinux: false` lorsque
+`sourceKind == ScanSourceKind.image`, quel que soit l'état de la case
+`--platform linux`. Cette case n'a d'effet qu'en mode fichier SBOM ; en mode
+image, `--platform linux` (sans architecture) est *rejeté* par grype sur une
+image multi-plateforme (`no child with platform linux in index`, vérifié en
+conditions réelles) — seul le champ dédié doit s'appliquer dans ce mode.
+
 ==== `services/osv_runner.dart` — Exécution OSV-Scanner
 
 Même architecture que `grype_runner.dart`. Deux types d'événements (sealed class) :
@@ -401,14 +436,35 @@ Même architecture que `grype_runner.dart`. Deux types d'événements (sealed cl
 
 Particularité : un code de retour *1* indique que des vulnérabilités ont été
 trouvées (comportement normal d'osv-scanner), pas une erreur. Seul un code
-*supérieur à 1* signale une vraie erreur.
+*supérieur à 1* signale une vraie erreur — ce comportement est partagé par
+`scan image` (vérifié en conditions réelles).
 
-La commande lancée est :
+En mode fichier SBOM (`useImage: false`, par défaut), la commande lancée
+reprend l'ancien style par flags (toujours accepté, bien que marqué
+`[DEPRECATED]` dans l'aide d'osv-scanner ≥ 2.x) :
 
 [source,bash]
 ----
-osv-scanner --format json --sbom <sbomFile> [--config <configFile>]
+osv-scanner --format json --sbom <target> [--config <configFile>]
 ----
+
+En mode image (`useImage: true`), seule la sous-commande `scan image`
+(introduite dans le CLI v2) sait analyser une image ; l'ancien style ne le
+permet pas :
+
+[source,bash]
+----
+osv-scanner scan image --format json <target>                # registre
+osv-scanner scan image --format json --archive <target>       # archive locale
+----
+
+Le choix entre les deux se fait via `FileSystemEntity.typeSync(target)` :
+un fichier local déclenche `--archive`, sinon `target` est passé tel quel
+(référence de registre). *Contrairement à Grype et Trivy, osv-scanner ne
+sait pas lire un répertoire OCI layout* (seule une archive tar est
+supportée par `--archive`) — c'est pourquoi `osv_panel.dart` passe
+`allowOciDir: false` à `ImageRefField` et n'offre pas ce sélecteur.
+osv-scanner n'a pas non plus d'option `--platform`.
 
 ==== `services/trivy_runner.dart` — Exécution Trivy
 
@@ -417,7 +473,9 @@ Même architecture. Paramètres nommés de `run()` :
 [source,dart]
 ----
 Stream<TrivyEvent> run({
-  required String sbomFile,
+  required String target,
+  bool useImage = false,
+  String? platform,                     // ex. 'linux/arm64', mode image uniquement
   List<String> severities = const [],   // ex. ['CRITICAL', 'HIGH']
   bool ignoreUnfixed = false,
   bool skipDbUpdate = false,
@@ -438,7 +496,7 @@ Deux types d'événements :
 |exitCode + stderr optionnel
 |===
 
-La commande lancée est :
+En mode fichier SBOM (`useImage: false`), la sous-commande est `sbom` :
 
 [source,bash]
 ----
@@ -447,7 +505,22 @@ trivy sbom --format json --quiet \
   [--ignore-unfixed] \
   [--skip-db-update] \
   [--config trivy.yaml] \
-  <sbomFile>
+  <target>
+----
+
+En mode image (`useImage: true`), la sous-commande devient `image` et
+`--platform` est ajouté si renseigné. `--input` accepte aussi bien une
+archive (`docker save`/OCI) qu'un répertoire OCI layout ; une référence de
+registre se passe en argument positionnel, comme en mode SBOM :
+
+[source,bash]
+----
+trivy image --format json --quiet \
+  [--severity ...] [--ignore-unfixed] [--skip-db-update] \
+  [--config trivy.yaml] [--platform linux/arm64] \
+  <target>                    # référence de registre
+# ou, si FileSystemEntity.typeSync(target) détecte un chemin local :
+trivy image [...] --input <target>   # archive ou répertoire OCI local
 ----
 
 [[sec-version-service]]
@@ -686,12 +759,19 @@ Paramètres :
 Structure interne :
 
 * `_ConfigSection` — `ToolVersionBadge` (voir <<sec-version-service>>) +
-  champs "Fichier SBOM" et "Config toml" (avec `_SplitPickButton`)
+  `ScanSourceToggle` (voir <<sec-vuln-shared>>) qui bascule entre le champ
+  "Fichier SBOM" et `ImageRefField(allowOciDir: false)`, puis "Config toml"
+  (avec `SplitPickButton`)
 * Bannière de résultat (vert / jaune / orange / rouge selon sévérités)
 * `TabController` à 2 onglets internes : *Vulnérabilités* et *JSON brut*
 
 `_OsvPanelState` appelle `VersionService.checkOsv()` dans `initState()`,
-identique au pattern Grype.
+identique au pattern Grype. `_sourceKind` (`ScanSourceKind`, voir
+<<sec-scan-image>>) détermine si `_analyze()` appelle `_runner.run()` avec
+`useImage: false` (fichier `_fileCtrl`) ou `useImage: true` (référence
+`_imageCtrl`) ; en mode image, la validation d'existence locale
+(`File(target).existsSync()`) n'est appliquée que si `looksLikeLocalPath(target)`
+est vrai, pour ne pas rejeter une référence de registre comme `nginx:latest`.
 
 L'onglet Vulnérabilités affiche `VulnTableView<OsvVuln>` (voir <<sec-vuln-shared>>
 pour le composant partagé) instancié avec `toolName: 'OSV-Scanner'`,
@@ -740,10 +820,13 @@ et les chips de filtrage par sévérité étaient absentes (clé introuvable dan
 
 * `ToolVersionBadge` (voir <<sec-version-service>>) en haut de `_ConfigSection`,
   alimenté par `VersionService.checkTrivy()` appelé dans `initState()`
+* `ScanSourceToggle` + champ "Fichier SBOM" ou `ImageRefField` (avec, en
+  mode image, un champ "Plateforme" optionnel — `--platform`, voir
+  <<sec-scan-image>>)
 * 5 `FilterChip` pour `--severity` (CRITICAL / HIGH / MEDIUM / LOW / UNKNOWN)
 * `CheckboxListTile` pour `--ignore-unfixed`
 * `CheckboxListTile` pour `--skip-db-update`
-* Champ "trivy.yaml" avec `_SplitPickButton`
+* Champ "trivy.yaml" avec `SplitPickButton`
 
 Paramètres :
 
@@ -766,9 +849,11 @@ Les champs de date (PascalCase, convention Trivy) :
 * `publishedDate` (`DateTime?`) — depuis `v['PublishedDate']` (ISO 8601 → UTC)
 * `modifiedDate` (`DateTime?`) — depuis `v['LastModifiedDate']`
 
-NOTE: `_SplitPickButton` est défini localement (privé `_`) dans chaque panel.
-C'est une duplication intentionnelle pour éviter de créer un fichier partagé.
-Pour une refactorisation future, extraire vers `widgets/shared/split_pick_button.dart`.
+NOTE: Contrairement à une note antérieure de ce document (obsolète, corrigée
+ici), `SplitPickButton` n'est *pas* dupliqué localement dans chaque panel :
+c'est un widget public partagé, défini dans `vuln_shared.dart` (voir
+<<sec-vuln-shared>>) et importé par `grype_panel.dart` / `osv_panel.dart` /
+`trivy_panel.dart`.
 
 ==== `widgets/quality_panel.dart` — Onglet Qualité SBOM
 
@@ -1200,8 +1285,15 @@ Paramètres :
   "Propager aux autres onglets" ; `ResultsPanel` l'utilise pour écraser les
   filtres des deux autres panneaux
 
-Les boutons de sélection de fichier utilisent `_SplitPickButton` (basé sur
-`MenuAnchor`) pour proposer "Type filtré" / "Tous les fichiers" en split-button.
+Les boutons de sélection de fichier utilisent `SplitPickButton` (partagé,
+voir <<sec-vuln-shared>>, basé sur `MenuAnchor`) pour proposer "Type filtré" /
+"Tous les fichiers" en split-button.
+
+Une bascule `ScanSourceToggle` (voir <<sec-vuln-shared>> et <<sec-scan-image>>)
+choisit entre le champ "Fichier SBOM" et `ImageRefField` (archive locale ou
+répertoire OCI layout via ses deux boutons, ou saisie directe d'une référence
+de registre) ; en mode image, un champ "Plateforme" optionnel apparaît
+(`--platform`).
 
 `_GrypePanelState` appelle `VersionService.checkGrype()` dans `initState()` et
 stocke le résultat dans `ToolVersionInfo? _versionInfo`. Ce champ est transmis
@@ -1302,6 +1394,32 @@ l'outil n'a pas de champ de classification
 sévérité (`_activeFilters`) et le filtre de date (délégué à
 `widget.dateFilter.matches(...)`) — le getter `_filtered` compose les quatre.
 
+[[sec-scan-source-widgets]]
+=== `ScanSourceToggle` / `ImageRefField` / `looksLikeLocalPath`
+
+Composants partagés par les trois panneaux pour le scan d'image de
+conteneur (voir <<sec-scan-image>> côté runners) :
+
+* `enum ScanSourceKind { sbomFile, image }` — état de la bascule, tenu dans
+  chaque `_XxxPanelState._sourceKind`.
+* `ScanSourceToggle` — `SegmentedButton<ScanSourceKind>` à deux segments
+  ("Fichier SBOM" / "Image de conteneur"), style compact.
+* `ImageRefField` — champ de saisie de la référence d'image, avec deux
+  boutons `IconButton.outlined` : archive locale (`.tar`/`.tar.gz`/`.tgz`,
+  toujours proposé) et répertoire OCI layout (proposé seulement si
+  `allowOciDir: true`, valeur par défaut ; `osv_panel.dart` passe `false`
+  car osv-scanner ne sait pas lire un tel répertoire). Le label du champ
+  (`HelpLabel`) et le `hintText` adaptent leur contenu à `allowOciDir`.
+* `bool looksLikeLocalPath(String s)` — heuristique (`s.startsWith('/')`,
+  `'./'`, `'../'` ou `'~'`) utilisée côté panneaux pour décider si la
+  validation d'existence locale (`File(...).existsSync()`) s'applique avant
+  de lancer l'analyse ; une référence de registre comme `nginx:latest` ne
+  la déclenche pas.
+
+Ces trois éléments ne portent aucune logique de commande : le choix entre
+"registre / archive / répertoire OCI" et sa traduction en arguments CLI
+reste dans chaque `*_runner.dart` (voir <<sec-scan-image>>), pas ici.
+
 === Export CSV et AsciiDoc + PDF
 
 Deux boutons dans la barre d'outils, tous deux désactivés si `_filtered` est
@@ -1387,7 +1505,8 @@ Utilisateur
   │ clique "Analyser" dans GrypePanel
   ▼
 GrypePanel._analyze()
-  │ construit les args depuis l'état local
+  │ construit target/useImage depuis _sourceKind (fichier SBOM ou image,
+  │ voir <<sec-scan-image>>) + les args depuis l'état local
   ▼
 GrypeRunner.run(...)   →   Process.start('grype', args)
   │
@@ -1422,7 +1541,8 @@ Utilisateur
   │ clique "Analyser" dans OsvPanel
   ▼
 OsvPanel._analyze()
-  │ construit les args depuis l'état local
+  │ construit target/useImage depuis _sourceKind (fichier SBOM, ou image
+  │ via `scan image` — pas de répertoire OCI, voir <<sec-scan-image>>)
   ▼
 OsvRunner.run(...)   →   Process.start('osv-scanner', args)
   │
@@ -1442,9 +1562,10 @@ Utilisateur
   │ clique "Analyser" dans TrivyPanel
   ▼
 TrivyPanel._analyze()
-  │ construit les args depuis l'état local (severities, ignoreUnfixed…)
+  │ construit target/useImage depuis _sourceKind (voir <<sec-scan-image>>)
+  │ + les args depuis l'état local (severities, ignoreUnfixed…)
   ▼
-TrivyRunner.run(...)   →   Process.start('trivy', ['sbom', '--format', 'json', ...])
+TrivyRunner.run(...)   →   Process.start('trivy', ['sbom'|'image', '--format', 'json', ...])
   │
   │ Stream<TrivyEvent>
   ├── TrivyOutputEvent(jsonOutput)  →  setState() → _vulns (TrivyVuln[]), _jsonOutput

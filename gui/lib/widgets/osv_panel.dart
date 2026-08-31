@@ -181,8 +181,12 @@ class _OsvPanelState extends State<OsvPanel>
   bool get wantKeepAlive => true;
   final _runner = OsvRunner();
   final _fileCtrl = TextEditingController();
+  final _imageCtrl = TextEditingController();
   final _configCtrl = TextEditingController();
   late final TabController _resultTabs;
+
+  // Source à analyser : fichier SBOM (par défaut) ou image de conteneur
+  ScanSourceKind _sourceKind = ScanSourceKind.sbomFile;
 
   bool _isRunning = false;
   List<OsvVuln> _vulns = [];
@@ -212,6 +216,7 @@ class _OsvPanelState extends State<OsvPanel>
   void dispose() {
     _runner.kill();
     _fileCtrl.dispose();
+    _imageCtrl.dispose();
     _configCtrl.dispose();
     _resultTabs.dispose();
     super.dispose();
@@ -241,6 +246,17 @@ class _OsvPanelState extends State<OsvPanel>
     }
   }
 
+  Future<void> _pickImageArchive() async {
+    final r = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['tar', 'gz', 'tgz'],
+      dialogTitle: 'Choisir une archive image (docker save / OCI)',
+    );
+    if (r?.files.single.path != null) {
+      setState(() => _imageCtrl.text = r!.files.single.path!);
+    }
+  }
+
   Future<void> _pickConfigFile({bool filtered = true}) async {
     final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
@@ -253,13 +269,20 @@ class _OsvPanelState extends State<OsvPanel>
   }
 
   void _analyze() {
-    final sbomFile = _fileCtrl.text.trim();
-    if (sbomFile.isEmpty) {
-      setState(() => _error = 'Veuillez sélectionner un fichier SBOM.');
+    final useImage = _sourceKind == ScanSourceKind.image;
+    final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    if (target.isEmpty) {
+      setState(() => _error = useImage
+          ? 'Veuillez indiquer une image à analyser.'
+          : 'Veuillez sélectionner un fichier SBOM.');
       return;
     }
-    if (!File(sbomFile).existsSync()) {
-      setState(() => _error = 'Fichier introuvable : $sbomFile');
+    // Une référence de registre (nginx:latest) n'est pas un chemin local :
+    // on ne vérifie l'existence que pour un fichier SBOM ou une archive
+    // locale explicitement désignée comme telle (préfixe ./, /, ~).
+    if ((!useImage || looksLikeLocalPath(target)) &&
+        !File(target).existsSync()) {
+      setState(() => _error = 'Fichier introuvable : $target');
       return;
     }
 
@@ -274,7 +297,8 @@ class _OsvPanelState extends State<OsvPanel>
 
     _runner
         .run(
-          sbomFile: sbomFile,
+          target: target,
+          useImage: useImage,
           configFile:
               _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
         )
@@ -332,6 +356,10 @@ class _OsvPanelState extends State<OsvPanel>
       children: [
         _ConfigSection(
           fileCtrl: _fileCtrl,
+          imageCtrl: _imageCtrl,
+          sourceKind: _sourceKind,
+          onSourceKindChanged: (k) => setState(() => _sourceKind = k),
+          onPickImageArchive: _pickImageArchive,
           configCtrl: _configCtrl,
           isRunning: _isRunning,
           onPickSbom: _pickSbomFile,
@@ -424,6 +452,10 @@ class _OsvPanelState extends State<OsvPanel>
 
 class _ConfigSection extends StatelessWidget {
   final TextEditingController fileCtrl;
+  final TextEditingController imageCtrl;
+  final ScanSourceKind sourceKind;
+  final ValueChanged<ScanSourceKind> onSourceKindChanged;
+  final VoidCallback onPickImageArchive;
   final TextEditingController configCtrl;
   final bool isRunning;
   final VoidCallback onPickSbom;
@@ -436,6 +468,10 @@ class _ConfigSection extends StatelessWidget {
 
   const _ConfigSection({
     required this.fileCtrl,
+    required this.imageCtrl,
+    required this.sourceKind,
+    required this.onSourceKindChanged,
+    required this.onPickImageArchive,
     required this.configCtrl,
     required this.isRunning,
     required this.onPickSbom,
@@ -469,28 +505,44 @@ class _ConfigSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: fileCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Fichier SBOM',
-                    hintText: 'chemin/vers/sbom.cdx.json',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SplitPickButton(
-                filterLabel: '.json .jsonld',
-                onPickFiltered: onPickSbom,
-                onPickAll: onPickSbomAll,
-              ),
-            ],
+          // ── Source : fichier SBOM ou image de conteneur ──
+          ScanSourceToggle(
+            kind: sourceKind,
+            enabled: !isRunning,
+            onChanged: onSourceKindChanged,
           ),
+          const SizedBox(height: 8),
+          if (sourceKind == ScanSourceKind.sbomFile)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: fileCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Fichier SBOM',
+                      hintText: 'chemin/vers/sbom.cdx.json',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SplitPickButton(
+                  filterLabel: '.json .jsonld',
+                  onPickFiltered: onPickSbom,
+                  onPickAll: onPickSbomAll,
+                ),
+              ],
+            )
+          else
+            ImageRefField(
+              controller: imageCtrl,
+              enabled: !isRunning,
+              allowOciDir: false,
+              onPickArchive: onPickImageArchive,
+            ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -636,7 +688,7 @@ class _EmptyHint extends StatelessWidget {
           children: [
             Icon(Icons.plagiarism_outlined, size: 56, color: Colors.grey),
             SizedBox(height: 12),
-            Text('Sélectionnez un SBOM et lancez l\'analyse',
+            Text('Sélectionnez un SBOM ou une image et lancez l\'analyse',
                 style: TextStyle(color: Colors.grey, fontSize: 15)),
             SizedBox(height: 4),
             Text('osv-scanner — Google Open Source Vulnerability Database',

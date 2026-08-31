@@ -20,7 +20,19 @@ class TrivyRunner {
   bool get isRunning => _process != null;
 
   Stream<TrivyEvent> run({
-    required String sbomFile,
+    /// Cible à analyser : chemin d'un fichier SBOM (mode par défaut, sous-
+    /// commande `sbom`), ou — si [useImage] est vrai — référence d'image de
+    /// registre, ou chemin d'une archive/répertoire OCI local (sous-
+    /// commande `image`).
+    required String target,
+
+    /// Analyse une image de conteneur (`trivy image`) plutôt qu'un fichier
+    /// SBOM (`trivy sbom`).
+    bool useImage = false,
+
+    /// Valeur de --platform (ex. 'linux/arm64'), pertinente uniquement pour
+    /// une image multi-architecture (ignorée si [useImage] est faux).
+    String? platform,
     List<String> severities = const [],
     bool ignoreUnfixed = false,
     bool skipDbUpdate = false,
@@ -28,7 +40,7 @@ class TrivyRunner {
   }) {
     final controller = StreamController<TrivyEvent>();
 
-    final args = ['sbom', '--format', 'json', '--quiet'];
+    final args = <String>[useImage ? 'image' : 'sbom', '--format', 'json', '--quiet'];
     if (severities.isNotEmpty) {
       args.addAll(['--severity', severities.join(',')]);
     }
@@ -37,7 +49,21 @@ class TrivyRunner {
     if (configFile != null && configFile.isNotEmpty) {
       args.addAll(['--config', configFile]);
     }
-    args.add(sbomFile);
+    if (useImage) {
+      if (platform != null && platform.isNotEmpty) {
+        args.addAll(['--platform', platform]);
+      }
+      // --input accepte aussi bien une archive (docker save / OCI) qu'un
+      // répertoire OCI layout ; une référence de registre se passe en
+      // argument positionnel classique.
+      if (FileSystemEntity.typeSync(target) != FileSystemEntityType.notFound) {
+        args.addAll(['--input', target]);
+      } else {
+        args.add(target);
+      }
+    } else {
+      args.add(target);
+    }
 
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();

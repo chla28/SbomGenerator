@@ -25,7 +25,11 @@ class GrypeRunner {
   bool get isRunning => _process != null;
 
   Stream<GrypeEvent> run({
-    required String sbomFile,
+    /// Cible à analyser : chemin d'un fichier SBOM, ou — grype détecte
+    /// automatiquement le type de source — référence d'image de registre
+    /// (nginx:latest), chemin d'une archive (docker save / OCI) ou d'un
+    /// répertoire OCI layout.
+    required String target,
     String? failOn,
     bool onlyFixed = false,
     String? configFile,
@@ -34,6 +38,10 @@ class GrypeRunner {
     bool byCve = true,
     String? distroVersion,
     String? templateFile,
+
+    /// Valeur explicite de --platform (ex. 'linux/arm64'), utile pour une
+    /// image multi-architecture. Prioritaire sur [platformLinux] si fournie.
+    String? platform,
   }) {
     final controller = StreamController<GrypeEvent>();
 
@@ -45,14 +53,18 @@ class GrypeRunner {
       );
     }
 
-    final args = <String>[sbomFile, '--output', 'json'];
+    final args = <String>[target, '--output', 'json'];
     if (tmpFile != null) {
       args.addAll([
         '--output', 'template=${tmpFile.path}',
         '--template', templateFile!,
       ]);
     }
-    if (platformLinux) args.addAll(['--platform', 'linux']);
+    if (platform != null && platform.isNotEmpty) {
+      args.addAll(['--platform', platform]);
+    } else if (platformLinux) {
+      args.addAll(['--platform', 'linux']);
+    }
     if (addCpesIfNone) args.add('--add-cpes-if-none');
     if (byCve) args.add('--by-cve');
     if (distroVersion != null && distroVersion.isNotEmpty) {

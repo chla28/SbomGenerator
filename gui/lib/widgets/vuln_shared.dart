@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
+import 'help_icon.dart';
 
 // ─── Couleurs de sévérité ───────────────────────────────────────────────────
 
@@ -253,6 +254,138 @@ class _SplitPickButtonState extends State<SplitPickButton> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Sélection de la source à analyser (fichier SBOM ou image) ─────────────
+//
+// Grype, Trivy et osv-scanner savent tous les trois analyser directement une
+// image de conteneur en plus d'un fichier SBOM déjà généré. Les trois
+// panneaux partagent la bascule et le champ de référence d'image ; seule la
+// commande envoyée au sous-processus diffère (voir chaque `*_runner.dart`).
+
+/// Source choisie pour l'analyse : un fichier SBOM déjà généré, ou une image
+/// de conteneur (registre, archive locale, ou répertoire OCI layout) scannée
+/// directement par l'outil.
+enum ScanSourceKind { sbomFile, image }
+
+/// Heuristique pour distinguer un chemin local (archive ou répertoire OCI
+/// layout) d'une référence de registre (ex. `nginx:latest`,
+/// `ghcr.io/org/app:tag`) : un chemin local commence toujours par `/`, `./`,
+/// `../` ou `~`.
+bool looksLikeLocalPath(String s) =>
+    s.startsWith('/') ||
+    s.startsWith('./') ||
+    s.startsWith('../') ||
+    s.startsWith('~');
+
+/// Bascule "Fichier SBOM" / "Image de conteneur", partagée par les 3 onglets
+/// de scan.
+class ScanSourceToggle extends StatelessWidget {
+  final ScanSourceKind kind;
+  final bool enabled;
+  final ValueChanged<ScanSourceKind> onChanged;
+
+  const ScanSourceToggle({
+    super.key,
+    required this.kind,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<ScanSourceKind>(
+      segments: const [
+        ButtonSegment(
+          value: ScanSourceKind.sbomFile,
+          icon: Icon(Icons.description_outlined, size: 16),
+          label: Text('Fichier SBOM'),
+        ),
+        ButtonSegment(
+          value: ScanSourceKind.image,
+          icon: Icon(Icons.inventory_2_outlined, size: 16),
+          label: Text('Image de conteneur'),
+        ),
+      ],
+      selected: {kind},
+      onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+/// Champ de référence d'image, avec sélecteurs pour une archive locale
+/// (docker save / archive OCI) et, si [allowOciDir] est vrai, un répertoire
+/// au format OCI layout. [allowOciDir] doit être à `false` pour les outils
+/// qui ne savent pas lire un tel répertoire directement (osv-scanner, qui
+/// n'accepte qu'une archive via `--archive`).
+class ImageRefField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool enabled;
+  final bool allowOciDir;
+  final VoidCallback onPickArchive;
+  final VoidCallback? onPickOciDir;
+  final ValueChanged<String>? onChanged;
+
+  const ImageRefField({
+    super.key,
+    required this.controller,
+    required this.enabled,
+    required this.onPickArchive,
+    this.allowOciDir = true,
+    this.onPickOciDir,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            enabled: enabled,
+            decoration: InputDecoration(
+              label: HelpLabel(
+                'Image de conteneur',
+                'Référence d\'une image à analyser directement, sans\n'
+                    'passer par un fichier SBOM :\n'
+                    '• Registre : nginx:latest, ghcr.io/org/app:tag\n'
+                    '• Archive : ./image.tar(.gz) (docker save)\n'
+                    '${allowOciDir ? '• Répertoire OCI layout : ./oci_dir/\n' : ''}'
+                    'Un registre privé est résolu via la configuration\n'
+                    'Docker locale (docker login), sans champ dédié ici.',
+              ),
+              hintText: allowOciDir
+                  ? 'nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/'
+                  : 'nginx:latest  •  ./image.tar(.gz)',
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            onChanged: onChanged,
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.outlined(
+          tooltip: 'Choisir une archive (.tar, .tar.gz, .tgz)',
+          onPressed: enabled ? onPickArchive : null,
+          icon: const Icon(Icons.archive_outlined, size: 18),
+        ),
+        if (allowOciDir) ...[
+          const SizedBox(width: 4),
+          IconButton.outlined(
+            tooltip: 'Choisir un répertoire OCI layout',
+            onPressed: enabled ? onPickOciDir : null,
+            icon: const Icon(Icons.folder_outlined, size: 18),
+          ),
+        ],
+      ],
     );
   }
 }
