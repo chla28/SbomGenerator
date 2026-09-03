@@ -214,7 +214,7 @@ class CycloneDxGenerator {
         'type': 'application',
         'bom-ref': 'tool-sbom_generator',
         'name': 'sbom_generator',
-        'version': '1.2.0',
+        'version': '1.2.1',
       }
     ];
     if (extraTool != null && extraTool != 'sbom_generator') {

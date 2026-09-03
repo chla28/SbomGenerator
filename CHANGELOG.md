@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-03
+
+### Fixed
+- GUI : dans le Tableau de bord, un CVE préfixé par OSV-Scanner selon l'origine de l'avis
+  distro (ex. `DEBIAN-CVE-2026-13221`) n'est plus compté comme distinct du même CVE nu
+  (`CVE-2026-13221`) rapporté par Grype/Trivy dans la comparaison inter-scanners
+
 ## [1.2.0] - 2026-09-03
 
 ### Added
