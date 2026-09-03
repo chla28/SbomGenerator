@@ -100,6 +100,67 @@ void main() {
   });
 
   testWidgets(
+      'un CVE préfixé par OSV-Scanner (DEBIAN-CVE-xxxx) est fusionné avec '
+      'le même CVE nu rapporté par Grype/Trivy', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final grype = [
+      const GrypeVuln(
+        id: 'CVE-2026-13221',
+        severity: 'High',
+        packageName: 'valkey',
+        installedVersion: '1.0',
+        fixedVersion: '1.1',
+        packageType: 'deb',
+      ),
+    ];
+    // OSV-Scanner préfixe ses avis Debian par l'origine (DEBIAN-) là où
+    // Grype/Trivy rapportent l'ID CVE nu — sans normalisation, la même
+    // vulnérabilité comptait comme deux lignes distinctes.
+    final osv = [
+      const OsvVuln(
+        id: 'DEBIAN-CVE-2026-13221',
+        severity: 'High',
+        packageName: 'valkey',
+        installedVersion: '1.0',
+        fixedVersion: '1.1',
+        ecosystem: 'Debian',
+      ),
+    ];
+    final trivy = [
+      const TrivyVuln(
+        id: 'CVE-2026-13221',
+        severity: 'HIGH',
+        packageName: 'valkey',
+        installedVersion: '1.0',
+        fixedVersion: '1.1',
+        title: 'valkey vulnerability',
+      ),
+    ];
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: DashboardPanel(
+          grypeVulns: grype,
+          osvVulns: osv,
+          trivyVulns: trivy,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Une seule ligne, sous sa forme CVE nue — pas de doublon
+    // DEBIAN-CVE-2026-13221 / CVE-2026-13221, et pas de marqueur "vu par un
+    // seul scanner" puisque les 3 scanners l'ont bien détectée.
+    expect(find.text('Comparaison inter-scanners (1 CVE)'), findsOneWidget);
+    expect(find.text('CVE-2026-13221'), findsOneWidget);
+    expect(find.text('DEBIAN-CVE-2026-13221'), findsNothing);
+    expect(find.byTooltip('Vu par un seul scanner sur 3'), findsNothing);
+  });
+
+  testWidgets(
       'le bouton "Exporter en AsciiDoc + PDF" est désactivé tant qu\'aucun '
       'scanner n\'a été exécuté', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);

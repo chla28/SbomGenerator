@@ -40,11 +40,12 @@ class DashboardPanel extends StatelessWidget {
     final osv = osvVulns;
     final trivy = trivyVulns;
 
-    // CVE IDs uniques sur l'ensemble des scanners
+    // CVE IDs uniques sur l'ensemble des scanners (normalisés — voir
+    // _normalizeVulnId)
     final allIds = <String>{
-      if (grype != null) ...grype.map((v) => v.id),
-      if (osv != null) ...osv.map((v) => v.id),
-      if (trivy != null) ...trivy.map((v) => v.id),
+      if (grype != null) ...grype.map((v) => _normalizeVulnId(v.id)),
+      if (osv != null) ...osv.map((v) => _normalizeVulnId(v.id)),
+      if (trivy != null) ...trivy.map((v) => _normalizeVulnId(v.id)),
     };
     final scansRun = [grype, osv, trivy].where((l) => l != null).length;
 
@@ -151,19 +152,43 @@ typedef _CrossRowData = ({
   bool inTrivy,
 });
 
+// OSV-Scanner préfixe parfois un CVE par l'origine de l'avis distro (ex.
+// `DEBIAN-CVE-2026-13221` pour un paquet Debian), là où Grype et Trivy
+// rapportent le même identifiant nu (`CVE-2026-13221`) — sans normalisation,
+// la comparaison inter-scanners par correspondance exacte de chaîne compte
+// la même vulnérabilité comme deux ID distincts, dont un "vu par un seul
+// scanner". Vérifié empiriquement sur une image Debian réelle : sur les 95
+// ID `DEBIAN-CVE-xxxx` rapportés par OSV-Scanner, 90 correspondent
+// exactement (une fois le préfixe retiré) à un ID rapporté par Grype et 94
+// à un ID rapporté par Trivy. Le motif générique `PREFIXE-CVE-xxxx` couvre
+// aussi les variantes d'autres écosystèmes (ex. UBUNTU-, ALPINE-) sans
+// nécessiter de liste de préfixes en dur.
+final RegExp _distroPrefixedCveRe = RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$');
+
+String _normalizeVulnId(String id) =>
+    _distroPrefixedCveRe.firstMatch(id)?.group(1) ?? id;
+
 List<_CrossRowData> _crossScannerRows(
   List<GrypeVuln>? grypeVulns,
   List<OsvVuln>? osvVulns,
   List<TrivyVuln>? trivyVulns,
 ) {
-  final grypeIds = grypeVulns?.map((v) => v.id).toSet() ?? {};
-  final osvIds = osvVulns?.map((v) => v.id).toSet() ?? {};
-  final trivyIds = trivyVulns?.map((v) => v.id).toSet() ?? {};
+  final grypeIds =
+      grypeVulns?.map((v) => _normalizeVulnId(v.id)).toSet() ?? {};
+  final osvIds = osvVulns?.map((v) => _normalizeVulnId(v.id)).toSet() ?? {};
+  final trivyIds =
+      trivyVulns?.map((v) => _normalizeVulnId(v.id)).toSet() ?? {};
   final crossIds = {...grypeIds, ...osvIds, ...trivyIds}.toList();
 
-  final grypeMap = {for (final v in grypeVulns ?? []) v.id: v.severity};
-  final osvMap = {for (final v in osvVulns ?? []) v.id: v.severity};
-  final trivyMap = {for (final v in trivyVulns ?? []) v.id: v.severity};
+  final grypeMap = {
+    for (final v in grypeVulns ?? []) _normalizeVulnId(v.id): v.severity
+  };
+  final osvMap = {
+    for (final v in osvVulns ?? []) _normalizeVulnId(v.id): v.severity
+  };
+  final trivyMap = {
+    for (final v in trivyVulns ?? []) _normalizeVulnId(v.id): v.severity
+  };
 
   int sevOrd(String? s) => switch ((s ?? '').toLowerCase()) {
         'critical' => 0,
