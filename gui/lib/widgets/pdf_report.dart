@@ -8,6 +8,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+// ─── Version de la GUI ───────────────────────────────────────────────────────
+//
+// Unique endroit à mettre à jour côté GUI lors d'un bump de version (avec
+// gui/pubspec.yaml) — home_screen.dart (À propos) et les exports PDF s'y
+// réfèrent tous les deux, au lieu de dupliquer le littéral.
+const String kGuiVersion = '1.2.1';
+
 // ─── Thème asciidoctor-pdf ──────────────────────────────────────────────────
 //
 // asciidoctor-pdf ne sait charger un thème que depuis un fichier réel sur
@@ -170,3 +177,48 @@ String svgImageMacro(String svg, {String alt = 'Répartition par sévérité'}) 
   final b64 = base64Encode(utf8.encode(svg));
   return 'image::data:image/svg+xml;base64,$b64[$alt,pdfwidth=100%]';
 }
+
+// ─── Version des scanners ─────────────────────────────────────────────────
+//
+// Exécute `<outil> --version` (ou équivalent) au moment de l'export, pour
+// que le rapport reflète la version réellement installée — plutôt que de la
+// capturer au moment du scan, qui peut dater de plusieurs jours. `null` si
+// l'outil est absent du PATH ou si la sortie ne correspond pas au format
+// attendu : les appelants doivent alors omettre la ligne plutôt que
+// d'afficher "null".
+Future<String?> _detectToolVersion(
+  String executable,
+  List<String> args,
+  RegExp versionPattern,
+) async {
+  try {
+    final result = await Process.run(executable, args);
+    final output = '${result.stdout}\n${result.stderr}';
+    return versionPattern.firstMatch(output)?.group(1);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Ex. `grype version` → une ligne `Version:             0.118.0`.
+Future<String?> grypeVersion() => _detectToolVersion(
+    'grype', ['version'], RegExp(r'^Version:\s*(\S+)', multiLine: true));
+
+/// Ex. `trivy --version` → une première ligne `Version: 0.74.0` (les
+/// versions de bases de données qui suivent sont indentées, donc non
+/// capturées par `^Version:` ancré en tout début de ligne).
+Future<String?> trivyVersion() => _detectToolVersion(
+    'trivy', ['--version'], RegExp(r'^Version:\s*(\S+)', multiLine: true));
+
+/// Ex. `osv-scanner --version` → une première ligne
+/// `osv-scanner version: 2.4.0`.
+Future<String?> osvScannerVersion() => _detectToolVersion(
+    'osv-scanner',
+    ['--version'],
+    RegExp(r'^osv-scanner version:\s*(\S+)', multiLine: true));
+
+/// Formate une ligne `| Libellé | Version |` pour la table de résumé d'un
+/// export, avec "indisponible" si la détection a échoué (outil absent du
+/// PATH, sortie inattendue…).
+String pdfToolVersionRow(String label, String? version) =>
+    '| $label | ${version ?? '_indisponible_'}';

@@ -263,6 +263,26 @@ Future<void> _exportDashboard(
   buf.writeln('|===');
   buf.writeln();
 
+  // Versions détectées au moment de l'export (pas au moment du scan) —
+  // toujours à jour même si l'outil a été mis à jour depuis.
+  buf.writeln('== Outils');
+  buf.writeln();
+  buf.writeln('[cols="<3,<1",options="header"]');
+  buf.writeln('|===');
+  buf.writeln('| Outil | Version');
+  buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion));
+  if (grype != null) {
+    buf.writeln(pdfToolVersionRow('Grype', await grypeVersion()));
+  }
+  if (osv != null) {
+    buf.writeln(pdfToolVersionRow('OSV-Scanner', await osvScannerVersion()));
+  }
+  if (trivy != null) {
+    buf.writeln(pdfToolVersionRow('Trivy', await trivyVersion()));
+  }
+  buf.writeln('|===');
+  buf.writeln();
+
   buf.writeln('== Répartition par scanner');
   buf.writeln();
   for (final scanner in [

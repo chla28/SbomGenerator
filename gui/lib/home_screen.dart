@@ -8,6 +8,7 @@ import 'models/sbom_result.dart';
 import 'services/sbom_runner.dart';
 import 'services/settings_service.dart';
 import 'widgets/config_panel.dart';
+import 'widgets/pdf_report.dart' show kGuiVersion;
 import 'widgets/results_panel.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -318,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'SBOM Generator',
-      applicationVersion: '1.2.1',
+      applicationVersion: kGuiVersion,
       applicationIcon: const Icon(Icons.assignment_outlined, size: 48),
       children: const [
         Text(

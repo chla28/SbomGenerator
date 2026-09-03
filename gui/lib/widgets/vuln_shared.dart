@@ -54,6 +54,15 @@ String csvEscape(String s) {
 /// contenu y est ambigu (nouvelle cellule), on l'échappe systématiquement.
 String adocEscape(String s) => s.replaceAll('|', '\\|');
 
+/// Associe le nom d'outil affiché (`widget.toolName` de grype/osv/trivy_panel)
+/// à sa fonction de détection de version (pdf_report.dart).
+Future<String?> _toolVersionFor(String toolName) => switch (toolName) {
+      'Grype' => grypeVersion(),
+      'OSV-Scanner' => osvScannerVersion(),
+      'Trivy' => trivyVersion(),
+      _ => Future.value(null),
+    };
+
 String _dateFilterSummary(CveDateFilter f) {
   final fieldLabel = switch (f.field) {
     CveDateField.published => 'publication',
@@ -836,6 +845,20 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     }
     buf.writeln('|===');
     buf.writeln();
+
+    // Versions détectées au moment de l'export (pas au moment du scan) —
+    // toujours à jour même si l'outil a été mis à jour depuis.
+    buf.writeln('== Outils');
+    buf.writeln();
+    buf.writeln('[cols="<3,<1",options="header"]');
+    buf.writeln('|===');
+    buf.writeln('| Outil | Version');
+    buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion));
+    buf.writeln(
+        pdfToolVersionRow(widget.toolName, await _toolVersionFor(widget.toolName)));
+    buf.writeln('|===');
+    buf.writeln();
+
     buf.writeln('== Détail');
     buf.writeln();
     buf.writeln(
