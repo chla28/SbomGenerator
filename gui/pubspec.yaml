@@ -15,17 +15,19 @@ dependencies:
   url_launcher: ^6.3.1
   desktop_drop: ^0.7.1
   flutter_html: ^3.0.0
+  # Dépendance directe (utilisée aussi par HelpViewerScreen pour extraire le
+  # texte brut du HTML pré-généré, pour la recherche) — épinglée à 0.15.5
+  # exactement : flutter_html 3.0.0 importe une API interne (package:html/
+  # src/query_selector.dart) qui a changé de forme en 0.15.6+, provoquant
+  # une erreur de compilation ("Method not found: 'matches'") au-delà de
+  # cette version — vérifié empiriquement, à réévaluer si flutter_html est
+  # mis à jour. tool/generate_help.dart s'appuie sur la même résolution.
+  html: 0.15.5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  # Épinglé : flutter_html 3.0.0 importe une API interne (package:html/
-  # src/query_selector.dart) qui a changé de forme en 0.15.6+, provoquant
-  # une erreur de compilation ("Method not found: 'matches'") au-delà de
-  # 0.15.5 — vérifié empiriquement, à réévaluer si flutter_html est mis à
-  # jour.
-  html: 0.15.5
 
 flutter:
   uses-material-design: true

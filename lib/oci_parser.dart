@@ -531,7 +531,7 @@ class OciParser {
       final dpkgStatus = File('$fsDir/var/lib/dpkg/status');
       if (await dpkgStatus.exists()) {
         if (verbose) print('skopeo : base dpkg trouvée');
-        packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef));
+        packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef, fsDir));
       }
 
       // Vérifier les deux emplacements RPM : traditionnel (/var/lib/rpm) et
@@ -628,7 +628,7 @@ class OciParser {
   }
 
   Future<List<Package>> _parseDpkgStatus(
-      File statusFile, String imageRef) async {
+      File statusFile, String imageRef, String fsDir) async {
     final packages = <Package>[];
     final fields = <String, String>{};
     String? currentKey;
@@ -651,7 +651,7 @@ class OciParser {
       packages.add(OciPackage(
         name: name,
         version: fields['version'] ?? '',
-        license: '',
+        license: _readDebianCopyrightLicense(fsDir, name),
         vendor: fields['maintainer'] ?? '',
         url: fields['homepage'] ?? '',
         summary: summary,
@@ -693,6 +693,53 @@ class OciParser {
     flushPackage();
 
     return packages;
+  }
+
+  // Contrairement à RPM, /var/lib/dpkg/status n'a pas de champ Licence —
+  // la seule source fiable est /usr/share/doc/<pkg>/copyright, présent pour
+  // (quasiment) tout paquet Debian/Ubuntu. On ne l'exploite que lorsqu'il
+  // suit le format DEP-5 machine-readable (identifiable par son en-tête
+  // Format:) : les champs License: y sont des identifiants courts fiables
+  // (ex. "GPL-2.0-or-later", parfois une expression "GPL-2 or Artistic"),
+  // que LicenseNormalizer sait déjà normaliser en aval. Les copyright files
+  // en texte libre (l'autre convention, plus ancienne) ne sont pas
+  // interprétés : deviner une licence dans du texte libre serait trop
+  // sujet à erreur pour une donnée censée être fiable.
+  static final RegExp _dep5FormatRe =
+      RegExp(r'^Format:\s*https?://.*copyright-format', multiLine: true);
+
+  String _readDebianCopyrightLicense(String fsDir, String pkgName) {
+    final file = File('$fsDir/usr/share/doc/$pkgName/copyright');
+    if (!file.existsSync()) return '';
+    final String content;
+    try {
+      content = file.readAsStringSync();
+    } catch (_) {
+      return '';
+    }
+    if (!_dep5FormatRe.hasMatch(content)) return '';
+
+    // Stanzas séparées par une ligne vide ; on retient le champ License:
+    // (première ligne seulement — le corps qui suit, indenté, est le texte
+    // complet de la licence, pas l'identifiant) de chaque stanza, en
+    // priorisant celle qui couvre tout le paquet (Files: *).
+    final stanzas = content.split(RegExp(r'\n\s*\n'));
+    String? wholePackageLicense;
+    final allLicenses = <String>[];
+    for (final stanza in stanzas) {
+      final filesMatch =
+          RegExp(r'^Files:\s*(.+)$', multiLine: true).firstMatch(stanza);
+      final licenseMatch =
+          RegExp(r'^License:\s*(.+)$', multiLine: true).firstMatch(stanza);
+      final license = licenseMatch?.group(1)?.trim();
+      if (license == null || license.isEmpty) continue;
+      if (!allLicenses.contains(license)) allLicenses.add(license);
+      if (filesMatch?.group(1)?.trim() == '*') {
+        wholePackageLicense ??= license;
+      }
+    }
+    if (wholePackageLicense != null) return wholePackageLicense;
+    return allLicenses.join(' and ');
   }
 
   List<String> _dpkgDepends(String depends) {
@@ -1126,6 +1173,13 @@ Future<List<Package>> ociParserParseRpmRoot(
 OciPackage? ociParserTrivyPkgToPackage(
         Map<String, dynamic> pkgJson, String ecosystemType, String imageRef) =>
     OciParser()._trivyPkgToPackage(pkgJson, ecosystemType, imageRef);
+
+/// Appelle [OciParser._parseDpkgStatus] depuis les tests sur un fichier
+/// `status` (et un `fsDir` racine, pour `usr/share/doc/<pkg>/copyright`)
+/// déjà présents sur disque, sans passer par skopeo.
+Future<List<Package>> ociParserParseDpkgStatus(
+        File statusFile, String imageRef, String fsDir) =>
+    OciParser()._parseDpkgStatus(statusFile, imageRef, fsDir);
 
 /// Appelle [OciParser._syftDistroToOsInfo] depuis les tests, sur un objet
 /// JSON syft (racine `syft <image> --output json`) déjà décodé, sans

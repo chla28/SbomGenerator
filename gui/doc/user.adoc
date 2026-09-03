@@ -282,7 +282,9 @@ Le bouton *❓* dans la barre de titre ouvre ce manuel utilisateur directement
 dans l'application (sommaire à gauche, chapitre sélectionné à droite) — à
 ne pas confondre avec les icônes ❓ plus petites présentes sur chaque champ/
 section, qui affichent une infobulle courte au survol plutôt que d'ouvrir
-le manuel complet.
+le manuel complet. Le champ de recherche en tête de sommaire filtre les
+chapitres par titre *et* par contenu au fur et à mesure de la frappe ; un
+extrait du passage trouvé s'affiche sous le titre du chapitre concerné.
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
@@ -944,7 +946,7 @@ Exemple de template Go pour un CSV :
 {{- end}}
 ----
 
-La sortie produite est affichée dans l'onglet *Template* (voir <<sec-vue-template>>)
+La sortie produite est affichée dans l'onglet *Template* (voir <<sec-vue-template,vue Template>>)
 et peut être copiée dans le presse-papiers.
 
 NOTE: Grype est lancé en une seule passe qui produit simultanément la sortie
@@ -1018,7 +1020,7 @@ colonne n'affiche le chemin du fichier). Ces lignes sont donc fusionnées en
 une seule, avec un badge *×N* à côté de l'identifiant CVE — survolez-le pour
 voir le nombre d'emplacements réels. Cette fusion s'applique à la bannière
 de synthèse, aux compteurs de sévérité et aux exports (voir ci-dessous) ;
-seule la vue *JSON* (<<sec-vue-json>>) reste fidèle à la sortie complète et
+seule la vue *JSON* (<<sec-vue-json,vue JSON>>) reste fidèle à la sortie complète et
 non fusionnée de l'outil.
 
 *Recherche* : le champ de recherche filtre en temps réel sur le nom du paquet,

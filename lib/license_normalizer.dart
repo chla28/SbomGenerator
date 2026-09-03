@@ -1,6 +1,7 @@
 /// Shared license normalisation for all SBOM generators.
 ///
-/// Converts raw RPM / Python license strings to SPDX identifiers.
+/// Converts raw RPM / Debian (`debian/copyright`, DEP-5) / Python license
+/// strings to SPDX identifiers.
 /// Output forms:
 ///   • [toSpdxExpression] — plain SPDX expression string (for SPDX 2.3 / 3.0),
 ///     with any term not recognised as a real SPDX license/exception id
@@ -17,24 +18,34 @@
 ///     "what we determined after normalisation" (e.g. SBOM quality scoring
 ///     tools such as sbomqs).
 class LicenseNormalizer {
-  // ── RPM → SPDX mapping table ──────────────────────────────────────────────
+  // ── RPM/Debian → SPDX mapping table ─────────────────────────────────────────
 
   static const Map<String, String> _rpmToSpdx = {
-    // GPL family
+    // GPL family — RPM (GPLv2, GPL-2.0) and Debian DEP-5 (GPL-2, GPL-2+)
+    // conventions both map here.
     'GPL': 'GPL-2.0-only',
     'GPL+': 'GPL-2.0-or-later',
+    'GPL-1': 'GPL-1.0-only',
+    'GPL-1+': 'GPL-1.0-or-later',
+    'GPL-2': 'GPL-2.0-only',
+    'GPL-2+': 'GPL-2.0-or-later',
     'GPL-2.0': 'GPL-2.0-only',
     'GPL-2.0+': 'GPL-2.0-or-later',
     'GPLv2': 'GPL-2.0-only',
     'GPLv2+': 'GPL-2.0-or-later',
+    'GPL-3': 'GPL-3.0-only',
+    'GPL-3+': 'GPL-3.0-or-later',
     'GPL-3.0': 'GPL-3.0-only',
     'GPL-3.0+': 'GPL-3.0-or-later',
     'GPLv3': 'GPL-3.0-only',
     'GPLv3+': 'GPL-3.0-or-later',
     // LGPL family
     'LGPL': 'LGPL-2.0-only',
+    'LGPL+': 'LGPL-2.0-or-later',
     'LGPLv2': 'LGPL-2.0-only',
     'LGPLv2+': 'LGPL-2.0-or-later',
+    'LGPL-2': 'LGPL-2.0-only',
+    'LGPL-2+': 'LGPL-2.0-or-later',
     'LGPL-2.0': 'LGPL-2.0-only',
     'LGPL-2.0+': 'LGPL-2.0-or-later',
     'LGPLv2.1': 'LGPL-2.1-only',
@@ -43,11 +54,14 @@ class LicenseNormalizer {
     'LGPL-2.1+': 'LGPL-2.1-or-later',
     'LGPLv3': 'LGPL-3.0-only',
     'LGPLv3+': 'LGPL-3.0-or-later',
+    'LGPL-3': 'LGPL-3.0-only',
+    'LGPL-3+': 'LGPL-3.0-or-later',
     'LGPL-3.0': 'LGPL-3.0-only',
     'LGPL-3.0+': 'LGPL-3.0-or-later',
-    // Apache / MIT / BSD
+    // Apache / MIT ("Expat" is Debian's DEP-5 canonical name for MIT) / BSD
     'ASL 1.1': 'Apache-1.1',
     'ASL 2.0': 'Apache-2.0',
+    'Expat': 'MIT',
     'ASL2.0': 'Apache-2.0',
     'Apache 2.0': 'Apache-2.0',
     'Apache-2.0': 'Apache-2.0',
@@ -60,9 +74,17 @@ class LicenseNormalizer {
     'BSD License': 'BSD-2-Clause',
     'BSD 2-Clause': 'BSD-2-Clause',
     'BSD-2-Clause': 'BSD-2-Clause',
+    'BSD-2-clause': 'BSD-2-Clause',
     'BSD 3-Clause': 'BSD-3-Clause',
     'BSD-3-Clause': 'BSD-3-Clause',
+    'BSD-3-clause': 'BSD-3-Clause',
     'BSD 4-Clause': 'BSD-4-Clause',
+    'BSD-4-clause': 'BSD-4-Clause',
+    // GFDL (documentation Debian/GNU)
+    'GFDL-1.2': 'GFDL-1.2-only',
+    'GFDL-1.2+': 'GFDL-1.2-or-later',
+    'GFDL-1.3': 'GFDL-1.3-only',
+    'GFDL-1.3+': 'GFDL-1.3-or-later',
     // Mozilla
     'MPLv1.1': 'MPL-1.1',
     'MPL-1.1': 'MPL-1.1',
@@ -116,6 +138,7 @@ class LicenseNormalizer {
     'Public Domain': 'LicenseRef-PublicDomain',
     'PublicDomain': 'LicenseRef-PublicDomain',
     'public domain': 'LicenseRef-PublicDomain',
+    'public-domain': 'LicenseRef-PublicDomain',
   };
 
   // Sorted longest-first for correct token replacement in compound expressions.

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:test/test.dart';
 import 'package:sbom_generator/oci_parser.dart';
 
@@ -183,6 +185,124 @@ void main() {
       expect(
           ociParserTrivyMetadataToOsInfo({'Metadata': <String, dynamic>{}}),
           isNull);
+    });
+  });
+
+  group('OciParser (backend skopeo) — licence dpkg via copyright DEP-5', () {
+    late Directory tmp;
+
+    setUp(() async {
+      tmp = await Directory.systemTemp.createTemp('oci_parser_dpkg_test_');
+    });
+
+    tearDown(() async {
+      await tmp.delete(recursive: true);
+    });
+
+    Future<void> writeCopyright(String pkg, String content) async {
+      final dir = Directory('${tmp.path}/usr/share/doc/$pkg');
+      await dir.create(recursive: true);
+      await File('${dir.path}/copyright').writeAsString(content);
+    }
+
+    test(
+        'extrait la licence depuis le champ License: de la stanza Files: * '
+        '(DEP-5)', () async {
+      await writeCopyright('bash', '''
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+
+Files: *
+Copyright: 1994-2023 Free Software Foundation, Inc.
+License: GPL-3+
+
+Files: examples/*
+Copyright: 1994 Someone Else
+License: MIT
+''');
+      final status = File('${tmp.path}/status');
+      await status.writeAsString('''
+Package: bash
+Status: install ok installed
+Version: 5.2.15-2
+Architecture: amd64
+Maintainer: Someone <x@example.org>
+Depends: libc6
+Description: GNU Bourne Again SHell
+ Bash is an sh-compatible shell.
+''');
+
+      final packages =
+          await ociParserParseDpkgStatus(status, 'test:image', tmp.path);
+      expect(packages, hasLength(1));
+      // La stanza "Files: *" (couvre tout le paquet) est priorisée sur les
+      // autres stanzas plus spécifiques (ex. examples/*).
+      expect(packages.single.license, 'GPL-3+');
+    });
+
+    test('sans stanza Files: * , concatène les licences distinctes trouvées',
+        () async {
+      await writeCopyright('foo', '''
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+
+Files: src/*
+Copyright: 2020 A
+License: MIT
+
+Files: doc/*
+Copyright: 2020 B
+License: CC0-1.0
+''');
+      final status = File('${tmp.path}/status');
+      await status.writeAsString('''
+Package: foo
+Status: install ok installed
+Version: 1.0
+Architecture: amd64
+Description: test
+''');
+
+      final packages =
+          await ociParserParseDpkgStatus(status, 'test:image', tmp.path);
+      expect(packages.single.license, 'MIT and CC0-1.0');
+    });
+
+    test(
+        'ignore un copyright file en texte libre (pas de format DEP-5 '
+        'machine-readable)', () async {
+      await writeCopyright('legacy-pkg', '''
+This package was written by someone.
+
+It is released under the GNU General Public License, version 2, or (at
+your option) any later version.
+''');
+      final status = File('${tmp.path}/status');
+      await status.writeAsString('''
+Package: legacy-pkg
+Status: install ok installed
+Version: 1.0
+Architecture: amd64
+Description: test
+''');
+
+      final packages =
+          await ociParserParseDpkgStatus(status, 'test:image', tmp.path);
+      expect(packages.single.license, isEmpty);
+    });
+
+    test('chaîne vide quand /usr/share/doc/<pkg>/copyright est absent',
+        () async {
+      final status = File('${tmp.path}/status');
+      await status.writeAsString('''
+Package: nodoc
+Status: install ok installed
+Version: 1.0
+Architecture: amd64
+Description: test
+''');
+
+      final packages =
+          await ociParserParseDpkgStatus(status, 'test:image', tmp.path);
+      expect(packages.single.license, isEmpty);
     });
   });
 }

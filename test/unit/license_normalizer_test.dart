@@ -82,9 +82,15 @@ void main() {
 
     test('échappe seulement le token inconnu dans une expression composée',
         () {
-      final expr =
-          LicenseNormalizer.toSpdxExpression('GPLv2 and public-domain');
-      expect(expr, 'GPL-2.0-only AND LicenseRef-public-domain');
+      final expr = LicenseNormalizer.toSpdxExpression('GPLv2 and curl');
+      expect(expr, 'GPL-2.0-only AND LicenseRef-curl');
+    });
+
+    test('reconnaît les noms courts Debian DEP-5 (GPL-2+, Expat…)', () {
+      expect(LicenseNormalizer.toSpdxExpression('GPL-2+'), 'GPL-2.0-or-later');
+      expect(LicenseNormalizer.toSpdxExpression('Expat'), 'MIT');
+      expect(LicenseNormalizer.toSpdxExpression('public-domain'),
+          'LicenseRef-PublicDomain');
     });
 
     test('laisse passer une clause WITH bien formée', () {

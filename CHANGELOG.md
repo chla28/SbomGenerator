@@ -7,10 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Backend OCI skopeo : les paquets Debian/Ubuntu extraient désormais leur licence depuis
+  `/usr/share/doc/<paquet>/copyright` (format DEP-5 machine-readable) au lieu de toujours
+  rapporter une licence vide — `LicenseNormalizer` reconnaît en plus les noms courts
+  propres à Debian (`GPL-2+`, `Expat`, `public-domain`, `GFDL-1.3`…)
 - GUI : aide en ligne — un bouton ❓ dans la barre du haut ouvre le manuel utilisateur
   complet directement dans l'application (sommaire des 21 chapitres à gauche, contenu à
-  droite, renvois internes cliquables), en plus de l'aide contextuelle courte déjà
-  présente sur chaque champ/section
+  droite, renvois internes cliquables, recherche par titre et par contenu avec extrait de
+  contexte), en plus de l'aide contextuelle courte déjà présente sur chaque champ/section
+
+### Fixed
+- Documentation GUI : deux renvois internes de `user.adoc` (vue JSON, vue Template)
+  s'affichaient sans texte lisible (`[sec-vue-json]`) faute de texte de lien explicite
 - CycloneDX : les licences distinguent désormais la valeur *declared* (brute, telle que
   rapportée par le paquet) de la valeur *concluded* (normalisée SPDX par
   `LicenseNormalizer`), via le champ `license.acknowledgement` (CycloneDX 1.5+) — une

@@ -1699,24 +1699,46 @@ fichiers générés ordinaires, l'appli elle-même n'exécute jamais
   sur le bon chapitre au clic, même s'il pointe vers un autre chapitre que
   celui affiché.
 
-**Lecteur (`HelpViewerScreen`)** — `Scaffold` avec sommaire (`ListView` des
-titres de chapitres) à gauche et contenu du chapitre sélectionné à droite,
-rendu par le paquet `flutter_html` (widgets Flutter natifs, pas de WebView —
-`webview_flutter` n'a pas de support desktop Linux stable, `flutter_html`
-n'en a besoin d'aucun). `onAnchorTap` intercepte les clics sur les liens
-internes : ancre connue dans `toc.json` → changement de chapitre (`Navigator`
-non utilisé, juste un `setState` + `ScrollController.jumpTo(0)`) ; sinon,
-ouverture via `url_launcher` (lien externe). Le style (`_helpStyle`) calque
-les couleurs du thème Material courant (`Theme.of(context)`), y compris en
-mode sombre — même principe que le thème PDF de `pdf_report.dart` ci-dessus,
+**Lecteur (`HelpViewerScreen`)** — `Scaffold` avec sommaire (recherche +
+`ListView` des titres de chapitres) à gauche et contenu du chapitre
+sélectionné à droite, rendu par le paquet `flutter_html` (widgets Flutter
+natifs, pas de WebView — `webview_flutter` n'a pas de support desktop Linux
+stable, `flutter_html` n'en a besoin d'aucun). Les 21 chapitres (HTML +
+texte brut) sont chargés une seule fois au démarrage (`_loadAll`,
+`Future.wait`, ~240 Ko au total) plutôt que paresseusement à chaque
+sélection : la recherche doit pouvoir scanner le contenu de tous les
+chapitres sans aller-retour disque à chaque frappe. `onAnchorTap`
+intercepte les clics sur les liens internes : ancre connue dans `toc.json`
+→ changement de chapitre (`Navigator` non utilisé, juste un `setState` +
+`ScrollController.jumpTo(0)`) ; sinon, ouverture via `url_launcher` (lien
+externe). Le style (`_helpStyle`) calque les couleurs du thème Material
+courant (`Theme.of(context)`), y compris en mode sombre — même principe que
+le thème PDF de `pdf_report.dart` ci-dessus,
 en plus simple (pas de fichier de thème séparé, juste une `Map<String, Style>`
 passée au widget `Html`).
+
+**Recherche** — un `TextField` en tête de sommaire filtre `_visibleIndices`
+(titre *ou* contenu, insensible à la casse) sur le texte brut de chaque
+chapitre, extrait du HTML via `package:html` (`html_parser.parse(html)
+.documentElement?.text`, plus fiable qu'une regex de nettoyage de balises —
+gère correctement les entités comme `&#8217;`). `_snippetFor(i)` construit un
+court extrait de contexte autour de la première occurrence de la requête
+(±60 caractères, `…` en tête/fin si tronqué), affiché en sous-titre du
+`ListTile` du sommaire quand la correspondance vient du contenu plutôt que
+du titre. Aucune mise en évidence *dans* le contenu affiché à droite ni
+défilement jusqu'à l'occurrence : `flutter_html` ne rend pas de widgets
+adressables individuellement (pas de clé par nœud), retrouver et surligner
+un passage précis demanderait de reconstruire son propre moteur de rendu —
+hors de proportion pour ce que ça apporterait.
 
 NOTE: `flutter_html: ^3.0.0` importe une API interne
 (`package:html/src/query_selector.dart`) dont la forme a changé en
 `html 0.15.6+` (`Method not found: 'matches'` à la compilation) — `html` est
-donc épinglé à `0.15.5` dans `dev_dependencies` (voir le commentaire dans
-`pubspec.yaml`). À réévaluer si `flutter_html` est mis à jour.
+donc épinglé à `0.15.5` (voir le commentaire dans `pubspec.yaml`). Dépendance
+directe (pas seulement transitive via `flutter_html`) : `HelpViewerScreen`
+l'utilise aussi directement pour la recherche (`_stripHtml`), et
+`tool/generate_help.dart` s'appuie sur la même résolution de version. À
+réévaluer si `flutter_html` est mis à jour.
 
 === `DateFilterBar` / `DateChip`
 
@@ -2412,9 +2434,10 @@ système (Linux) dans `ConfigPanel`
 |^3.0.0
 |Rendu du manuel utilisateur (HTML pré-généré) dans `HelpViewerScreen` —
 widgets Flutter natifs, sans WebView (non supportée sur desktop Linux)
-|===
 
-`html` (`^0.15.5`, épinglé à `0.15.5` exactement — voir la note dans
-`widgets/help_viewer.dart` ci-dessus) est une `dev_dependency` : utilisée
-uniquement par `tool/generate_help.dart` pour parser/découper le HTML rendu
-par asciidoctor, jamais par l'appli elle-même à l'exécution.
+|`html`
+|`0.15.5` (épinglé — voir la note dans `widgets/help_viewer.dart` ci-dessus)
+|Parsing HTML : `tool/generate_help.dart` (découpage en chapitres, dev-time
+uniquement) et `HelpViewerScreen._stripHtml` (extraction du texte brut pour
+la recherche, à l'exécution)
+|===
