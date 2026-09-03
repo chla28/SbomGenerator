@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
 import 'help_icon.dart';
+import 'pdf_report.dart';
 
 // ─── Couleurs de sévérité ───────────────────────────────────────────────────
 
@@ -809,17 +810,25 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('= Rapport de vulnérabilités — ${widget.toolName}');
     buf.writeln(':doctype: article');
     buf.writeln(':toc:');
+    buf.writeln(':toc-title: Sommaire');
     buf.writeln(':toclevels: 1');
     buf.writeln(':icons: font');
     buf.writeln();
     buf.writeln('== Résumé');
     buf.writeln();
+    final svg = buildSeverityBarSvg(counts);
+    if (svg != null) {
+      buf.writeln(svgImageMacro(svg));
+      buf.writeln();
+    }
     buf.writeln('[cols="<3,<1",options="header"]');
     buf.writeln('|===');
     buf.writeln('| Indicateur | Valeur');
     buf.writeln('| Vulnérabilités affichées | ${rows.length}');
     for (final s in widget.severityOrder) {
-      if (counts.containsKey(s)) buf.writeln('| $s | ${counts[s]}');
+      if (counts.containsKey(s)) {
+        buf.writeln('| ${pdfSeverityBadge(s)} | ${counts[s]}');
+      }
     }
     if (widget.dateFilter.hasConstraints) {
       buf.writeln(
@@ -835,7 +844,12 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('| ${columns.join(' | ')}');
     buf.writeln();
     for (final v in rows) {
-      buf.writeln('| ${widget.csvRow(v).map(adocEscape).join(' | ')}');
+      final cells = widget.csvRow(v);
+      final formatted = [
+        pdfSeverityBadge(cells.first),
+        ...cells.skip(1).map(adocEscape),
+      ];
+      buf.writeln('| ${formatted.join(' | ')}');
     }
     buf.writeln('|===');
     buf.writeln();
@@ -850,7 +864,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
         : '$path.pdf';
 
     try {
-      final result = await Process.run('asciidoctor-pdf', [path, '-o', pdfPath]);
+      final result = await runAsciidoctorPdf(path, pdfPath);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result.exitCode == 0

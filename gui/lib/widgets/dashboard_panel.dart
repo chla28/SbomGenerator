@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'grype_panel.dart';
 import 'osv_panel.dart';
+import 'pdf_report.dart';
 import 'trivy_panel.dart';
 import 'vuln_shared.dart' show adocEscape;
 
@@ -222,6 +223,7 @@ Future<void> _exportDashboard(
   buf.writeln('= Rapport de synthèse — Tableau de bord des vulnérabilités');
   buf.writeln(':doctype: article');
   buf.writeln(':toc:');
+  buf.writeln(':toc-title: Sommaire');
   buf.writeln(':toclevels: 1');
   buf.writeln(':icons: font');
   buf.writeln();
@@ -253,19 +255,24 @@ Future<void> _exportDashboard(
     } else {
       final counts =
           DashboardPanel._countByKey(vulns.map((v) => v.severity));
+      final svg = buildSeverityBarSvg(counts);
+      if (svg != null) {
+        buf.writeln(svgImageMacro(svg));
+        buf.writeln();
+      }
       buf.writeln('[cols="<2,<1",options="header"]');
       buf.writeln('|===');
       buf.writeln('| Sévérité | Nombre');
       for (final s in ['critical', 'high', 'medium', 'low']) {
         if ((counts[s] ?? 0) > 0) {
-          buf.writeln('| ${s[0].toUpperCase()}${s.substring(1)} | ${counts[s]}');
+          buf.writeln('| ${pdfSeverityBadge(s)} | ${counts[s]}');
         }
       }
       final other = counts.entries
           .where((e) =>
               !const {'critical', 'high', 'medium', 'low'}.contains(e.key))
           .fold(0, (s, e) => s + e.value);
-      if (other > 0) buf.writeln('| Autre | $other');
+      if (other > 0) buf.writeln('| ${pdfSeverityBadge('autre')} | $other');
       buf.writeln('| *Total* | *${vulns.length}*');
       buf.writeln('|===');
     }
@@ -281,7 +288,7 @@ Future<void> _exportDashboard(
     buf.writeln('|===');
     buf.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy');
     for (final row in crossRows) {
-      buf.writeln('| ${adocEscape(row.severity.isEmpty ? '?' : row.severity)} '
+      buf.writeln('| ${pdfSeverityBadge(row.severity)} '
           '| ${adocEscape(row.id)} '
           '| ${row.inGrype ? '✓' : '—'} '
           '| ${row.inOsv ? '✓' : '—'} '
@@ -300,7 +307,7 @@ Future<void> _exportDashboard(
       : '$path.pdf';
 
   try {
-    final result = await Process.run('asciidoctor-pdf', [path, '-o', pdfPath]);
+    final result = await runAsciidoctorPdf(path, pdfPath);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(result.exitCode == 0
