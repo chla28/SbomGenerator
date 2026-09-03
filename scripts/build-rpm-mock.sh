@@ -8,7 +8,7 @@
 # (dist tag produit : .el9 / .el10, comme pour un vrai RHEL).
 #
 # Usage : ./scripts/build-rpm-mock.sh [VERSION] [--targets=fedora44,el9,el10] [--arch=x86_64]
-#   VERSION    numéro de version (défaut : 1.1.0)
+#   VERSION    numéro de version (défaut : 1.2.0)
 #   --targets  sous-ensemble de cibles à construire (défaut : les trois)
 #   --arch     architecture cible (défaut : celle de la machine hôte)
 #
@@ -27,7 +27,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 ARCH="$(uname -m)"
 TARGETS="fedora44,el9,el10"
 
@@ -37,7 +37,7 @@ for _arg in "$@"; do
     --arch=*)    ARCH="${_arg#--arch=}" ;;
     --help|-h)
       echo "Usage: $0 [VERSION] [--targets=fedora44,el9,el10] [--arch=x86_64]"
-      echo "  VERSION    numéro de version (défaut: 1.1.0)"
+      echo "  VERSION    numéro de version (défaut: 1.2.0)"
       echo "  --targets  sous-ensemble de cibles, virgule-séparé (défaut: les trois)"
       echo "  --arch     architecture cible (défaut: $(uname -m))"
       exit 0 ;;

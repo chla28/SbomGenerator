@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-03
+
+### Added
+- GUI : les exports PDF (Tableau de bord, Grype, OSV-Scanner, Trivy) utilisent désormais un
+  thème `asciidoctor-pdf` calqué sur l'appli — badges de sévérité colorés, barre de
+  répartition par sévérité, en-têtes de tableau bleus — au lieu du rendu noir et blanc
+  par défaut
+
 ## [1.1.0] - 2026-08-31
 
 ### Added
