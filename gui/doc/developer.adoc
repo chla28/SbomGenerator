@@ -1012,6 +1012,34 @@ ID `DEBIAN-CVE-xxxx` d'OSV-Scanner correspondaient à un ID Grype et 94 à un
 ID Trivy une fois le préfixe retiré — 200 lignes de comparaison avant
 normalisation, 106 après.
 
+NOTE: Deux autres écarts, plus sévères que la nomenclature, affectent
+spécifiquement les paquets OS (Debian/Alpine/RPM) — aucun n'est corrigé
+côté GUI, mais ils expliquent des écarts de comptage bruts massifs entre
+scanners que `_normalizeVulnId` ne touche pas. **OSV-Scanner peut tomber à
+0 CVE sur un SBOM alors qu'il en trouve des centaines sur la même image
+scannée directement** : `osv-scanner scan source --sbom=...` interroge
+l'API OSV.dev avec le `purl` du SBOM tel quel, mais OSV.dev n'indexe les
+avis Debian que sous une forme purl très spécifique (paquet *source*,
+`arch=source`, nom de code de la distribution — ex.
+`pkg:deb/debian/openssl?arch=source&distro=trixie`), différente du purl
+standard produit par syft (`pkg:deb/debian/<paquet-binaire>@<version>?arch=amd64&distro=debian-13.6`).
+Vérifié empiriquement (`curl` direct vers `https://api.osv.dev/v1/query`
+avec chaque variante de purl) : toute forme hors du format source/codename
+renvoie `{}`. Sur une image Debian réelle (79 paquets), cela donnait 0 CVE
+via `osv-scanner scan source --sbom=`, contre 233 via `osv-scanner scan
+image --archive=...` (extraction interne, sans purl). **Grype et Trivy
+n'ont par ailleurs pas la même exhaustivité sur les paquets OS Debian**
+(207 correspondances Grype contre 27 Trivy sur le même SBOM, alors que les
+deux utilisent leur matcher distro dédié — `dpkg-matcher` côté Grype,
+donc pas un artefact de matching CPE) : Grype reprend l'intégralité du
+Debian Security Tracker y compris les avis `<no-dsa>` (won't-fix) et
+`not-fixed`, là où Trivy ne remonte qu'un sous-ensemble plus restreint —
+confirmé sur `security-tracker.debian.org` pour `CVE-2026-19499`/`glibc`
+(listée « vulnerable », `<no-dsa> (Minor issue)` : présente chez Grype en
+`fix.state=wont-fix`, absente chez Trivy). Détail et méthode de
+vérification complète dans `user.adoc`, section « Pourquoi Grype,
+OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».
+
 [[sec-dashboard-export]]
 ===== `_crossScannerRows` / `_exportDashboard` — export AsciiDoc + PDF
 

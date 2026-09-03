@@ -1644,6 +1644,22 @@ causes bien distinctes :
   avant l'autre. Les règles de correspondance de version (bornes affectées,
   epoch RPM) et le score de sévérité retenu (CVSS NVD vs fournisseur vs
   distro) peuvent aussi différer légèrement d'un moteur à l'autre.
+* *Grype et Trivy n'ont pas la même exhaustivité sur les paquets OS
+  Debian* — sur une image Debian réelle (79 paquets), Grype rapportait 207
+  correspondances contre seulement 27 pour Trivy, sur le même SBOM. Ce
+  n'est pourtant pas un problème de faux positifs par CPE : les deux
+  outils utilisent bien leur matcher distro dédié (`dpkg-matcher` côté
+  Grype). L'écart vient de la complétude des données reprises — Grype
+  remonte l'intégralité du Debian Security Tracker, y compris les avis
+  marqués `<no-dsa>` (bug mineur que Debian a choisi de ne jamais corriger)
+  et les CVE sans version corrigée connue, là où Trivy ne remonte qu'un
+  sous-ensemble plus restreint. Vérification faite sur
+  `security-tracker.debian.org` : une CVE citée uniquement par Grype
+  (`CVE-2026-19499` sur `glibc`/trixie) y est bien listée « vulnerable »
+  avec la note `<no-dsa> (Minor issue)` — Grype la rapporte donc à raison
+  (état « won't fix »), Trivy l'omet simplement. Aucun des deux n'a tort :
+  Trivy est plus conservateur (CVE au statut tranché), Grype plus
+  exhaustif mais plus bruyant.
 
 Aucun des deux scanners n'est « la » vérité : chacun a sa base et sa
 granularité de correspondance propres. C'est précisément la raison d'être
@@ -1667,6 +1683,25 @@ paquets en parsant le nom de fichier `<groupId>.<artifactId>-<version>.jar`
 ce n'est pas le SBOM qui invente des CVE : c'est `trivy image` qui en
 manque quelques-unes que `trivy sbom` retrouve grâce à la détection plus
 complète de syft.
+
+Le même type d'écart existe pour OSV-Scanner, mais de façon bien plus
+radicale : sur les paquets de distribution (Debian/Alpine/RPM), lui donner
+un SBOM peut faire tomber le résultat à *zéro* CVE, alors que scanner
+l'image directement en trouve des centaines. En cause : `osv-scanner scan
+source --sbom=...` interroge l'API OSV.dev avec le `purl` du SBOM tel
+quel, mais OSV.dev n'indexe les avis Debian que sous une forme purl très
+spécifique — paquet *source*, `arch=source`, nom de code de la
+distribution (ex. `pkg:deb/debian/openssl?arch=source&distro=trixie`) —
+différente du purl standard produit par syft/sbom_generator pour un
+paquet Debian (`pkg:deb/debian/<paquet-binaire>@<version>?arch=amd64&distro=debian-13.6`,
+conforme à la spec purl). Sur l'image Debian réelle citée plus haut, cela
+donnait 0 CVE via `osv-scanner scan source --sbom=`, contre 233 via
+`osv-scanner scan image` (qui fait sa propre extraction et n'utilise
+aucun purl). Ce n'est pas un défaut du SBOM généré — le même écart existe
+avec un SBOM produit par syft seul — mais une limite du mode « scan de
+SBOM » d'OSV-Scanner pour les paquets de distribution : pour une
+couverture OS fiable avec cet outil, mieux vaut scanner l'image
+directement plutôt que passer par un SBOM.
 
 [[sec-dashboard-export]]
 === Export AsciiDoc + PDF
