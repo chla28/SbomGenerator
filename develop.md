@@ -1659,3 +1659,13 @@ de la GUI Flutter associée, et produit une archive de distribution
 (`dist/sbom_generator-<version>-linux-<arch>.tar.gz`), avec génération
 optionnelle de paquets `.rpm` (`--rpm`, nécessite `rpmbuild`). Voir
 `scripts/install.sh` / `scripts/uninstall.sh` pour l'installation.
+
+L'archive embarque un SBOM CycloneDX (`sbom.cdx.json`) des dépendances
+runtime de la GUI (fontconfig, mesa-libGL, gtk4, libsecret — alignées sur
+les `Requires` du sous-paquet gui dans `scripts/sbom_generator.spec`),
+auto-hébergement : généré avec le binaire `sbom-generator` tout juste
+compilé par le script lui-même, pas une installation préalable. Avec
+`--rpm`, un second SBOM des RPM effectivement construits est produit à
+côté de l'archive (`dist/sbom_generator-<version>-linux-<arch>-rpms.cdx.json`
+— ne peut pas être inclus dans l'archive elle-même, puisque les RPM sont
+construits à partir de cette archive).

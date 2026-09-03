@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `scripts/build-dist.sh` génère désormais un SBOM CycloneDX (`sbom.cdx.json`, dépendances
+  runtime de la GUI) et l'inclut dans l'archive de distribution, auto-hébergement via le
+  binaire `sbom-generator` tout juste compilé par le script ; avec `--rpm`, un second SBOM
+  décrivant les RPM effectivement construits est produit à côté de l'archive
 - Backend OCI skopeo : les paquets Debian/Ubuntu extraient désormais leur licence depuis
   `/usr/share/doc/<paquet>/copyright` (format DEP-5 machine-readable) au lieu de toujours
   rapporter une licence vide — `LicenseNormalizer` reconnaît en plus les noms courts
