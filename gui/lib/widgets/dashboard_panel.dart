@@ -342,6 +342,30 @@ Future<void> _exportDashboard(
     buf.writeln('|===');
   }
   buf.writeln();
+
+  if (scansRun >= 2) {
+    buf.writeln('[NOTE]');
+    buf.writeln('====');
+    buf.writeln('Des comptages très différents entre scanners sur les '
+        'paquets système (Debian/Alpine/RPM) ne signalent pas forcément '
+        'une erreur. OSV-Scanner peut ne trouver aucune CVE sur ces '
+        'paquets lorsqu\'il est lancé en mode « scan de SBOM » : son API '
+        'n\'indexe les avis Debian que sous une forme de purl précise, '
+        'absente du SBOM standard produit par syft — scanner l\'image '
+        'directement (`osv-scanner scan image`) donne une couverture '
+        'fiable. Grype et Trivy n\'ont par ailleurs pas la même '
+        'exhaustivité sur ces mêmes paquets : Grype reprend l\'intégralité '
+        'du Debian Security Tracker (avis « won\'t fix » inclus) là où '
+        'Trivy ne remonte qu\'un sous-ensemble plus restreint. Aucun des '
+        'deux scanners n\'a tort — leurs chiffres bruts ne sont '
+        'simplement pas directement comparables sur ce type de paquet. '
+        'Détails et méthode de vérification dans la documentation '
+        'utilisateur, section « Pourquoi Grype, OSV-Scanner et Trivy ne '
+        'trouvent pas les mêmes CVE ».');
+    buf.writeln('====');
+    buf.writeln();
+  }
+
   buf.writeln('_Généré par sbom_generator_gui._');
 
   await File(path).writeAsString(buf.toString());

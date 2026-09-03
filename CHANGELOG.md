@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- GUI : l'export du Tableau de bord (AsciiDoc/PDF) inclut désormais une note explicative sur
+  les écarts de détection entre scanners propres aux paquets système (Debian/Alpine/RPM) :
+  OSV-Scanner pouvant tomber à 0 CVE en mode scan de SBOM, et l'écart d'exhaustivité entre
+  Grype et Trivy sur les avis Debian
+
 ## [1.3.0] - 2026-09-03
 
 ### Added
