@@ -345,7 +345,7 @@ class CycloneDxGenerator {
 
     if (_hasValue(pkg.license)) {
       component['licenses'] =
-          LicenseNormalizer.toCycloneDxLicenses(pkg.license);
+          LicenseNormalizer.toCycloneDxLicensesConcluded(pkg.license);
     }
 
     // CycloneDX 1.7+ only (schema 1.6 has no `patentAssertions`).

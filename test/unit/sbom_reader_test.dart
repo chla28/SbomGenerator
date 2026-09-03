@@ -56,4 +56,58 @@ void main() {
       expect(packages.single.name, 'bash');
     });
   });
+
+  group('SbomReader — licences declared/concluded', () {
+    test(
+        'relit la licence brute complète (entrée "declared") même quand le '
+        'générateur a éclaté la licence composée en plusieurs entrées '
+        '"concluded"', () {
+      final pkg = RpmPackage(
+        name: 'foo',
+        version: '1.0',
+        release: '1',
+        arch: 'x86_64',
+        epoch: '(none)',
+        license: 'GPL-2.0-or-later and BSD-3-Clause and curl',
+        vendor: '',
+        url: '',
+        buildTime: '',
+        summary: '',
+        requires: const [],
+        provides: const [],
+      );
+
+      final sbom = CycloneDxGenerator().generate([pkg], []);
+      final rawComponent = (sbom['components'] as List).single as Map;
+      final licenses = rawComponent['licenses'] as List;
+      // Une entrée "declared" (licence brute) + une "concluded" par
+      // licence individuelle du AND (GPL-2.0-or-later, BSD-3-Clause, curl).
+      expect(licenses, hasLength(4));
+
+      final packages = SbomReader().read(sbom);
+      expect(packages.single.license,
+          'GPL-2.0-or-later and BSD-3-Clause and curl');
+    });
+
+    test('relit une licence simple (non composée) sans changement', () {
+      final pkg = RpmPackage(
+        name: 'bar',
+        version: '1.0',
+        release: '1',
+        arch: 'x86_64',
+        epoch: '(none)',
+        license: 'MIT',
+        vendor: '',
+        url: '',
+        buildTime: '',
+        summary: '',
+        requires: const [],
+        provides: const [],
+      );
+
+      final sbom = CycloneDxGenerator().generate([pkg], []);
+      final packages = SbomReader().read(sbom);
+      expect(packages.single.license, 'MIT');
+    });
+  });
 }

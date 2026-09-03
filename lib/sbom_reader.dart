@@ -87,9 +87,26 @@ class SbomReader {
     String license = '';
     final licenses = c['licenses'] as List?;
     if (licenses != null && licenses.isNotEmpty) {
-      final first = licenses.first as Map<String, dynamic>?;
-      final expr = first?['expression'] as String?;
-      final licObj = first?['license'] as Map<String, dynamic>?;
+      final entries = licenses.whereType<Map<String, dynamic>>().toList();
+      // Prefer the entry tagged "declared" (CycloneDX 1.5+
+      // `license.acknowledgement`) — LicenseNormalizer.
+      // toCycloneDxLicensesConcluded always stores the complete raw
+      // license string there, even when the "concluded" determination is
+      // split into several entries for a compound AND license. Falls back
+      // to the first entry for SBOMs without that tag (older exports, or
+      // produced by another tool).
+      Map<String, dynamic>? declared;
+      for (final entry in entries) {
+        final ack = entry['acknowledgement'] ??
+            (entry['license'] as Map<String, dynamic>?)?['acknowledgement'];
+        if (ack == 'declared') {
+          declared = entry;
+          break;
+        }
+      }
+      final chosen = declared ?? entries.first;
+      final expr = chosen['expression'] as String?;
+      final licObj = chosen['license'] as Map<String, dynamic>?;
       license = expr ??
           (licObj?['id'] as String?) ??
           (licObj?['name'] as String?) ??

@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- CycloneDX : les licences distinguent désormais la valeur *declared* (brute, telle que
+  rapportée par le paquet) de la valeur *concluded* (normalisée SPDX par
+  `LicenseNormalizer`), via le champ `license.acknowledgement` (CycloneDX 1.5+) — une
+  licence composée en AND pur (ex. `GPL-2.0-or-later AND BSD-3-Clause`) est éclatée en
+  autant d'entrées `concluded` individuelles. Améliore la qualité mesurée par `sbomqs`
+  (catégorie Licensing) sans rien inventer : la donnée existait déjà, elle est juste mieux
+  exposée. `SbomReader` relit la valeur brute complète depuis l'entrée `declared`
+- SPDX 2.3 / SPDX3 : `LicenseNormalizer.toSpdxExpression` échappe désormais tout terme non
+  reconnu comme identifiant SPDX réel (ex. `curl`, `permissive`, `public-domain` — noms
+  courts propres à `debian/copyright`) en `LicenseRef-<slug>`, pour que l'expression
+  produite reste syntaxiquement valide au sens de la grammaire SPDX même sur ces noms
+  Debian non listés
 - GUI : l'export du Tableau de bord (AsciiDoc/PDF) inclut désormais une note explicative sur
   les écarts de détection entre scanners propres aux paquets système (Debian/Alpine/RPM) :
   OSV-Scanner pouvant tomber à 0 CVE en mode scan de SBOM, et l'écart d'exhaustivité entre

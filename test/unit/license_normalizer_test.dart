@@ -72,6 +72,33 @@ void main() {
       final expr = LicenseNormalizer.toSpdxExpression('LGPLv2.1+ or GPLv2+');
       expect(expr, 'LGPL-2.1-or-later OR GPL-2.0-or-later');
     });
+
+    test('échappe un token inconnu en LicenseRef- pour rester une '
+        'expression SPDX valide', () {
+      // "curl" n'est pas un identifiant SPDX listé — un validateur SPDX
+      // strict rejetterait l'expression si on le laissait tel quel.
+      expect(LicenseNormalizer.toSpdxExpression('curl'), 'LicenseRef-curl');
+    });
+
+    test('échappe seulement le token inconnu dans une expression composée',
+        () {
+      final expr =
+          LicenseNormalizer.toSpdxExpression('GPLv2 and public-domain');
+      expect(expr, 'GPL-2.0-only AND LicenseRef-public-domain');
+    });
+
+    test('laisse passer une clause WITH bien formée', () {
+      final expr = LicenseNormalizer.toSpdxExpression(
+          'GPL-3.0-only WITH Classpath-exception-2.0');
+      expect(expr, 'GPL-3.0-only WITH Classpath-exception-2.0');
+    });
+
+    test('échappe en bloc une clause WITH mal formée (espace dans '
+        "l'exception)", () {
+      final expr = LicenseNormalizer.toSpdxExpression(
+          'GPL-3.0-only WITH Bison exception');
+      expect(expr, 'LicenseRef-GPL-3.0-only-WITH-Bison-exception');
+    });
   });
 
   group('LicenseNormalizer.toCycloneDxLicenses', () {
@@ -123,6 +150,49 @@ void main() {
           LicenseNormalizer.toCycloneDxLicenses('MyCustomLicense-1.0');
       expect(result, hasLength(1));
       expect(result[0]['license'].containsKey('id'), isTrue);
+    });
+  });
+
+  group('LicenseNormalizer.toCycloneDxLicensesConcluded', () {
+    test('retourne [] pour (none)', () {
+      expect(LicenseNormalizer.toCycloneDxLicensesConcluded('(none)'),
+          isEmpty);
+    });
+
+    test('licence simple : une entrée declared + une concluded', () {
+      final result = LicenseNormalizer.toCycloneDxLicensesConcluded('MIT');
+      expect(result, hasLength(2));
+      expect(result[0]['license']['name'], 'MIT');
+      expect(result[0]['license']['acknowledgement'], 'declared');
+      expect(result[1]['license']['id'], 'MIT');
+      expect(result[1]['license']['acknowledgement'], 'concluded');
+    });
+
+    test('expression AND pure : declared (brute) + une concluded par '
+        'licence individuelle', () {
+      final result = LicenseNormalizer.toCycloneDxLicensesConcluded(
+          'GPLv2 and MIT and curl');
+      expect(result, hasLength(4));
+      expect(result[0]['license']['name'], 'GPLv2 and MIT and curl');
+      expect(result[0]['license']['acknowledgement'], 'declared');
+
+      final concluded = result.skip(1);
+      expect(concluded.every((e) => e['license']['acknowledgement'] == 'concluded'),
+          isTrue);
+      expect(concluded.map((e) => e['license']['id'] ?? e['license']['name']),
+          containsAll(['GPL-2.0-only', 'MIT', 'curl']));
+      // "curl" n'est pas un identifiant SPDX connu → porté en name, pas id.
+      final curlEntry =
+          concluded.firstWhere((e) => (e['license']['name'] ?? '') == 'curl');
+      expect(curlEntry['license'].containsKey('id'), isFalse);
+    });
+
+    test('expression avec OR : conserve la forme expression unique '
+        "existante (pas de scission declared/concluded)", () {
+      final result = LicenseNormalizer.toCycloneDxLicensesConcluded(
+          'MIT or GPLv2');
+      expect(result, hasLength(1));
+      expect(result[0].containsKey('expression'), isTrue);
     });
   });
 }
