@@ -42,7 +42,7 @@ class SpdxGenerator {
       'spdxVersion': 'SPDX-2.3',
       'creationInfo': {
         'created': now,
-        'creators': ['Tool: sbom_generator-1.2.1'],
+        'creators': ['Tool: sbom_generator-1.3.0'],
         'licenseListVersion': '3.21',
       },
       'name': documentName ?? 'Package Set SBOM',
@@ -159,7 +159,7 @@ class SpdxGenerator {
       spdxPkg['annotations'] = [
         {
           'annotationType': 'OTHER',
-          'annotator': 'Tool: sbom_generator-1.2.1',
+          'annotator': 'Tool: sbom_generator-1.3.0',
           'annotationDate': DateTime.now().toUtc().toIso8601String(),
           'comment': comment,
         }

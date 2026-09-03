@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-03
+
+### Added
+- GUI : les exports PDF (Tableau de bord, Grype, OSV-Scanner, Trivy) indiquent désormais la
+  version de sbom_generator_gui et celle du ou des scanner(s) concerné(s) (détectées via
+  `<outil> --version` au moment de l'export)
+
 ## [1.2.1] - 2026-09-03
 
 ### Fixed
