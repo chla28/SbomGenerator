@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- GUI : aide en ligne — un bouton ❓ dans la barre du haut ouvre le manuel utilisateur
+  complet directement dans l'application (sommaire des 21 chapitres à gauche, contenu à
+  droite, renvois internes cliquables), en plus de l'aide contextuelle courte déjà
+  présente sur chaque champ/section
 - CycloneDX : les licences distinguent désormais la valeur *declared* (brute, telle que
   rapportée par le paquet) de la valeur *concluded* (normalisée SPDX par
   `LicenseNormalizer`), via le champ `license.acknowledgement` (CycloneDX 1.5+) — une

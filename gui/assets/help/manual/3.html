@@ -1,0 +1,521 @@
+
+<h2 id="_panneau_configuration">4. Panneau Configuration</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_section_entrée">4.1. Section Entrée</h3>
+<div class="sect3">
+<h4 id="_fichier_dentrée_input">4.1.1. Fichier d’entrée (<code>--input</code>)</h4>
+<div class="paragraph">
+<p>Chemin vers le fichier contenant la liste des paquets à analyser.
+Le bouton 📂 à droite du champ propose un menu :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Type filtré (.lst, .txt…)</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">N’affiche que les fichiers aux extensions courantes</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Tous les fichiers</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Affiche tous les fichiers du répertoire</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+Vous pouvez également <strong>glisser-déposer</strong> un fichier depuis votre gestionnaire
+de fichiers (Nautilus, Thunar…) directement sur ce champ. Un liseré bleu indique
+que le dépôt est accepté.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Le fichier doit contenir <strong>un élément par ligne</strong>. Les types acceptés sont :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Type</th>
+<th class="tableblock halign-left valign-top">Format de la ligne</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Paquet RPM installé</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>bash</code> ou <code>bash-5.1.8-6.el9.x86_64</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fichier RPM local</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/package.rpm</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Wheel Python (<code>.whl</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/package-1.0-py3-none-any.whl</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Archive tar</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/pkg.tar.gz</code> ou <code>.tgz</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Archive Zip</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/archive.zip</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Paquet Debian (<code>.deb</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/package.deb</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dépendances Python</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/requirements.txt</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Un seul fichier d’entrée peut contenir des lignes de types différents.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Le champ <strong>Fichier d’entrée</strong> devient optionnel si une <strong>Image OCI</strong> est
+spécifiée dans la section suivante.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="admonitionblock important">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+Les champs <strong>Fichier d’entrée</strong> et <strong>Image OCI</strong> sont mutuellement
+exclusifs dans l’interface : remplir l’un (saisie, glisser-déposer ou
+sélecteur de fichier/répertoire) vide automatiquement l’autre. Pour combiner
+les deux sources en une seule analyse, utilisez la ligne de commande
+(<code>--input</code> et <code>--image</code> ensemble).
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_section_image_oci">4.2. Section Image OCI</h3>
+<div class="sect3">
+<h4 id="_image_oci_image">4.2.1. Image OCI (<code>--image</code>)</h4>
+<div class="paragraph">
+<p>Référence à une image OCI à analyser. Trois formats sont acceptés :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 28.5714%;">
+<col style="width: 42.8571%;">
+<col style="width: 28.5715%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Format</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Exemple</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Registre</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Image Docker Hub ou registre privé</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>nginx:latest</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Archive tar</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Export <code>docker save</code> ou <code>skopeo copy docker-archive:</code> (.tar, .tar.gz, .tgz)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/ubuntu.tar</code>, <code>/path/image.tar.gz</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OCI layout</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Répertoire contenant <code>index.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/oci_dir/</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Le bouton 📂 à droite du champ ouvre un menu contextuel :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Archive tar (.tar / .tar.gz / .tgz)</strong> — sélecteur de fichier filtré sur ces trois extensions</p>
+</li>
+<li>
+<p><strong>Répertoire OCI layout</strong> — sélecteur de répertoire</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Pour les images de registre, saisissez la référence manuellement.</p>
+</div>
+<div class="paragraph">
+<p>Si le champ est vide, l’analyse OCI est désactivée.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_outil_oci_oci_tool">4.2.2. Outil OCI (<code>--oci-tool</code>)</h4>
+<div class="paragraph">
+<p>Visible uniquement lorsque le champ <strong>Image OCI</strong> est rempli. Sélectionnez le
+backend d’analyse :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 40%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Outil</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Prérequis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Syft (défaut)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Anchore Syft — tous types de paquets (deb, rpm, apk, pypi, npm, go, java…)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>syft</code> dans le PATH</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Trivy</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Aqua Trivy — tous types de paquets</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> dans le PATH</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Skopeo</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Extraction manuelle des layers — dpkg, RPM et APK uniquement</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>skopeo</code> et <code>tar</code> dans le PATH</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_section_sortie">4.3. Section Sortie</h3>
+<div class="sect3">
+<h4 id="_chemin_de_base_output">4.3.1. Chemin de base (<code>--output</code>)</h4>
+<div class="paragraph">
+<p>Préfixe des fichiers générés, sans extension.
+Exemple : <code>sbom</code> produira <code>sbom.cdx.json</code>, <code>sbom.spdx.json</code>, etc.
+Un chemin relatif est résolu depuis le répertoire courant au moment du lancement.</p>
+</div>
+<div class="paragraph">
+<p>Une prévisualisation des noms de fichiers attendus s’affiche dès que
+le champ est renseigné.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_formats_format">4.3.2. Formats (<code>--format</code>)</h4>
+<div class="paragraph">
+<p>Cochez un ou plusieurs formats. Au moins un format doit être sélectionné.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 28.5714%;">
+<col style="width: 28.5714%;">
+<col style="width: 42.8572%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Format</th>
+<th class="tableblock halign-left valign-top">Extension produite</th>
+<th class="tableblock halign-left valign-top">Usage typique</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CycloneDX 1.6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.cdx.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse de vulnérabilités avec grype, outils OWASP</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SPDX 2.3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.spdx.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Conformité légale, outils OpenChain</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SPDX 3.0 JSON-LD</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.spdx3.jsonld</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Écosystèmes liés (RDF/ontologie)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">JSON personnalisé</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.custom.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Intégration dans des pipelines internes</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Markdown</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.md</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Documentation lisible directement sur GitHub/GitLab</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">AsciiDoc</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.adoc</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rapport technique riche (tableaux, styles)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HTML</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.html</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rapport interactif autonome (filtrable et triable, graphiques par écosystème/licence)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CSV</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.csv</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Import dans un tableur ou un pipeline de traitement de données</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect3">
+<h4 id="_option_pdf_asciidoc_uniquement">4.3.3. Option PDF (AsciiDoc uniquement)</h4>
+<div class="paragraph">
+<p>Quand le format <strong>AsciiDoc</strong> est coché, une option supplémentaire apparaît :
+<strong>Convertir en PDF (asciidoctor-pdf)</strong>. Si elle est activée, l’outil
+<code>asciidoctor-pdf</code> est lancé automatiquement après la génération du <code>.adoc</code>.</p>
+</div>
+<div class="paragraph">
+<p>Un champ optionnel permet de spécifier le chemin de destination du PDF.
+Sans valeur, le PDF est créé dans le même dossier que le <code>.adoc</code>, avec
+le même nom de base.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_section_options">4.4. Section Options</h3>
+<div class="sect3">
+<h4 id="_nom_du_document_sbom_name">4.4.1. Nom du document SBOM (<code>--name</code>)</h4>
+<div class="paragraph">
+<p>Libellé qui apparaîtra dans les métadonnées du SBOM
+(champ <code>metadata.component.name</code> en CycloneDX).
+Exemple : <code>Mon Application 2.1.0</code>.
+Laissez vide pour utiliser le nom du fichier d’entrée.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_répertoire_rpm_local_rpm_dir">4.4.2. Répertoire RPM local (<code>--rpm-dir</code>)</h4>
+<div class="paragraph">
+<p>Dossier contenant des fichiers <code>.rpm</code> supplémentaires à inclure dans l’analyse.
+Utile pour enrichir la résolution de métadonnées (version exacte, licence)
+lorsque les paquets ne sont pas installés sur la machine courante.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_override_de_licences_license_map">4.4.3. Override de licences (<code>--license-map</code>)</h4>
+<div class="paragraph">
+<p>Fichier texte permettant de corriger ou préciser les licences de certains paquets.
+Le bouton à droite propose les mêmes options que le champ fichier d’entrée :
+type filtré (<code>.txt</code>, <code>.yaml</code>) ou tous les fichiers.
+Format : une règle par ligne : <code>nom-paquet: SPDX-expression</code></p>
+</div>
+<div class="paragraph">
+<p>Exemple :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>openssl: OpenSSL
+my-internal-lib: LicenseRef-PROPRIETARY</pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_concurrence_concurrency">4.4.4. Concurrence (<code>--concurrency</code>)</h4>
+<div class="paragraph">
+<p>Nombre de paquets traités en parallèle. Le curseur va de <strong>0</strong> (illimité)
+à <strong>16</strong>. La valeur par défaut est <strong>4</strong>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Augmentez si votre machine a de nombreux cœurs et une bonne connexion réseau.</p>
+</li>
+<li>
+<p>Diminuez (1 = séquentiel) en cas d’erreurs de rate-limiting sur les dépôts.</p>
+</li>
+<li>
+<p>La valeur 0 traite tous les paquets simultanément — à utiliser avec prudence
+sur de grandes listes.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_mode_verbeux_verbose">4.4.5. Mode verbeux (<code>--verbose</code>)</h4>
+<div class="paragraph">
+<p>Affiche dans l’onglet <strong>Progression</strong> des informations supplémentaires :
+outils de résolution utilisés, statistiques de traitement, détails de chaque
+paquet trouvé.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_score_qualité_sbomqs">4.4.6. Score qualité sbomqs</h4>
+<div class="paragraph">
+<p>Quand cette option est cochée, <code>sbomqs score</code> est exécuté automatiquement
+sur le premier fichier SBOM JSON généré (<code><strong>.cdx.json</strong></code><strong> ou <code></code></strong><code>.spdx.json</code>).
+Le résultat s’affiche dans l’onglet <strong>Résultats</strong> sous la liste des fichiers.</p>
+</div>
+<div class="paragraph">
+<p>Si <code>sbomqs</code> n’est pas installé, l’option est ignorée silencieusement.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Voir <a href="#_installer_sbomqs_optionnel">Installer sbomqs (optionnel)</a> pour l’installation.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_persistance_des_paramètres">4.5. Persistance des paramètres</h3>
+<div class="paragraph">
+<p>Tous les paramètres de la section <strong>Options</strong> — formats sélectionnés, chemin
+de base, répertoire RPM, fichier de licences, niveau de concurrence, mode verbeux,
+génération PDF, score sbomqs — sont <strong>automatiquement sauvegardés</strong> après chaque
+génération et <strong>restaurés</strong> au prochain démarrage de l’application.</p>
+</div>
+<div class="paragraph">
+<p>Les paramètres sauvegardés <strong>ne comprennent pas</strong> le fichier d’entrée (trop lié
+à un contexte particulier) ni le chemin du PDF.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_profils_de_configuration">4.6. Profils de configuration</h3>
+<div class="paragraph">
+<p>Un <strong>profil</strong> regroupe tous les paramètres de configuration sous un nom
+personnalisé, et peut être rappelé en un clic pour basculer rapidement
+entre plusieurs configurations types (ex. : « RHEL 9 production », « Audit
+Python », « CI/CD minimal »).</p>
+</div>
+<div class="sect3">
+<h4 id="_accéder_aux_profils">4.6.1. Accéder aux profils</h4>
+<div class="paragraph">
+<p>Cliquez sur l’icône 🔖 (signets) en haut à droite de l’en-tête du panneau
+Configuration.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ Configuration ────────────────── [🔖] ─┐
+  │  ...                                     │</pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_fenêtre_de_gestion_des_profils">4.6.2. Fenêtre de gestion des profils</h4>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ Profils de configuration ──────────────────────────────────┐
+  │                                                              │
+  │  Nom du profil : [ RHEL 9 production      ] [Enregistrer]  │
+  │                                                              │
+  │  ─────────────────────────────────────────────────────────  │
+  │  RHEL 9 production               [Charger] [Supprimer]      │
+  │  Audit Python                    [Charger] [Supprimer]      │
+  │  CI/CD minimal                   [Charger] [Supprimer]      │
+  │                                                              │
+  └──────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Enregistrer</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Sauvegarde l’état actuel de tous les champs sous le nom saisi</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Charger</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Applique les valeurs du profil (sauf le fichier d’entrée)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Supprimer</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Demande confirmation, puis supprime le profil</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Le <strong>fichier d’entrée</strong> n’est pas inclus dans les profils — il est
+généralement propre à chaque contexte d’utilisation.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+Si un profil du même nom existe déjà, <strong>Enregistrer</strong> le met à jour.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_prévisualisation_de_la_commande">4.7. Prévisualisation de la commande</h3>
+<div class="paragraph">
+<p>Sous le bouton <strong>▶ Générer le SBOM</strong> s’affiche en permanence la ligne de commande
+shell équivalente à la configuration actuelle :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  $ sbom-generator --input /home/user/paquets.lst \
+    --output /home/user/sbom --format cyclonedx spdx</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Cette prévisualisation se met à jour à chaque modification d’un champ.
+Un bouton 📋 permet de copier la commande dans le presse-papiers pour
+la rejouer depuis un terminal ou l’intégrer dans un script CI/CD.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancer_et_arrêter_la_génération">4.8. Lancer et arrêter la génération</h3>
+<div class="paragraph">
+<p>Cliquez sur <strong>▶ Générer le SBOM</strong> pour démarrer.
+Le bouton se transforme en <strong>■ Arrêter la génération</strong> pendant l’exécution.
+Cliquer sur Arrêter envoie un signal d’interruption au processus.</p>
+</div>
+</div>
+</div>

@@ -1,0 +1,90 @@
+
+<h2 id="_onglet_fusion_sbom">16. Onglet Fusion SBOM</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Fusion SBOM</strong> combine plusieurs fichiers SBOM en un seul document,
+en dédupliquant les composants communs. Il orchestre la sous-commande
+<code>sbom-generator merge</code> en arrière-plan.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ [➕ Ajouter des fichiers…]  [📂 Fichiers générés]   3 fichier(s) sélectionné(s) ─┐
+  │  📄 base.cdx.json         /chemin/vers/base.cdx.json                      [✕]  │
+  │  📄 extra-1.cdx.json      /chemin/vers/extra-1.cdx.json                   [✕]  │
+  │  📄 extra-2.cdx.json      /chemin/vers/extra-2.cdx.json                   [✕]  │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [ Fichier de sortie : merged.cdx.json ]  [ Nom du document (optionnel) ]  [🔀 Fusionner]
+
+  ✔ Fusion réussie → merged.cdx.json</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sélection_des_fichiers_à_fusionner">16.1. Sélection des fichiers à fusionner</h3>
+<div class="paragraph">
+<p>Deux façons d’alimenter la liste :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>➕ Ajouter des fichiers…</strong> : ouvre un sélecteur de fichiers du système,
+sélection multiple possible.</p>
+</li>
+<li>
+<p><strong>📂 Fichiers générés</strong> : menu listant les fichiers SBOM produits pendant la
+session courante (mêmes formats que l’onglet Arborescence, hors SPDX 3.0
+— voir Contraintes ci-dessous).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Chaque fichier de la liste peut être retiré individuellement via le bouton
+<strong>✕</strong>. Le bouton <strong>🔀 Fusionner</strong> n’est actif qu’à partir de deux fichiers
+sélectionnés et d’un chemin de sortie renseigné.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fichier_de_sortie_et_nom_du_document">16.2. Fichier de sortie et nom du document</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Fichier de sortie</strong> : chemin du document fusionné produit (valeur par
+défaut : <code>merged.cdx.json</code>).</p>
+</li>
+<li>
+<p><strong>Nom du document</strong> (optionnel) : s’il est renseigné, remplace le nom du
+document dans le fichier fusionné ; sinon, le nom du premier fichier
+source est conservé.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancement_et_résultat">16.3. Lancement et résultat</h3>
+<div class="paragraph">
+<p>Le bouton <strong>🔀 Fusionner</strong> lance <code>sbom-generator merge</code> avec les fichiers
+sélectionnés. Le déroulé de la commande (journal) s’affiche sous les
+champs, suivi d’une bannière de résultat :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ Fusion réussie → &lt;fichier&gt;</strong> (vert) en cas de succès.</p>
+</li>
+<li>
+<p><strong>✘ Échec de la fusion (code N)</strong> (rouge) en cas d’échec — consultez le
+journal affiché pour le détail de l’erreur.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_contraintes">16.4. Contraintes</h3>
+<div class="paragraph">
+<p>Tous les fichiers sélectionnés doivent être dans le même format (celui du
+premier fichier de la liste) : CycloneDX ou SPDX 2.3. Le format de sortie
+suit celui du premier fichier. Le format SPDX 3.0 (JSON-LD) n’est pas pris
+en charge en entrée pour la fusion.</p>
+</div>
+</div>
+</div>

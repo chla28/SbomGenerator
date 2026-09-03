@@ -1,0 +1,96 @@
+
+<h2 id="_onglet_licences_sbom">17. Onglet Licences SBOM</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Licences SBOM</strong> génère un rapport de conformité des licences au
+format AsciiDoc, regroupé par licence, à partir d’un fichier SBOM existant.
+Il orchestre la sous-commande <code>sbom-generator licenses</code> en arrière-plan.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ [📄 Choisir un fichier…]  [📂 Fichiers générés]   /chemin/vers/sbom.cdx.json ─┐
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  Sélectionnez un fichier CycloneDX ou SPDX pour générer un rapport de
+  licences AsciiDoc, regroupé par licence, avec signalement des licences
+  copyleft et des paquets sans licence détectée.
+
+  [ Fichier de sortie : licences.adoc ]  [ Nom du document (optionnel) ]  [⚖ Générer]
+
+  ✔ Rapport généré → licences.adoc</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sélection_du_fichier_source">17.1. Sélection du fichier source</h3>
+<div class="paragraph">
+<p>Deux façons de désigner le fichier :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>📄 Choisir un fichier…</strong> : ouvre un sélecteur de fichiers du système.</p>
+</li>
+<li>
+<p><strong>📂 Fichiers générés</strong> : menu listant les fichiers SBOM produits pendant la
+session courante (mêmes formats que l’onglet Arborescence : CycloneDX,
+SPDX 2.3, SPDX 3.0 JSON-LD).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Le bouton <strong>⚖ Générer</strong> n’est actif qu’une fois un fichier sélectionné et un
+chemin de sortie renseigné.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fichier_de_sortie_et_nom_du_document_2">17.2. Fichier de sortie et nom du document</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Fichier de sortie</strong> : chemin du rapport AsciiDoc produit (valeur par
+défaut : <code>licences.adoc</code>).</p>
+</li>
+<li>
+<p><strong>Nom du document</strong> (optionnel) : s’il est renseigné, remplace le nom du
+document dans l’en-tête du rapport ; sinon, le nom du fichier source est
+conservé.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancement_et_résultat_2">17.3. Lancement et résultat</h3>
+<div class="paragraph">
+<p>Le bouton <strong>⚖ Générer</strong> lance <code>sbom-generator licenses</code> sur le fichier
+sélectionné. Le déroulé de la commande (journal) s’affiche sous les champs,
+suivi d’une bannière de résultat :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ Rapport généré → &lt;fichier&gt;</strong> (vert) en cas de succès.</p>
+</li>
+<li>
+<p><strong>✘ Échec de la génération (code N)</strong> (rouge) en cas d’échec — consultez le
+journal affiché pour le détail de l’erreur.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Le rapport produit regroupe les paquets par licence exacte, avec un résumé
+chiffré en tête (paquets analysés, licences distinctes, paquets sous licence
+copyleft fort/faible, paquets sans licence détectée), un avertissement
+listant les identifiants copyleft détectés (GPL/AGPL en fort ; LGPL, MPL,
+EPL, CDDL, CPL, EUPL en faible), et une section par licence listant les
+paquets concernés.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_contraintes_2">17.4. Contraintes</h3>
+<div class="paragraph">
+<p>Le format source doit être reconnu (CycloneDX, SPDX 2.3 ou SPDX 3.0). La
+classification copyleft est une heuristique de repérage par identifiant
+SPDX, pas une analyse juridique.</p>
+</div>
+</div>
+</div>

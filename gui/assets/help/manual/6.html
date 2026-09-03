@@ -1,0 +1,75 @@
+
+<h2 id="_onglet_aperçu_prévisualisation_sbom">7. Onglet Aperçu — Prévisualisation SBOM</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Aperçu (N)</strong> affiche le contenu brut des fichiers SBOM générés
+directement dans l’interface, sans avoir à ouvrir un éditeur externe.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ Fichier : [ sbom.cdx.json ▼ ]                     [📋] ─┐
+  │                                                            │
+  │  {                                                         │
+  │    "bomFormat": "CycloneDX",                               │
+  │    "specVersion": "1.6",                                   │
+  │    "version": 1,                                           │
+  │    "metadata": {                                           │
+  │      "component": {                                        │
+  │        "name": "Mon Application 2.1.0",                   │
+  │        ...                                                 │
+  └────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sélection_du_fichier">7.1. Sélection du fichier</h3>
+<div class="paragraph">
+<p>Un menu déroulant en haut de l’onglet liste tous les fichiers non-PDF générés
+dans la session courante. Le premier fichier est sélectionné automatiquement
+à la fin de la génération.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_comportement_du_rendu">7.2. Comportement du rendu</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Le contenu est affiché en police monospace sur fond sombre, comme le terminal.</p>
+</li>
+<li>
+<p>Les fichiers JSON (CycloneDX, SPDX) sont affichés tels quels.</p>
+</li>
+<li>
+<p>Les fichiers Markdown et AsciiDoc sont également affichés en texte brut.</p>
+</li>
+<li>
+<p>Au-delà de <strong>50 000 caractères</strong>, le contenu est tronqué avec une note
+indiquant la taille totale réelle.</p>
+</li>
+<li>
+<p>Le texte est sélectionnable.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_copier_le_contenu">7.3. Copier le contenu</h3>
+<div class="paragraph">
+<p>Le bouton 📋 en haut à droite copie l’intégralité du contenu affiché dans
+le presse-papiers.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+L’onglet Aperçu ne remplace pas un outil dédié pour explorer de gros
+fichiers JSON. Pour les fichiers très volumineux, utilisez le bouton ↗
+(onglet Résultats) pour ouvrir le fichier dans votre application système.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>

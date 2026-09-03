@@ -1669,6 +1669,55 @@ chacun un PDF noir et blanc par défaut :
   afficher la ligne "null", d'où `pdfToolVersionRow(label, version)` qui
   affiche `_indisponible_` en italique dans ce cas.
 
+=== `widgets/help_viewer.dart` — aide en ligne (manuel utilisateur intégré)
+
+`HelpViewerScreen`, ouvert depuis l'icône ❓ de la barre du haut
+(`home_screen.dart`), affiche `doc/user.adoc` dans l'appli elle-même — pas
+seulement l'aide contextuelle courte des icônes ❓ par champ (`HelpIcon`/
+`HelpLabel`, `widgets/help_icon.dart`).
+
+**Génération des assets (`tool/generate_help.dart`)** — à relancer
+manuellement (`dart run tool/generate_help.dart` depuis `gui/`) après toute
+modification de `doc/user.adoc` ; ses sorties sont commitées comme des
+fichiers générés ordinaires, l'appli elle-même n'exécute jamais
+`asciidoctor` :
+
+* Rend `doc/user.adoc` en HTML unique via `asciidoctor -a icons! -a toc!`
+  (`icons!` : labels texte "Note"/"Astuce"… plutôt qu'une police d'icônes
+  externe que `flutter_html` ne peut pas charger ; `toc!` : le sommaire est
+  reconstruit côté Flutter, pas besoin de celui d'asciidoctor).
+* Découpe le HTML avec `package:html` à chaque `<div class="sect1">`
+  (asciidoctor enveloppe déjà chaque section `== ` de premier niveau dans
+  un tel div, enfant direct de `#content` — pas besoin de redécouper
+  manuellement au fil des `<h2>`) → un fichier `assets/help/manual/<n>.html`
+  par chapitre (21 actuellement).
+* Émet `assets/help/manual/toc.json` : la liste ordonnée `{title, file}`
+  pour le sommaire, et une table `id d'ancre → index de chapitre` construite
+  à partir de tous les attributs `id="…"` du HTML (dont les ancres
+  `[[sec-xxx]]` du `.adoc`) — permet à un renvoi interne
+  (`<<sec-xxx>>`, rendu `<a href="#sec-xxx">`) de faire basculer le lecteur
+  sur le bon chapitre au clic, même s'il pointe vers un autre chapitre que
+  celui affiché.
+
+**Lecteur (`HelpViewerScreen`)** — `Scaffold` avec sommaire (`ListView` des
+titres de chapitres) à gauche et contenu du chapitre sélectionné à droite,
+rendu par le paquet `flutter_html` (widgets Flutter natifs, pas de WebView —
+`webview_flutter` n'a pas de support desktop Linux stable, `flutter_html`
+n'en a besoin d'aucun). `onAnchorTap` intercepte les clics sur les liens
+internes : ancre connue dans `toc.json` → changement de chapitre (`Navigator`
+non utilisé, juste un `setState` + `ScrollController.jumpTo(0)`) ; sinon,
+ouverture via `url_launcher` (lien externe). Le style (`_helpStyle`) calque
+les couleurs du thème Material courant (`Theme.of(context)`), y compris en
+mode sombre — même principe que le thème PDF de `pdf_report.dart` ci-dessus,
+en plus simple (pas de fichier de thème séparé, juste une `Map<String, Style>`
+passée au widget `Html`).
+
+NOTE: `flutter_html: ^3.0.0` importe une API interne
+(`package:html/src/query_selector.dart`) dont la forme a changé en
+`html 0.15.6+` (`Method not found: 'matches'` à la compilation) — `html` est
+donc épinglé à `0.15.5` dans `dev_dependencies` (voir le commentaire dans
+`pubspec.yaml`). À réévaluer si `flutter_html` est mis à jour.
+
 === `DateFilterBar` / `DateChip`
 
 * `DateFilterBar` : `Row` avec icône calendrier, label "Date CVE :",
@@ -2307,6 +2356,31 @@ Si cette contrainte disparaît dans un environnement différent (poste de
 développeur standard, CI GitHub Actions), rien n'empêche d'ajouter des tests
 widgets équivalents pour `SbomTreePanel`/`SbomDiffPanel`.
 
+=== Deux `rootBundle.loadString` dans le même fichier de test : le second bloque
+
+En écrivant les tests de `HelpViewerScreen` (qui charge
+`assets/help/manual/toc.json` via `rootBundle.loadString` dans
+`initState`), un second `testWidgets` dans le *même fichier* — chacun
+montant sa propre instance du widget — voyait sa future de chargement ne
+jamais se résoudre : ni erreur, ni `setState`, un `pump` répété (jusqu'à
+4 s) ne changeait rien, et `pumpAndSettle` finissait par expirer (timeout)
+plutôt que planter proprement.
+
+Diagnostic par répétition avec un widget minimal, sans aucun code du
+projet ni `flutter_html` : un `StatefulWidget` dont `initState` appelle
+juste `rootBundle.loadString('assets/…')` reproduit le même blocage dès
+qu'il est monté une seconde fois dans deux `testWidgets` du même fichier —
+premier test : `pump` de 500 ms suffit ; second test : même après 4 s de
+`pump` répétés, la chaîne reste sur son texte "loading" initial. Un défaut
+d'isolation du cache d'assets entre tests d'un même fichier dans ce binding
+Flutter/test, sans rapport avec `HelpViewerScreen` lui-même.
+
+Conséquence pratique : `help_viewer_test.dart` (chargement + affichage du
+premier chapitre) et `help_viewer_navigation_test.dart` (clic sur le
+sommaire) sont deux fichiers séparés plutôt que deux `testWidgets` du même
+fichier — `package:test` isole chaque fichier dans son propre isolat, ce
+qui contourne le problème (vérifié : les deux passent une fois séparés).
+
 == Dépendances
 
 [cols="2,1,3", options="header"]
@@ -2333,4 +2407,14 @@ widgets équivalents pour `SbomTreePanel`/`SbomDiffPanel`.
 |^0.7.1
 |Réception des glisser-déposer de fichiers depuis le gestionnaire de fichiers
 système (Linux) dans `ConfigPanel`
+
+|`flutter_html`
+|^3.0.0
+|Rendu du manuel utilisateur (HTML pré-généré) dans `HelpViewerScreen` —
+widgets Flutter natifs, sans WebView (non supportée sur desktop Linux)
 |===
+
+`html` (`^0.15.5`, épinglé à `0.15.5` exactement — voir la note dans
+`widgets/help_viewer.dart` ci-dessus) est une `dev_dependency` : utilisée
+uniquement par `tool/generate_help.dart` pour parser/découper le HTML rendu
+par asciidoctor, jamais par l'appli elle-même à l'exécution.

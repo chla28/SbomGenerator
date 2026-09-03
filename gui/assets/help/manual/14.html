@@ -1,0 +1,103 @@
+
+<h2 id="_onglet_comparaison_sbom">15. Onglet Comparaison SBOM</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Comparaison SBOM</strong> met en évidence les différences entre deux
+fichiers SBOM (par exemple avant / après une mise à jour).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
+  │ [ /chemin/vers/avant.cdx.json ] [📂]  │  │ [ /chemin/vers/après.cdx.json ] [📂] │
+  └───────────────────────────────────────┘  └──────────────────────────────────────┘
+                                                                    [Comparer]
+
+  Ajoutés : 5  │  Supprimés : 3  │  Modifiés : 8  │  Inchangés : 230
+
+  Filtre : [✓ Ajoutés] [✓ Supprimés] [✓ Modifiés] [ Inchangés]
+  Recherche : [ openssl…                             ]
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
+  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
+  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
+  └─────────────────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_chargement_des_fichiers">15.1. Chargement des fichiers</h3>
+<div class="paragraph">
+<p>Sélectionnez un fichier dans chaque emplacement (SBOM A et SBOM B) via le
+bouton 📂 ou en saisissant un chemin. Les formats CycloneDX, SPDX 2.x et
+SPDX 3.0 JSON-LD sont supportés (mêmes formats que l’onglet Arborescence) ;
+les deux fichiers comparés n’ont pas besoin d’être dans le même format.</p>
+</div>
+<div class="paragraph">
+<p>Cliquez sur <strong>Comparer</strong> pour lancer la comparaison. Le bouton est actif
+uniquement si les deux fichiers sont sélectionnés.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_barre_de_compteurs">15.2. Barre de compteurs</h3>
+<div class="paragraph">
+<p>Affiche le nombre de composants dans chaque catégorie :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 20%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">+  (vert)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Ajoutés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans B, absents de A</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">−  (rouge)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Supprimés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans A, absents de B</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">~  (orange)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Modifiés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans A et B, mais avec version ou licence différente</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">=  (gris)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Inchangés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Identiques dans A et B</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_filtres_et_recherche">15.3. Filtres et recherche</h3>
+<div class="paragraph">
+<p>Les puces de filtre permettent d’afficher ou masquer chaque catégorie.
+Par défaut, les composants <strong>Inchangés</strong> sont masqués pour se concentrer
+sur les différences.</p>
+</div>
+<div class="paragraph">
+<p>Le champ de recherche filtre sur le nom du composant en temps réel, en
+combinaison avec les filtres de catégorie.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_colonne_de_différences">15.4. Colonne de différences</h3>
+<div class="paragraph">
+<p>Pour les composants <strong>Modifiés</strong> :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>La <strong>version</strong> affiche l’ancienne valeur barrée et la nouvelle valeur en vert</p>
+</li>
+<li>
+<p>La <strong>licence</strong> affiche l’ancienne valeur barrée et la nouvelle valeur en vert</p>
+</li>
+</ul>
+</div>
+</div>
+</div>

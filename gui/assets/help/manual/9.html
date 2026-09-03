@@ -1,0 +1,171 @@
+
+<h2 id="_onglet_trivy_analyse_de_vulnérabilités">10. Onglet Trivy — Analyse de vulnérabilités</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Trivy</strong> utilise l’outil d’Aqua Security. Il propose des options
+supplémentaires par rapport à OSV-Scanner et Grype.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
+  │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
+  │                                                                   │
+  │  Sévérités : [CRITICAL] [HIGH] [MEDIUM] [LOW] [UNKNOWN]          │
+  │  [ ] --ignore-unfixed   [ ] --skip-db-update                     │
+  │  trivy.yaml   : [                               ] [Choisir ▾]   │
+  │                                                      [Analyser]  │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 4 vulnérabilité(s) : 1 CRITICAL, 3 HIGH                       │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnérabilités (4)]  │ [JSON brut]                               │
+  └───────────────────────┴───────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_indicateur_de_version_3">10.1. Indicateur de version</h3>
+<div class="paragraph">
+<p>Même comportement que dans l’onglet Grype (voir <a href="#_indicateur_de_version">Indicateur de version</a>),
+appliqué à <code>trivy</code>. Le badge est affiché en haut du panneau de configuration
+dès que la vérification de démarrage est terminée.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_prérequis_3">10.2. Prérequis</h3>
+<div class="paragraph">
+<p><code>trivy</code> doit être installé et accessible dans le PATH
+(voir <a href="#_installer_trivy_optionnel">Installer trivy (optionnel)</a>).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-onglet-trivy-source">10.3. Sélection de la source à analyser</h3>
+<div class="paragraph">
+<p>Même bascule <strong>Fichier SBOM / Image de conteneur</strong>, mêmes formats acceptés
+en mode image (registre, archive locale, répertoire OCI layout) que dans
+l’onglet Grype (voir <a href="#sec-source-scan">Sélection de la source à analyser</a>), y compris le champ optionnel
+<strong>Plateforme</strong> (<code>--platform</code>, ex. <code>linux/arm64</code>).</p>
+</div>
+<div class="paragraph">
+<p>En mode <strong>Fichier SBOM</strong>, Trivy est lancé via sa sous-commande <code>trivy sbom</code> ;
+en mode <strong>Image de conteneur</strong>, via <code>trivy image</code> (une archive ou un
+répertoire local est alors passé via <code>--input</code>, une référence de registre
+en argument direct).</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Sur un SBOM CycloneDX/SPDX généré par <code>sbom_generator</code> avec le
+backend <code>syft</code>, il est normal que le mode <strong>Fichier SBOM</strong> trouve quelques
+CVE Java de <strong>plus</strong> que le mode <strong>Image de conteneur</strong> sur la même image —
+ce n’est pas un faux positif du SBOM, mais une sous-détection de
+l’analyseur de jars intégré à Trivy pour les jars sans <code>pom.properties</code>
+(ex. rebuilds internes Red Hat), que le cataloguer de syft détecte via le
+nom de fichier là où Trivy échoue. Voir <a href="#sec-pourquoi-ecarts-scanners">Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</a>
+pour le détail avec des chiffres réels.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_options_de_scan_2">10.4. Options de scan</h3>
+<div class="sect3">
+<h4 id="_filtre_de_sévérités_severity">10.4.1. Filtre de sévérités (<code>--severity</code>)</h4>
+<div class="paragraph">
+<p>Cochez une ou plusieurs sévérités pour limiter l’analyse.
+Si aucune n’est cochée, toutes les sévérités sont analysées.</p>
+</div>
+<div class="paragraph">
+<p>Niveaux disponibles : <strong>CRITICAL</strong>, <strong>HIGH</strong>, <strong>MEDIUM</strong>, <strong>LOW</strong>, <strong>UNKNOWN</strong>.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_ignore_unfixed">10.4.2. <code>--ignore-unfixed</code></h4>
+<div class="paragraph">
+<p>N’affiche que les vulnérabilités pour lesquelles une version corrigée
+est disponible. Équivalent à <code>--only-fixed</code> dans Grype.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_skip_db_update">10.4.3. <code>--skip-db-update</code></h4>
+<div class="paragraph">
+<p>Empêche Trivy de mettre à jour sa base de données locale au démarrage.
+Utile en environnement hors-ligne ou pour des analyses répétées rapides
+lorsque la base est déjà à jour.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_fichier_de_configuration_trivy_yaml">10.4.4. Fichier de configuration (<code>trivy.yaml</code>)</h4>
+<div class="paragraph">
+<p>Chemin vers un fichier de configuration Trivy au format YAML.
+Permet de définir des règles d’ignorance, des proxies, des registres
+privés, etc.</p>
+</div>
+<div class="paragraph">
+<p>Ce paramètre est optionnel. Le bouton <strong>Choisir</strong> propose un filtre
+<code>.yaml</code> / <code>.yml</code> ou tous les fichiers.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_commande_équivalente">10.5. Commande équivalente</h3>
+<div class="paragraph">
+<p>En mode <strong>Fichier SBOM</strong>, Trivy est lancé avec les arguments :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">trivy sbom --format json --quiet \
+  [--severity CRITICAL,HIGH,...] \
+  [--ignore-unfixed] \
+  [--skip-db-update] \
+  [--config trivy.yaml] \
+  /chemin/vers/sbom.cdx.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>En mode <strong>Image de conteneur</strong> :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">trivy image --format json --quiet \
+  [--severity CRITICAL,HIGH,...] [--ignore-unfixed] [--skip-db-update] \
+  [--config trivy.yaml] [--platform linux/arm64] \
+  nginx:latest
+# ou, pour une archive/un répertoire OCI local :
+trivy image --format json --quiet [...] --input /chemin/vers/image.tar</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_résultats_2">10.6. Résultats</h3>
+<div class="paragraph">
+<p>Même interface que les onglets Grype et OSV-Scanner : barre de recherche
++ tri + export CSV/AsciiDoc+PDF, filtres par sévérité, fusion des doublons
+visuels (badge ×N, voir <a href="#sec-vue-table">[sec-vue-table]</a>), puis liste des vulnérabilités.</p>
+</div>
+<div class="paragraph">
+<p><strong>Export CSV</strong> (bouton ⬇) : colonnes Sévérité, CVE/ID, Paquet, Version
+installée, Version corrigée, Titre, Emplacements.</p>
+</div>
+<div class="paragraph">
+<p><strong>Export AsciiDoc + PDF</strong> (bouton ⬥) : même rapport que sur les onglets
+Grype/OSV-Scanner (résumé par sévérité + tableau détaillé, conversion PDF
+automatique si <code>asciidoctor-pdf</code> est installé) — voir <a href="#sec-vue-table">[sec-vue-table]</a>.</p>
+</div>
+<div class="paragraph">
+<p>La colonne <strong>Titre</strong> correspond au champ <code>Title</code> du JSON Trivy (description
+courte de la CVE). Elle apparaît en sous-titre de chaque entrée dans la
+liste.</p>
+</div>
+<div class="paragraph">
+<p><strong>Filtre par date</strong> : même barre que l’onglet Grype (voir <a href="#sec-vue-table">[sec-vue-table]</a>).
+Le champ <strong>Publication</strong> correspond à <code>PublishedDate</code> du JSON Trivy, le
+champ <strong>Modification</strong> à <code>LastModifiedDate</code>. L’option <strong>Propager</strong> copie le
+filtre vers les onglets Grype et OSV-Scanner.</p>
+</div>
+</div>
+</div>

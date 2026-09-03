@@ -1,0 +1,508 @@
+
+<h2 id="_onglet_grype_analyse_de_vulnérabilités">8. Onglet Grype — Analyse de vulnérabilités</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Grype</strong> est entièrement autonome : il peut être utilisé à tout moment,
+indépendamment d’une génération SBOM récente.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
+  │  Fichier SBOM : [ /projet/sbom.cdx.json                ] [Choisir]│
+  │                                                                   │
+  │  [x] --platform linux   [x] --add-cpes-if-none   [x] --by-cve   │
+  │                                                                   │
+  │  Distro            --fail-on       --only-fixed                   │
+  │  [ rhel:9  ▼ ]     [ (aucun) ▼ ]  [ ]              [Analyser]   │
+  │                                                                   │
+  │  Template (-t) : [ ./grype_csv.tmpl              ] [Choisir]     │
+  │  grype.yaml    : [                               ] [Choisir]     │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 5 vulnérabilité(s) : 1 Critical, 2 High, 2 Medium             │
+  ├──────────────┬───────────────────────────────────────────────────┤
+  │ [Table (5)]  │ [JSON]  │ [Template]                              │
+  ├──────────────┴───────────────────────────────────────────────────┤
+  │  CRITICAL  openssl 1.1.1k → 1.1.1l  CVE-2021-3711  rpm         │
+  │  HIGH      bash 5.0.17              CVE-2021-3489   rpm         │
+  │  HIGH      curl 7.76.1              CVE-2023-38545  rpm         │
+  │  MEDIUM    zlib 1.2.11              CVE-2022-37434  rpm         │
+  │  MEDIUM    expat 2.2.10             CVE-2022-25235  rpm         │
+  └───────────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_indicateur_de_version">8.1. Indicateur de version</h3>
+<div class="paragraph">
+<p>En haut du panneau de configuration, l’application affiche la version de
+<code>grype</code> installée ainsi que l’état de mise à jour, vérifiés en arrière-plan
+au démarrage :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ v0.87.0</strong> (vert) — <code>grype</code> est installé et à jour.</p>
+</li>
+<li>
+<p><strong>↑ v0.87.0 → v0.88.1</strong> (orange, cliquable) — une nouvelle version est
+disponible sur GitHub. Cliquez pour ouvrir la page de release dans
+le navigateur.</p>
+</li>
+<li>
+<p><strong>non installé</strong> (rouge) — <code>grype</code> n’est pas trouvé dans le PATH.</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+La vérification interroge l’API GitHub. En l’absence de connexion
+réseau, seule la version installée est affichée, sans comparaison.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-source-scan">8.2. Sélection de la source à analyser</h3>
+<div class="paragraph">
+<p>Une bascule <strong>Fichier SBOM / Image de conteneur</strong> en haut du panneau permet de
+choisir ce que grype analyse. Ce choix, ainsi que le champ associé, est commun
+aux trois onglets de scan (Grype, OSV-Scanner, Trivy) — voir aussi
+<a href="#sec-onglet-trivy-source">Sélection de la source à analyser</a> et <a href="#sec-onglet-osv-source">Sélection de la source à analyser</a>.</p>
+</div>
+<div class="paragraph">
+<p><strong>Fichier SBOM</strong> (mode par défaut) : le champ est pré-rempli automatiquement
+avec le dernier fichier SBOM généré dans la session courante, en priorisant
+les formats reconnus par grype : <code>.cdx.json</code> (CycloneDX) puis <code>.spdx.json</code>
+(SPDX). Vous pouvez saisir manuellement un chemin ou cliquer sur <strong>Choisir</strong>
+pour parcourir le système de fichiers. Les formats <code>.json</code> et <code>.jsonld</code> sont
+proposés dans le sélecteur.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Grype analyse le contenu du fichier, pas son extension.
+Un fichier CycloneDX renommé <code>.json</code> est reconnu correctement.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p><strong>Image de conteneur</strong> : le champ accepte trois formes de référence, toutes
+prises en charge par grype sans distinction de syntaxe côté application :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>une référence de <strong>registre</strong>, ex. <code>nginx:latest</code>, <code>ghcr.io/org/app:tag</code> —
+l’image est récupérée via la configuration Docker locale (<code>docker login</code>)
+si le registre est privé, sans champ d’identifiants dédié dans l’application ;</p>
+</li>
+<li>
+<p>une <strong>archive</strong> exportée par <code>docker save</code> (ou une archive OCI), via le
+bouton dédié (extensions <code>.tar</code>, <code>.tar.gz</code>, <code>.tgz</code>) ;</p>
+</li>
+<li>
+<p>un <strong>répertoire au format OCI layout</strong> (produit par exemple par <code>skopeo copy</code>),
+via le second bouton dédié.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Un champ optionnel <strong>Plateforme</strong> apparaît en mode image, pour forcer la
+plateforme cible sur une image multi-architecture (ex. <code>linux/arm64</code>).
+Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_options_de_scan">8.3. Options de scan</h3>
+<div class="sect3">
+<h4 id="_platform_linux">8.3.1. <code>--platform linux</code></h4>
+<div class="paragraph">
+<p>Force grype à considérer la plateforme cible comme Linux lors de la
+résolution des vulnérabilités, en mode <strong>Fichier SBOM</strong> uniquement. Recommandé
+pour les SBOM issus de listes de paquets RPM ou DEB.</p>
+</div>
+<div class="paragraph">
+<p>Décochez cette option si vous analysez un SBOM issu d’un autre système
+(bibliothèques macOS…).</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Cette case n’a aucun effet en mode <strong>Image de conteneur</strong> : elle est
+ignorée au profit du champ <strong>Plateforme</strong> décrit ci-dessus (<code>linux</code> seul, sans
+architecture, est d’ailleurs rejeté par grype sur une image multi-plateforme).
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_add_cpes_if_none">8.3.2. <code>--add-cpes-if-none</code></h4>
+<div class="paragraph">
+<p>Grype utilise les identifiants <strong>CPE</strong> (Common Platform Enumeration) pour
+faire correspondre les paquets aux entrées CVE. Si un paquet du SBOM ne
+possède pas de CPE déclaré, cette option demande à grype d’en générer un
+automatiquement depuis le nom et la version du paquet.</p>
+</div>
+<div class="paragraph">
+<p>Recommandé : réduit les faux-négatifs sur des SBOM produits sans CPE
+(c’est le cas de la plupart des SBOM générés par <code>sbom-generator</code>).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_by_cve">8.3.3. <code>--by-cve</code></h4>
+<div class="paragraph">
+<p>Sans cette option, grype groupe les résultats par identifiant <strong>GHSA</strong>
+(GitHub Security Advisory) quand il est disponible.
+Avec cette option, chaque résultat est présenté sous son identifiant
+<strong>CVE</strong> principal, plus universel et reconnu par les outils de gestion
+des vulnérabilités.</p>
+</div>
+<div class="paragraph">
+<p>Recommandé pour l’interopérabilité avec des outils de ticketing (Jira,
+défauts, etc.) ou des référentiels de vulnérabilités internes.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_distro_rhelversion">8.3.4. <code>--distro rhel:&lt;version&gt;</code></h4>
+<div class="paragraph">
+<p>Précise la distribution Linux cible. Sans cette option, grype tente
+de la déduire du SBOM, ce qui peut échouer ou produire des correspondances
+imprécises.</p>
+</div>
+<div class="paragraph">
+<p>Versions RHEL disponibles dans le menu : <strong>7</strong>, <strong>8</strong>, <strong>9</strong>, <strong>10</strong>. Sélectionnez
+<strong>(aucune)</strong> pour laisser grype détecter automatiquement la distribution.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Choisir la mauvaise version peut engendrer des faux-positifs
+(vulnérabilités non applicables car déjà corrigées par le backport RHEL)
+ou des faux-négatifs. Vérifiez la version exacte de votre système avec
+<code>cat /etc/redhat-release</code>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_fail_on_sévérité">8.3.5. <code>--fail-on &lt;sévérité&gt;</code></h4>
+<div class="paragraph">
+<p>Contrôle le code de retour de grype. Avec cette option, grype retourne
+un code d’erreur (non nul) si au moins une vulnérabilité du niveau
+indiqué ou supérieur est détectée. Utile en CI/CD.</p>
+</div>
+<div class="paragraph">
+<p>Exemple : <code>--fail-on high</code> fait échouer l’analyse si une vulnérabilité
+<strong>High</strong> ou <strong>Critical</strong> est trouvée.</p>
+</div>
+<div class="paragraph">
+<p>La bannière de résultat dans l’UI reflète ce code de retour : fond rouge
+si grype a retourné une erreur, fond vert sinon.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_only_fixed">8.3.6. <code>--only-fixed</code></h4>
+<div class="paragraph">
+<p>N’affiche que les vulnérabilités pour lesquelles une version corrigée
+est disponible. Permet de se concentrer sur les actions immédiatement
+réalisables.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_template_de_sortie_t">8.4. Template de sortie (<code>-t</code>)</h3>
+<div class="paragraph">
+<p>Le champ <strong>Template (-t)</strong> permet de générer une sortie personnalisée
+(CSV, HTML, texte) via un fichier template Go.</p>
+</div>
+<div class="paragraph">
+<p>Le champ est pré-rempli avec <code>./grype_csv.tmpl</code>. Si ce fichier n’existe
+pas au moment du lancement, la sortie template est ignorée sans erreur.</p>
+</div>
+<div class="paragraph">
+<p>Exemple de template Go pour un CSV :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>"CVE","Paquet","Version installée","Version corrigée","Sévérité"
+{{- range .Matches}}
+"{{.Vulnerability.ID}}","{{.Artifact.Name}}","{{.Artifact.Version}}","{{fixedIn .Vulnerability}}","{{.Vulnerability.Severity}}"
+{{- end}}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>La sortie produite est affichée dans l’onglet <strong>Template</strong> (voir <a href="#sec-vue-template">[sec-vue-template]</a>)
+et peut être copiée dans le presse-papiers.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Grype est lancé en une seule passe qui produit simultanément la sortie
+JSON (pour la vue Table) et la sortie template (via un fichier temporaire).
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fichier_de_configuration_grype_yaml">8.5. Fichier de configuration (<code>grype.yaml</code>)</h3>
+<div class="paragraph">
+<p>Chemin vers un fichier de configuration grype au format YAML.
+Permet de définir des règles d’ignorance, des bases de données personnalisées,
+des proxies, etc.</p>
+</div>
+<div class="paragraph">
+<p>Ce paramètre est optionnel. Laissez le champ vide pour utiliser la
+configuration grype par défaut (<code>~/.grype.yaml</code> si elle existe).</p>
+</div>
+<div class="paragraph">
+<p>Documentation officielle : <a href="https://github.com/anchore/grype#configuration" class="bare">https://github.com/anchore/grype#configuration</a></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancer_et_arrêter_lanalyse">8.6. Lancer et arrêter l’analyse</h3>
+<div class="paragraph">
+<p>Cliquez sur <strong>Analyser</strong> pour démarrer. Une barre de progression linéaire
+s’affiche pendant l’exécution. Le bouton devient <strong>Stop</strong> pour interrompre.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_interprétation_des_résultats">8.7. Interprétation des résultats</h3>
+<div class="sect3">
+<h4 id="_bannière_de_résumé">8.7.1. Bannière de résumé</h4>
+<div class="paragraph">
+<p>Apparaît une fois l’analyse terminée, avant les onglets de résultats.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Couleur de la bannière</th>
+<th class="tableblock halign-left valign-top">Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fond vert</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Aucune vulnérabilité détectée (ou aucune au-dessus du seuil <code>--fail-on</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fond jaune</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Vulnérabilités détectées de niveau Medium ou Low</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fond orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Au moins une vulnérabilité High</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fond rouge</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Au moins une vulnérabilité Critical</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect3">
+<h4 id="_vue_table">8.7.2. Vue Table</h4>
+<div id="sec-vue-table" class="paragraph">
+<p>La vue Table affiche une barre d’outils de recherche/tri, les filtres par
+sévérité, puis la liste des vulnérabilités :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  [ Rechercher...                        ] [⬇]
+  Filtre : [Critical (1)] [High (2)] [Medium (2)] [Low (0)]  [Tout voir]
+
+  ┌────────────┬──────────────────┬──────────────────┬───────────────┬──────┐
+  │ SÉVÉRITÉ ↕ │ PAQUET ↕         │ VERSION ↕        │ CVE/ID ↕      │ TYPE │
+  ├────────────┼──────────────────┼──────────────────┼───────────────┼──────┤
+  │ CRITICAL   │ openssl          │ 1.1.1k → 1.1.1l  │ CVE-2021-3711 │ rpm  │
+  │ HIGH       │ bash             │ 5.0.17  (no fix) │ CVE-2021-3489 │ rpm  │
+  │ MEDIUM     │ zlib             │ 1.2.11  → 1.2.12 │ CVE-2022-37434│ rpm  │
+  └────────────┴──────────────────┴──────────────────┴───────────────┴──────┘</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>Fusion des doublons visuels</strong> : un même composant peut être détecté à
+plusieurs emplacements distincts dans l’image/le SBOM analysé — par exemple
+une bibliothèque présente à la fois en jar autonome et reshadée (embarquée)
+dans un autre jar — avec exactement la même sévérité, le même CVE, le même
+paquet et la même version. Grype et Trivy remontent alors, à raison, deux
+résultats distincts, mais visuellement identiques dans ce tableau (aucune
+colonne n’affiche le chemin du fichier). Ces lignes sont donc fusionnées en
+une seule, avec un badge <strong>×N</strong> à côté de l’identifiant CVE — survolez-le pour
+voir le nombre d’emplacements réels. Cette fusion s’applique à la bannière
+de synthèse, aux compteurs de sévérité et aux exports (voir ci-dessous) ;
+seule la vue <strong>JSON</strong> (<a href="#sec-vue-json">[sec-vue-json]</a>) reste fidèle à la sortie complète et
+non fusionnée de l’outil.</p>
+</div>
+<div class="paragraph">
+<p><strong>Recherche</strong> : le champ de recherche filtre en temps réel sur le nom du paquet,
+l’identifiant CVE, la version ou le type.</p>
+</div>
+<div class="paragraph">
+<p><strong>Tri</strong> : cliquez sur l’en-tête d’une colonne (SÉVÉRITÉ, PAQUET, VERSION, CVE/ID)
+pour trier dans l’ordre croissant, cliquez à nouveau pour inverser. La flèche ↑↓
+indique la colonne et le sens de tri actifs. Par défaut, les résultats sont triés
+par sévérité décroissante (Critical en premier).</p>
+</div>
+<div class="paragraph">
+<p><strong>Export CSV</strong> : le bouton ⬇ (téléchargement) exporte la liste filtrée en cours
+(tenant compte de la recherche, des filtres sévérité, et déjà fusionnée —
+voir ci-dessus) dans un fichier <code>.csv</code> au format RFC 4180. Colonnes :
+Sévérité, CVE/ID, Paquet, Version installée, Version corrigée, Type,
+Emplacements (nombre d’occurrences fusionnées, <code>1</code> si le composant n’est
+présent qu’à un seul endroit).</p>
+</div>
+<div class="paragraph">
+<p><strong>Export AsciiDoc + PDF</strong> : le bouton ⬥ (à côté de l’export CSV) exporte la
+même liste filtrée dans un rapport AsciiDoc — résumé chiffré (nombre de
+vulnérabilités affichées, décompte par sévérité avec barre de répartition,
+filtre de date appliqué le cas échéant), section <strong>Outils</strong> indiquant la
+version de sbom_generator_gui et celle du scanner (détectées via
+<code>&lt;outil&gt; --version</code> au moment de l’export, donc toujours à jour même si
+l’outil a été mis à jour depuis le dernier scan), puis le tableau détaillé —
+avant de tenter automatiquement sa conversion en PDF via <code>asciidoctor-pdf</code>.
+Si l’outil n’est pas installé, le fichier <code>.adoc</code> reste produit et un
+message l’indique. L’emplacement de sortie est choisi via une boîte de
+dialogue.</p>
+</div>
+<div class="paragraph">
+<p>Le PDF généré reprend les couleurs de l’appli : badges de sévérité (mêmes
+teintes que les badges à l’écran), en-têtes de tableau bleus, barre de
+répartition par sévérité — au lieu du rendu noir et blanc par défaut
+d'`asciidoctor-pdf`.</p>
+</div>
+<div class="paragraph">
+<p><strong>Filtres par sévérité</strong> : cliquez sur un ou plusieurs badges pour n’afficher que
+les vulnérabilités du niveau correspondant. Le bouton <strong>Tout voir</strong> efface les
+filtres actifs. Seuls les badges correspondant à des sévérités présentes dans
+les résultats sont affichés.</p>
+</div>
+<div class="paragraph">
+<p><strong>Filtre par date</strong> : une barre de filtrage temporel se trouve au-dessus de la
+table. Elle permet d’afficher uniquement les CVE publiées ou modifiées dans
+une plage de dates donnée :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  📅 Date CVE : [Publication] [Modification] [La plus récente]
+     Après le : [2024-01-01 ×]   Avant le : [2024-12-31 ×]
+     [✓] Sans date    [Propager aux autres onglets]</pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Champ de date</strong> : sélecteur à trois valeurs — <strong>Publication</strong> (date initiale
+de publication du CVE), <strong>Modification</strong> (dernière mise à jour), <strong>La plus
+récente</strong> (la plus tardive des deux dates disponibles).</p>
+</li>
+<li>
+<p><strong>Après le / Avant le</strong> : chips cliquables ouvrant un calendrier. Un ×
+permet d’effacer chaque borne indépendamment.</p>
+</li>
+<li>
+<p><strong>Sans date</strong> : case à cocher pour inclure les CVE dont le champ de date
+sélectionné est absent ou non renseigné dans les données du scanner. Par
+défaut, ces CVE sont exclues lorsqu’un filtre est actif.</p>
+</li>
+<li>
+<p><strong>Propager aux autres onglets</strong> : copie le filtre en cours vers les deux
+autres onglets CVE (OSV-Scanner et Trivy). Les analyses elles-mêmes ne
+sont pas relancées ; seul l’affichage est filtré.</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Le filtre par date s’applique en post-traitement sur le JSON retourné
+par Grype. Il est indépendant des options de ligne de commande Grype et
+cumulable avec les filtres par sévérité et par recherche textuelle.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>Colonnes :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Badge de sévérité</strong> : libellé coloré (CRITICAL / HIGH / MEDIUM / LOW / NEGLIGIBLE)</p>
+</li>
+<li>
+<p><strong>Paquet</strong> : nom du paquet concerné en gras</p>
+</li>
+<li>
+<p><strong>Versions</strong> : version installée, et version corrigée si disponible (après <code>→</code>).
+La mention <code>(won’t fix)</code> indique que le mainteneur ne prévoit pas de correction.</p>
+</li>
+<li>
+<p><strong>CVE</strong> : identifiant cliquable — un clic copie l’identifiant dans le presse-papiers</p>
+</li>
+<li>
+<p><strong>Type</strong> : type de paquet (<code>rpm</code>, <code>python</code>, <code>deb</code>…)</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_vue_json">8.7.3. Vue JSON</h4>
+<div id="sec-vue-json" class="paragraph">
+<p>Affiche la sortie JSON brute de grype, formatée et indentée. Utile pour
+inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées…).</p>
+</div>
+<div class="paragraph">
+<p>Le bouton 📋 en haut à droite copie l’intégralité du JSON dans le presse-papiers.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_vue_template">8.7.4. Vue Template</h4>
+<div id="sec-vue-template" class="paragraph">
+<p>Affiche le résultat de la génération du fichier template (CSV ou autre format
+personnalisé). Visible uniquement si un fichier template a été configuré
+dans le champ <strong>Template (-t)</strong>.</p>
+</div>
+<div class="paragraph">
+<p>Un hint s’affiche si aucun template n’est configuré ou si l’analyse n’a
+pas encore été lancée.</p>
+</div>
+<div class="paragraph">
+<p>Le bouton 📋 copie la sortie dans le presse-papiers.</p>
+</div>
+</div>
+</div>
+</div>

@@ -236,7 +236,7 @@ L'interface est divisée en deux panneaux séparés par un séparateur vertical.
 
 ----
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  🗒 SBOM Generator                         [🎨] [🌙] [ℹ]                 │
+│  🗒 SBOM Generator                     [❓] [🎨] [🌙] [ℹ]                 │
 ├───────────────────────┬────────────────────────────────────────────────────┤
 │                       │                                                    │
 │   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Fusion][Licences][Visionneuse][Aperçu]│
@@ -277,6 +277,12 @@ composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
 des licences au format AsciiDoc), Visionneuse SBOM (exploration
 interactive d'un fichier SBOM externe) et Aperçu (prévisualisation du
 contenu SBOM).
+
+Le bouton *❓* dans la barre de titre ouvre ce manuel utilisateur directement
+dans l'application (sommaire à gauche, chapitre sélectionné à droite) — à
+ne pas confondre avec les icônes ❓ plus petites présentes sur chaque champ/
+section, qui affichent une infobulle courte au survol plutôt que d'ouvrir
+le manuel complet.
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.

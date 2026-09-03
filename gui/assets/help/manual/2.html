@@ -1,0 +1,59 @@
+
+<h2 id="_vue_densemble_de_linterface">3. Vue d’ensemble de l’interface</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’interface est divisée en deux panneaux séparés par un séparateur vertical.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>┌────────────────────────────────────────────────────────────────────────────┐
+│  🗒 SBOM Generator                         [🎨] [🌙] [ℹ]                 │
+├───────────────────────┬────────────────────────────────────────────────────┤
+│                       │                                                    │
+│   Configuration       │ [Progression][Résultats][Grype][OSV][Trivy][Fusion][Licences][Visionneuse][Aperçu]│
+│   ─────────────────   │ ─────────────────────────────────────────────────  │
+│   ENTRÉE              │                                                    │
+│   [fichier.lst  📂▾]  │   12 / 23  52%    bash-5.1.8-6.el9.x86_64         │
+│   (glisser-déposer)   │   ████████████████░░░░░░░░░░░░                    │
+│                       │                                                    │
+│   SORTIE              │   $ sbom-generator --input …                      │
+│   [sbom        📂▾]   │   Generating CycloneDX…                           │
+│   [x] CycloneDX       │   Resolved bash-5.1.8                             │
+│   [ ] SPDX 2.3        │   SBOM written → sbom.cdx.json  (42.3 KB)         │
+│   [ ] AsciiDoc        │                      [Copier] [Enregistrer]       │
+│   ...                 │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │
+│   OPTIONS             │  ✔ 23 paquets  •  1 fichier SBOM                  │
+│   [Nom document ]     │                                                    │
+│   Concurrence: 4      │                                                    │
+│   [ ] Verbeux         │                                                    │
+│   [ ] Score sbomqs    │                                                    │
+│                       │                                                    │
+│  [▶ Générer SBOM]     │                                                    │
+│  $ sbom-generator …   │                                                    │
+│                       │                                                    │
+└───────────────────────┴────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>Panneau gauche — Configuration</strong> : réglage de toutes les options avant
+le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
+automatiquement à chaque démarrage. La commande CLI équivalente s’affiche
+sous le bouton <strong>▶ Générer le SBOM</strong> et se met à jour en temps réel.</p>
+</div>
+<div class="paragraph">
+<p><strong>Panneau droit — Résultats</strong> : treize onglets — Progression (avec export
+des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
+(synthèse CVE multi-scanners), Grype, OSV-Scanner et Trivy (analyses CVE),
+Qualité SBOM (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
+composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
+(combine plusieurs SBOM en un seul), Licences SBOM (rapport de conformité
+des licences au format AsciiDoc), Visionneuse SBOM (exploration
+interactive d’un fichier SBOM externe) et Aperçu (prévisualisation du
+contenu SBOM).</p>
+</div>
+<div class="paragraph">
+<p>Le bouton <strong>🌙 / ☀</strong> dans la barre de titre bascule entre mode sombre et
+mode clair. Le bouton <strong>🎨</strong> ouvre le sélecteur de couleur de thème.
+Les deux préférences sont sauvegardées.</p>
+</div>
+</div>

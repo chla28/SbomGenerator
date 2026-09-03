@@ -8,6 +8,7 @@ import 'models/sbom_result.dart';
 import 'services/sbom_runner.dart';
 import 'services/settings_service.dart';
 import 'widgets/config_panel.dart';
+import 'widgets/help_viewer.dart';
 import 'widgets/pdf_report.dart' show kGuiVersion;
 import 'widgets/results_panel.dart';
 
@@ -254,6 +255,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'Aide — Manuel utilisateur',
+            onPressed: () => _showHelp(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.palette_outlined),
             tooltip: 'Couleur du thème',
             onPressed: () => _showThemePicker(context),
@@ -299,6 +305,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showHelp(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HelpViewerScreen()),
     );
   }
 

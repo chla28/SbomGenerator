@@ -1,0 +1,111 @@
+
+<h2 id="_onglet_résultats">6. Onglet Résultats</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>L’onglet <strong>Résultats (N)</strong> affiche le nombre de fichiers générés dans son libellé.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ✔  2 fichier(s) SBOM généré(s) — 1 avertissement(s)
+  ┌─────────────────────────────────────────────────────┐
+  │ 📄 sbom.cdx.json                                    │
+  │    /home/user/projet/sbom.cdx.json     [📋] [↗]    │
+  │    42.3 KB                                          │
+  ├─────────────────────────────────────────────────────┤
+  │ 📄 sbom.spdx.json                                   │
+  │    /home/user/projet/sbom.spdx.json    [📋] [↗]    │
+  │    38.1 KB                                          │
+  └─────────────────────────────────────────────────────┘
+
+  ⚠ Avertissements (1)
+  Warning: licence inconnue pour 'mylib-1.2.3'</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_bannière_de_résultat">6.1. Bannière de résultat</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Fond vert</strong> : génération réussie. Le nombre de fichiers et d’avertissements
+est affiché.</p>
+</li>
+<li>
+<p><strong>Fond rouge</strong> : la génération a échoué. Le message d’erreur est affiché
+directement dans la bannière.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fichiers_générés">6.2. Fichiers générés</h3>
+<div class="paragraph">
+<p>Chaque fichier est présenté dans une carte avec :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>son nom (en gras, police monospace)</p>
+</li>
+<li>
+<p>son chemin complet</p>
+</li>
+<li>
+<p>sa taille</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Deux boutons sont disponibles à droite de chaque carte :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">📋</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copie le chemin complet dans le presse-papiers</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">↗</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Ouvre le fichier avec l’application système par défaut (visionneuse JSON, éditeur…)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_score_sbomqs">6.3. Score sbomqs</h3>
+<div class="paragraph">
+<p>Si l’option <strong>Score qualité sbomqs</strong> est cochée et que <code>sbomqs</code> est installé,
+un bloc indigo s’affiche après la liste des fichiers avec la sortie complète
+de <code>sbomqs score</code> :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ── Score sbomqs ──────────────────────────────────
+  sbomqs score sbom.cdx.json
+  Document Name  Format  Spec   Score   Avg
+  sbom.cdx.json  cdx     1.6    8.3/10  8.3</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Le texte est sélectionnable pour copier-coller le score.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_avertissements">6.4. Avertissements</h3>
+<div class="paragraph">
+<p>Les avertissements sont affichés dans un bloc orange replié. Si leur nombre
+dépasse 5, un bouton <strong>Voir N de plus…</strong> permet de les afficher tous.
+Ces avertissements sont non bloquants : les fichiers SBOM ont bien été générés.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_erreur_fatale">6.5. Erreur fatale</h3>
+<div class="paragraph">
+<p>En cas d’échec (code de retour non nul), le message d’erreur apparaît dans
+un bloc rouge sélectionnable pour faciliter le copier-coller.</p>
+</div>
+</div>
+</div>

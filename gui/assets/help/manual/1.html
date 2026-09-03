@@ -1,0 +1,189 @@
+
+<h2 id="_prérequis_installation">2. Prérequis &amp; installation</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_prérequis">2.1. Prérequis</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Composant</th>
+<th class="tableblock halign-left valign-top">Obligatoire</th>
+<th class="tableblock halign-left valign-top">Rôle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-generator</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Oui</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Génération des fichiers SBOM</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>syft</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse d’images OCI (onglet Configuration — outil OCI par défaut)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> (analyse CVE)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse des vulnérabilités CVE (onglet Trivy)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse des vulnérabilités CVE (onglet Grype)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>osv-scanner</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse des vulnérabilités CVE (onglet OSV-Scanner)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse des vulnérabilités CVE (onglet Trivy)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>asciidoctor-pdf</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Conversion automatique en PDF du rapport AsciiDoc (SBOM, ou export de
+vulnérabilités depuis Grype/OSV-Scanner/Trivy)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score de qualité SBOM (option dans Configuration)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="sect3">
+<h4 id="_vérifier_que_les_outils_sont_disponibles">2.1.1. Vérifier que les outils sont disponibles</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator --version
+syft version
+grype version
+osv-scanner --version
+trivy --version
+asciidoctor-pdf --version
+sbomqs version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_syft_optionnel">2.1.2. Installer syft (optionnel)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Anchore
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Vérifier
+syft version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_grype">2.1.3. Installer grype</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Anchore
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Vérifier
+grype version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_osv_scanner_optionnel">2.1.4. Installer osv-scanner (optionnel)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Google
+curl -sSfL \
+  https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Ou via Go (si Go est installé)
+go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+# Vérifier
+osv-scanner --version</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<code>osv-scanner</code> doit être accessible dans le PATH au lancement du GUI.
+Si l’outil est installé via Go dans <code>~/go/bin</code>, ajoutez ce dossier au PATH
+de votre session graphique (<code>~/.profile</code> ou <code>~/.bash_profile</code>).
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_trivy_optionnel">2.1.5. Installer trivy (optionnel)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Aqua Security
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Ou via le gestionnaire de paquets (Fedora/RHEL)
+sudo rpm -ivh https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.rpm
+
+# Vérifier
+trivy --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_asciidoctor_pdf_optionnel">2.1.6. Installer asciidoctor-pdf (optionnel)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">gem install asciidoctor-pdf</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_sbomqs_optionnel">2.1.7. Installer sbomqs (optionnel)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Télécharger la dernière release depuis GitHub
+# https://github.com/interlynk-io/sbomqs/releases
+curl -sSfL https://raw.githubusercontent.com/interlynk-io/sbomqs/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Vérifier
+sbomqs version</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancer_linterface">2.2. Lancer l’interface</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom_generator_gui</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Si le binaire n’est pas dans le PATH, exécutez-le directement :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">/chemin/vers/sbom_generator_gui</code></pre>
+</div>
+</div>
+</div>
+</div>
