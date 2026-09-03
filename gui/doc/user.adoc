@@ -1032,11 +1032,20 @@ présent qu'à un seul endroit).
 
 *Export AsciiDoc + PDF* : le bouton ⬥ (à côté de l'export CSV) exporte la
 même liste filtrée dans un rapport AsciiDoc — résumé chiffré (nombre de
-vulnérabilités affichées, décompte par sévérité, filtre de date appliqué le
-cas échéant) suivi du tableau détaillé — puis tente automatiquement sa
-conversion en PDF via `asciidoctor-pdf`. Si l'outil n'est pas installé, le
-fichier `.adoc` reste produit et un message l'indique. L'emplacement de
-sortie est choisi via une boîte de dialogue.
+vulnérabilités affichées, décompte par sévérité avec barre de répartition,
+filtre de date appliqué le cas échéant), section *Outils* indiquant la
+version de sbom_generator_gui et celle du scanner (détectées via
+`<outil> --version` au moment de l'export, donc toujours à jour même si
+l'outil a été mis à jour depuis le dernier scan), puis le tableau détaillé —
+avant de tenter automatiquement sa conversion en PDF via `asciidoctor-pdf`.
+Si l'outil n'est pas installé, le fichier `.adoc` reste produit et un
+message l'indique. L'emplacement de sortie est choisi via une boîte de
+dialogue.
+
+Le PDF généré reprend les couleurs de l'appli : badges de sévérité (mêmes
+teintes que les badges à l'écran), en-têtes de tableau bleus, barre de
+répartition par sévérité — au lieu du rendu noir et blanc par défaut
+d'`asciidoctor-pdf`.
 
 *Filtres par sévérité* : cliquez sur un ou plusieurs badges pour n'afficher que
 les vulnérabilités du niveau correspondant. Le bouton *Tout voir* efface les
@@ -1589,6 +1598,13 @@ Si la liste dépasse la hauteur disponible, l'ascenseur vertical de l'onglet
 permet de tout parcourir — faites défiler vers le bas à l'intérieur de l'onglet
 Tableau de bord.
 
+NOTE: OSV-Scanner préfixe parfois un CVE par l'origine de l'avis distro (ex.
+`DEBIAN-CVE-2026-13221` pour un paquet Debian) là où Grype et Trivy
+rapportent le même identifiant nu (`CVE-2026-13221`). Le tableau normalise
+automatiquement ce genre de préfixe avant comparaison — la vulnérabilité
+n'apparaît donc qu'une seule fois, sous sa forme CVE nue, au lieu de deux
+lignes distinctes dont une marquée à tort « vue par un seul scanner ».
+
 [[sec-pourquoi-ecarts-scanners]]
 === Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE
 
@@ -1611,6 +1627,15 @@ causes bien distinctes :
   monte à 132/135 (~98 %). Sur les paquets RPM (base OS), où les deux
   outils utilisent nativement l'identifiant CVE, l'accord était déjà direct
   à ~94 % (70 CVE communes sur ~75 de chaque côté).
+* *Autre nomenclature différente, celle-ci normalisée automatiquement* —
+  sur les paquets Debian, OSV-Scanner nomme certains de ses avis
+  `DEBIAN-CVE-xxxx-xxxxx` (origine Debian Security Tracker) là où Grype et
+  Trivy rapportent l'identifiant CVE nu correspondant. Contrairement au cas
+  GHSA↔CVE ci-dessus, le tableau de comparaison du Tableau de bord résout
+  ce préfixe automatiquement (voir <<sec-dashboard-export>>) — sur une image
+  Debian réelle, cela a réduit le nombre de lignes de la comparaison
+  inter-scanners de 200 à 106 (près de la moitié n'étaient que ce doublon
+  de nomenclature).
 * *Écarts réels résiduels (fraîcheur et couverture des bases)* — Grype
   (base Anchore) et Trivy (`trivy-db`) republient leurs bases de
   vulnérabilités à des rythmes et depuis des sources pas parfaitement
@@ -1650,10 +1675,15 @@ Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte un
 rapport reprenant l'intégralité de la vue affichée :
 
 * le résumé global (scanners exécutés, CVE uniques) ;
-* pour chaque scanner : sa répartition par sévérité (ou « Non exécuté » /
-  « Aucune vulnérabilité détectée » selon le cas) ;
+* la section *Outils* : version de sbom_generator_gui et version de chaque
+  scanner exécuté (détectées via `<outil> --version` au moment de l'export,
+  donc toujours à jour même si l'outil a été mis à jour depuis le dernier
+  scan — « indisponible » si l'outil n'est plus dans le `PATH`) ;
+* pour chaque scanner : sa répartition par sévérité avec barre colorée (ou
+  « Non exécuté » / « Aucune vulnérabilité détectée » selon le cas) ;
 * le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
-  présence par outil).
+  présence par outil), avec les CVE préfixés distro déjà normalisés (voir
+  <<sec-pourquoi-ecarts-scanners>>).
 
 Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n'y a ici qu'une seule
 vue de synthèse — pas de lignes filtrées/triées individuellement à exporter.
@@ -1663,7 +1693,9 @@ fichier `.adoc` écrit (emplacement choisi via une boîte de dialogue), la
 conversion en PDF via `asciidoctor-pdf` est tentée automatiquement ; si
 l'outil n'est pas installé, le fichier `.adoc` reste produit et un message
 l'indique — même comportement que l'export des onglets de scan (voir
-<<sec-vue-table>>).
+<<sec-vue-table>>). Le PDF reprend les couleurs du Tableau de bord (badges
+de sévérité, barre de répartition, en-têtes bleus) — voir <<sec-vue-table>>
+pour le détail du thème.
 
 NOTE: Le Tableau de bord se met à jour automatiquement chaque fois qu'une analyse
 est lancée dans un onglet scanner. Aucune action supplémentaire n'est requise.

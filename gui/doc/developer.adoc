@@ -999,6 +999,19 @@ OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ». Aucune résolution
 d'alias GHSA↔CVE n'est effectuée côté GUI :
 le tableau reflète fidèlement le vocabulaire de chaque scanner.
 
+`_crossScannerRows` normalise en revanche un autre cas de nomenclature :
+OSV-Scanner préfixe certains de ses avis Debian par l'origine
+(`DEBIAN-CVE-2026-13221`) là où Grype/Trivy rapportent le CVE nu
+(`CVE-2026-13221`). `_normalizeVulnId(id)` — `RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$')`
+appliquée à chaque ID avant construction des sets/maps `grypeIds`/`osvIds`/
+`trivyIds` (et au calcul de `allIds` dans `DashboardPanel.build()`) — réduit
+`PREFIXE-CVE-xxxx-xxxxx` à `CVE-xxxx-xxxxx`. Motif générique plutôt qu'une
+liste de préfixes en dur : couvre aussi UBUNTU-/ALPINE-/etc. si un scanner
+les produit. Vérifié empiriquement sur une image Debian réelle : 90 des 95
+ID `DEBIAN-CVE-xxxx` d'OSV-Scanner correspondaient à un ID Grype et 94 à un
+ID Trivy une fois le préfixe retiré — 200 lignes de comparaison avant
+normalisation, 106 après.
+
 [[sec-dashboard-export]]
 ===== `_crossScannerRows` / `_exportDashboard` — export AsciiDoc + PDF
 
@@ -1017,15 +1030,18 @@ par `_exportDashboard`, garantissant que le rapport exporté correspond
 exactement au tableau affiché (aucune logique dupliquée entre les deux).
 
 `_exportDashboard(context, {scansRun, uniqueIds, grype, osv, trivy,
-crossRows})` construit le rapport AsciiDoc en trois sections (`== Résumé
-global`, `== Répartition par scanner` avec un `=== <Nom>` par scanner et
-son décompte par sévérité via `DashboardPanel._countByKey` — méthode privée
-statique, accessible car même fichier —, `== Comparaison inter-scanners`
-reprenant `crossRows`), puis suit exactement le même patron que
-`_VulnTableViewState._exportAsciiDoc()` (voir <<sec-vuln-shared>>) :
-écriture du `.adoc` via `FilePicker.saveFile`, tentative de conversion
-`Process.run('asciidoctor-pdf', [path, '-o', pdfPath])`, retour utilisateur
-via `SnackBar` (succès, échec de conversion, ou outil absent).
+crossRows})` construit le rapport AsciiDoc en quatre sections (`== Résumé
+global`, `== Outils` — voir <<sec-pdf-report>> —, `== Répartition par
+scanner` avec un `=== <Nom>` par scanner, sa barre `buildSeverityBarSvg`/
+`svgImageMacro` et son décompte par sévérité via `DashboardPanel._countByKey`
+— méthode privée statique, accessible car même fichier — avec
+`pdfSeverityBadge` sur chaque libellé, `== Comparaison inter-scanners`
+reprenant `crossRows` avec `pdfSeverityBadge` sur la colonne Sévérité), puis
+suit exactement le même patron que `_VulnTableViewState._exportAsciiDoc()`
+(voir <<sec-vuln-shared>>) : écriture du `.adoc` via `FilePicker.saveFile`,
+tentative de conversion via `runAsciidoctorPdf(path, pdfPath)` (voir
+<<sec-pdf-report>>), retour utilisateur via `SnackBar` (succès, échec de
+conversion, ou outil absent).
 
 ==== `widgets/sbom_tree_panel.dart` — Onglet Arborescence SBOM
 
@@ -1559,20 +1575,71 @@ vide :
 * *Export AsciiDoc + PDF* (`Icons.picture_as_pdf_outlined`) — `_exportAsciiDoc()` :
   écrit un rapport AsciiDoc sur `_filtered` (donc après filtres
   sévérité/recherche/date, comme le CSV) — résumé chiffré (décompte par
-  sévérité + filtre de date appliqué le cas échéant) suivi d'un tableau
-  détaillé dont les colonnes sont dérivées de `csvHeader`/`csvRow` (pas de
-  paramètres AsciiDoc dédiés : le CSV et l'AsciiDoc partagent la même
-  description de colonnes). Une fois le `.adoc` écrit, tente automatiquement
-  `Process.run('asciidoctor-pdf', [path, '-o', pdfPath])` — silencieux si
-  l'outil est absent (`catch` générique, message dans le `SnackBar` de
+  sévérité, chaque libellé passé à `pdfSeverityBadge` + barre
+  `buildSeverityBarSvg`/`svgImageMacro`, filtre de date appliqué le cas
+  échéant), section `== Outils` (`pdfToolVersionRow('sbom_generator_gui',
+  kGuiVersion)` puis `pdfToolVersionRow(widget.toolName,
+  await _toolVersionFor(widget.toolName))` — voir <<sec-pdf-report>>) suivi
+  d'un tableau détaillé dont les colonnes sont dérivées de
+  `csvHeader`/`csvRow` (pas de paramètres AsciiDoc dédiés : le CSV et
+  l'AsciiDoc partagent la même description de colonnes ; seule la première
+  cellule — la sévérité — passe par `pdfSeverityBadge` au lieu d'`adocEscape`
+  brut). Une fois le `.adoc` écrit, tente automatiquement
+  `runAsciidoctorPdf(path, pdfPath)` (voir <<sec-pdf-report>>) — silencieux
+  si l'outil est absent (`catch` générique, message dans le `SnackBar` de
   résultat) ou en échec (code retour non nul rapporté, `.adoc` conservé) ;
   même philosophie que `HomeScreen._generatePdf()` (conversion PDF du
-  rapport SBOM principal), en plus compact car il n'y a pas de journal
+  rapport SBOM principal, qui elle n'utilise pas le thème coloré — voir
+  <<sec-pdf-report>>), en plus compact car il n'y a pas de journal
   persistant à alimenter — tout le retour utilisateur passe par le
   `SnackBar`. `adocEscape(s)` échappe uniquement `|` (ambigu en tête de
   cellule AsciiDoc) — plus simple que `csvEscape` car les valeurs exportées
   (sévérité, CVE, nom de paquet, version) ne contiennent ni retour à la
   ligne ni guillemet à échapper en pratique.
+
+[[sec-pdf-report]]
+=== `widgets/pdf_report.dart` — thème et helpers PDF partagés
+
+Habillage visuel commun à `_VulnTableViewState._exportAsciiDoc()`
+(ci-dessus) et `_exportDashboard` (<<sec-dashboard-export>>), pour que les
+deux exports se ressemblent et ressemblent à l'écran plutôt que de produire
+chacun un PDF noir et blanc par défaut :
+
+* `kGuiVersion` — constante de version de la GUI, seul endroit à mettre à
+  jour côté GUI lors d'un bump (avec `gui/pubspec.yaml`) ; `home_screen.dart`
+  (dialogue « À propos ») s'y réfère aussi, au lieu d'un littéral dupliqué.
+* `runAsciidoctorPdf(adocPath, pdfPath)` — écrit le thème YAML
+  (`_kPdfThemeYaml`, `extends: default`, couleurs calquées sur l'appli,
+  rôles `sev-critical`/`sev-high`/`sev-medium`/`sev-low`/`sev-other`) dans
+  le dossier temp système à chaque appel (contenu statique, coût
+  négligeable — évite tout problème de cache si le thème change d'une
+  version à l'autre), puis lance `asciidoctor-pdf` avec
+  `-a pdf-theme=<chemin absolu>`. Pas de `pdf-themesdir` nécessaire (chemin
+  déjà absolu) ; le thème n'est jamais déclaré dans le `.adoc` lui-même.
+* `pdfSeverityBadge(severity)` — rend `[.sev-xxx]#LABEL#` (rôle du thème
+  ci-dessus), utilisable directement comme contenu de cellule de tableau.
+  Seuils identiques à `severityFg`/`severityBg` (ce fichier, plus haut).
+* `buildSeverityBarSvg(countsBySeverity)` / `svgImageMacro(svg)` —
+  reproduisent `_SeverityBar` (`dashboard_panel.dart`) : segments
+  proportionnels Critical/High/Medium/Low/Autre, mêmes couleurs, mêmes
+  coins arrondis. Construite en SVG et embarquée en data URI
+  (`image::data:image/svg+xml;base64,...[]`) plutôt qu'en cellules de
+  tableau à fond coloré : l'attribut AsciiDoc `{set:cellbgcolor:...}`,
+  technique documentée pour colorer une cellule, s'est révélé non honoré
+  par le thème par défaut d'asciidoctor-pdf 2.3.24 lors des tests — le SVG
+  en data URI, lui, ne nécessite aucun fichier temporaire supplémentaire.
+* `grypeVersion()` / `osvScannerVersion()` / `trivyVersion()` — lancent
+  respectivement `grype version`, `trivy --version`, `osv-scanner --version`
+  et extraient le numéro via une regex ancrée en début de ligne (`^Version:`
+  pour grype/trivy — qui ancre aussi bien la première ligne non indentée que
+  la version, sans capturer les versions de bases indentées qui suivent
+  chez trivy —, `^osv-scanner version:` pour osv-scanner). Exécutées au
+  moment de l'export, pas au moment du scan : reflète la version réellement
+  installée même si l'outil a été mis à jour depuis. Retournent `null`
+  (`try`/`catch` générique) si l'outil est absent du `PATH` ou si la sortie
+  ne correspond pas au format attendu — les appelants ne doivent alors pas
+  afficher la ligne "null", d'où `pdfToolVersionRow(label, version)` qui
+  affiche `_indisponible_` en italique dans ce cas.
 
 === `DateFilterBar` / `DateChip`
 
