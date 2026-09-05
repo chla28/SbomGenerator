@@ -82,10 +82,25 @@ que le dépôt est accepté.
 <td class="tableblock halign-left valign-top"><p class="tableblock">Dépendances Python</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/requirements.txt</code></p></td>
 </tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Archive Java (<code>.jar</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/chemin/vers/lib-1.2.3.jar</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Manifeste / lockfile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>go.sum</code>, <code>go.mod</code>, <code>package-lock.json</code>, <code>yarn.lock</code>, <code>pom.xml</code>,
+<code>pubspec.lock</code>, <code>pubspec.yaml</code></p></td>
+</tr>
 </tbody>
 </table>
 <div class="paragraph">
-<p>Un seul fichier d’entrée peut contenir des lignes de types différents.</p>
+<p>Un seul fichier d’entrée peut contenir des lignes de types différents. Un
+chemin pointant directement vers une archive ou un manifeste unique (plutôt
+que vers un fichier liste) est également accepté ; un répertoire est scanné
+récursivement pour tous ces types. Pour Dart/Flutter, <code>pubspec.lock</code> fournit
+les versions résolues et la fermeture transitive complète (les dépendances de
+développement sont exclues) ; <code>pubspec.yaml</code> ne fournit que les dépendances
+directes de la section <code>dependencies:</code>.</p>
 </div>
 <div class="admonitionblock note">
 <table>

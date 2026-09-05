@@ -1,6 +1,6 @@
 # sbom_generator
 
-Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn, Maven), d'archives génériques, ou d'une **image de conteneur** (OCI).
+Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn, Maven, Dart/Flutter), d'archives génériques, ou d'une **image de conteneur** (OCI).
 
 ---
 
@@ -28,6 +28,8 @@ Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paq
 | Paquets npm `package-lock.json` | `/opt/webapp/package-lock.json` (v1/v2/v3) | *(aucun)* |
 | Paquets yarn `yarn.lock` | `/opt/webapp/yarn.lock` (classique et Berry) | *(aucun)* |
 | Dépendances Maven `pom.xml` | `/opt/javaapp/pom.xml` (scope compile) | *(aucun)* |
+| Lockfile Dart/Flutter `pubspec.lock` | `/opt/flutterapp/pubspec.lock` (versions résolues + transitives) | *(aucun)* |
+| Manifeste Dart/Flutter `pubspec.yaml` | `/opt/flutterapp/pubspec.yaml` (dépendances directes) | *(aucun)* |
 
 Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangés librement dans un même fichier ou dossier.
 
@@ -49,9 +51,12 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 - Paquet Debian : extraction du fichier `control` via `dpkg-deb -f`, parsing RFC 822
 - Archive `.jar` : coordonnées Maven lues via `pom.properties` embarqué, sinon `META-INF/MANIFEST.MF` (Bundle-SymbolicName…), sinon déduites du nom de fichier ; un jar « shaded »/uber-jar embarquant des dépendances relocalisées (chacune avec son propre `pom.properties`) produit un composant par dépendance en plus du jar lui-même
 - Requirements.txt : parsing pur Dart (PEP 503), expansion en `WheelPackage` avant la boucle principale
-- Go (`go.sum`/`go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`) : parsing pur Dart, expansion en `WheelPackage` avant la boucle principale (même mécanisme que requirements.txt, cardinalité 1 fichier → N paquets)
+- Go (`go.sum`/`go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`), Dart/Flutter (`pubspec.lock`/`pubspec.yaml`) : parsing pur Dart, expansion en `WheelPackage` avant la boucle principale (même mécanisme que requirements.txt, cardinalité 1 fichier → N paquets)
+  - `pubspec.lock` : versions résolues + fermeture transitive complète ; toutes les sources (`hosted`, `git`, `path`, `sdk`). Les dépendances `dependency: "direct dev"` sont exclues (leurs transitives exclusives restent, faute d'information dans le lockfile).
+  - `pubspec.yaml` : dépendances directes de la section `dependencies:` uniquement (la section `dev_dependencies:` est ignorée) ; version déduite de la contrainte quand elle est univoque (`^1.2.3`, `1.2.3`, `>=1.2.3`), sinon vide.
+  - Dans un scan de dossier, si `pubspec.lock` et `pubspec.yaml` coexistent, seul le `.lock` est retenu.
 - Image OCI (`--image`) : analyse via `syft`, `trivy` ou `skopeo` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
-- Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
+- Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`, `pubspec.yaml`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
 **Formats de sortie :**
 
@@ -198,6 +203,10 @@ sbom_generator scan --sbom sbom.cdx.json --scanner all --cve-after 2024-01-01
 # --input pointant directement vers un .jar unique
 ./sbom_generator -i /opt/app/libs/my-lib-1.2.3.jar -o sbom.cdx.json
 
+# --input pointant directement vers un manifeste unique (lockfile Dart/Flutter,
+# requirements.txt, go.sum, package-lock.json, pom.xml…)
+./sbom_generator -i /opt/flutterapp/pubspec.lock -o sbom.cdx.json
+
 # Traitement de 8 entrées en parallèle (liste mixte RPM + .deb + .whl + .txt)
 ./sbom_generator -i packages.txt -c 8 -o sbom.cdx.json
 
@@ -333,6 +342,7 @@ sbom_generator/
 │   ├── npm_parser.dart          # Parsing package-lock.json v1/v2/v3 (pur Dart)
 │   ├── yarn_parser.dart         # Parsing yarn.lock classique et Berry (pur Dart)
 │   ├── maven_parser.dart        # Parsing pom.xml (pur Dart, extraction XML légère)
+│   ├── pubspec_parser.dart      # Parsing pubspec.lock / pubspec.yaml (pur Dart)
 │   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo)
 │   │                            #   skopeo : RPM, dpkg, APK, Maven JARs, PyPI, npm
 │   ├── archive_helpers.dart     # Helpers partagés tar/zip (parseFilename, identifyLicense)
@@ -375,4 +385,5 @@ sbom_generator/
 | Java Maven (`.jar` autonome, `pom.xml`, ou OCI via skopeo) | `pkg:maven/<groupId>/<artifactId>@<ver>` | `pkg:maven/org.yaml/snakeyaml@2.0` |
 | Go (`go.sum` / `go.mod`) | `pkg:golang/<module>@<ver>` | `pkg:golang/github.com/gorilla/mux@1.8.1` |
 | npm / yarn (`package-lock.json`, `yarn.lock`, ou OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
+| Dart/Flutter (`pubspec.lock` / `pubspec.yaml`) | `pkg:pub/<name>@<ver>` | `pkg:pub/provider@6.1.2` |
 | Image de conteneur (`--image`) | PURL fourni par l'outil d'analyse (syft/trivy), ou reconstruit selon l'écosystème détecté | `pkg:apk/alpine/musl@1.2.4-r2` |

@@ -1377,6 +1377,7 @@ class _InputTypeLegend extends StatelessWidget {
             ('Paquet Debian', '/path/to/package.deb'),
             ('Archive Java', '/path/to/lib.jar'),
             ('requirements', '/path/to/requirements.txt'),
+            ('Manifeste/lock', 'go.sum, package-lock.json, pom.xml, pubspec.lock…'),
           ])
             Padding(
               padding: const EdgeInsets.only(top: 2),

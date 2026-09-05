@@ -252,6 +252,7 @@ class SbomReader {
     if (purl.startsWith('pkg:deb/')) return 'deb';
     if (purl.startsWith('pkg:pypi/')) return 'pypi';
     if (purl.startsWith('pkg:npm/')) return 'npm';
+    if (purl.startsWith('pkg:pub/')) return 'pub';
     if (purl.startsWith('pkg:golang/')) return 'golang';
     if (purl.startsWith('pkg:maven/')) return 'maven';
     if (purl.startsWith('pkg:cargo/')) return 'cargo';

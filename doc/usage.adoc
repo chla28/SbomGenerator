@@ -9,7 +9,7 @@
 :docdate: 2026-06-30
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
-Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml) et *images OCI* (via syft, trivy ou skopeo). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml), *paquets Dart/Flutter* (pubspec.lock/pubspec.yaml) et *images OCI* (via syft, trivy ou skopeo). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
 Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
 
 == Prérequis
@@ -364,6 +364,14 @@ un composant par dépendance, en plus du jar lui-même.
 |Dépendances Maven (`pom.xml`)
 |`/opt/myapp/pom.xml`
 |Parseur pur Dart — scope compile/provided, hors test et dependencyManagement ; PURL `pkg:maven/…`
+
+|Lockfile Dart/Flutter (`pubspec.lock`)
+|`/opt/flutterapp/pubspec.lock`
+|Parseur pur Dart — versions résolues + fermeture transitive, toutes sources (hosted/git/path/sdk), hors `direct dev` ; PURL `pkg:pub/…`
+
+|Manifeste Dart/Flutter (`pubspec.yaml`)
+|`/opt/flutterapp/pubspec.yaml`
+|Parseur pur Dart — section `dependencies:` seulement (hors `dev_dependencies:`) ; PURL `pkg:pub/…`
 |===
 
 === Règles de syntaxe
@@ -375,13 +383,16 @@ un composant par dépendance, en plus du jar lui-même.
 === Raccourci : passer directement une archive unique
 
 `--input` accepte aussi directement le chemin d'une archive ou d'un paquet
-unique (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`, `.jar`), sans
-passer par un fichier liste intermédiaire :
+unique (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`, `.jar`), ou
+d'un manifeste unique reconnu par son nom exact (`requirements.txt`, `go.sum`,
+`go.mod`, `package-lock.json`, `yarn.lock`, `pom.xml`, `pubspec.lock`,
+`pubspec.yaml`), sans passer par un fichier liste intermédiaire :
 
 [source,shell]
 ----
 sbom_generator -i /opt/3PP/myapp-2.0.0-linux-amd64.zip -o sbom
 sbom_generator -i /opt/libs/my-lib-1.2.3.jar -o sbom
+sbom_generator -i /opt/flutterapp/pubspec.lock -o sbom
 ----
 
 Pour tout autre chemin de fichier, `--input` reste interprété comme un
@@ -394,7 +405,9 @@ Si `--input` pointe vers un **dossier**, celui-ci est scanné récursivement
 tableau ci-dessus : `.rpm`, `.deb`, `.whl`, `.jar`, `.zip`,
 `.tar`/`.tar.gz`/`.tgz`, ainsi que les manifestes reconnus par leur nom exact
 (`requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`,
-`yarn.lock`). Un `.txt` qui ne s'appelle pas exactement `requirements.txt`
+`yarn.lock`, `pubspec.lock`, `pubspec.yaml`). Si `pubspec.lock` et
+`pubspec.yaml` coexistent dans un même dossier, seul le `.lock` est retenu.
+Un `.txt` qui ne s'appelle pas exactement `requirements.txt`
 n'est donc pas retenu, contrairement au fichier liste où n'importe quel
 `.txt` (hors `.whl`) est traité comme un fichier de requirements.
 
@@ -1079,6 +1092,7 @@ sbom_generator/
 │   ├── npm_parser.dart            # Lecture package-lock.json v1/v2/v3 (pur Dart)
 │   ├── yarn_parser.dart           # Lecture yarn.lock v1 et v2+ Berry (pur Dart)
 │   ├── maven_parser.dart          # Lecture pom.xml (pur Dart, extraction XML légère)
+│   ├── pubspec_parser.dart        # Lecture pubspec.lock / pubspec.yaml (pur Dart)
 │   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo)
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée

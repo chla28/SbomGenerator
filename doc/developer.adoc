@@ -22,6 +22,8 @@ Fichier d'entrée (.txt)           Image OCI (--image)
         ├─ package-lock  ─► NpmParser       (pur Dart, pré-expansion)
         ├─ yarn.lock     ─► YarnParser      (pur Dart, pré-expansion)
         ├─ pom.xml       ─► MavenParser     (pur Dart, pré-expansion)
+        ├─ pubspec.lock  ─► PubspecParser   (pur Dart, pré-expansion)
+        ├─ pubspec.yaml  ─► PubspecParser   (pur Dart, pré-expansion)
         │                                  │
         ▼                                  ▼
 ┌────────────────────────────────────────────────────────────┐
@@ -76,8 +78,8 @@ Parser Parser Parser Parser Parser             Parser
 
 Tous les générateurs travaillent sur `List<Package>` — la classe abstraite
 commune à `RpmPackage`, `WheelPackage`, `DebPackage` et `OciPackage`.
-`WheelPackage` est également réutilisé pour Go, npm, yarn et Maven via le
-champ `packageType`.
+`WheelPackage` est également réutilisé pour Go, npm, yarn, Maven et
+Dart/Flutter (`packageType='pub'`) via le champ `packageType`.
 
 [[sec-models]]
 == `lib/models.dart` — Hiérarchie de types
@@ -225,6 +227,12 @@ Le comportement dépend de `packageType` :
 |`pkg:maven/<groupId>/<artifactId>@<ver>`
 |`pkg-maven-`
 |`SPDXRef-maven-`
+
+|`'pub'`
+|`pubspec.lock` ou `pubspec.yaml` (via `PubspecParser`)
+|`pkg:pub/<name>@<ver>`
+|`pkg-pub-`
+|`SPDXRef-pub-`
 
 |`'cargo'`
 |OCI / lockfiles Rust
@@ -1395,6 +1403,10 @@ for (final ref in packageRefs) {
     preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
   } else if (_isPomXml(ref)) {
     preloadedPackages.addAll(mavenParser.parsePomXml(ref));
+  } else if (_isPubspecLock(ref)) {
+    preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref));
+  } else if (_isPubspecYaml(ref)) {
+    preloadedPackages.addAll(pubspecParser.parsePubspecYaml(ref));
   } else {
     filteredRefs.add(ref);
   }
@@ -1413,6 +1425,8 @@ bool _isGoMod(String r)        => r.endsWith('go.mod');
 bool _isPackageLock(String r)  => r.endsWith('package-lock.json');
 bool _isYarnLock(String r)     => r.endsWith('yarn.lock');
 bool _isPomXml(String r)       => r.endsWith('pom.xml');
+bool _isPubspecLock(String r)  => r.endsWith('pubspec.lock');
+bool _isPubspecYaml(String r)  => r.endsWith('pubspec.yaml');
 ----
 
 [NOTE]
@@ -1585,6 +1599,42 @@ if (_packageType == 'maven') {
 
 Exemple : `org.slf4j:slf4j-api@2.0.7` → `pkg:maven/org.slf4j/slf4j-api@2.0.7`
 
+== `lib/pubspec_parser.dart` — Paquets Dart/Flutter
+
+Parseur *pur Dart* (sans dépendance `yaml`) pour `pubspec.lock` et
+`pubspec.yaml`. Retourne `List<WheelPackage>` avec `packageType: 'pub'`
+(PURL `pkg:pub/<name>@<ver>`).
+
+=== `parsePubspecLock(String path)`
+
+Lecture ligne à ligne du bloc `packages:` (indentation stable à 2 espaces
+générée par `pub`). Pour chaque paquet :
+
+* `dependency:` — `direct dev` → **exclu**. Les transitives tirées uniquement
+  par une dépendance de dev ne sont pas distinguables dans le lockfile : elles
+  restent incluses.
+* `source:` — `hosted` | `git` | `path` | `sdk` : toutes retenues.
+* `version:` — version résolue (`"0.0.0"` pour les pseudo-paquets `sdk`).
+* `description.name` (hosted) → nom du paquet ; sinon la clé du bloc.
+* `description.sha256` (hosted) → `WheelPackage.sha256Header`.
+* `description.url` → homepage (`https://pub.dev/packages/<name>` pour
+  pub.dev, `<registre>/packages/<name>` pour un registre privé, l'URL du dépôt
+  pour `git`).
+
+=== `parsePubspecYaml(String path)`
+
+Lit uniquement la section `dependencies:` (la section `dev_dependencies:` et
+`dependency_overrides:` sont ignorées). La contrainte de version est réduite à
+une version unique quand c'est univoque (`^1.2.3`, `1.2.3`, `>=1.2.3` →
+`1.2.3`) ; une plage (`>=1.0.0 <2.0.0`) ou `any` donne une version vide.
+
+=== Priorité lock / yaml
+
+Dans un scan de dossier, si `pubspec.lock` et `pubspec.yaml` coexistent au
+même endroit, `bin/sbom_generator.dart` ne retient que le `.lock` (versions
+résolues + fermeture transitive). En fichier liste, les deux sont honorés tels
+que listés.
+
 == `lib/csv_generator.dart` — Export CSV
 
 Génère un fichier CSV (RFC 4180) à partir d'une `List<Package>`.
@@ -1702,8 +1752,13 @@ if (inputPath != null) {
       }
     }
     found.sort();
+    // Si pubspec.lock et pubspec.yaml coexistent au même endroit, on ne
+    // garde que le .lock (versions résolues + fermeture transitive).
     packageRefs = found;
-  } else if (_isSingleArchiveInput(inputPath)) {
+  } else if (_isSingleArchiveInput(inputPath) ||
+      _isSupportedPackageFile(inputPath)) {
+    // Archive/paquet/manifeste unique (nom exact pour les manifestes) :
+    // pubspec.lock, requirements.txt, go.sum, pom.xml…
     packageRefs = [inputPath];
   } else {
     try {
@@ -1725,7 +1780,8 @@ actionnable au lieu d'une stack trace brute.
 `_isSupportedPackageFile()` est volontairement plus stricte que le fichier
 liste pour les manifestes : elle exige un nom de fichier *exact*
 (`requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`,
-`yarn.lock`) plutôt qu'une extension générique (`*.txt` par ex.), pour éviter
+`yarn.lock`, `pubspec.lock`, `pubspec.yaml`) plutôt qu'une extension générique
+(`*.txt` par ex.), pour éviter
 qu'un `README.txt` ou un `notes.txt` traînant dans l'arborescence scannée soit
 pris à tort pour un fichier de requirements. Le fichier liste, lui, continue
 d'accepter n'importe quel `.txt` (hors `.whl`) via `_isRequirements()` — la
@@ -2909,7 +2965,8 @@ main()
   │     ├── GoParser.parseGoSum/parseGoMod() → preloadedPackages [go.sum/go.mod]
   │     ├── NpmParser.parsePackageLock()     → preloadedPackages [package-lock.json]
   │     ├── YarnParser.parseYarnLock()       → preloadedPackages [yarn.lock]
-  │     └── MavenParser.parsePomXml()        → preloadedPackages [pom.xml]
+  │     ├── MavenParser.parsePomXml()        → preloadedPackages [pom.xml]
+  │     └── PubspecParser.parsePubspec{Lock,Yaml}() → preloadedPackages [pubspec.*]
   ├── [indexation --rpm-dir]                  [si --rpm-dir spécifié]
   │     └── dir.list(recursive: true) → rpmExactIndex + rpmNameIndex
   ├── Process.run('<ociTool>', ['--version'])  [si --image fourni]
@@ -3008,6 +3065,11 @@ des types syft/trivy, construction PURL par écosystème, extraction OS de base
 |extraction de base, nom `groupId:artifactId`, scope test/system,
 `dependencyManagement`, PURL, fichier inexistant
 
+|`test/unit/pubspec_parser_test.dart`
+|8
+|`pubspec.lock` (hosted/git/path/sdk, sha256, exclusion `direct dev`,
+registre privé), `pubspec.yaml` (hors `dev_dependencies:`), PURL, erreurs
+
 |`test/unit/jar_parser_test.dart`
 |14
 |identité propre vs dépendances relocalisées (uber-jar), repli
@@ -3095,7 +3157,7 @@ sans faire échouer la suite.
   certains tests d'intégration se sautent proprement selon l'environnement)
 * [ ] Test sur les 5 archives 3PP (nom, version, arch, licence corrects)
 * [ ] Test avec liste mixte RPM + .whl + .tar.gz + .zip + .deb + .jar + requirements.txt + `--image`
-* [ ] Test avec manifestes Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
+* [ ] Test avec manifestes Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`), Dart/Flutter (`pubspec.lock`, `pubspec.yaml`)
 * [ ] Test sous-commande `convert` : CycloneDX → SPDX, SPDX → CycloneDX, tous → CSV
 * [ ] Test sous-commande `licenses` : regroupement, avertissement copyleft, paquets sans licence
 * [ ] Test sous-commande `validate` : fichier valide, invalide, strict mode

@@ -335,9 +335,22 @@ Le fichier doit contenir *un élément par ligne*. Les types acceptés sont :
 
 |Dépendances Python
 |`/chemin/vers/requirements.txt`
+
+|Archive Java (`.jar`)
+|`/chemin/vers/lib-1.2.3.jar`
+
+|Manifeste / lockfile
+|`go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pom.xml`,
+`pubspec.lock`, `pubspec.yaml`
 |===
 
-Un seul fichier d'entrée peut contenir des lignes de types différents.
+Un seul fichier d'entrée peut contenir des lignes de types différents. Un
+chemin pointant directement vers une archive ou un manifeste unique (plutôt
+que vers un fichier liste) est également accepté ; un répertoire est scanné
+récursivement pour tous ces types. Pour Dart/Flutter, `pubspec.lock` fournit
+les versions résolues et la fermeture transitive complète (les dépendances de
+développement sont exclues) ; `pubspec.yaml` ne fournit que les dépendances
+directes de la section `dependencies:`.
 
 NOTE: Le champ *Fichier d'entrée* devient optionnel si une *Image OCI* est
 spécifiée dans la section suivante.

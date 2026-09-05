@@ -25,6 +25,7 @@ import 'package:sbom_generator/go_parser.dart';
 import 'package:sbom_generator/npm_parser.dart';
 import 'package:sbom_generator/yarn_parser.dart';
 import 'package:sbom_generator/maven_parser.dart';
+import 'package:sbom_generator/pubspec_parser.dart';
 import 'package:sbom_generator/csv_generator.dart';
 import 'package:sbom_generator/sbom_reader.dart';
 import 'package:sbom_generator/license_report_generator.dart';
@@ -93,6 +94,7 @@ Future<void> main(List<String> arguments) async {
           '  • a path to a go.sum or go.mod file\n'
           '  • a path to a package-lock.json or yarn.lock file\n'
           '  • a path to a pom.xml file\n'
+          '  • a path to a pubspec.lock or pubspec.yaml file\n'
           'If --input is a directory, it is scanned recursively for all of\n'
           'the file types above (requires unzip for .jar).\n'
           'Optional when --image is provided.',
@@ -339,6 +341,16 @@ Future<void> main(List<String> arguments) async {
         }
       }
       found.sort();
+      // Dans un même dossier, pubspec.lock (versions résolues + fermeture
+      // transitive) prime sur pubspec.yaml (contraintes directes seulement).
+      final pubspecLockDirs = found
+          .where((p) => p.endsWith('/pubspec.lock'))
+          .map((p) => p.substring(0, p.length - 'pubspec.lock'.length))
+          .toSet();
+      found.removeWhere((p) =>
+          p.endsWith('/pubspec.yaml') &&
+          pubspecLockDirs
+              .contains(p.substring(0, p.length - 'pubspec.yaml'.length)));
       packageRefs = found;
       if (verbose) {
         print('${found.length} fichier(s) de paquet trouvé(s) dans $inputPath.');
@@ -347,9 +359,10 @@ Future<void> main(List<String> arguments) async {
         _err('Aucun paquet reconnu dans le dossier $inputPath.');
         exit(1);
       }
-    } else if (_isSingleArchiveInput(inputPath)) {
-      // --input pointe directement vers une archive/paquet unique
-      // (et non vers un fichier liste) : on l'utilise telle quelle.
+    } else if (_isSingleArchiveInput(inputPath) ||
+        _isSupportedPackageFile(inputPath)) {
+      // --input pointe directement vers une archive/un paquet/un manifeste
+      // unique (et non vers un fichier liste) : on l'utilise tel quel.
       packageRefs = [inputPath];
     } else {
       List<String> lines;
@@ -407,6 +420,7 @@ Future<void> main(List<String> arguments) async {
   final npmParser = NpmParser();
   final yarnParser = YarnParser();
   final mavenParser = MavenParser();
+  final pubspecParser = PubspecParser();
   final preloadedPackages = <Package>[];
   final filteredRefs = <String>[];
   for (final ref in packageRefs) {
@@ -422,6 +436,10 @@ Future<void> main(List<String> arguments) async {
       preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
     } else if (_isPomXml(ref)) {
       preloadedPackages.addAll(mavenParser.parsePomXml(ref));
+    } else if (_isPubspecLock(ref)) {
+      preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref));
+    } else if (_isPubspecYaml(ref)) {
+      preloadedPackages.addAll(pubspecParser.parsePubspecYaml(ref));
     } else {
       filteredRefs.add(ref);
     }
@@ -956,6 +974,8 @@ bool _isGoMod(String ref) => ref.endsWith('go.mod');
 bool _isPackageLock(String ref) => ref.endsWith('package-lock.json');
 bool _isYarnLock(String ref) => ref.endsWith('yarn.lock');
 bool _isPomXml(String ref) => ref.endsWith('pom.xml');
+bool _isPubspecLock(String ref) => ref.endsWith('pubspec.lock');
+bool _isPubspecYaml(String ref) => ref.endsWith('pubspec.yaml');
 
 /// True si [path] est un fichier reconnu par le scan récursif d'un dossier
 /// passé en --input (voir la lecture de packageRefs plus haut). Contrairement
@@ -975,7 +995,9 @@ bool _isSupportedPackageFile(String path) {
       base == 'go.sum' ||
       base == 'go.mod' ||
       base == 'package-lock.json' ||
-      base == 'yarn.lock';
+      base == 'yarn.lock' ||
+      base == 'pubspec.lock' ||
+      base == 'pubspec.yaml';
 }
 
 void _err(String msg) => stderr.writeln('Error: $msg');
@@ -2084,6 +2106,8 @@ Input file format (--input) :
         - Generic archive (no metadata)   → PURL pkg:generic/…
     • Debian: path to a .deb file
     • requirements.txt: path to a pip requirements file
+    • Manifests/lockfiles: go.sum, go.mod, package-lock.json, yarn.lock,
+      pom.xml, pubspec.lock, pubspec.yaml
 
 OCI image formats (--image) :
     • Registre  : nginx:latest  ubuntu:22.04  myregistry.io/app@sha256:…

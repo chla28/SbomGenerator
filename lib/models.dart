@@ -221,6 +221,7 @@ class WheelPackage extends Package {
     final n = Uri.encodeComponent(name.toLowerCase());
     return switch (_packageType) {
       'npm' => version.isNotEmpty ? 'pkg:npm/$n@$v' : 'pkg:npm/$n',
+      'pub' => version.isNotEmpty ? 'pkg:pub/$n@$v' : 'pkg:pub/$n',
       'cargo' => version.isNotEmpty ? 'pkg:cargo/$n@$v' : 'pkg:cargo/$n',
       'apk' => version.isNotEmpty ? 'pkg:apk/alpine/$n@$v' : 'pkg:apk/alpine/$n',
       _ => version.isNotEmpty ? 'pkg:generic/$n@$v' : 'pkg:generic/$n',
@@ -233,6 +234,7 @@ class WheelPackage extends Package {
       'pypi' => 'pkg-pypi',
       'golang' => 'pkg-golang',
       'npm' => 'pkg-npm',
+      'pub' => 'pkg-pub',
       'maven' => 'pkg-maven',
       'cargo' => 'pkg-cargo',
       _ => 'pkg-src',
@@ -246,6 +248,7 @@ class WheelPackage extends Package {
       'pypi' => 'SPDXRef-pypi',
       'golang' => 'SPDXRef-golang',
       'npm' => 'SPDXRef-npm',
+      'pub' => 'SPDXRef-pub',
       'maven' => 'SPDXRef-maven',
       'cargo' => 'SPDXRef-cargo',
       _ => 'SPDXRef-src',
