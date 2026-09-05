@@ -3,6 +3,7 @@ example
 bin/sbom_generator.exe
 bin/sbom_generator
 dist/
+build/
 .dart_tool/
 tmp/
 
