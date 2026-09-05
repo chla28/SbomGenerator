@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # build-dist.sh — Compile et package SBOM Generator pour Linux
 # Produit : dist/sbom_generator-VERSION-linux-ARCH.tar.gz
-#             (inclut un SBOM CycloneDX des dépendances runtime : sbom.cdx.json)
+#             (inclut un SBOM CycloneDX : dépendances runtime distro + arbre
+#              des dépendances Dart/Flutter — sbom.cdx.json)
 #           dist/rpmbuild/RPMS/  (avec --rpm)
 #             + dist/sbom_generator-VERSION-linux-ARCH-rpms.cdx.json
 #               (SBOM CycloneDX des RPM produits ; à côté, pas dans l'archive,
@@ -129,14 +130,14 @@ cp "${SCRIPT_DIR}/uninstall.sh" "${DIST_DIR}/"
 chmod +x "${DIST_DIR}/install.sh" "${DIST_DIR}/uninstall.sh"
 echo "  ✓ install.sh / uninstall.sh"
 
-# SBOM (CycloneDX) des dépendances runtime du GUI, alignées sur les
+# SBOM (CycloneDX) : dépendances runtime distro du GUI, alignées sur les
 # `Requires` du sous-paquet gui dans sbom_generator.spec (branche moderne
 # gtk4/libsecret — Fedora 44, RHEL 9/10, les seules cibles couvertes par
-# build-rpm-mock.sh). Généré avec le binaire tout juste compilé ci-dessus
-# (pas un `sbom-generator` du PATH) : la version packagée s'auto-décrit
-# elle-même, sans dépendre d'une installation préalable sur la machine de
-# build. Le CLI est un binaire Dart statique, sans dépendance runtime à
-# déclarer.
+# build-rpm-mock.sh) + arbre des dépendances Dart/Flutter (tous les
+# pubspec.lock du projet : CLI à la racine, GUI dans gui/). Généré avec le
+# binaire tout juste compilé ci-dessus (pas un `sbom-generator` du PATH) :
+# la version packagée s'auto-décrit elle-même, sans dépendre d'une
+# installation préalable sur la machine de build.
 SBOM_INPUT="$(mktemp)"
 cat > "$SBOM_INPUT" <<'PKGS'
 fontconfig
@@ -144,10 +145,12 @@ mesa-libGL
 gtk4
 libsecret
 PKGS
+find "$PROJECT_DIR" -name pubspec.lock \
+  -not -path '*/build/*' -not -path '*/.dart_tool/*' | sort >> "$SBOM_INPUT"
 if "${DIST_DIR}/bin/sbom-generator" -i "$SBOM_INPUT" -f cyclonedx \
      -o "${DIST_DIR}/sbom.cdx.json" \
-     -n "sbom_generator-${VERSION}-runtime-deps" 2>&1 | sed 's/^/  /'; then
-  echo "  ✓ sbom.cdx.json (SBOM CycloneDX, dépendances runtime)"
+     -n "${DIST_NAME}-sbom" 2>&1 | sed 's/^/  /'; then
+  echo "  ✓ sbom.cdx.json (SBOM CycloneDX : deps runtime + arbre pub)"
 else
   echo "  ⚠  Échec de la génération du SBOM — le packaging continue sans." >&2
 fi
@@ -201,7 +204,7 @@ if [[ "$BUILD_RPM" == true ]]; then
     RPM_LIST="$(mktemp)"
     find "${RPM_TOPDIR}/RPMS" -name "*.rpm" | sort > "$RPM_LIST"
     if "${DIST_DIR}/bin/sbom-generator" -i "$RPM_LIST" -f cyclonedx \
-         -o "$RPM_SBOM" -n "sbom_generator-${VERSION}-rpms" 2>&1 \
+         -o "$RPM_SBOM" -n "${DIST_NAME}-rpms" 2>&1 \
          | sed 's/^/  /'; then
       echo "  ✓ $(realpath --relative-to="${PROJECT_DIR}" "$RPM_SBOM")"
     else
@@ -217,7 +220,7 @@ echo "✅ Distribution prête !"
 echo ""
 echo "  dist/${DIST_NAME}.tar.gz (${TOTAL_SIZE})"
 if [[ -f "${DIST_DIR}/sbom.cdx.json" ]]; then
-  echo "    └─ inclut sbom.cdx.json (SBOM CycloneDX, dépendances runtime)"
+  echo "    └─ inclut sbom.cdx.json (SBOM CycloneDX : deps runtime + arbre pub)"
 fi
 if [[ "$BUILD_RPM" == true ]]; then
   find "${PROJECT_DIR}/dist/rpmbuild/RPMS" -name "*.rpm" 2>/dev/null | sort \
