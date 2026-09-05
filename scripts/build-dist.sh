@@ -85,6 +85,10 @@ echo ""
 # ── GUI : flutter build linux --release ─────────────────────────────────────
 echo "▶ Build du GUI Flutter (release)…"
 cd gui
+# `flutter clean` d'abord : le cache CMake de gui/build/ mémorise le chemin
+# absolu du projet et fait échouer le build si l'arborescence a été déplacée
+# ou clonée ailleurs ("CMakeCache.txt directory ... is different").
+flutter clean 2>&1 | sed 's/^/  /'
 flutter build linux --release 2>&1 \
   | grep -E "^\s*(✓|Building|error|warning|▶)" | sed 's/^/  /'
 cp -r build/linux/x64/release/bundle/. "${DIST_DIR}/gui/"
