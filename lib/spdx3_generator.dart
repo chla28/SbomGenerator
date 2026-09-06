@@ -20,6 +20,10 @@ class Spdx3Generator {
     /// distinct des paquets applicatifs — même justification que côté
     /// CycloneDX (voir `CycloneDxGenerator.generate`).
     OsInfo? osInfo,
+
+    /// SDK/toolchain de build (`{'flutter': '3.47.2', 'dart': '3.9.0'}`),
+    /// ajouté au graphe comme éléments `Tool` référencés par `createdBy`.
+    Map<String, String> sdkTools = const {},
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
     final base = 'https://sbom.local/spdx3/${generateUuidV4()}';
@@ -27,6 +31,9 @@ class Spdx3Generator {
     final docId = base;
     final ciId = '$base#creationInfo';
     final toolId = '$base#tool-sbom_generator';
+    final sdkToolIds = {
+      for (final name in sdkTools.keys) name: '$base#tool-sdk-${_safeId(name)}',
+    };
 
     final pkgIds = {
       for (final pkg in packages) pkg.bomRef: '$base#${pkg.spdxId}',
@@ -40,7 +47,7 @@ class Spdx3Generator {
       'type': 'CreationInfo',
       'specVersion': _specVersion,
       'created': now,
-      'createdBy': [toolId],
+      'createdBy': [toolId, ...sdkToolIds.values],
     });
 
     graph.add({
@@ -49,6 +56,16 @@ class Spdx3Generator {
       'creationInfo': ciId,
       'name': 'sbom_generator',
       'toolVersion': '1.4.0',
+    });
+
+    sdkTools.forEach((name, version) {
+      graph.add({
+        'type': 'Tool',
+        'spdxId': sdkToolIds[name],
+        'creationInfo': ciId,
+        'name': name,
+        if (version.isNotEmpty) 'toolVersion': version,
+      });
     });
 
     final vendorIds = _buildVendorElements(packages, base, ciId, graph);
@@ -239,9 +256,10 @@ class Spdx3Generator {
     String outputPath, {
     String? documentName,
     OsInfo? osInfo,
+    Map<String, String> sdkTools = const {},
   }) async {
     final sbom = generate(packages, dependencies,
-        documentName: documentName, osInfo: osInfo);
+        documentName: documentName, osInfo: osInfo, sdkTools: sdkTools);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

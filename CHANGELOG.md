@@ -23,9 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 - `--sdk-version <sdk>=<version>` (répétable) : renseigne la vraie version d'un
-  SDK Dart/Flutter pour les paquets `source: sdk` d'un `pubspec.lock` /
-  `pubspec.yaml` (que `pub` note toujours `0.0.0`). `scripts/build-dist.sh` le
-  passe automatiquement à partir de `flutter --version` / `dart --version`.
+  SDK Dart/Flutter. Double effet — (1) applique la version aux paquets
+  `source: sdk` correspondants d'un `pubspec.lock` / `pubspec.yaml` (que `pub`
+  note toujours `0.0.0`) ; (2) ajoute chaque SDK à la toolchain du SBOM :
+  `metadata.tools.components` (CycloneDX, `type: platform`),
+  `creationInfo.creators` (SPDX 2.3), éléments `Tool` (SPDX 3.0) — c'est là
+  qu'apparaît la version de `dart`, qui n'a pas de paquet dans le lockfile.
+  `scripts/build-dist.sh` le passe automatiquement depuis `flutter --version` /
+  `dart --version`.
 
 ### Fixed
 - `pubspec.lock` / `pubspec.yaml` : les paquets `source: sdk` autres que le

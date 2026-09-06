@@ -18,6 +18,10 @@ class SpdxGenerator {
     /// `CycloneDxGenerator.generate`) : sans lui, Trivy en mode `trivy sbom`
     /// n'évalue pas les CVE des paquets système.
     OsInfo? osInfo,
+
+    /// SDK/toolchain de build (`{'flutter': '3.47.2', 'dart': '3.9.0'}`),
+    /// ajouté aux `creationInfo.creators` sous forme `Tool: <nom>-<version>`.
+    Map<String, String> sdkTools = const {},
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
     final docUuid = generateUuidV4();
@@ -42,7 +46,11 @@ class SpdxGenerator {
       'spdxVersion': 'SPDX-2.3',
       'creationInfo': {
         'created': now,
-        'creators': ['Tool: sbom_generator-1.4.0'],
+        'creators': [
+          'Tool: sbom_generator-1.4.0',
+          for (final e in sdkTools.entries)
+            'Tool: ${e.key}${e.value.isEmpty ? '' : '-${e.value}'}',
+        ],
         'licenseListVersion': '3.21',
       },
       'name': documentName ?? 'Package Set SBOM',
@@ -196,9 +204,10 @@ class SpdxGenerator {
     String outputPath, {
     String? documentName,
     OsInfo? osInfo,
+    Map<String, String> sdkTools = const {},
   }) async {
     final sbom = generate(packages, dependencies,
-        documentName: documentName, osInfo: osInfo);
+        documentName: documentName, osInfo: osInfo, sdkTools: sdkTools);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

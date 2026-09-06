@@ -1685,6 +1685,15 @@ générée par `pub`). Pour chaque paquet :
   vide** (`pkg:pub/flutter`), sauf si `sdkVersions` fournit la vraie version
   (`{'flutter': '3.47.2'}` → tous les paquets `description: flutter` héritent de
   `3.47.2`). Alimenté par `--sdk-version <sdk>=<ver>` côté CLI.
+
+`--sdk-version` a un **second effet**, indépendant du parsing pubspec : la map
+`sdkVersions` est passée à `CycloneDxGenerator` / `SpdxGenerator` /
+`Spdx3Generator` (paramètre `sdkTools`) qui ajoutent chaque SDK à la toolchain
+du document — `metadata.tools.components[]` (`type: platform`,
+`bom-ref: tool-sdk-<nom>`) en CycloneDX, `creationInfo.creators`
+(`Tool: <nom>-<version>`) en SPDX 2.3, un élément `Tool` référencé par
+`createdBy` en SPDX 3.0. C'est le seul endroit où la version du SDK **dart**
+apparaît (il n'a pas d'entrée paquet dans un lockfile Flutter).
 * `description.sha256` (hosted) → `WheelPackage.sha256Header`.
 * `description.url` → homepage (`https://pub.dev/packages/<name>` pour
   pub.dev, `<registre>/packages/<name>` pour un registre privé, l'URL du dépôt

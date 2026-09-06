@@ -47,6 +47,18 @@ void main() {
       final sbom = generator.generate([_pkg(name: 'foo')], []);
       expect(sbom['name'], 'Package Set SBOM');
     });
+
+    test('sdkTools → creationInfo.creators "Tool: <nom>-<version>"', () {
+      final sbom = generator.generate([_pkg(name: 'foo')], [],
+          sdkTools: {'flutter': '3.47.2', 'dart': '3.9.0'});
+      final creators =
+          (sbom['creationInfo'] as Map)['creators'] as List<dynamic>;
+      expect(creators, containsAll([
+        'Tool: sbom_generator-1.4.0',
+        'Tool: flutter-3.47.2',
+        'Tool: dart-3.9.0',
+      ]));
+    });
   });
 
   group('SpdxGenerator.generate — paquets', () {

@@ -64,6 +64,18 @@ void main() {
       expect(_findAllType(sbom, 'CreationInfo'), hasLength(1));
       expect(_findAllType(sbom, 'Tool'), hasLength(1));
     });
+
+    test('sdkTools → un Tool par SDK, référencé dans createdBy', () {
+      final sbom = generator.generate([_pkg(name: 'foo')], [],
+          sdkTools: {'flutter': '3.47.2', 'dart': '3.9.0'});
+      final tools = _findAllType(sbom, 'Tool');
+      expect(tools, hasLength(3));
+      final byName = {for (final t in tools) t['name']: t};
+      expect(byName['flutter']!['toolVersion'], '3.47.2');
+      expect(byName['dart']!['toolVersion'], '3.9.0');
+      final ci = _findType(sbom, 'CreationInfo');
+      expect((ci['createdBy'] as List).length, 3);
+    });
   });
 
   group('Spdx3Generator.generate — paquets', () {

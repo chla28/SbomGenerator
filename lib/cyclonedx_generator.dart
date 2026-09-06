@@ -76,6 +76,11 @@ class CycloneDxGenerator {
     /// mode `trivy sbom` évaluent aussi les CVE des paquets système
     /// (RPM/DEB/APK), et pas seulement celles des paquets applicatifs.
     OsInfo? osInfo,
+
+    /// SDK/toolchain ayant servi à produire l'artefact (`{'flutter': '3.47.2',
+    /// 'dart': '3.9.0'}`), ajouté à `metadata.tools.components`. Vient de
+    /// `--sdk-version` côté CLI.
+    Map<String, String> sdkTools = const {},
   }) {
     if (!supportedSpecVersions.contains(specVersion)) {
       throw ArgumentError(
@@ -137,7 +142,7 @@ class CycloneDxGenerator {
       'serialNumber': serialNumber,
       'version': 1,
       'metadata': _buildMetadata(now, documentName, author, organization,
-          tlp: tlp, extraTool: citationSource),
+          tlp: tlp, extraTool: citationSource, sdkTools: sdkTools),
       'components': [
         if (osInfo != null) _buildOsComponent(osInfo),
         for (final pkg in packages)
@@ -179,6 +184,7 @@ class CycloneDxGenerator {
     String? citationSource,
     Map<String, PatentAssertion>? patentsByPackageName,
     OsInfo? osInfo,
+    Map<String, String> sdkTools = const {},
   }) async {
     final sbom = generate(
       packages,
@@ -191,6 +197,7 @@ class CycloneDxGenerator {
       citationSource: citationSource,
       patentsByPackageName: patentsByPackageName,
       osInfo: osInfo,
+      sdkTools: sdkTools,
     );
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
@@ -205,6 +212,7 @@ class CycloneDxGenerator {
     String? org, {
     String? tlp,
     String? extraTool,
+    Map<String, String> sdkTools = const {},
   }) {
     final authorName = author ?? 'sbom_generator';
     final orgName = org ?? 'local';
@@ -224,6 +232,16 @@ class CycloneDxGenerator {
         'name': extraTool,
       });
     }
+    // SDK/toolchain de build (Dart, Flutter…) — `type: platform` : ni une
+    // application ni une lib, c'est l'environnement qui a produit l'artefact.
+    sdkTools.forEach((name, version) {
+      tools.add({
+        'type': 'platform',
+        'bom-ref': _toolBomRef('sdk-$name'),
+        'name': name,
+        if (version.isNotEmpty) 'version': version,
+      });
+    });
 
     final metadata = <String, dynamic>{
       'timestamp': timestamp,

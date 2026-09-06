@@ -143,6 +143,28 @@ void main() {
     });
   });
 
+  group('CycloneDxGenerator.generate — sdkTools (toolchain de build)', () {
+    test('ajoute chaque SDK à metadata.tools.components (type platform)', () {
+      final sbom = generator.generate([_rpm(name: 'bash')], [],
+          sdkTools: {'flutter': '3.47.2', 'dart': '3.9.0'});
+      final tools = ((sbom['metadata'] as Map)['tools'] as Map)['components']
+          as List<dynamic>;
+      final byName = {for (final t in tools) t['name']: t};
+      expect(byName['flutter'],
+          {'type': 'platform', 'bom-ref': 'tool-sdk-flutter', 'name': 'flutter', 'version': '3.47.2'});
+      expect(byName['dart']!['version'], '3.9.0');
+      // sbom_generator lui-même reste présent
+      expect(byName.containsKey('sbom_generator'), isTrue);
+    });
+
+    test('sdkTools vide → aucun tool supplémentaire', () {
+      final sbom = generator.generate([_rpm(name: 'bash')], []);
+      final tools =
+          ((sbom['metadata'] as Map)['tools'] as Map)['components'] as List;
+      expect(tools, hasLength(1));
+    });
+  });
+
   group('CycloneDxGenerator.generate — patentAssertions (1.7)', () {
     test('ajoute patentAssertions au composant correspondant + definitions.patents',
         () {

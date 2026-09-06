@@ -205,10 +205,15 @@ répétable). Code retour 2 si au moins une violation est détectée.
 |`--sdk-version <sdk>=<ver>`
 |—
 |—
-|Vraie version d'un SDK Dart/Flutter pour les paquets `source: sdk` d'un
-`pubspec.lock` / `pubspec.yaml` (que pub note toujours `0.0.0`). Répétable —
-`--sdk-version flutter=3.47.2 --sdk-version dart=3.9.0`. Sans cette option, ces
-paquets sortent sans version (PURL `pkg:pub/flutter`).
+|Vraie version d'un SDK Dart/Flutter (répétable —
+`--sdk-version flutter=3.47.2 --sdk-version dart=3.9.0`). Effet double : (1) la
+version est appliquée aux paquets `source: sdk` correspondants d'un
+`pubspec.lock` / `pubspec.yaml` (que pub note toujours `0.0.0` ; sans l'option
+ils sortent sans version) ; (2) chaque SDK est ajouté à la *toolchain* du SBOM
+— `metadata.tools.components` (CycloneDX, `type: platform`),
+`creationInfo.creators` (SPDX 2.3), éléments `Tool` (SPDX 3.0). C'est ainsi
+que la version de `dart` figure au SBOM, `dart` n'ayant pas de paquet dans le
+lockfile.
 
 |`--cyclonedx-version <ver>`
 |—

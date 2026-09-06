@@ -735,15 +735,16 @@ Future<void> main(List<String> arguments) async {
               tlp: tlp,
               citationSource: citationSource,
               patentsByPackageName: patentMap,
-              osInfo: ociOs);
+              osInfo: ociOs,
+              sdkTools: sdkVersions);
         case 'spdx':
           await SpdxGenerator().writeToFile(
               uniquePackages, dependencies, outPath,
-              documentName: docName, osInfo: ociOs);
+              documentName: docName, osInfo: ociOs, sdkTools: sdkVersions);
         case 'spdx3':
           await Spdx3Generator().writeToFile(
               uniquePackages, dependencies, outPath,
-              documentName: docName, osInfo: ociOs);
+              documentName: docName, osInfo: ociOs, sdkTools: sdkVersions);
         case 'json':
           await SimpleJsonGenerator().writeToFile(
               uniquePackages, dependencies, outPath, documentName: docName);
