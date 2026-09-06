@@ -78,6 +78,11 @@ Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0
 |`--min-quality-score`
 |Score de qualité du SBOM généré (0–10)
 
+|`asciidoctor-pdf`
+|—
+|`scan --format pdf`
+|Conversion du rapport de synthèse AsciiDoc en PDF (si absent, le `.adoc` est conservé)
+
 |`cosign`
 |—
 |`--sign`
@@ -100,6 +105,7 @@ cdxgen --version  # si --oci-tool cdxgen (requiert Node.js)
 grype version         # si scan --scanner grype (défaut)
 osv-scanner --version # si scan --scanner osv
 sbomqs version         # si --min-quality-score
+asciidoctor-pdf --version # si scan --format pdf
 cosign version         # si --sign
 ----
 
@@ -823,11 +829,16 @@ filtrage optionnel par date de publication ou de modification des CVE.
 
 |`--format <valeur>` / `-f`
 |`text`
-|`text` (console colorée) ou `sarif` (rapport SARIF 2.1.0)
+|`text` (console colorée), `sarif` (SARIF 2.1.0), ou `markdown` / `asciidoc` /
+`pdf` (rapport de synthèse inter-scanners — résumé global, répartition par
+sévérité pour chaque scanner, matrice de présence CVE × scanner). `pdf` =
+`asciidoc` + conversion via `asciidoctor-pdf` (si absent, le `.adoc` est
+conservé à côté).
 
 |`--output <fichier>` / `-o`
 |—
-|Fichier de sortie pour `--format sarif` (sinon affiché sur stdout)
+|Fichier de sortie. Requis pour `markdown` / `asciidoc` / `pdf` ; pour
+`sarif`, écrit sur stdout si omis.
 |===
 
 [source,bash]
@@ -849,6 +860,10 @@ filtrage optionnel par date de publication ou de modification des CVE.
 # Export SARIF (intégration GitHub Code Scanning) vers un fichier
 ./sbom_generator scan --sbom sbom.cdx.json --scanner all \
   --format sarif --output resultats.sarif
+
+# Rapport de synthèse PDF (Grype + OSV-Scanner + Trivy)
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format pdf --output scan-report.pdf
 ----
 
 Les résultats `--format text` sont triés par sévérité décroissante
@@ -857,6 +872,17 @@ interrogé. En `--format sarif`, un `run` SARIF est produit par scanner
 interrogé, avec une règle par identifiant de vulnérabilité. L'échec d'un
 scanner (binaire absent, sortie JSON illisible) n'empêche pas les autres
 scanners demandés (`--scanner all`) de s'exécuter.
+
+Les formats `markdown`, `asciidoc` et `pdf` produisent un *rapport de
+synthèse* dans le fichier `--output` : résumé global (scanners exécutés,
+nombre de CVE uniques tous scanners confondus, total brut), répartition par
+sévérité pour chaque scanner, puis une matrice « CVE × scanner » (✓/—) triée
+par sévérité — les identifiants distro-préfixés d'OSV-Scanner
+(`DEBIAN-CVE-…`) sont ramenés à la forme nue avant la comparaison. Ces
+formats retournent le code `0` dès qu'un rapport est produit, quel que soit
+le nombre de CVE (le code `1` reste réservé à `text` / `sarif`). C'est ce
+que `scripts/build-dist.sh` utilise pour joindre un PDF de synthèse à côté de
+l'archive de distribution.
 
 Codes de retour : `0` = aucune CVE dans la plage demandée (tous scanners
 confondus), `1` = au moins une CVE trouvée, ou erreur de scanner.
@@ -1127,6 +1153,7 @@ sbom_generator/
 │   ├── sbom_diff.dart             # Comparaison de SBOMs (sous-commande diff)
 │   ├── sbom_merger.dart           # Fusion de SBOMs (sous-commande merge)
 │   ├── sbom_reader.dart           # Lecteur SBOM (CycloneDX/SPDX) → List<Package> (convert, licenses)
+│   ├── scan_report_generator.dart # Rapport de synthèse inter-scanners (scan -f md/adoc/pdf)
 │   ├── license_report_generator.dart # Rapport de licences AsciiDoc (sous-commande licenses)
 │   ├── policy_checker.dart        # Licences interdites + score qualité CI/CD
 │   ├── cyclonedx_generator.dart   # Générateur CycloneDX 1.6/1.7

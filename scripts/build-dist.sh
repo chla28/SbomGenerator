@@ -3,10 +3,15 @@
 # Produit : dist/sbom_generator-VERSION-linux-ARCH.tar.gz
 #             (inclut un SBOM CycloneDX : dépendances runtime distro + arbre
 #              des dépendances Dart/Flutter — sbom.cdx.json)
+#           dist/sbom_generator-VERSION-linux-ARCH-scan-report.pdf
+#             (rapport de synthèse CVE Grype + OSV-Scanner + Trivy du SBOM
+#              ci-dessus ; à côté de l'archive — instantané daté, best-effort :
+#              produit seulement si au moins un scanner est installé)
 #           dist/rpmbuild/RPMS/  (avec --rpm)
 #             + dist/sbom_generator-VERSION-linux-ARCH-rpms.cdx.json
 #               (SBOM CycloneDX des RPM produits ; à côté, pas dans l'archive,
 #               car les RPM sont construits à partir de l'archive elle-même)
+#             + dist/sbom_generator-VERSION-linux-ARCH-rpms-scan-report.pdf
 #
 # Le SBOM est généré avec le binaire sbom-generator tout juste compilé par ce
 # script (auto-hébergement : pas de dépendance à une installation préalable
@@ -44,6 +49,35 @@ DIST_DIR="${PROJECT_DIR}/dist/${DIST_NAME}"
 ARCHIVE="${PROJECT_DIR}/dist/${DIST_NAME}.tar.gz"
 
 cd "$PROJECT_DIR"
+
+# Scanne un SBOM avec Grype + OSV-Scanner + Trivy (best-effort : chaque
+# scanner absent est simplement omis) et produit un PDF de synthèse via
+# `sbom-generator scan -f pdf`. Le PDF est déposé À CÔTÉ de l'archive dans
+# dist/ (instantané CVE daté, pas un livrable figé). N'échoue jamais le
+# build : si aucun scanner ni asciidoctor-pdf n'est disponible, on saute.
+#   $1 = chemin du SBOM      $2 = chemin du PDF de sortie
+run_scan_report() {
+  local sbom="$1" pdf="$2"
+  if [[ ! -f "$sbom" ]]; then
+    echo "  ⚠  SBOM introuvable ($sbom) — scan sauté." >&2
+    return 0
+  fi
+  if ! command -v grype &>/dev/null \
+     && ! command -v osv-scanner &>/dev/null \
+     && ! command -v trivy &>/dev/null; then
+    echo "  ⚠  Aucun scanner (grype / osv-scanner / trivy) — scan sauté." >&2
+    return 0
+  fi
+  # `scan -f pdf` sort 0 dès qu'un rapport est produit (même avec des CVE) ;
+  # si asciidoctor-pdf manque, le .adoc est conservé à côté.
+  if "${DIST_DIR}/bin/sbom-generator" scan \
+       --sbom "$sbom" --scanner all --format pdf --output "$pdf" 2>&1 \
+       | sed 's/^/  /'; then
+    [[ -f "$pdf" ]] && echo "  ✓ $(realpath --relative-to="${PROJECT_DIR}" "$pdf")"
+  else
+    echo "  ⚠  Échec du scan CVE — le packaging continue sans rapport." >&2
+  fi
+}
 
 # ── Vérification des outils ──────────────────────────────────────────────────
 echo "╔══════════════════════════════════════════╗"
@@ -157,6 +191,12 @@ fi
 rm -f "$SBOM_INPUT"
 echo ""
 
+# ── Scan CVE du SBOM + PDF de synthèse ───────────────────────────────────────
+echo "▶ Scan CVE du SBOM (Grype + OSV-Scanner + Trivy)…"
+SCAN_PDF="${PROJECT_DIR}/dist/${DIST_NAME}-scan-report.pdf"
+run_scan_report "${DIST_DIR}/sbom.cdx.json" "$SCAN_PDF"
+echo ""
+
 # ── Archive ──────────────────────────────────────────────────────────────────
 echo "▶ Création de l'archive…"
 tar czf "$ARCHIVE" -C "${PROJECT_DIR}/dist" "${DIST_NAME}"
@@ -212,6 +252,11 @@ if [[ "$BUILD_RPM" == true ]]; then
     fi
     rm -f "$RPM_LIST"
     echo ""
+
+    echo "▶ Scan CVE du SBOM des RPM construits…"
+    run_scan_report "$RPM_SBOM" \
+      "${PROJECT_DIR}/dist/${DIST_NAME}-rpms-scan-report.pdf"
+    echo ""
   fi
 fi
 
@@ -222,11 +267,19 @@ echo "  dist/${DIST_NAME}.tar.gz (${TOTAL_SIZE})"
 if [[ -f "${DIST_DIR}/sbom.cdx.json" ]]; then
   echo "    └─ inclut sbom.cdx.json (SBOM CycloneDX : deps runtime + arbre pub)"
 fi
+if [[ -f "$SCAN_PDF" ]]; then
+  echo "  dist/${DIST_NAME}-scan-report.pdf (synthèse CVE Grype + OSV-Scanner + Trivy)"
+elif [[ -f "${SCAN_PDF%.pdf}.adoc" ]]; then
+  echo "  dist/${DIST_NAME}-scan-report.adoc (synthèse CVE — PDF non généré, asciidoctor-pdf absent)"
+fi
 if [[ "$BUILD_RPM" == true ]]; then
   find "${PROJECT_DIR}/dist/rpmbuild/RPMS" -name "*.rpm" 2>/dev/null | sort \
     | while IFS= read -r r; do echo "  $(realpath --relative-to="${PROJECT_DIR}" "$r")"; done
   if [[ -f "${PROJECT_DIR}/dist/${DIST_NAME}-rpms.cdx.json" ]]; then
     echo "  dist/${DIST_NAME}-rpms.cdx.json (SBOM CycloneDX des RPM ci-dessus)"
+  fi
+  if [[ -f "${PROJECT_DIR}/dist/${DIST_NAME}-rpms-scan-report.pdf" ]]; then
+    echo "  dist/${DIST_NAME}-rpms-scan-report.pdf (synthèse CVE des RPM ci-dessus)"
   fi
 fi
 echo ""

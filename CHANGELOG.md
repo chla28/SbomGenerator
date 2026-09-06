@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `sbom-generator scan` : nouveaux formats de sortie `markdown`, `asciidoc` et
+  `pdf` (`-f`, écrits via `-o`) — un **rapport de synthèse inter-scanners** :
+  résumé global (scanners exécutés, CVE uniques tous scanners confondus, total
+  brut), répartition par sévérité pour chaque scanner, et matrice « CVE ×
+  scanner » (✓/—) triée par sévérité (identifiants `DEBIAN-CVE-…` d'OSV-Scanner
+  normalisés avant comparaison). `pdf` = `asciidoc` + `asciidoctor-pdf` (si
+  absent, le `.adoc` est conservé). Ces formats retournent `0` dès qu'un
+  rapport est produit, quel que soit le nombre de CVE.
+- `scripts/build-dist.sh` scanne désormais le SBOM généré avec Grype +
+  OSV-Scanner + Trivy et dépose un PDF de synthèse à côté de l'archive
+  (`…-scan-report.pdf` ; avec `--rpm`, aussi `…-rpms-scan-report.pdf`).
+  Best-effort : chaque scanner absent est omis, l'absence totale de scanner ou
+  d'`asciidoctor-pdf` n'échoue pas le build.
+
 ### Fixed
 - CycloneDX : `license.id` n'est plus attribué qu'aux identifiants réellement
   présents sur la SPDX License List (nouvel instantané `lib/spdx_license_ids.dart`).

@@ -28,6 +28,7 @@ import 'package:sbom_generator/maven_parser.dart';
 import 'package:sbom_generator/pubspec_parser.dart';
 import 'package:sbom_generator/csv_generator.dart';
 import 'package:sbom_generator/sbom_reader.dart';
+import 'package:sbom_generator/scan_report_generator.dart';
 import 'package:sbom_generator/license_report_generator.dart';
 
 const _version = '1.4.0';
@@ -36,7 +37,9 @@ const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciid
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
 const _validOciTools = {'syft', 'trivy', 'skopeo', 'cdxgen'};
 const _validDateFields = {'published', 'modified', 'latest'};
-const _validScanFormats = {'text', 'sarif'};
+const _validScanFormats = {'text', 'sarif', 'markdown', 'asciidoc', 'pdf'};
+// Formats produisant un rapport de synthèse inter-scanners (fichier).
+const _reportScanFormats = {'markdown', 'asciidoc', 'pdf'};
 const _validCycloneDxVersions = CycloneDxGenerator.supportedSpecVersions;
 const _validTlpClassifications = CycloneDxGenerator.validTlpClassifications;
 
@@ -1171,11 +1174,15 @@ Future<void> _runScan(List<String> arguments) async {
         abbr: 'f',
         defaultsTo: 'text',
         help: 'Format de sortie.\n'
-            '  text    Texte coloré sur stdout (défaut)\n'
-            '  sarif   SARIF 2.1.0 (intégration GitHub Code Scanning)')
+            '  text      Texte coloré sur stdout (défaut)\n'
+            '  sarif     SARIF 2.1.0 (intégration GitHub Code Scanning)\n'
+            '  markdown  Rapport de synthèse inter-scanners (Markdown)\n'
+            '  asciidoc  Rapport de synthèse inter-scanners (AsciiDoc)\n'
+            '  pdf       Idem asciidoc + conversion via asciidoctor-pdf')
     ..addOption('output',
         abbr: 'o',
-        help: 'Fichier de sortie pour --format sarif. Si omis, écrit sur stdout.')
+        help: 'Fichier de sortie. Requis pour --format markdown/asciidoc/pdf ;\n'
+            'pour --format sarif, écrit sur stdout si omis.')
     ..addFlag('help',
         abbr: 'h',
         negatable: false,
@@ -1239,11 +1246,17 @@ Future<void> _runScan(List<String> arguments) async {
     before = before.add(const Duration(hours: 23, minutes: 59, seconds: 59));
   }
 
+  final isReport = _reportScanFormats.contains(format);
+  if (isReport && outputPath == null) {
+    stderr.writeln('scan: --output <fichier> est requis pour --format $format.');
+    exit(1);
+  }
+
   final scanners = scanner == 'all'
       ? ['grype', 'osv', 'trivy']
       : [scanner];
 
-  final quiet = format == 'sarif';
+  final quiet = format == 'sarif' || isReport;
   final resultsByScanner = <String, List<Map<String, dynamic>>>{};
   int totalShown = 0;
   for (final s in scanners) {
@@ -1267,7 +1280,94 @@ Future<void> _runScan(List<String> arguments) async {
     }
   }
 
+  if (isReport) {
+    if (resultsByScanner.isEmpty) {
+      stderr.writeln(
+          'scan: aucun scanner n\'a produit de résultat — rapport non généré.');
+      exit(1);
+    }
+    await _writeScanReport(
+        format, outputPath!, sbomFile, resultsByScanner, scanners);
+    // Un rapport produit n'est pas un échec, quel que soit le nombre de CVE.
+    exit(0);
+  }
+
   exit(totalShown > 0 ? 1 : 0);
+}
+
+/// Écrit le rapport de synthèse inter-scanners dans [outputPath].
+/// Pour `pdf`, écrit d'abord un `.adoc` à côté puis lance `asciidoctor-pdf` ;
+/// si l'exécutable est absent ou échoue, conserve le `.adoc` et avertit
+/// (best-effort — l'appelant, ex. build-dist.sh, continue).
+Future<void> _writeScanReport(
+  String format,
+  String outputPath,
+  String sbomFile,
+  Map<String, List<Map<String, dynamic>>> resultsByScanner,
+  List<String> scanners,
+) async {
+  final gen = ScanReportGenerator(
+    sbomPath: sbomFile,
+    resultsByScanner: resultsByScanner,
+    toolVersions: {
+      'sbom-generator': _version,
+      for (final s in scanners)
+        if (resultsByScanner.containsKey(s))
+          {'grype': 'Grype', 'osv': 'OSV-Scanner', 'trivy': 'Trivy'}[s]!:
+              await _scannerVersion(s) ?? 'inconnue',
+    },
+  );
+
+  if (format == 'markdown') {
+    await File(outputPath).writeAsString(gen.toMarkdown());
+    stdout.writeln('Rapport Markdown écrit → $outputPath');
+    return;
+  }
+
+  // asciidoc | pdf : on écrit toujours l'AsciiDoc.
+  final adocPath = format == 'asciidoc'
+      ? outputPath
+      : (outputPath.toLowerCase().endsWith('.pdf')
+          ? '${outputPath.substring(0, outputPath.length - 4)}.adoc'
+          : '$outputPath.adoc');
+  await File(adocPath).writeAsString(gen.toAsciiDoc());
+
+  if (format == 'asciidoc') {
+    stdout.writeln('Rapport AsciiDoc écrit → $adocPath');
+    return;
+  }
+
+  try {
+    final r = await renderAsciiDocToPdf(adocPath, outputPath);
+    if (r.exitCode == 0) {
+      stdout.writeln('Rapport PDF écrit → $outputPath');
+    } else {
+      stderr.writeln('scan: asciidoctor-pdf a échoué (code ${r.exitCode}) : '
+          '${(r.stderr as String).trim()}');
+      stderr.writeln('scan: rapport AsciiDoc conservé → $adocPath');
+    }
+  } on ProcessException {
+    stderr.writeln('scan: asciidoctor-pdf introuvable — PDF non généré, '
+        'rapport AsciiDoc conservé → $adocPath');
+  }
+}
+
+/// Version courte d'un scanner (`<x.y.z>`), ou null si l'outil est absent.
+Future<String?> _scannerVersion(String scanner) async {
+  final (cmd, cmdArgs) = switch (scanner) {
+    'grype' => ('grype', ['version']),
+    'osv' => ('osv-scanner', ['--version']),
+    'trivy' => ('trivy', ['--version']),
+    _ => (scanner, ['--version']),
+  };
+  try {
+    final r = await Process.run(cmd, cmdArgs);
+    final m = RegExp(r'(\d+\.\d+\.\d+)')
+        .firstMatch('${r.stdout}\n${r.stderr}');
+    return m?.group(1);
+  } catch (_) {
+    return null;
+  }
 }
 
 // Retourne la liste brute [{id, severity, package, published, modified}] ou null si erreur.
@@ -1500,9 +1600,18 @@ Exemples:
   sbom-generator scan --sbom sbom.cdx.json --scanner all \\
     --format sarif --output results.sarif
 
+  # Rapport de synthèse PDF (Grype + OSV-Scanner + Trivy)
+  sbom-generator scan --sbom sbom.cdx.json --scanner all \\
+    --format pdf --output scan-report.pdf
+
 Codes de retour:
-  0  Aucune CVE dans la plage demandée
-  1  Au moins une CVE trouvée (ou erreur de scanner)
+  text / sarif :
+    0  Aucune CVE dans la plage demandée
+    1  Au moins une CVE trouvée (ou erreur de scanner)
+  markdown / asciidoc / pdf :
+    0  Rapport produit (quel que soit le nombre de CVE ; pour pdf, le
+       .adoc est conservé si asciidoctor-pdf est absent)
+    1  Aucun scanner n'a produit de résultat, ou --output manquant
 ''');
 }
 

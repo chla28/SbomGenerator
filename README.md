@@ -85,6 +85,7 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 - `unzip` (pour les archives `.jar`, et pour `--oci-tool skopeo`)
 - `syft`, `trivy`, `skopeo` ou `cdxgen` (uniquement pour `--image`, selon le backend choisi ; `cdxgen` requiert Node.js)
 - `grype`, `osv-scanner` ou `trivy` (uniquement pour la sous-commande `scan`)
+- `asciidoctor-pdf` (uniquement pour `scan --format pdf` ; sinon le `.adoc` est conservé)
 - `sbomqs` (uniquement pour `--min-quality-score`)
 - `cosign` (uniquement pour `--sign`)
 
@@ -156,6 +157,9 @@ sbom_generator validate --strict sbom.cdx.json
 # Rechercher les vulnérabilités connues d'un SBOM déjà généré (grype/osv/trivy)
 sbom_generator scan --sbom sbom.cdx.json
 sbom_generator scan --sbom sbom.cdx.json --scanner all --cve-after 2024-01-01
+
+# Rapport de synthèse inter-scanners (markdown | asciidoc | pdf)
+sbom_generator scan --sbom sbom.cdx.json --scanner all -f pdf -o scan-report.pdf
 ```
 
 ### Exemples
@@ -356,6 +360,7 @@ sbom_generator/
 │   ├── sbom_diff.dart           # Comparaison de SBOMs (SbomDiffer)
 │   ├── sbom_merger.dart         # Fusion de SBOMs (SbomMerger)
 │   ├── sbom_reader.dart         # Relecture d'un SBOM existant (sous-commande convert)
+│   ├── scan_report_generator.dart # Rapport de synthèse inter-scanners (scan -f md/adoc/pdf)
 │   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
 │   ├── cyclonedx_generator.dart # Format CycloneDX 1.6/1.7 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
