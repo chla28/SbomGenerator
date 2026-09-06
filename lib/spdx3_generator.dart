@@ -48,7 +48,7 @@ class Spdx3Generator {
       'spdxId': toolId,
       'creationInfo': ciId,
       'name': 'sbom_generator',
-      'toolVersion': '1.3.0',
+      'toolVersion': '1.4.0',
     });
 
     final vendorIds = _buildVendorElements(packages, base, ciId, graph);

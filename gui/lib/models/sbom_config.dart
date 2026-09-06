@@ -24,12 +24,13 @@ const formatLabels = {
   'csv': 'CSV',
 };
 
-const allOciTools = ['syft', 'trivy', 'skopeo'];
+const allOciTools = ['syft', 'trivy', 'skopeo', 'cdxgen'];
 
 const ociToolLabels = {
   'syft': 'Syft',
   'trivy': 'Trivy',
   'skopeo': 'Skopeo',
+  'cdxgen': 'cdxgen',
 };
 
 /// Versions CycloneDX supportées par --cyclonedx-version.
@@ -51,7 +52,7 @@ class SbomConfig {
   /// Référence à une image OCI (--image). Vide = non utilisé.
   String imageRef;
 
-  /// Backend OCI choisi (--oci-tool) : 'syft', 'trivy' ou 'skopeo'.
+  /// Backend OCI choisi (--oci-tool) : 'syft', 'trivy', 'skopeo' ou 'cdxgen'.
   String ociTool;
 
   /// Version CycloneDX générée (--cyclonedx-version) : '1.6' ou '1.7'.

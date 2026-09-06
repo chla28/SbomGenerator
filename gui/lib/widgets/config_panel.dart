@@ -1238,7 +1238,8 @@ class _OciToolSelector extends StatelessWidget {
               'Outil utilisé pour extraire les paquets de l\'image :\n'
               '• Syft (Anchore) — le plus complet, tous écosystèmes\n'
               '• Trivy (Aqua) — rapide, CVE intégrées\n'
-              '• Skopeo — extraction manuelle dpkg/rpm/apk',
+              '• Skopeo — extraction manuelle dpkg/rpm/apk\n'
+              '• cdxgen (OWASP) — CycloneDX natif, tous écosystèmes',
             ),
           ],
         ),
@@ -1268,6 +1269,12 @@ class _OciToolSelector extends StatelessWidget {
               icon: Icon(Icons.layers_outlined, size: 14),
               tooltip: 'Skopeo + extraction manuelle (dpkg/rpm/apk)',
             ),
+            ButtonSegment(
+              value: 'cdxgen',
+              label: Text('cdxgen'),
+              icon: Icon(Icons.inventory_2_outlined, size: 14),
+              tooltip: 'OWASP cdxgen — CycloneDX natif, tous écosystèmes',
+            ),
           ],
           selected: {selected},
           onSelectionChanged: (s) => onChanged(s.first),
@@ -1278,7 +1285,10 @@ class _OciToolSelector extends StatelessWidget {
               ? 'Syft (recommandé) — supporte tous les écosystèmes'
               : selected == 'trivy'
                   ? 'Trivy — tous écosystèmes, déjà utilisé pour les CVE'
-                  : 'Skopeo — extraction manuelle dpkg / rpm / apk',
+                  : selected == 'skopeo'
+                      ? 'Skopeo — extraction manuelle dpkg / rpm / apk'
+                      : 'cdxgen — SBOM CycloneDX natif, tous écosystèmes '
+                          '(nécessite Node.js)',
           style: TextStyle(
             fontSize: 10,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.5),

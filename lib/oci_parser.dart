@@ -15,12 +15,13 @@ enum OciRefType {
 }
 
 /// Résultat de [OciParser.parseImage] : les paquets détectés, et — si le
-/// backend l'expose (syft, trivy ; pas skopeo, voir [OciParser._parseSkopeo])
-/// — l'OS de base de l'image, pour générer un composant dédié dans les SBOM
-/// CycloneDX/SPDX (voir [OsInfo]).
+/// backend l'expose (syft, trivy, cdxgen ; pas skopeo, voir
+/// [OciParser._parseSkopeo]) — l'OS de base de l'image, pour générer un
+/// composant dédié dans les SBOM CycloneDX/SPDX (voir [OsInfo]).
 typedef OciParseResult = ({List<Package> packages, OsInfo? os});
 
-/// Parse les paquets présents dans une image OCI via syft, trivy ou skopeo.
+/// Parse les paquets présents dans une image OCI via syft, trivy, skopeo ou
+/// cdxgen.
 class OciParser {
   // ── Détection automatique du format ─────────────────────────────────────────
 
@@ -40,8 +41,8 @@ class OciParser {
     String tool, {
     bool verbose = false,
   }) async {
-    // Les trois backends (syft, trivy, skopeo) n'acceptent que des .tar non
-    // compressés en format docker-archive. Si l'entrée est .tar.gz ou .tgz,
+    // Les quatre backends (syft, trivy, skopeo, cdxgen) n'acceptent que des
+    // .tar non compressés en format docker-archive. Si l'entrée est .tar.gz ou .tgz,
     // on la décompresse dans un répertoire temporaire avant de continuer.
     Directory? decompDir;
     String resolvedRef = imageRef;
@@ -70,6 +71,8 @@ class OciParser {
           return await _parseTrivy(resolvedRef, verbose: verbose);
         case 'skopeo':
           return await _parseSkopeo(resolvedRef, verbose: verbose);
+        case 'cdxgen':
+          return await _parseCdxgen(resolvedRef, verbose: verbose);
         default:
           throw ArgumentError('Outil OCI inconnu : $tool');
       }
@@ -1158,6 +1161,197 @@ class OciParser {
 
     return packages;
   }
+
+  // ── Backend cdxgen ───────────────────────────────────────────────────────────
+  //
+  // cdxgen (OWASP CycloneDX Generator) produit directement un SBOM CycloneDX
+  // complet de l'image (`cdxgen --type docker`). On ne conserve que les
+  // composants porteurs d'un PURL d'écosystème de paquets réel (pkg:deb,
+  // pkg:rpm, pkg:apk, pkg:pypi, pkg:npm, pkg:golang, pkg:maven…) : cdxgen
+  // inventorie aussi chaque fichier/binaire de l'image sous forme de composants
+  // `pkg:generic/…` de type `file`, ainsi que des actifs cryptographiques et
+  // des dépôts APT, tous écartés pour rester cohérent avec syft/trivy.
+  //
+  // cdxgen n'émet pas de composant `operating-system` dédié : l'OS de base est
+  // reconstitué depuis le qualifiant `distro=` des PURL de paquets système.
+
+  Future<OciParseResult> _parseCdxgen(String imageRef,
+      {bool verbose = false}) async {
+    final refType = detectRefType(imageRef);
+    final target = switch (refType) {
+      OciRefType.tar => File(imageRef).absolute.path,
+      OciRefType.ociLayout => Directory(imageRef).absolute.path,
+      OciRefType.registry => imageRef,
+    };
+
+    if (verbose) print('cdxgen : analyse de $target…');
+
+    final result = await Process.run('cdxgen', [
+      '--type', 'docker',
+      '--output', '-',
+      '--no-progress',
+      target,
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception(
+          'cdxgen a échoué (code ${result.exitCode}) : ${result.stderr}');
+    }
+
+    // cdxgen écrit le BOM sur stdout (--output -) et ses logs sur stderr ;
+    // selon la version quelques lignes peuvent tout de même précéder le JSON,
+    // on repart donc du premier '{'.
+    final out = result.stdout as String;
+    final start = out.indexOf('{');
+    if (start < 0) {
+      throw Exception('cdxgen : aucune sortie JSON reçue.');
+    }
+
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(out.substring(start)) as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('cdxgen : impossible de parser le JSON : $e');
+    }
+
+    final components = (data['components'] as List?) ?? [];
+    final packages = <Package>[];
+    var distro = '';
+    for (final c in components.whereType<Map<String, dynamic>>()) {
+      final pkg = _cdxgenComponentToPackage(c, imageRef);
+      if (pkg == null) continue;
+      packages.add(pkg);
+      if (distro.isEmpty) distro = _purlQualifier(pkg.purl, 'distro');
+    }
+
+    return (packages: packages, os: _cdxgenOsInfo(distro));
+  }
+
+  /// Correspondance préfixe d'écosystème PURL → [OciPackage.packageType].
+  /// Les préfixes absents (`generic`, `oci`, `container`…) sont écartés.
+  static const _cdxgenPurlEcosystem = {
+    'deb': 'deb',
+    'rpm': 'rpm',
+    'apk': 'apk',
+    'pypi': 'pypi',
+    'npm': 'npm',
+    'golang': 'go',
+    'maven': 'java',
+    'gem': 'gem',
+    'cargo': 'cargo',
+    'nuget': 'nuget',
+    'composer': 'composer',
+    'pub': 'pub',
+    'hex': 'hex',
+    'conan': 'conan',
+    'swift': 'swift',
+  };
+
+  OciPackage? _cdxgenComponentToPackage(
+      Map<String, dynamic> c, String imageRef) {
+    final type = (c['type'] as String?) ?? '';
+    if (type == 'file' ||
+        type == 'cryptographic-asset' ||
+        type == 'data' ||
+        type == 'operating-system' ||
+        type == 'container' ||
+        type == 'platform') {
+      return null;
+    }
+
+    final purl = (c['purl'] as String?) ?? '';
+    if (!purl.startsWith('pkg:')) return null;
+    final eco = purl.substring(4).split(RegExp(r'[/@?]')).first;
+    final pkgType = _cdxgenPurlEcosystem[eco];
+    if (pkgType == null) return null;
+
+    final rawName = (c['name'] as String?) ?? '';
+    if (rawName.isEmpty) return null;
+    final group = (c['group'] as String?) ?? '';
+    final name =
+        (pkgType == 'java' && group.isNotEmpty) ? '$group:$rawName' : rawName;
+
+    // Licences au format CycloneDX : [{expression}] ou [{license:{id|name}}].
+    final licenseStr = ((c['licenses'] as List?) ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map((l) {
+          final expr = l['expression'] as String?;
+          if (expr != null && expr.isNotEmpty) return expr;
+          final lic = l['license'] as Map<String, dynamic>?;
+          return (lic?['id'] as String?) ?? (lic?['name'] as String?) ?? '';
+        })
+        .where((s) => s.isNotEmpty)
+        .join(' AND ');
+
+    final vendor = ((c['supplier'] as Map<String, dynamic>?)?['name']
+            as String?) ??
+        (c['publisher'] as String?) ??
+        '';
+
+    var url = '';
+    for (final r in ((c['externalReferences'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()) {
+      final t = r['type'];
+      if (t == 'website' || t == 'vcs' || t == 'distribution') {
+        url = (r['url'] as String?) ?? '';
+        if (t == 'website') break;
+      }
+    }
+
+    var sha256 = '';
+    for (final h in ((c['hashes'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()) {
+      if (h['alg'] == 'SHA-256') {
+        sha256 = (h['content'] as String?) ?? '';
+        break;
+      }
+    }
+
+    return OciPackage(
+      name: name,
+      version: (c['version'] as String?) ?? '',
+      license: licenseStr,
+      vendor: vendor,
+      url: url,
+      summary: (c['description'] as String?) ?? '',
+      arch: _purlQualifier(purl, 'arch'),
+      sourceRef: imageRef,
+      imageRef: imageRef,
+      sha256Header: sha256,
+      requires: const [],
+      provides: [name],
+      packageType: pkgType,
+      purlOverride: purl,
+    );
+  }
+
+  /// Valeur (décodée) d'un qualifiant de PURL (`…?k=v&k2=v2`) ; chaîne vide si
+  /// le qualifiant est absent.
+  String _purlQualifier(String purl, String key) {
+    final q = purl.indexOf('?');
+    if (q < 0) return '';
+    for (final part in purl.substring(q + 1).split('&')) {
+      final eq = part.indexOf('=');
+      if (eq > 0 && part.substring(0, eq) == key) {
+        return Uri.decodeComponent(part.substring(eq + 1));
+      }
+    }
+    return '';
+  }
+
+  /// Reconstitue l'OS de base depuis un qualifiant `distro` de cdxgen
+  /// (ex. `debian-12`, `alpine-3.19`, `redhat-9`, `opensuse-leap-15.5`).
+  /// La version est le segment après le dernier `-`.
+  OsInfo? _cdxgenOsInfo(String? distro) {
+    if (distro == null || distro.isEmpty) return null;
+    // Certains PURL cdxgen portent `distro_name` (bookworm) en plus de
+    // `distro` (debian-12) ; seul `distro` nous intéresse ici.
+    final dash = distro.lastIndexOf('-');
+    if (dash <= 0 || dash == distro.length - 1) return null;
+    return OsInfo(
+      id: _toTrivyOsFamily(distro.substring(0, dash)),
+      version: distro.substring(dash + 1),
+    );
+  }
 }
 
 // ── Helpers exposés pour les tests du paquet ──────────────────────────────────
@@ -1192,3 +1386,15 @@ OsInfo? ociParserSyftDistroToOsInfo(Map<String, dynamic> syftJson) =>
 /// lancer trivy.
 OsInfo? ociParserTrivyMetadataToOsInfo(Map<String, dynamic> trivyJson) =>
     OciParser()._trivyMetadataToOsInfo(trivyJson);
+
+/// Appelle [OciParser._cdxgenComponentToPackage] depuis les tests, sur un
+/// composant CycloneDX (élément de `components[]`) déjà décodé, sans lancer
+/// cdxgen.
+OciPackage? ociParserCdxgenComponentToPackage(
+        Map<String, dynamic> component, String imageRef) =>
+    OciParser()._cdxgenComponentToPackage(component, imageRef);
+
+/// Appelle [OciParser._cdxgenOsInfo] depuis les tests, sur un qualifiant
+/// `distro` de PURL cdxgen (ex. `debian-12`).
+OsInfo? ociParserCdxgenOsInfo(String? distroQualifier) =>
+    OciParser()._cdxgenOsInfo(distroQualifier);

@@ -30,11 +30,11 @@ import 'package:sbom_generator/csv_generator.dart';
 import 'package:sbom_generator/sbom_reader.dart';
 import 'package:sbom_generator/license_report_generator.dart';
 
-const _version = '1.3.0';
+const _version = '1.4.0';
 
 const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
-const _validOciTools = {'syft', 'trivy', 'skopeo'};
+const _validOciTools = {'syft', 'trivy', 'skopeo', 'cdxgen'};
 const _validDateFields = {'published', 'modified', 'latest'};
 const _validScanFormats = {'text', 'sarif'};
 const _validCycloneDxVersions = CycloneDxGenerator.supportedSpecVersions;
@@ -115,7 +115,8 @@ Future<void> main(List<String> arguments) async {
       help: 'Backend d\'analyse OCI (utilisé avec --image).\n'
           '  syft    Anchore Syft (défaut) — tous types de paquets\n'
           '  trivy   Aqua Trivy — tous types de paquets\n'
-          '  skopeo  Skopeo + extraction manuelle (dpkg/rpm/apk)',
+          '  skopeo  Skopeo + extraction manuelle (dpkg/rpm/apk)\n'
+          '  cdxgen  OWASP cdxgen — tous types de paquets',
     )
     ..addOption(
       'output',
@@ -2123,6 +2124,9 @@ Examples:
 
   # OCI layout directory, backend skopeo
   dart run bin/sbom_generator.dart --image ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
+
+  # CycloneDX depuis une image Docker Hub, backend cdxgen
+  dart run bin/sbom_generator.dart --image nginx:latest --oci-tool cdxgen -o nginx.cdx.json
 
   # Combiner image OCI + liste de paquets supplémentaires
   dart run bin/sbom_generator.dart --image nginx:latest -i extra_pkgs.txt -o sbom.cdx.json

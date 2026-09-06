@@ -188,6 +188,125 @@ void main() {
     });
   });
 
+  group('OciParser (backend cdxgen) — filtrage & normalisation des composants',
+      () {
+    test('conserve un composant deb avec son PURL et son arch', () {
+      final pkg = ociParserCdxgenComponentToPackage({
+        'type': 'library',
+        'name': 'adduser',
+        'version': '3.134',
+        'group': 'debian',
+        'purl': 'pkg:deb/debian/adduser@3.134'
+            '?arch=all&distro=debian-12&distro_name=bookworm',
+        'supplier': {'name': 'Debian Adduser Developers'},
+        'hashes': [
+          {'alg': 'SHA-256', 'content': 'abc123'},
+        ],
+        'licenses': [
+          {
+            'license': {'id': 'GPL-2.0-or-later'}
+          },
+        ],
+      }, 'debian.tar')!;
+
+      expect(pkg.name, 'adduser');
+      expect(pkg.version, '3.134');
+      // Le PURL de cdxgen (avec distro=) est repris tel quel — grype en a besoin.
+      expect(pkg.purl,
+          'pkg:deb/debian/adduser@3.134?arch=all&distro=debian-12&distro_name=bookworm');
+      expect(pkg.packageType, 'deb');
+      expect(pkg.arch, 'all');
+      expect(pkg.license, 'GPL-2.0-or-later');
+      expect(pkg.vendor, 'Debian Adduser Developers');
+      expect(pkg.sha256Header, 'abc123');
+    });
+
+    test('écarte les composants de type file (inventaire fichiers cdxgen)', () {
+      expect(
+        ociParserCdxgenComponentToPackage({
+          'type': 'file',
+          'name': 'AdduserCommon.pm',
+          'purl': 'pkg:generic/AdduserCommon.pm#usr/share/perl5/Debian/AdduserCommon.pm',
+        }, 'debian.tar'),
+        isNull,
+      );
+    });
+
+    test('écarte les PURL pkg:generic (dépôts APT, binaires non tracés)', () {
+      expect(
+        ociParserCdxgenComponentToPackage({
+          'type': 'data',
+          'name': 'deb.debian.org/debian',
+          'version': 'bookworm',
+          'purl': 'pkg:generic/os-repository/deb.debian.org%2Fdebian@bookworm',
+        }, 'debian.tar'),
+        isNull,
+      );
+    });
+
+    test('écarte les actifs cryptographiques', () {
+      expect(
+        ociParserCdxgenComponentToPackage({
+          'type': 'cryptographic-asset',
+          'name': 'RSA-2048',
+          'purl': 'pkg:generic/rsa',
+        }, 'debian.tar'),
+        isNull,
+      );
+    });
+
+    test('recombine groupId:artifactId pour un composant maven', () {
+      final pkg = ociParserCdxgenComponentToPackage({
+        'type': 'library',
+        'name': 'guava',
+        'version': '33.0.0-jre',
+        'group': 'com.google.guava',
+        'purl': 'pkg:maven/com.google.guava/guava@33.0.0-jre',
+      }, 'app.tar')!;
+      expect(pkg.name, 'com.google.guava:guava');
+      expect(pkg.packageType, 'java');
+    });
+
+    test('licence au format expression CycloneDX', () {
+      final pkg = ociParserCdxgenComponentToPackage({
+        'type': 'library',
+        'name': 'openssl',
+        'version': '3.0.11',
+        'purl': 'pkg:deb/debian/openssl@3.0.11',
+        'licenses': [
+          {'expression': 'Apache-2.0 AND OpenSSL'},
+        ],
+      }, 'debian.tar')!;
+      expect(pkg.license, 'Apache-2.0 AND OpenSSL');
+    });
+  });
+
+  group('OciParser (backend cdxgen) — OS de base depuis le qualifiant distro',
+      () {
+    test('debian-12 → id debian, version 12', () {
+      final os = ociParserCdxgenOsInfo('debian-12')!;
+      expect(os.id, 'debian');
+      expect(os.version, '12');
+    });
+
+    test('alpine-3.19 → id alpine, version 3.19', () {
+      final os = ociParserCdxgenOsInfo('alpine-3.19')!;
+      expect(os.id, 'alpine');
+      expect(os.version, '3.19');
+    });
+
+    test('traduit rhel-9 vers la famille Trivy redhat', () {
+      final os = ociParserCdxgenOsInfo('rhel-9')!;
+      expect(os.id, 'redhat');
+      expect(os.version, '9');
+    });
+
+    test('retourne null quand aucun qualifiant distro (image distroless)', () {
+      expect(ociParserCdxgenOsInfo(null), isNull);
+      expect(ociParserCdxgenOsInfo(''), isNull);
+    });
+  });
+
   group('OciParser (backend skopeo) — licence dpkg via copyright DEP-5', () {
     late Directory tmp;
 

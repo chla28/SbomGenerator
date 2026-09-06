@@ -238,7 +238,7 @@ Champs ajoutés pour OCI :
 * `String imageRef` (défaut : `''`) — référence à une image OCI (`--image`) ;
   vide signifie que l'analyse OCI est désactivée.
 * `String ociTool` (défaut : `'syft'`) — backend OCI choisi (`--oci-tool`).
-  Valeurs : `'syft'`, `'trivy'`, `'skopeo'`.
+  Valeurs : `'syft'`, `'trivy'`, `'skopeo'`, `'cdxgen'`.
 
 Ces deux champs sont inclus dans `toJson()` / `fromJson()` (clés `'imageRef'`
 et `'ociTool'`) et donc persistés entre sessions. Ils sont chargés par
@@ -257,9 +257,9 @@ if (imageRef.isNotEmpty) {
 Constantes exposées :
 
 * `allFormats`, `formatLabels`, `_formatExtensions` — checkboxes de format
-* `allOciTools` (`['syft', 'trivy', 'skopeo']`) — liste des backends OCI
-* `ociToolLabels` (`{'syft': 'Syft', 'trivy': 'Trivy', 'skopeo': 'Skopeo'}`) —
-  libellés des boutons radio du sélecteur d'outil OCI
+* `allOciTools` (`['syft', 'trivy', 'skopeo', 'cdxgen']`) — liste des backends OCI
+* `ociToolLabels` (`{'syft': 'Syft', 'trivy': 'Trivy', 'skopeo': 'Skopeo',
+  'cdxgen': 'cdxgen'}`) — libellés des segments du sélecteur d'outil OCI
 
 ==== `models/app_themes.dart` — Thèmes de couleur
 
@@ -711,8 +711,8 @@ Sortie. Elle comprend deux éléments :
   ou non, et `_pickDir()` pour les répertoires OCI layout.
   Le type `registry` est toujours saisi manuellement.
 . *Sélecteur d'outil OCI* — `_OciToolSelector` (widget privé) affiché uniquement
-  si `c.imageRef.isNotEmpty`. Propose trois `RadioListTile` (`syft`, `trivy`,
-  `skopeo`) et met à jour `c.ociTool` via `setState`.
+  si `c.imageRef.isNotEmpty`. `SegmentedButton` à quatre segments (`syft`,
+  `trivy`, `skopeo`, `cdxgen`) qui met à jour `c.ociTool` via `setState`.
 
 La validation du champ fichier d'entrée (`--input`) est assouplie : l'erreur
 "Requis" ne s'affiche que si `imageRef` est vide :

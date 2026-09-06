@@ -28,6 +28,12 @@
 <td class="tableblock halign-left valign-top"><p class="tableblock">Analyse d’images OCI (onglet Configuration — outil OCI par défaut)</p></td>
 </tr>
 <tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>skopeo</code> / <code>trivy</code> / <code>cdxgen</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Analyse d’images OCI — backends alternatifs (onglet Configuration — outil OCI) ;
+<code>cdxgen</code> requiert Node.js</p></td>
+</tr>
+<tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> (analyse CVE)</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Non</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Analyse des vulnérabilités CVE (onglet Trivy)</p></td>
@@ -69,6 +75,7 @@ syft version
 grype version
 osv-scanner --version
 trivy --version
+cdxgen --version
 asciidoctor-pdf --version
 sbomqs version</code></pre>
 </div>
@@ -88,7 +95,19 @@ syft version</code></pre>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_installer_grype">2.1.3. Installer grype</h4>
+<h4 id="_installer_cdxgen_optionnel">2.1.3. Installer cdxgen (optionnel)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Via npm (requiert Node.js ≥ 20)
+npm install -g @cyclonedx/cdxgen
+
+# Vérifier
+cdxgen --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installer_grype">2.1.4. Installer grype</h4>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Anchore
@@ -101,7 +120,7 @@ grype version</code></pre>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_installer_osv_scanner_optionnel">2.1.4. Installer osv-scanner (optionnel)</h4>
+<h4 id="_installer_osv_scanner_optionnel">2.1.5. Installer osv-scanner (optionnel)</h4>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Google
@@ -132,7 +151,7 @@ de votre session graphique (<code>~/.profile</code> ou <code>~/.bash_profile</co
 </div>
 </div>
 <div class="sect3">
-<h4 id="_installer_trivy_optionnel">2.1.5. Installer trivy (optionnel)</h4>
+<h4 id="_installer_trivy_optionnel">2.1.6. Installer trivy (optionnel)</h4>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-bash" data-lang="bash"># Script officiel Aqua Security
@@ -148,7 +167,7 @@ trivy --version</code></pre>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_installer_asciidoctor_pdf_optionnel">2.1.6. Installer asciidoctor-pdf (optionnel)</h4>
+<h4 id="_installer_asciidoctor_pdf_optionnel">2.1.7. Installer asciidoctor-pdf (optionnel)</h4>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-bash" data-lang="bash">gem install asciidoctor-pdf</code></pre>
@@ -156,7 +175,7 @@ trivy --version</code></pre>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_installer_sbomqs_optionnel">2.1.7. Installer sbomqs (optionnel)</h4>
+<h4 id="_installer_sbomqs_optionnel">2.1.8. Installer sbomqs (optionnel)</h4>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-bash" data-lang="bash"># Télécharger la dernière release depuis GitHub

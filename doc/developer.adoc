@@ -31,7 +31,7 @@ Fichier d'entrée (.txt)           Image OCI (--image)
 │  (main + _Semaphore + _printProgress)                      │
 │  1. Lecture + validation CLI (--input et/ou --image)       │
 │  2. Pré-expansion des manifestes (requirements, go, npm…)  │
-│  3. Analyse OCI si --image (OciParser via syft/trivy/skopeo│
+│  3. Analyse OCI si --image (syft/trivy/skopeo/cdxgen)      │
 │  4. Détection du type par extension                        │
 │  5. Dispatch concurrent (--concurrency N)                  │
 │  6. Déduplication par bomRef                               │
@@ -966,7 +966,7 @@ Point d'entrée : `Future<OciParseResult> parseImage(String imageRef, String too
 où `OciParseResult = ({List<Package> packages, OsInfo? os})` (record Dart 3
 — voir <<sec-osinfo-oci-parser>>).
 
-Dispatch vers l'un des trois backends selon `tool` :
+Dispatch vers l'un des quatre backends selon `tool` :
 
 [cols="1,3", options="header"]
 |===
@@ -984,6 +984,13 @@ lit `Results[].{Type, Packages[]}` + `Metadata.OS` (OS de base) ; réessai sans 
 |Copie via `skopeo copy` en OCI layout → extraction des layers tar →
 détection de la base de paquets (dpkg/status, rpm --root, lib/apk/db/installed) ;
 `os: null` — ne lit pas `/etc/os-release`
+
+|`'cdxgen'`
+|`cdxgen --type docker --output - --no-progress <ref>` ; parse le BOM CycloneDX,
+ne garde que les `components[]` dont le PURL relève d'un écosystème de paquets
+connu (`_cdxgenPurlEcosystem`), écarte les types `file` / `cryptographic-asset`
+/ `data` et les PURL `pkg:generic`. OS de base reconstitué depuis le
+qualifiant `distro=` des PURL système (`_cdxgenOsInfo`)
 |===
 
 === Backend Syft (`_parseSyft`)
@@ -1015,7 +1022,7 @@ Lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et le normalise via
 `pypi`, etc.). Le PURL est lu depuis `Identifier.PURL` (trivy ≥ 0.38).
 
 [[sec-osinfo-oci-parser]]
-=== `OsInfo` — OS de base (`_syftDistroToOsInfo` / `_trivyMetadataToOsInfo`)
+=== `OsInfo` — OS de base (`_syftDistroToOsInfo` / `_trivyMetadataToOsInfo` / `_cdxgenOsInfo`)
 
 `OciParser` extrait l'OS de base de l'image (voir la classe `OsInfo` sous
 <<sec-models>>) pour permettre à
@@ -1047,6 +1054,32 @@ référence) :
 
 `os: null` quand syft/trivy n'ont détecté aucune base OS (image `scratch`
 ou distroless), ou pour le backend skopeo (jamais couvert, voir ci-dessus).
+
+Le backend cdxgen n'émet pas de composant `operating-system` : `_cdxgenOsInfo()`
+reconstitue l'`OsInfo` depuis le qualifiant `distro=` d'un PURL de paquet
+système (ex. `pkg:deb/debian/adduser@3.134?...&distro=debian-12` →
+`id: debian, version: 12`), en séparant la version au dernier `-` et en
+appliquant `_toTrivyOsFamily()` à l'identifiant. `os: null` si aucun paquet
+système ne porte de qualifiant `distro` (image sans base OS reconnue).
+
+=== Backend cdxgen (`_parseCdxgen`)
+
+`cdxgen --type docker` accepte les trois `OciRefType` (référence registre,
+archive `.tar` via chemin absolu, répertoire OCI layout). Le BOM CycloneDX
+est lu sur `stdout` (`--output -`) puis normalisé :
+
+* `_cdxgenComponentToPackage()` écarte les composants de type `file`,
+  `cryptographic-asset`, `data`, `operating-system`, `container`, `platform`,
+  puis exige un PURL dont le préfixe d'écosystème figure dans
+  `_cdxgenPurlEcosystem` (`deb`, `rpm`, `apk`, `pypi`, `npm`, `golang`,
+  `maven`, `gem`, `cargo`, `nuget`, `composer`, `pub`, `hex`, `conan`,
+  `swift`). Les composants `pkg:generic` (inventaire fichier par fichier de
+  cdxgen, dépôts APT) sont donc rejetés.
+* Le PURL de cdxgen est repris tel quel dans `purlOverride` (il inclut
+  `distro=`/`arch=`, nécessaires à grype).
+* Pour un composant `pkg:maven`, `group` + `name` sont recombinés en
+  `groupId:artifactId` (convention interne de `WheelPackage`/`OciPackage`).
+* Licences au format CycloneDX (`[{expression}]` ou `[{license:{id|name}}]`).
 
 === Backend Skopeo (`_parseSkopeo`)
 
@@ -1840,6 +1873,11 @@ Backend d'analyse OCI, utilisé en conjonction avec `--image`. Valeurs valides :
 
 |`skopeo`
 |Skopeo + extraction manuelle des layers — dpkg, RPM, APK, Maven JARs, PyPI packages et npm
+
+|`cdxgen`
+|OWASP CycloneDX Generator (`cdxgen --type docker`) — tous types de paquets ;
+BOM CycloneDX filtré aux composants porteurs d'un PURL d'écosystème réel.
+Requiert Node.js.
 |===
 
 === Option `--rpm-dir` / `-d`
@@ -2277,7 +2315,7 @@ if (ref.endsWith('.whl')) {
 
 === Vérification des outils
 
-* `syft` / `trivy` / `skopeo` : vérifié (`<tool> --version`) si `--image` est fourni
+* `syft` / `trivy` / `skopeo` / `cdxgen` : vérifié (`<tool> --version`) si `--image` est fourni (l'outil testé est celui de `--oci-tool`)
 * `rpm` : vérifié si la liste contient au moins une référence non-`.whl`, non-tar,
   non-`.zip`, non-`.deb`
 * `python3` : vérifié si la liste contient au moins un `.whl`, tar ou `.zip`
@@ -3177,8 +3215,8 @@ sans faire échouer la suite.
   `python3dist(lxml)`
 * [ ] Si ajout d'un type de paquet : mettre à jour `models.dart`, tous les générateurs
   (`if (pkg is …)`), `bin/sbom_generator.dart` (dispatch + outil check) et ce document
-* [ ] Si modification de `OciParser` ou `--image`/`--oci-tool` : tester les trois backends
-  (syft, trivy, skopeo) avec registre, tar et OCI layout ; si la détection d'OS
+* [ ] Si modification de `OciParser` ou `--image`/`--oci-tool` : tester les quatre backends
+  (syft, trivy, skopeo, cdxgen) avec registre, tar et OCI layout ; si la détection d'OS
   (`OsInfo`) est touchée, revérifier avec `trivy sbom` sur le SBOM produit que
   la classe "os-pkgs" est bien détectée (pas seulement que le composant OS est
   présent dans le JSON — voir <<sec-osinfo-oci-parser>>)
@@ -3226,6 +3264,9 @@ Outils système requis à l'exécution :
 
 |`skopeo` + `tar`
 |images OCI avec `--oci-tool skopeo`
+
+|`cdxgen` (+ Node.js)
+|images OCI avec `--oci-tool cdxgen`
 
 |`unzip`
 |archives `.jar` (via `--input`), et backend `skopeo` (`--oci-tool skopeo`)

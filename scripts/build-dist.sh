@@ -14,14 +14,14 @@
 # est bien celle en cours de packaging).
 #
 # Usage : ./scripts/build-dist.sh [VERSION] [--rpm]
-#   VERSION : numéro de version (défaut: 1.3.0)
+#   VERSION : numéro de version (défaut: 1.4.0)
 #   --rpm   : génère également les paquets RPM (nécessite rpm-build)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-VERSION="1.3.0"
+VERSION="1.4.0"
 BUILD_RPM=false
 
 for _arg in "$@"; do
@@ -29,7 +29,7 @@ for _arg in "$@"; do
     --rpm)     BUILD_RPM=true ;;
     --help|-h)
       echo "Usage: $0 [VERSION] [--rpm]"
-      echo "  VERSION  numéro de version (défaut: 1.3.0)"
+      echo "  VERSION  numéro de version (défaut: 1.4.0)"
       echo "  --rpm    génère les RPMs en plus du tar.gz (nécessite rpm-build)"
       exit 0 ;;
     -*)        echo "Option inconnue : $_arg" >&2; exit 1 ;;

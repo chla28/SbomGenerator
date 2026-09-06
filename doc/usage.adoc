@@ -9,7 +9,7 @@
 :docdate: 2026-06-30
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
-Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml), *paquets Dart/Flutter* (pubspec.lock/pubspec.yaml) et *images OCI* (via syft, trivy ou skopeo). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml), *paquets Dart/Flutter* (pubspec.lock/pubspec.yaml) et *images OCI* (via syft, trivy, skopeo ou cdxgen). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
 Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
 
 == Prérequis
@@ -58,6 +58,11 @@ Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0
 |`--image` avec `--oci-tool skopeo`
 |Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python packages et npm
 
+|`cdxgen`
+|—
+|`--image` avec `--oci-tool cdxgen`
+|Analyse d'images OCI via OWASP CycloneDX Generator — tous types de paquets (requiert Node.js)
+
 |`grype`
 |—
 |sous-commande `scan --scanner grype` (défaut)
@@ -91,6 +96,7 @@ unzip --version   # si --input contient un .jar, ou --oci-tool skopeo
 syft version      # si --oci-tool syft
 trivy --version   # si --oci-tool trivy, ou scan --scanner trivy
 skopeo --version  # si --oci-tool skopeo
+cdxgen --version  # si --oci-tool cdxgen (requiert Node.js)
 grype version         # si scan --scanner grype (défaut)
 osv-scanner --version # si scan --scanner osv
 sbomqs version         # si --min-quality-score
@@ -152,7 +158,7 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |`--oci-tool <outil>`
 |—
 |`syft`
-|Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo`
+|Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo`, `cdxgen`
 
 |`--output <fichier>`
 |`-o`
@@ -543,8 +549,9 @@ find /mnt/AppStream/Packages -name '*.rpm' >> liste.txt
 ./sbom_generator -I nginx:latest -f cyclonedx -n "nginx" -o nginx.cdx.json
 ----
 
-Avec les backends `syft` et `trivy` (pas `skopeo`), le SBOM CycloneDX/SPDX
-généré inclut un composant dédié pour l'OS de base de l'image — nécessaire
+Avec les backends `syft`, `trivy` et `cdxgen` (pas `skopeo`), le SBOM
+CycloneDX/SPDX généré inclut un composant dédié pour l'OS de base de l'image
+— nécessaire
 pour qu'un outil comme Trivy (`trivy sbom`), rescanné plus tard sur ce
 fichier, évalue aussi les CVE des paquets système (RPM/DEB/APK), pas
 seulement celles des paquets applicatifs. Sans ce composant, ces CVE
@@ -586,6 +593,26 @@ Les formats `.tar`, `.tar.gz` et `.tgz` sont détectés automatiquement.
 ----
 ./sbom_generator -I ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
 ----
+
+=== Analyse via cdxgen (OWASP CycloneDX Generator)
+
+`cdxgen` produit un SBOM CycloneDX complet de l'image ; le générateur ne
+retient que les composants porteurs d'un PURL d'écosystème réel
+(`pkg:deb`, `pkg:rpm`, `pkg:apk`, `pkg:pypi`, `pkg:npm`, `pkg:golang`,
+`pkg:maven`…). L'inventaire fichier par fichier (`pkg:generic/…` de type
+`file`), les actifs cryptographiques et les dépôts APT émis par cdxgen sont
+écartés, pour un résultat cohérent avec `syft`/`trivy`. L'OS de base est
+reconstitué depuis le qualifiant `distro=` des PURL système (cdxgen n'émet
+pas de composant `operating-system` dédié).
+
+[source,bash]
+----
+./sbom_generator -I nginx:latest --oci-tool cdxgen -o nginx.cdx.json
+----
+
+NOTE: `cdxgen` est distribué via npm (`npm install -g @cyclonedx/cdxgen`) et
+requiert Node.js. Registre distant, archive tar et OCI layout directory sont
+tous acceptés.
 
 === Combiner image OCI et liste de paquets supplémentaires
 
@@ -885,7 +912,7 @@ précisément à obtenir l'union des trois plutôt que de se fier à un seul.
 |Date/heure de génération (UTC ISO 8601)
 
 |Outil
-|`sbom_generator 1.3.0`
+|`sbom_generator 1.4.0`
 
 |Auteur
 |Fixé à `sbom_generator` (non configurable)
@@ -1093,7 +1120,7 @@ sbom_generator/
 │   ├── yarn_parser.dart           # Lecture yarn.lock v1 et v2+ Berry (pur Dart)
 │   ├── maven_parser.dart          # Lecture pom.xml (pur Dart, extraction XML légère)
 │   ├── pubspec_parser.dart        # Lecture pubspec.lock / pubspec.yaml (pur Dart)
-│   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo)
+│   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo / cdxgen)
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée
 │   ├── sbom_diff.dart             # Comparaison de SBOMs (sous-commande diff)
@@ -1120,9 +1147,9 @@ sbom_generator/
 └── pubspec.yaml                   # Dépendances Dart (args ^2.4.2)
 ....
 
-`sbomqs`, `grype`, `osv-scanner`, `cosign`, `syft`, `trivy` et `skopeo` sont
-des outils externes invoqués en sous-processus : ils ne font pas partie de
-ce dépôt (voir <<Prérequis>>).
+`sbomqs`, `grype`, `osv-scanner`, `cosign`, `syft`, `trivy`, `skopeo` et
+`cdxgen` sont des outils externes invoqués en sous-processus : ils ne font
+pas partie de ce dépôt (voir <<Prérequis>>).
 
 == Dépannage
 
@@ -1189,12 +1216,13 @@ Si le même paquet (même NEVRA) apparaît plusieurs fois (par ex. présent dans
 et AppStream), il n'est inclus qu'une seule fois dans le SBOM. Un message
 `($N doublon(s) supprimé(s))` l'indique.
 
-=== `syft / trivy / skopeo: command not found`
+=== `syft / trivy / skopeo / cdxgen: command not found`
 
 L'outil OCI demandé n'est pas installé ou n'est pas dans le PATH.
 
-Installez l'outil via son script officiel ou le gestionnaire de paquets du système.
-Vérifiez avec `which syft`, `which trivy` ou `which skopeo`.
+Installez l'outil via son script officiel ou le gestionnaire de paquets du système
+(`cdxgen` : `npm install -g @cyclonedx/cdxgen`, requiert Node.js).
+Vérifiez avec `which syft`, `which trivy`, `which skopeo` ou `which cdxgen`.
 
 === `Échec de l'analyse OCI : …`
 

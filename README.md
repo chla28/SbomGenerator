@@ -41,7 +41,7 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 | Archive tar exportée | `/path/image.tar`, `.tar.gz`, `.tgz` (ex. `docker save`) |
 | Répertoire OCI layout | `/path/oci_dir/` (contient `index.json`) |
 
-Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes), `trivy` (tous écosystèmes), ou `skopeo` (extraction manuelle : dpkg, RPM, APK, Maven JARs, PyPI, npm).
+Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes), `trivy` (tous écosystèmes), `skopeo` (extraction manuelle : dpkg, RPM, APK, Maven JARs, PyPI, npm), ou `cdxgen` (OWASP CycloneDX Generator, tous écosystèmes ; nécessite Node.js).
 
 **Traitement :**
 - RPM : 3 appels `rpm` en parallèle par paquet (`--queryformat`, `--requires`, `--provides`)
@@ -55,7 +55,8 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
   - `pubspec.lock` : versions résolues + fermeture transitive complète ; toutes les sources (`hosted`, `git`, `path`, `sdk`). Les dépendances `dependency: "direct dev"` sont exclues (leurs transitives exclusives restent, faute d'information dans le lockfile).
   - `pubspec.yaml` : dépendances directes de la section `dependencies:` uniquement (la section `dev_dependencies:` est ignorée) ; version déduite de la contrainte quand elle est univoque (`^1.2.3`, `1.2.3`, `>=1.2.3`), sinon vide.
   - Dans un scan de dossier, si `pubspec.lock` et `pubspec.yaml` coexistent, seul le `.lock` est retenu.
-- Image OCI (`--image`) : analyse via `syft`, `trivy` ou `skopeo` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
+- Image OCI (`--image`) : analyse via `syft`, `trivy`, `skopeo` ou `cdxgen` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
+  - `cdxgen` : produit un SBOM CycloneDX complet dont on ne retient que les composants porteurs d'un PURL d'écosystème réel (l'inventaire fichier par fichier de cdxgen et ses actifs cryptographiques sont écartés) ; l'OS de base est reconstitué depuis le qualifiant `distro=` des PURL système
 - Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`, `pubspec.yaml`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
 **Formats de sortie :**
@@ -82,7 +83,7 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 - `python3` (pour les wheels et archives tar/zip)
 - `dpkg-deb` (pour les paquets Debian `.deb`)
 - `unzip` (pour les archives `.jar`, et pour `--oci-tool skopeo`)
-- `syft`, `trivy` ou `skopeo` (uniquement pour `--image`, selon le backend choisi)
+- `syft`, `trivy`, `skopeo` ou `cdxgen` (uniquement pour `--image`, selon le backend choisi ; `cdxgen` requiert Node.js)
 - `grype`, `osv-scanner` ou `trivy` (uniquement pour la sous-commande `scan`)
 - `sbomqs` (uniquement pour `--min-quality-score`)
 - `cosign` (uniquement pour `--sign`)
@@ -111,7 +112,7 @@ Options :
   -i, --input              Fichier d'entrée (requis si --image absent)
   -I, --image              Image de conteneur à analyser : registre, archive
                            tar (.tar/.tar.gz/.tgz) ou répertoire OCI layout
-      --oci-tool            Backend d'analyse OCI : syft (défaut) | trivy | skopeo
+      --oci-tool            Backend d'analyse OCI : syft (défaut) | trivy | skopeo | cdxgen
   -o, --output             Fichier de sortie (défaut : sbom.json)
                            Avec plusieurs formats, utilisé comme base de nom
   -f, --format             Format(s), virgule-séparés :
@@ -189,6 +190,9 @@ sbom_generator scan --sbom sbom.cdx.json --scanner all --cve-after 2024-01-01
 
 # Analyser une archive tar exportée (docker save), backend trivy
 ./sbom_generator -I ./ubuntu.tar --oci-tool trivy -f spdx -o ubuntu.spdx.json
+
+# Analyser une image via cdxgen (OWASP CycloneDX Generator)
+./sbom_generator -I nginx:latest --oci-tool cdxgen -o nginx.cdx.json
 
 # Combiner une image OCI et une liste de paquets supplémentaires
 ./sbom_generator -I nginx:latest -i extra_pkgs.txt -o sbom.cdx.json
@@ -343,8 +347,9 @@ sbom_generator/
 │   ├── yarn_parser.dart         # Parsing yarn.lock classique et Berry (pur Dart)
 │   ├── maven_parser.dart        # Parsing pom.xml (pur Dart, extraction XML légère)
 │   ├── pubspec_parser.dart      # Parsing pubspec.lock / pubspec.yaml (pur Dart)
-│   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo)
+│   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo / cdxgen)
 │   │                            #   skopeo : RPM, dpkg, APK, Maven JARs, PyPI, npm
+│   │                            #   cdxgen : SBOM CycloneDX natif, filtré aux PURL réels
 │   ├── archive_helpers.dart     # Helpers partagés tar/zip (parseFilename, identifyLicense)
 │   ├── license_normalizer.dart  # Normalisation SPDX centralisée (LicenseNormalizer)
 │   ├── sbom_diff.dart           # Comparaison de SBOMs (SbomDiffer)
@@ -386,4 +391,4 @@ sbom_generator/
 | Go (`go.sum` / `go.mod`) | `pkg:golang/<module>@<ver>` | `pkg:golang/github.com/gorilla/mux@1.8.1` |
 | npm / yarn (`package-lock.json`, `yarn.lock`, ou OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
 | Dart/Flutter (`pubspec.lock` / `pubspec.yaml`) | `pkg:pub/<name>@<ver>` | `pkg:pub/provider@6.1.2` |
-| Image de conteneur (`--image`) | PURL fourni par l'outil d'analyse (syft/trivy), ou reconstruit selon l'écosystème détecté | `pkg:apk/alpine/musl@1.2.4-r2` |
+| Image de conteneur (`--image`) | PURL fourni par l'outil d'analyse (syft/trivy/cdxgen), ou reconstruit selon l'écosystème détecté | `pkg:apk/alpine/musl@1.2.4-r2` |

@@ -27,7 +27,7 @@ un dossier du PATH ou créez un lien symbolique :</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_syft_skopeo_introuvable">21.2. <code>syft</code> / <code>skopeo</code> introuvable</h3>
+<h3 id="_syft_skopeo_cdxgen_introuvable">21.2. <code>syft</code> / <code>skopeo</code> / <code>cdxgen</code> introuvable</h3>
 <div class="paragraph">
 <p><strong>Symptôme</strong> : la génération échoue avec le message
 <code>syft introuvable ou non fonctionnel — requis pour --image.</code></p>
@@ -44,7 +44,11 @@ syft version
 
 # Skopeo (Fedora/RHEL)
 sudo dnf install skopeo
-skopeo --version</code></pre>
+skopeo --version
+
+# cdxgen (npm, requiert Node.js)
+npm install -g @cyclonedx/cdxgen
+cdxgen --version</code></pre>
 </div>
 </div>
 </div>

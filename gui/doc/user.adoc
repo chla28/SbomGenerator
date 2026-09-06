@@ -98,6 +98,11 @@ Les paramètres sont *automatiquement sauvegardés* entre les sessions.
 |Non
 |Analyse d'images OCI (onglet Configuration — outil OCI par défaut)
 
+|`skopeo` / `trivy` / `cdxgen`
+|Non
+|Analyse d'images OCI — backends alternatifs (onglet Configuration — outil OCI) ;
+`cdxgen` requiert Node.js
+
 |`trivy` (analyse CVE)
 |Non
 |Analyse des vulnérabilités CVE (onglet Trivy)
@@ -133,6 +138,7 @@ syft version
 grype version
 osv-scanner --version
 trivy --version
+cdxgen --version
 asciidoctor-pdf --version
 sbomqs version
 ----
@@ -147,6 +153,17 @@ curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
 
 # Vérifier
 syft version
+----
+
+==== Installer cdxgen (optionnel)
+
+[source,bash]
+----
+# Via npm (requiert Node.js ≥ 20)
+npm install -g @cyclonedx/cdxgen
+
+# Vérifier
+cdxgen --version
 ----
 
 ==== Installer grype
@@ -413,6 +430,11 @@ backend d'analyse :
 |Skopeo
 |Extraction manuelle des layers — dpkg, RPM et APK uniquement
 |`skopeo` et `tar` dans le PATH
+
+|cdxgen
+|OWASP CycloneDX Generator — tous types de paquets ; le SBOM produit est
+filtré aux composants porteurs d'un PURL d'écosystème réel
+|`cdxgen` dans le PATH (requiert Node.js)
 |===
 
 === Section Sortie
@@ -2182,7 +2204,7 @@ Utilisez ↗ pour ouvrir le fichier JSON généré.
 |Étape |Action
 
 |1
-|Assurez-vous que `syft` (ou `trivy` / `skopeo`) est installé
+|Assurez-vous que `syft` (ou `trivy` / `skopeo` / `cdxgen`) est installé
 (voir <<_installer_syft_optionnel>>)
 
 |2
@@ -2468,7 +2490,7 @@ un dossier du PATH ou créez un lien symbolique :
 ln -s /chemin/vers/sbom-generator /usr/local/bin/sbom-generator
 ----
 
-=== `syft` / `skopeo` introuvable
+=== `syft` / `skopeo` / `cdxgen` introuvable
 
 *Symptôme* : la génération échoue avec le message
 `syft introuvable ou non fonctionnel — requis pour --image.`
@@ -2485,6 +2507,10 @@ syft version
 # Skopeo (Fedora/RHEL)
 sudo dnf install skopeo
 skopeo --version
+
+# cdxgen (npm, requiert Node.js)
+npm install -g @cyclonedx/cdxgen
+cdxgen --version
 ----
 
 === Échec de l'analyse OCI

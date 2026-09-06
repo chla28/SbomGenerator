@@ -6,7 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-06
+
 ### Added
+- Backend OCI **cdxgen** (`--oci-tool cdxgen`, ou sélecteur « cdxgen » dans la GUI) en plus
+  de `syft`, `trivy` et `skopeo` : lance `cdxgen --type docker` (OWASP CycloneDX Generator,
+  requiert Node.js) et normalise le BOM produit — seuls les composants porteurs d'un PURL
+  d'écosystème réel sont retenus (`pkg:deb`, `pkg:rpm`, `pkg:apk`, `pkg:pypi`, `pkg:npm`,
+  `pkg:golang`, `pkg:maven`…), l'inventaire fichier par fichier de cdxgen (`pkg:generic` de
+  type `file`), ses actifs cryptographiques et ses dépôts APT sont écartés pour un résultat
+  cohérent avec les autres backends. Registre, archive tar et OCI layout directory sont
+  acceptés. L'OS de base est reconstitué depuis le qualifiant `distro=` des PURL système
+  (cdxgen n'émet pas de composant `operating-system` dédié)
 - `scripts/build-dist.sh` génère désormais un SBOM CycloneDX (`sbom.cdx.json`, dépendances
   runtime de la GUI) et l'inclut dans l'archive de distribution, auto-hébergement via le
   binaire `sbom-generator` tout juste compilé par le script ; avec `--rpm`, un second SBOM
