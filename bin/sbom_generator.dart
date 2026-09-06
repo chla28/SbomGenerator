@@ -1390,7 +1390,23 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile,
   if (!quiet) stdout.writeln('\n── Grype ──────────────────────────────────────────');
   final ProcessResult result;
   try {
-    result = await Process.run('grype', [sbomFile, '--output', 'json']);
+    // Mêmes options que le lanceur Grype de la GUI
+    // (gui/lib/services/grype_runner.dart), pour que `scan` et l'onglet
+    // Grype rapportent les mêmes CVE sur un même SBOM :
+    //   --add-cpes-if-none : Grype synthétise un CPE pour les composants qui
+    //     n'en ont pas (sinon il ne matche que par PURL et rate les CVE
+    //     indexées par CPE — ex. le pseudo-paquet `flutter` d'un pubspec) ;
+    //   --by-cve : rapporte l'ID CVE plutôt que GHSA quand les deux existent,
+    //     indispensable pour aligner les identifiants avec OSV-Scanner/Trivy
+    //     dans la matrice inter-scanners du rapport de synthèse ;
+    //   --platform linux : sans effet sur une entrée SBOM, gardé pour parité.
+    result = await Process.run('grype', [
+      sbomFile,
+      '--output', 'json',
+      '--platform', 'linux',
+      '--add-cpes-if-none',
+      '--by-cve',
+    ]);
   } on ProcessException catch (e) {
     stderr.writeln('grype: introuvable (${e.message}). Installez-le ou omettez --scanner grype.');
     return null;

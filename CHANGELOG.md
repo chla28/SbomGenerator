@@ -22,6 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   d'`asciidoctor-pdf` n'échoue pas le build.
 
 ### Fixed
+- `sbom-generator scan --scanner grype` invoque désormais Grype avec les mêmes
+  options que l'onglet Grype de la GUI (`--add-cpes-if-none --by-cve --platform
+  linux`). Sans `--add-cpes-if-none`, Grype ne matchait que par PURL et
+  manquait les CVE indexées par CPE (ex. `flutter@0.0.0` d'un `pubspec.lock`) :
+  `scan` rapportait 0 CVE là où la GUI en trouvait. `--by-cve` aligne aussi les
+  identifiants (CVE vs GHSA) avec OSV-Scanner / Trivy pour la matrice
+  inter-scanners.
 - CycloneDX : `license.id` n'est plus attribué qu'aux identifiants réellement
   présents sur la SPDX License List (nouvel instantané `lib/spdx_license_ids.dart`).
   L'ancienne heuristique « le token contient un tiret suivi d'un chiffre » faisait

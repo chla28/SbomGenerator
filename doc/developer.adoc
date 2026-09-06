@@ -2208,7 +2208,10 @@ comptage/comparaison, comme dans le tableau de bord de la GUI.
 Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile, {bool quiet = false}) async {
   final ProcessResult result;
   try {
-    result = await Process.run('grype', [sbomFile, '--output', 'json']);
+    result = await Process.run('grype', [
+      sbomFile, '--output', 'json',
+      '--platform', 'linux', '--add-cpes-if-none', '--by-cve',
+    ]);
   } on ProcessException catch (e) {
     stderr.writeln('grype: introuvable (${e.message}). ...');
     return null;
@@ -2216,6 +2219,17 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile, {bool quiet = fal
   // exitCode > 1 → erreur ; sinon parse data['matches'][].{vulnerability, artifact}
 }
 ----
+
+Les options Grype sont alignées sur le lanceur de la GUI
+(`gui/lib/services/grype_runner.dart`) : sans `--add-cpes-if-none`, Grype ne
+matche que par PURL et rate les CVE indexées par CPE (ex. le pseudo-paquet
+`flutter` d'un `pubspec.lock`, qui n'a pas de PURL exploitable) — c'est la
+cause d'un écart constaté entre `scan` et l'onglet Grype sur un même SBOM.
+`--by-cve` fait rapporter l'ID CVE plutôt que GHSA, condition nécessaire pour
+aligner les identifiants avec OSV-Scanner/Trivy dans la matrice
+inter-scanners. `--platform linux` est sans effet sur une entrée SBOM (gardé
+pour parité). OSV-Scanner (`--format json --sbom`) et Trivy
+(`sbom --format json --quiet`) sont déjà invoqués comme la GUI.
 
 Chaque scanner a son propre format JSON (`matches[]` pour grype,
 `results[].packages[].vulnerabilities[]` pour osv-scanner,

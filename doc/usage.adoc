@@ -873,6 +873,12 @@ interrogé, avec une règle par identifiant de vulnérabilité. L'échec d'un
 scanner (binaire absent, sortie JSON illisible) n'empêche pas les autres
 scanners demandés (`--scanner all`) de s'exécuter.
 
+Grype est lancé avec les mêmes options que l'onglet Grype de l'interface
+graphique — notamment `--add-cpes-if-none` (Grype synthétise un CPE pour les
+composants qui n'en ont pas, sinon il ne matche que par PURL) et `--by-cve`
+(identifiant CVE plutôt que GHSA). `scan` et la GUI rapportent donc les mêmes
+CVE sur un même SBOM.
+
 Les formats `markdown`, `asciidoc` et `pdf` produisent un *rapport de
 synthèse* dans le fichier `--output` : résumé global (scanners exécutés,
 nombre de CVE uniques tous scanners confondus, total brut), répartition par
@@ -884,8 +890,11 @@ le nombre de CVE (le code `1` reste réservé à `text` / `sarif`). C'est ce
 que `scripts/build-dist.sh` utilise pour joindre un PDF de synthèse à côté de
 l'archive de distribution.
 
-Codes de retour : `0` = aucune CVE dans la plage demandée (tous scanners
-confondus), `1` = au moins une CVE trouvée, ou erreur de scanner.
+Codes de retour (`--format text` / `sarif`) : `0` = aucune CVE dans la plage
+demandée (tous scanners confondus), `1` = au moins une CVE trouvée, ou erreur
+de scanner. Les formats rapport (`markdown` / `asciidoc` / `pdf`) renvoient
+`0` dès qu'un rapport est écrit ; `1` seulement si `--output` manque ou si
+aucun scanner n'a produit de résultat.
 
 === Pourquoi les scanners ne trouvent pas les mêmes CVE
 
