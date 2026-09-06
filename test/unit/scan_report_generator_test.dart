@@ -90,6 +90,52 @@ void main() {
       expect(adoc, contains('[.sev-critical]#CRITICAL#'));
     });
 
+    test('alerts() : CVE uniques Critical + High, pire sévérité, scanners', () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [
+            _v('CVE-2026-1', 'Critical'),
+            _v('CVE-2026-2', 'High'),
+            _v('CVE-2026-3', 'Medium'), // exclu
+          ],
+          'trivy': [
+            _v('CVE-2026-2', 'Critical'), // pire sévérité → Critical
+            _v('CVE-2026-4', 'Low'), // exclu
+          ],
+          'osv': <Map<String, dynamic>>[],
+        },
+      );
+      final a = gen.alerts();
+      expect(a.map((x) => x.id), ['CVE-2026-1', 'CVE-2026-2']);
+      final two = a.firstWhere((x) => x.id == 'CVE-2026-2');
+      expect(two.severity.toLowerCase(), 'critical');
+      expect(two.scanners, containsAll(['Grype', 'Trivy']));
+      expect(a.first.package, 'p@1');
+    });
+
+    test('alerts() : normalise les ID distro-préfixés avant dédup', () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [_v('CVE-2026-13221', 'Critical')],
+          'osv': [_v('DEBIAN-CVE-2026-13221', 'High')],
+        },
+      );
+      expect(gen.alerts(), hasLength(1));
+      expect(gen.alerts().single.id, 'CVE-2026-13221');
+    });
+
+    test('alerts() vide si aucune CVE Critical/High', () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [_v('CVE-2026-1', 'Medium'), _v('CVE-2026-2', 'Low')],
+        },
+      );
+      expect(gen.alerts(), isEmpty);
+    });
+
     test('échappe le séparateur de cellule dans les identifiants', () {
       final gen = ScanReportGenerator(
         sbomPath: 's',

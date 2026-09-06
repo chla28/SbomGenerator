@@ -69,10 +69,14 @@ run_scan_report() {
     return 0
   fi
   # `scan -f pdf` sort 0 dès qu'un rapport est produit (même avec des CVE) ;
-  # si asciidoctor-pdf manque, le .adoc est conservé à côté.
+  # si asciidoctor-pdf manque, le .adoc est conservé à côté. Il liste au
+  # passage chaque CVE Critical (rouge) / High (orange) sur stdout : on force
+  # la couleur si le terminal du build la supporte (le `sed` la préserve).
+  local color=never
+  [[ -t 1 && -z "${NO_COLOR:-}" ]] && color=always
   if "${DIST_DIR}/bin/sbom-generator" scan \
-       --sbom "$sbom" --scanner all --format pdf --output "$pdf" 2>&1 \
-       | sed 's/^/  /'; then
+       --sbom "$sbom" --scanner all --format pdf --output "$pdf" \
+       --color "$color" 2>&1 | sed 's/^/  /'; then
     [[ -f "$pdf" ]] && echo "  ✓ $(realpath --relative-to="${PROJECT_DIR}" "$pdf")"
   else
     echo "  ⚠  Échec du scan CVE — le packaging continue sans rapport." >&2

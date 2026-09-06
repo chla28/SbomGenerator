@@ -2237,12 +2237,18 @@ tableau texte par scanner interrogé, avec rappel du filtre appliqué
 `security-severity` via `_sarifSecurityScore()`) — `--format sarif`
 
 |`_writeScanReport()`
-|`--format markdown` / `asciidoc` / `pdf` : instancie
-`ScanReportGenerator` (`lib/scan_report_generator.dart`) et écrit le fichier.
-Pour `pdf`, écrit d'abord un `.adoc` à côté puis appelle
-`renderAsciiDocToPdf()` (shell-out `asciidoctor-pdf` + thème partagé) ;
-`ProcessException` ou code ≠ 0 → conserve le `.adoc`, avertit, mais ne fait
-pas échouer la commande
+|`--format markdown` / `asciidoc` / `pdf` : reçoit le `ScanReportGenerator`
+(`lib/scan_report_generator.dart`) et écrit le fichier. Pour `pdf`, écrit
+d'abord un `.adoc` à côté puis appelle `renderAsciiDocToPdf()` (shell-out
+`asciidoctor-pdf` + thème partagé) ; `ProcessException` ou code ≠ 0 →
+conserve le `.adoc`, avertit, mais ne fait pas échouer la commande
+
+|`_printSeverityAlerts()`
+|Avant l'écriture du fichier (formats rapport uniquement) : liste sur stdout
+`ScanReportGenerator.alerts()` — une ligne par CVE unique Critical (rouge
+`\e[1;31m`) / High (orange `\e[38;5;208m`), avec paquet + scanners, puis un
+décompte. `--color auto` (défaut) = `stdout.hasTerminal && !NO_COLOR` ;
+`always` / `never` forcent. Best-effort, sans effet sur le code de retour
 
 |`_scannerVersion()`
 |Version courte `x.y.z` d'un scanner (best-effort, pour l'entête « Outils »
@@ -2256,9 +2262,11 @@ du rapport)
 hors `renderAsciiDocToPdf`) : `toMarkdown()` / `toAsciiDoc()` prennent la
 `Map<String, List<…>?>` par scanner (`null` = non exécuté, `[]` = exécuté
 sans résultat) et produisent résumé global + répartition par sévérité +
-matrice CVE × scanner. Les identifiants distro-préfixés d'OSV-Scanner
-(`DEBIAN-CVE-…`) sont normalisés (`_distroPrefixedCveRe`) avant tout
-comptage/comparaison, comme dans le tableau de bord de la GUI.
+matrice CVE × scanner. `alerts({keep})` renvoie les `ScanAlert` (CVE unique,
+pire sévérité, paquet, scanners) au-dessus d'un seuil — consommé par
+`_printSeverityAlerts` côté CLI. Les identifiants distro-préfixés
+d'OSV-Scanner (`DEBIAN-CVE-…`) sont normalisés (`_distroPrefixedCveRe`) avant
+tout comptage/comparaison, comme dans le tableau de bord de la GUI.
 
 [source,dart]
 ----

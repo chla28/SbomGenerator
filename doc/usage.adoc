@@ -866,6 +866,12 @@ conservé à côté).
 |—
 |Fichier de sortie. Requis pour `markdown` / `asciidoc` / `pdf` ; pour
 `sarif`, écrit sur stdout si omis.
+
+|`--color <valeur>`
+|`auto`
+|Coloration ANSI des alertes Critical/High listées sur stdout par les
+formats rapport : `auto` (couleur si terminal + `NO_COLOR` non défini),
+`always`, `never`.
 |===
 
 [source,bash]
@@ -916,6 +922,15 @@ formats retournent le code `0` dès qu'un rapport est produit, quel que soit
 le nombre de CVE (le code `1` reste réservé à `text` / `sarif`). C'est ce
 que `scripts/build-dist.sh` utilise pour joindre un PDF de synthèse à côté de
 l'archive de distribution.
+
+En plus du fichier, ces trois formats *listent sur stdout chaque CVE
+Critical (en rouge) et High (en orange)*, une ligne par CVE unique
+(dédupliquée entre scanners), avec le paquet concerné et les scanners qui
+l'ont vue, puis un décompte. `--color auto` (défaut) colore seulement si
+stdout est un terminal et `NO_COLOR` non défini ; `--color always` force la
+couleur (utile derrière un pipe — `build-dist.sh` l'active quand le terminal
+du build le permet), `--color never` n'émet que les préfixes `[CRITICAL]` /
+`[HIGH]`.
 
 Codes de retour (`--format text` / `sarif`) : `0` = aucune CVE dans la plage
 demandée (tous scanners confondus), `1` = au moins une CVE trouvée, ou erreur

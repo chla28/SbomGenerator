@@ -1235,6 +1235,13 @@ Future<void> _runScan(List<String> arguments) async {
         abbr: 'o',
         help: 'Fichier de sortie. Requis pour --format markdown/asciidoc/pdf ;\n'
             'pour --format sarif, écrit sur stdout si omis.')
+    ..addOption('color',
+        allowed: ['auto', 'always', 'never'],
+        defaultsTo: 'auto',
+        help: 'Coloration ANSI des alertes Critical/High (formats rapport).\n'
+            '  auto    si stdout est un terminal et NO_COLOR non défini (défaut)\n'
+            '  always  toujours (utile derrière un pipe : build-dist.sh)\n'
+            '  never   jamais (préfixes [CRITICAL]/[HIGH])')
     ..addFlag('help',
         abbr: 'h',
         negatable: false,
@@ -1259,6 +1266,7 @@ Future<void> _runScan(List<String> arguments) async {
   final dateField = args['cve-date-field'] as String;
   final includeUndated = args['include-undated'] as bool;
   final format = args['format'] as String;
+  final colorMode = args['color'] as String;
   final outputPath = args['output'] as String?;
 
   if (!_validScanners.contains(scanner)) {
@@ -1338,13 +1346,52 @@ Future<void> _runScan(List<String> arguments) async {
           'scan: aucun scanner n\'a produit de résultat — rapport non généré.');
       exit(1);
     }
-    await _writeScanReport(
-        format, outputPath!, sbomFile, resultsByScanner, scanners);
+    final gen = ScanReportGenerator(
+      sbomPath: sbomFile,
+      resultsByScanner: resultsByScanner,
+      toolVersions: {
+        'sbom-generator': _version,
+        for (final s in scanners)
+          if (resultsByScanner.containsKey(s))
+            {'grype': 'Grype', 'osv': 'OSV-Scanner', 'trivy': 'Trivy'}[s]!:
+                await _scannerVersion(s) ?? 'inconnue',
+      },
+    );
+    _printSeverityAlerts(gen, colorMode);
+    await _writeScanReport(format, outputPath!, gen);
     // Un rapport produit n'est pas un échec, quel que soit le nombre de CVE.
     exit(0);
   }
 
   exit(totalShown > 0 ? 1 : 0);
+}
+
+/// Affiche, une ligne par CVE unique, les vulnérabilités Critical (rouge) et
+/// High (orange) — pendant un build (`scan -f markdown|asciidoc|pdf`). Best
+/// effort : n'échoue jamais et n'affecte pas le code de retour.
+void _printSeverityAlerts(ScanReportGenerator gen, String colorMode) {
+  final alerts = gen.alerts();
+  if (alerts.isEmpty) return;
+
+  final color = switch (colorMode) {
+    'always' => true,
+    'never' => false,
+    _ => stdout.hasTerminal && !Platform.environment.containsKey('NO_COLOR'),
+  };
+  const red = '\x1B[1;31m', orange = '\x1B[38;5;208m', reset = '\x1B[0m';
+
+  var crit = 0, high = 0;
+  for (final a in alerts) {
+    final isCrit = a.severity.toLowerCase() == 'critical';
+    isCrit ? crit++ : high++;
+    final label = isCrit ? 'CRITICAL' : 'HIGH';
+    final srcs = a.scanners.isEmpty ? '' : '  (${a.scanners.join(', ')})';
+    final pkg = a.package.isEmpty ? '' : '  ${a.package}';
+    final line = '[$label] ${a.id}$pkg$srcs';
+    stdout.writeln(color ? '${isCrit ? red : orange}$line$reset' : line);
+  }
+  final summary = '→ $crit CVE critique(s), $high CVE High';
+  stdout.writeln(color ? '$red$summary$reset' : summary);
 }
 
 /// Écrit le rapport de synthèse inter-scanners dans [outputPath].
@@ -1354,22 +1401,8 @@ Future<void> _runScan(List<String> arguments) async {
 Future<void> _writeScanReport(
   String format,
   String outputPath,
-  String sbomFile,
-  Map<String, List<Map<String, dynamic>>> resultsByScanner,
-  List<String> scanners,
+  ScanReportGenerator gen,
 ) async {
-  final gen = ScanReportGenerator(
-    sbomPath: sbomFile,
-    resultsByScanner: resultsByScanner,
-    toolVersions: {
-      'sbom-generator': _version,
-      for (final s in scanners)
-        if (resultsByScanner.containsKey(s))
-          {'grype': 'Grype', 'osv': 'OSV-Scanner', 'trivy': 'Trivy'}[s]!:
-              await _scannerVersion(s) ?? 'inconnue',
-    },
-  );
-
   if (format == 'markdown') {
     await File(outputPath).writeAsString(gen.toMarkdown());
     stdout.writeln('Rapport Markdown écrit → $outputPath');
@@ -1671,6 +1704,12 @@ Exemples:
   # Rapport de synthèse PDF (Grype + OSV-Scanner + Trivy)
   sbom-generator scan --sbom sbom.cdx.json --scanner all \\
     --format pdf --output scan-report.pdf
+
+En --format markdown/asciidoc/pdf, chaque CVE Critical (rouge) et High
+(orange) est aussi listée sur stdout, une ligne par CVE unique
+(dédupliquée entre scanners) — utile pendant un build. --color auto par
+défaut (couleur si stdout est un terminal et NO_COLOR non défini) ;
+--color always force la couleur derrière un pipe.
 
 Codes de retour:
   text / sarif :

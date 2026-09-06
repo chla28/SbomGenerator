@@ -98,6 +98,17 @@ class ScanReportGenerator {
                 (v['severity'] as String?) ?? '',
         },
     };
+    // Premier paquet non vide rencontré pour chaque CVE (tous scanners).
+    final pkgById = <String, String>{};
+    for (final s in _scannerOrder) {
+      for (final v in resultsByScanner[s] ?? const []) {
+        final id = _normalizeId((v['id'] as String?) ?? '');
+        final pkg = (v['package'] as String?) ?? '';
+        if (id.isNotEmpty && pkg.isNotEmpty && pkg != '@') {
+          pkgById.putIfAbsent(id, () => pkg);
+        }
+      }
+    }
     final all = <String>{for (final ids in idsByScanner.values) ...ids}.toList();
 
     // Sévérité affichée = la pire rapportée par un scanner quelconque
@@ -127,8 +138,28 @@ class ScanReportGenerator {
         _CrossRow(
           id: id,
           severity: worstSeverity(id),
+          package: pkgById[id] ?? '',
           present: {for (final s in _scannerOrder) s: idsByScanner[s]?.contains(id) ?? false},
         ),
+    ];
+  }
+
+  /// CVE uniques (toutes sources confondues) dont la pire sévérité est dans
+  /// [keep] — pour un affichage d'alerte en console pendant un build.
+  List<ScanAlert> alerts(
+      {Set<String> keep = const {'critical', 'high'}}) {
+    return [
+      for (final r in _crossRows())
+        if (keep.contains(r.severity.toLowerCase()))
+          ScanAlert(
+            id: r.id,
+            severity: r.severity,
+            package: r.package,
+            scanners: [
+              for (final s in _scannerOrder)
+                if (r.present[s] ?? false) _scannerLabels[s]!,
+            ],
+          ),
     ];
   }
 
@@ -352,8 +383,27 @@ class ScanReportGenerator {
 class _CrossRow {
   final String id;
   final String severity;
+  final String package;
   final Map<String, bool> present;
-  _CrossRow({required this.id, required this.severity, required this.present});
+  _CrossRow(
+      {required this.id,
+      required this.severity,
+      required this.package,
+      required this.present});
+}
+
+/// Une CVE unique au-dessus d'un seuil de sévérité, pour l'affichage d'alerte.
+class ScanAlert {
+  final String id;
+  final String severity;
+  final String package;
+  final List<String> scanners;
+  ScanAlert({
+    required this.id,
+    required this.severity,
+    required this.package,
+    required this.scanners,
+  });
 }
 
 // ── AsciiDoc → PDF ─────────────────────────────────────────────────────────

@@ -22,6 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   d'`asciidoctor-pdf` n'échoue pas le build.
 
 ### Added
+- `sbom-generator scan -f markdown|asciidoc|pdf` liste désormais sur stdout,
+  une ligne par CVE unique, chaque vulnérabilité **Critical (rouge)** et
+  **High (orange)** — paquet concerné + scanners qui l'ont vue + décompte.
+  `--color auto` par défaut (couleur si terminal et `NO_COLOR` non défini),
+  `--color always` (force, ex. derrière le pipe de `build-dist.sh`),
+  `--color never`. `build-dist.sh` affiche ces alertes pendant l'audit du
+  build.
 - Licences des paquets Dart/Flutter : `pubspec.lock` n'en contient aucune ; le
   CLI lit désormais le fichier `LICENSE` de chaque paquet depuis le cache pub
   (`$PUB_CACHE` / `~/.pub-cache`, auto-détecté ; `--pub-cache <dir>` pour
