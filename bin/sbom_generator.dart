@@ -185,6 +185,13 @@ Future<void> main(List<String> arguments) async {
           'Peut être répété. Supporte les expressions SPDX partielles.\n'
           'Exemple : --deny-license GPL-3.0 --deny-license AGPL-3.0',
     )
+    ..addMultiOption(
+      'sdk-version',
+      help: 'Version réelle d\'un SDK Dart/Flutter, pour les paquets\n'
+          '`source: sdk` d\'un pubspec.lock/pubspec.yaml (que le lockfile\n'
+          'note toujours 0.0.0). Format <sdk>=<version>, répétable.\n'
+          'Exemple : --sdk-version flutter=3.47.2 --sdk-version dart=3.9.0',
+    )
     ..addOption(
       'cyclonedx-version',
       defaultsTo: '1.6',
@@ -302,6 +309,15 @@ Future<void> main(List<String> arguments) async {
   final licenseOverrides =
       licenseMapPath != null ? _parseLicenseMap(licenseMapPath) : <String, String>{};
   final denyLicenses = args['deny-license'] as List<String>;
+  final sdkVersions = <String, String>{};
+  for (final entry in args['sdk-version'] as List<String>) {
+    final eq = entry.indexOf('=');
+    if (eq <= 0) {
+      _err('--sdk-version attend <sdk>=<version> (reçu "$entry").');
+      exit(1);
+    }
+    sdkVersions[entry.substring(0, eq).trim()] = entry.substring(eq + 1).trim();
+  }
   final minQualityScore = args['min-quality-score'] as String?;
   final signSbom = args['sign'] as bool;
   if (verbose && licenseOverrides.isNotEmpty) {
@@ -441,9 +457,11 @@ Future<void> main(List<String> arguments) async {
     } else if (_isPomXml(ref)) {
       preloadedPackages.addAll(mavenParser.parsePomXml(ref));
     } else if (_isPubspecLock(ref)) {
-      preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref));
+      preloadedPackages
+          .addAll(pubspecParser.parsePubspecLock(ref, sdkVersions: sdkVersions));
     } else if (_isPubspecYaml(ref)) {
-      preloadedPackages.addAll(pubspecParser.parsePubspecYaml(ref));
+      preloadedPackages
+          .addAll(pubspecParser.parsePubspecYaml(ref, sdkVersions: sdkVersions));
     } else {
       filteredRefs.add(ref);
     }

@@ -1665,7 +1665,7 @@ Parseur *pur Dart* (sans dépendance `yaml`) pour `pubspec.lock` et
 `pubspec.yaml`. Retourne `List<WheelPackage>` avec `packageType: 'pub'`
 (PURL `pkg:pub/<name>@<ver>`).
 
-=== `parsePubspecLock(String path)`
+=== `parsePubspecLock(String path, {Map<String,String> sdkVersions})`
 
 Lecture ligne à ligne du bloc `packages:` (indentation stable à 2 espaces
 générée par `pub`). Pour chaque paquet :
@@ -1674,19 +1674,31 @@ générée par `pub`). Pour chaque paquet :
   par une dépendance de dev ne sont pas distinguables dans le lockfile : elles
   restent incluses.
 * `source:` — `hosted` | `git` | `path` | `sdk` : toutes retenues.
-* `version:` — version résolue (`"0.0.0"` pour les pseudo-paquets `sdk`).
 * `description.name` (hosted) → nom du paquet ; sinon la clé du bloc.
+* `source: sdk` — le nom est **toujours la clé** (`flutter`, `sky_engine`,
+  `flutter_web_plugins`…). Le `description:` scalaire (`description: flutter`)
+  nomme le SDK, pas le paquet : l'utiliser comme nom collait tous ces paquets
+  sur `flutter` puis les dédupliquait (régression corrigée). Il ne sert plus
+  qu'à choisir la clé dans `sdkVersions`.
+* `version:` — version résolue ; pour `source: sdk`, `pub` écrit toujours
+  `"0.0.0"` (aucune vraie version pour un paquet livré dans le SDK) → **version
+  vide** (`pkg:pub/flutter`), sauf si `sdkVersions` fournit la vraie version
+  (`{'flutter': '3.47.2'}` → tous les paquets `description: flutter` héritent de
+  `3.47.2`). Alimenté par `--sdk-version <sdk>=<ver>` côté CLI.
 * `description.sha256` (hosted) → `WheelPackage.sha256Header`.
 * `description.url` → homepage (`https://pub.dev/packages/<name>` pour
   pub.dev, `<registre>/packages/<name>` pour un registre privé, l'URL du dépôt
   pour `git`).
 
-=== `parsePubspecYaml(String path)`
+=== `parsePubspecYaml(String path, {Map<String,String> sdkVersions})`
 
 Lit uniquement la section `dependencies:` (la section `dev_dependencies:` et
-`dependency_overrides:` sont ignorées). La contrainte de version est réduite à
-une version unique quand c'est univoque (`^1.2.3`, `1.2.3`, `>=1.2.3` →
-`1.2.3`) ; une plage (`>=1.0.0 <2.0.0`) ou `any` donne une version vide.
+`dependency_overrides:` sont ignorées). Approche à `flush()` : chaque bloc de
+dépendance est bufferisé pour repérer une ligne imbriquée `sdk: <x>` (dépendance
+SDK) avant émission — sa version vient alors de `sdkVersions[<x>]` si fournie,
+sinon vide. Une contrainte simple est réduite à une version unique quand c'est
+univoque (`^1.2.3`, `1.2.3`, `>=1.2.3` → `1.2.3`) ; une plage
+(`>=1.0.0 <2.0.0`) ou `any` donne une version vide.
 
 === Priorité lock / yaml
 

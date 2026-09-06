@@ -21,7 +21,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Best-effort : chaque scanner absent est omis, l'absence totale de scanner ou
   d'`asciidoctor-pdf` n'échoue pas le build.
 
+### Added
+- `--sdk-version <sdk>=<version>` (répétable) : renseigne la vraie version d'un
+  SDK Dart/Flutter pour les paquets `source: sdk` d'un `pubspec.lock` /
+  `pubspec.yaml` (que `pub` note toujours `0.0.0`). `scripts/build-dist.sh` le
+  passe automatiquement à partir de `flutter --version` / `dart --version`.
+
 ### Fixed
+- `pubspec.lock` / `pubspec.yaml` : les paquets `source: sdk` autres que le
+  premier (`sky_engine`, `flutter_web_plugins`…) étaient renommés `flutter`
+  (via le `description:` scalaire) puis dédupliqués → composants perdus dans le
+  SBOM. Le nom est désormais la clé du bloc. Leur version factice `0.0.0` du
+  lockfile est aussi omise (PURL `pkg:pub/flutter` sans version) — sauf
+  `--sdk-version`. Effet de bord : plus de faux positifs Grype sur
+  `flutter@0.0.0` faute de version aberrante.
 - `sbom-generator scan --scanner grype` invoque désormais Grype avec les mêmes
   options que l'onglet Grype de la GUI (`--add-cpes-if-none --by-cve --platform
   linux`). Sans `--add-cpes-if-none`, Grype ne matchait que par PURL et

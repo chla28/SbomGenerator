@@ -16,11 +16,18 @@ import 'models.dart';
 /// apart from production transitives in the lockfile, so they are kept.
 ///
 /// All non-dev sources are reported: `hosted` (pub.dev or a custom registry),
-/// `git`, `path`, and `sdk` (the `flutter` / `dart` pseudo-packages).
+/// `git`, `path`, and `sdk` (`flutter`, `sky_engine`, `flutter_web_plugins`…).
+///
+/// `source: sdk` packages carry `version: "0.0.0"` in every lockfile (pub has
+/// no real version for SDK-bundled packages). That placeholder is dropped —
+/// the component is emitted without a version — unless the caller supplies the
+/// real SDK version via [sdkVersions] (`{'flutter': '3.47.2'}`), keyed by the
+/// SDK named in the lock entry's `description:` scalar.
 class PubspecParser {
   /// Parses a `pubspec.lock` file. Produces one [WheelPackage] per package
   /// with `packageType='pub'` (PURL `pkg:pub/<name>@<version>`).
-  List<WheelPackage> parsePubspecLock(String path) {
+  List<WheelPackage> parsePubspecLock(String path,
+      {Map<String, String> sdkVersions = const {}}) {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: pubspec.lock not found: $path');
@@ -31,12 +38,22 @@ class PubspecParser {
     final seen = <String>{};
     var inPackages = false;
 
-    String? key, dependency, source, version, sha256, descName, url;
+    String? key, dependency, source, version, sha256, descName, url, sdkName;
 
     void flush() {
       if (key != null && dependency != 'direct dev') {
-        final name = (descName != null && descName!.isNotEmpty) ? descName! : key!;
-        final ver = version ?? '';
+        // Pour `source: sdk`, `description:` est un scalaire qui nomme le SDK
+        // (`flutter`, `dart`), pas le paquet — le nom du paquet est la clé.
+        // `descName` (issu de `description.name`) ne concerne que `hosted`.
+        final name = source == 'sdk'
+            ? key!
+            : ((descName != null && descName!.isNotEmpty) ? descName! : key!);
+        // `pubspec.lock` écrit toujours "0.0.0" pour les paquets du SDK : on
+        // n'émet pas cette fausse version, sauf si l'appelant a fourni la
+        // version réelle du SDK (--sdk-version flutter=3.47.2).
+        final ver = source == 'sdk'
+            ? (sdkVersions[sdkName ?? ''] ?? '')
+            : (version ?? '');
         if (name.isNotEmpty && seen.add('$name@$ver')) {
           packages.add(WheelPackage(
             name: name,
@@ -54,7 +71,7 @@ class PubspecParser {
           ));
         }
       }
-      key = dependency = source = version = sha256 = descName = url = null;
+      key = dependency = source = version = sha256 = descName = url = sdkName = null;
     }
 
     for (final raw in file.readAsLinesSync()) {
@@ -87,7 +104,9 @@ class PubspecParser {
           version = _unquote(content.substring('version:'.length));
         } else if (content.startsWith('description:')) {
           final rest = content.substring('description:'.length).trim();
-          if (rest.isNotEmpty) descName = _unquote(rest); // scalar form (sdk)
+          // Scalar form (`description: flutter`) → names the SDK, not the
+          // package. Used only to look up the SDK version in [sdkVersions].
+          if (rest.isNotEmpty) sdkName = _unquote(rest);
         }
       } else if (indent == 6) {
         if (content.startsWith('name:')) {
@@ -105,8 +124,11 @@ class PubspecParser {
 
   /// Parses the `dependencies:` section of a `pubspec.yaml` file. Version
   /// constraints are reduced to a single version when unambiguous (`^1.2.3`,
-  /// `1.2.3`, `>=1.2.3`); ranges and `any` produce an empty version.
-  List<WheelPackage> parsePubspecYaml(String path) {
+  /// `1.2.3`, `>=1.2.3`); ranges and `any` produce an empty version. An SDK
+  /// dependency (`flutter:\n    sdk: flutter`) takes its version from
+  /// [sdkVersions] if supplied, otherwise none.
+  List<WheelPackage> parsePubspecYaml(String path,
+      {Map<String, String> sdkVersions = const {}}) {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: pubspec.yaml not found: $path');
@@ -117,44 +139,66 @@ class PubspecParser {
     final seen = <String>{};
     var inDeps = false;
 
+    String? pendingName;
+    String pendingVersion = '';
+    String? pendingSdk;
+
+    void flush() {
+      if (pendingName == null || !seen.add(pendingName!)) {
+        pendingName = null;
+        pendingVersion = '';
+        pendingSdk = null;
+        return;
+      }
+      final ver = pendingSdk != null
+          ? (sdkVersions[pendingSdk!] ?? '')
+          : pendingVersion;
+      packages.add(WheelPackage(
+        name: pendingName!,
+        version: ver,
+        license: '',
+        url: 'https://pub.dev/packages/${pendingName!}',
+        summary: '',
+        vendor: '',
+        arch: 'any',
+        sourceRef: path,
+        requires: [],
+        provides: [pendingName!],
+        packageType: 'pub',
+      ));
+      pendingName = null;
+      pendingVersion = '';
+      pendingSdk = null;
+    }
+
     for (final raw in file.readAsLinesSync()) {
       final line = raw.trimRight();
       if (line.isEmpty || line.trimLeft().startsWith('#')) continue;
 
       if (!line.startsWith(' ')) {
+        flush();
         inDeps = line == 'dependencies:';
         continue;
       }
       if (!inDeps) continue;
 
       final indent = line.length - line.trimLeft().length;
-      if (indent != 2) continue; // nested git:/sdk:/path: detail lines
-
       var content = line.trim();
       final hashIdx = content.indexOf(' #');
       if (hashIdx >= 0) content = content.substring(0, hashIdx).trim();
 
-      final colon = content.indexOf(':');
-      if (colon < 0) continue;
-
-      final name = _unquote(content.substring(0, colon));
-      if (name.isEmpty || !seen.add(name)) continue;
-
-      final rest = content.substring(colon + 1).trim();
-      packages.add(WheelPackage(
-        name: name,
-        version: rest.isEmpty ? '' : _constraintToVersion(rest),
-        license: '',
-        url: 'https://pub.dev/packages/$name',
-        summary: '',
-        vendor: '',
-        arch: 'any',
-        sourceRef: path,
-        requires: [],
-        provides: [name],
-        packageType: 'pub',
-      ));
+      if (indent == 2) {
+        flush();
+        final colon = content.indexOf(':');
+        if (colon < 0) continue;
+        pendingName = _unquote(content.substring(0, colon));
+        pendingVersion = _constraintToVersion(content.substring(colon + 1).trim());
+      } else if (pendingName != null && content.startsWith('sdk:')) {
+        // nested `sdk: flutter` under a dependency → SDK-sourced
+        pendingSdk = _unquote(content.substring('sdk:'.length));
+      }
     }
+    flush();
     return packages;
   }
 

@@ -181,14 +181,27 @@ libsecret
 PKGS
 find "$PROJECT_DIR" -name pubspec.lock \
   -not -path '*/build/*' -not -path '*/.dart_tool/*' | sort >> "$SBOM_INPUT"
+
+# Les paquets `source: sdk` d'un pubspec.lock (flutter, sky_engine…) sont notés
+# "0.0.0" par pub : on injecte la vraie version des SDK utilisés pour ce build.
+SDK_ARGS=()
+_flutter_ver="$(flutter --version 2>/dev/null \
+  | grep -oiE 'flutter[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | head -1 \
+  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+[[ -n "$_flutter_ver" ]] && SDK_ARGS+=(--sdk-version "flutter=$_flutter_ver")
+_dart_ver="$(dart --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+[[ -n "$_dart_ver" ]] && SDK_ARGS+=(--sdk-version "dart=$_dart_ver")
+[[ ${#SDK_ARGS[@]} -gt 0 ]] && echo "  SDK : ${SDK_ARGS[*]}"
+
 if "${DIST_DIR}/bin/sbom-generator" -i "$SBOM_INPUT" -f cyclonedx \
      -o "${DIST_DIR}/sbom.cdx.json" \
-     -n "${DIST_NAME}-sbom" 2>&1 | sed 's/^/  /'; then
+     -n "${DIST_NAME}-sbom" ${SDK_ARGS[@]+"${SDK_ARGS[@]}"} 2>&1 | sed 's/^/  /'; then
   echo "  ✓ sbom.cdx.json (SBOM CycloneDX : deps runtime + arbre pub)"
 else
   echo "  ⚠  Échec de la génération du SBOM — le packaging continue sans." >&2
 fi
 rm -f "$SBOM_INPUT"
+unset _flutter_ver _dart_ver
 echo ""
 
 # ── Scan CVE du SBOM + PDF de synthèse ───────────────────────────────────────

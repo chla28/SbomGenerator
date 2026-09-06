@@ -115,8 +115,70 @@ packages:
       final local = pkgs.firstWhere((p) => p.name == 'my_local_dep');
       expect(local.url, '');
 
+      // `source: sdk` : "0.0.0" du lockfile n'est pas une vraie version → omise.
       final sdk = pkgs.firstWhere((p) => p.name == 'flutter');
-      expect(sdk.purl, 'pkg:pub/flutter@0.0.0');
+      expect(sdk.purl, 'pkg:pub/flutter');
+    });
+
+    test('source: sdk — le nom est la clé, pas le `description:` scalaire', () {
+      // Régression : `description: flutter` faisait renommer sky_engine et
+      // flutter_web_plugins en "flutter", puis les dédupliquer (2 composants
+      // perdus).
+      final f = _write('pubspec.lock', '''
+packages:
+  flutter:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  flutter_web_plugins:
+    dependency: transitive
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  sky_engine:
+    dependency: transitive
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+''');
+      final pkgs = parser.parsePubspecLock(f.path);
+      expect(pkgs.map((p) => p.name).toSet(),
+          {'flutter', 'flutter_web_plugins', 'sky_engine'});
+    });
+
+    test('--sdk-version : injecte la vraie version du SDK', () {
+      final f = _write('pubspec.lock', '''
+packages:
+  flutter:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  sky_engine:
+    dependency: transitive
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  provider:
+    dependency: "direct main"
+    description:
+      name: provider
+      sha256: "abc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.2"
+''');
+      final pkgs = parser
+          .parsePubspecLock(f.path, sdkVersions: {'flutter': '3.47.2'});
+      expect(pkgs.firstWhere((p) => p.name == 'flutter').purl,
+          'pkg:pub/flutter@3.47.2');
+      // les paquets bundlés avec le SDK Flutter héritent de sa version
+      expect(pkgs.firstWhere((p) => p.name == 'sky_engine').purl,
+          'pkg:pub/sky_engine@3.47.2');
+      // un paquet hosted n'est pas affecté
+      expect(pkgs.firstWhere((p) => p.name == 'provider').purl,
+          'pkg:pub/provider@6.1.2');
     });
 
     test('registre hébergé personnalisé → homepage sur ce registre', () {
@@ -169,6 +231,21 @@ dev_dependencies:
       expect(byName['http']!.version, ''); // range → pas de version unique
       expect(byName['collection']!.version, '');
       expect(byName['flutter']!.version, '');
+    });
+
+    test('--sdk-version : applique la version au dep sdk, pas aux autres', () {
+      final f = _write('pubspec.yaml', '''
+name: my_app
+dependencies:
+  provider: ^6.1.2
+  flutter:
+    sdk: flutter
+''');
+      final pkgs =
+          parser.parsePubspecYaml(f.path, sdkVersions: {'flutter': '3.47.2'});
+      final byName = {for (final p in pkgs) p.name: p};
+      expect(byName['flutter']!.purl, 'pkg:pub/flutter@3.47.2');
+      expect(byName['provider']!.purl, 'pkg:pub/provider@6.1.2');
     });
 
     test('fichier absent → liste vide', () {

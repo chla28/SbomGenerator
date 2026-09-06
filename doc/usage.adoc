@@ -202,6 +202,14 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |Refuser les composants dont la licence correspond au motif SPDX (correspondance partielle,
 répétable). Code retour 2 si au moins une violation est détectée.
 
+|`--sdk-version <sdk>=<ver>`
+|—
+|—
+|Vraie version d'un SDK Dart/Flutter pour les paquets `source: sdk` d'un
+`pubspec.lock` / `pubspec.yaml` (que pub note toujours `0.0.0`). Répétable —
+`--sdk-version flutter=3.47.2 --sdk-version dart=3.9.0`. Sans cette option, ces
+paquets sortent sans version (PURL `pkg:pub/flutter`).
+
 |`--cyclonedx-version <ver>`
 |—
 |`1.6`
@@ -379,7 +387,7 @@ un composant par dépendance, en plus du jar lui-même.
 
 |Lockfile Dart/Flutter (`pubspec.lock`)
 |`/opt/flutterapp/pubspec.lock`
-|Parseur pur Dart — versions résolues + fermeture transitive, toutes sources (hosted/git/path/sdk), hors `direct dev` ; PURL `pkg:pub/…`
+|Parseur pur Dart — versions résolues + fermeture transitive, toutes sources (hosted/git/path/sdk), hors `direct dev` ; PURL `pkg:pub/…`. Les paquets `source: sdk` sortent sans version (voir `--sdk-version`)
 
 |Manifeste Dart/Flutter (`pubspec.yaml`)
 |`/opt/flutterapp/pubspec.yaml`
