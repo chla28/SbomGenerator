@@ -27,8 +27,12 @@ en dédupliquant les composants communs. Il orchestre la sous-commande
 <div class="ulist">
 <ul>
 <li>
-<p><strong>➕ Ajouter des fichiers…</strong> : ouvre un sélecteur de fichiers du système,
-sélection multiple possible.</p>
+<p><strong>➕ Ajouter des fichiers…</strong> : ouvre un menu à deux entrées —
+<strong>.json / .jsonld</strong> (filtre le sélecteur sur ces extensions) ou
+<strong>Tous les fichiers</strong> (aucun filtre, pour les SBOM dont l’extension n’est pas
+<code>.json</code>, ex. <code>.cdx</code>, <code>.spdx</code>, <code>bom</code>, ou sans extension). Sélection multiple
+possible dans les deux cas. Le contenu doit rester du JSON CycloneDX ou
+SPDX 2.x quel que soit le nom du fichier.</p>
 </li>
 <li>
 <p><strong>📂 Fichiers générés</strong> : menu listant les fichiers SBOM produits pendant la

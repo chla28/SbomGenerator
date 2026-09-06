@@ -2013,8 +2013,12 @@ en dédupliquant les composants communs. Il orchestre la sous-commande
 
 Deux façons d'alimenter la liste :
 
-* *➕ Ajouter des fichiers…* : ouvre un sélecteur de fichiers du système,
-  sélection multiple possible.
+* *➕ Ajouter des fichiers…* : ouvre un menu à deux entrées —
+  *.json / .jsonld* (filtre le sélecteur sur ces extensions) ou
+  *Tous les fichiers* (aucun filtre, pour les SBOM dont l'extension n'est pas
+  `.json`, ex. `.cdx`, `.spdx`, `bom`, ou sans extension). Sélection multiple
+  possible dans les deux cas. Le contenu doit rester du JSON CycloneDX ou
+  SPDX 2.x quel que soit le nom du fichier.
 * *📂 Fichiers générés* : menu listant les fichiers SBOM produits pendant la
   session courante (mêmes formats que l'onglet Arborescence, hors SPDX 3.0
   — voir Contraintes ci-dessous).

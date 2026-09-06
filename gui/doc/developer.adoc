@@ -1180,8 +1180,11 @@ liste de chemins de fichiers et de déléguer la fusion au binaire CLI via
 État de `_SbomMergePanelState` :
 
 * `List<String> _inputFiles` — chemins des fichiers à fusionner (ajout via
-  `FilePicker.pickFiles(allowMultiple: true)` ou via le menu *Fichiers
-  générés* alimenté par `widget.outputFiles`)
+  `_pickFiles({bool filtered})` — menu à deux entrées : `filtered: true`
+  utilise `FileType.custom` + `allowedExtensions: ['json', 'jsonld']`,
+  `filtered: false` utilise `FileType.any` pour les SBOM sans extension
+  `.json` — ou via le menu *Fichiers générés* alimenté par
+  `widget.outputFiles`)
 * `_outputCtrl`, `_nameCtrl` — contrôleurs de texte pour `-o`/`-n`
 * `_running`, `_exitCode`, `_resultPath` — état d'exécution
 * `_logLines` — lignes de sortie de `SbomRunner` (`SbomLogEvent`)

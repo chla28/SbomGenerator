@@ -40,11 +40,11 @@ class _SbomMergePanelState extends State<SbomMergePanel>
     super.dispose();
   }
 
-  Future<void> _pickFiles() async {
+  Future<void> _pickFiles({bool filtered = true}) async {
     final r = await FilePicker.pickFiles(
       dialogTitle: 'Sélectionner des fichiers SBOM à fusionner',
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
+      type: filtered ? FileType.custom : FileType.any,
+      allowedExtensions: filtered ? const ['json', 'jsonld'] : null,
       allowMultiple: true,
     );
     if (r == null) return;
@@ -106,10 +106,24 @@ class _SbomMergePanelState extends State<SbomMergePanel>
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Ajouter des fichiers…'),
-                onPressed: _pickFiles,
+              MenuAnchor(
+                builder: (ctx, ctrl, child) => OutlinedButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Ajouter des fichiers…'),
+                  onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
+                ),
+                menuChildren: [
+                  MenuItemButton(
+                    leadingIcon: const Icon(Icons.filter_alt_outlined, size: 16),
+                    onPressed: () => _pickFiles(),
+                    child: const Text('.json / .jsonld'),
+                  ),
+                  MenuItemButton(
+                    leadingIcon: const Icon(Icons.folder_open, size: 16),
+                    onPressed: () => _pickFiles(filtered: false),
+                    child: const Text('Tous les fichiers'),
+                  ),
+                ],
               ),
               const SizedBox(width: 8),
               if (_sbomFiles.isNotEmpty)
