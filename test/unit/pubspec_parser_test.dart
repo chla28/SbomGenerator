@@ -147,6 +147,84 @@ packages:
           {'flutter', 'flutter_web_plugins', 'sky_engine'});
     });
 
+    test('lit le LICENSE des paquets depuis le cache pub (--pub-cache)', () {
+      final f = _write('pubspec.lock', '''
+packages:
+  args:
+    dependency: "direct main"
+    description:
+      name: args
+      sha256: "abc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.7.0"
+  mime:
+    dependency: transitive
+    description:
+      name: mime
+      sha256: "def"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
+''');
+      final cache = Directory('${tmp.path}/cache');
+      Directory('${cache.path}/hosted/pub.dev/args-2.7.0')
+          .createSync(recursive: true);
+      File('${cache.path}/hosted/pub.dev/args-2.7.0/LICENSE').writeAsStringSync(
+          'Redistribution and use in source and binary forms, with or without\n'
+          'modification, are permitted ... Neither the name of Google LLC ...');
+      Directory('${cache.path}/hosted/pub.dev/mime-2.0.0')
+          .createSync(recursive: true);
+      // mime : pas de fichier LICENSE → licence vide, pas d'erreur
+
+      final pkgs = parser.parsePubspecLock(f.path, pubCache: cache.path);
+      expect(pkgs.firstWhere((p) => p.name == 'args').license, 'BSD-3-Clause');
+      expect(pkgs.firstWhere((p) => p.name == 'mime').license, '');
+    });
+
+    test('sans --pub-cache : licence vide (le lockfile n\'en contient pas)', () {
+      final f = _write('pubspec.lock', '''
+packages:
+  args:
+    dependency: "direct main"
+    description:
+      name: args
+      sha256: "abc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.7.0"
+''');
+      expect(parser.parsePubspecLock(f.path).single.license, '');
+    });
+
+    test('LICENSE d\'un paquet sdk lu depuis --flutter-root', () {
+      final f = _write('pubspec.lock', '''
+packages:
+  flutter:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  sky_engine:
+    dependency: transitive
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+''');
+      final fr = Directory('${tmp.path}/flutter');
+      Directory('${fr.path}/packages/flutter').createSync(recursive: true);
+      File('${fr.path}/packages/flutter/LICENSE').writeAsStringSync(
+          'Redistribution and use in source and binary forms ... '
+          'endorse or promote products derived ...');
+      // sky_engine : pas de packages/sky_engine → repli sur le LICENSE racine
+      File('${fr.path}/LICENSE').writeAsStringSync('MIT License\n\n'
+          'Permission is hereby granted, free of charge, ... without restriction');
+
+      final pkgs = parser.parsePubspecLock(f.path, flutterRoot: fr.path);
+      expect(pkgs.firstWhere((p) => p.name == 'flutter').license, 'BSD-3-Clause');
+      expect(pkgs.firstWhere((p) => p.name == 'sky_engine').license, 'MIT');
+    });
+
     test('--sdk-version : injecte la vraie version du SDK', () {
       final f = _write('pubspec.lock', '''
 packages:

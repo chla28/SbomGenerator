@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'archive_helpers.dart' show identifyArchiveLicense;
 import 'models.dart';
 
 /// Parses Dart/Flutter dependency files: `pubspec.lock` and `pubspec.yaml`
@@ -23,11 +24,27 @@ import 'models.dart';
 /// the component is emitted without a version — unless the caller supplies the
 /// real SDK version via [sdkVersions] (`{'flutter': '3.47.2'}`), keyed by the
 /// SDK named in the lock entry's `description:` scalar.
+///
+/// A `pubspec.lock` carries no license data. When [pubCache] (the pub package
+/// cache, usually `~/.pub-cache`) and/or [flutterRoot] are supplied,
+/// [parsePubspecLock] reads the `LICENSE` file of each resolved package from
+/// disk and identifies it via [identifyArchiveLicense].
 class PubspecParser {
+  static const _licenseFileNames = [
+    'LICENSE',
+    'LICENSE.md',
+    'LICENSE.txt',
+    'LICENCE',
+    'COPYING',
+    'license',
+  ];
+
   /// Parses a `pubspec.lock` file. Produces one [WheelPackage] per package
   /// with `packageType='pub'` (PURL `pkg:pub/<name>@<version>`).
   List<WheelPackage> parsePubspecLock(String path,
-      {Map<String, String> sdkVersions = const {}}) {
+      {Map<String, String> sdkVersions = const {},
+      String? pubCache,
+      String? flutterRoot}) {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: pubspec.lock not found: $path');
@@ -38,7 +55,8 @@ class PubspecParser {
     final seen = <String>{};
     var inPackages = false;
 
-    String? key, dependency, source, version, sha256, descName, url, sdkName;
+    String? key, dependency, source, version, sha256, descName, url, sdkName,
+        resolvedRef, descPath;
 
     void flush() {
       if (key != null && dependency != 'direct dev') {
@@ -58,7 +76,18 @@ class PubspecParser {
           packages.add(WheelPackage(
             name: name,
             version: ver,
-            license: '',
+            license: _resolveLicense(
+              lockPath: path,
+              name: name,
+              source: source,
+              version: version,
+              url: url,
+              sdkName: sdkName,
+              resolvedRef: resolvedRef,
+              descPath: descPath,
+              pubCache: pubCache,
+              flutterRoot: flutterRoot,
+            ),
             url: _homepage(name, source, url),
             summary: '',
             vendor: '',
@@ -71,7 +100,8 @@ class PubspecParser {
           ));
         }
       }
-      key = dependency = source = version = sha256 = descName = url = sdkName = null;
+      key = dependency = source = version = sha256 = descName = url = sdkName =
+          resolvedRef = descPath = null;
     }
 
     for (final raw in file.readAsLinesSync()) {
@@ -115,11 +145,75 @@ class PubspecParser {
           sha256 = _unquote(content.substring('sha256:'.length));
         } else if (content.startsWith('url:')) {
           url = _unquote(content.substring('url:'.length));
+        } else if (content.startsWith('resolved-ref:')) {
+          resolvedRef = _unquote(content.substring('resolved-ref:'.length));
+        } else if (content.startsWith('path:')) {
+          descPath = _unquote(content.substring('path:'.length));
         }
       }
     }
     flush();
     return packages;
+  }
+
+  /// Locates and identifies the `LICENSE` file of a resolved package on disk.
+  /// Returns an SPDX identifier or `''` when not found / not identifiable.
+  String _resolveLicense({
+    required String lockPath,
+    required String name,
+    String? source,
+    String? version,
+    String? url,
+    String? sdkName,
+    String? resolvedRef,
+    String? descPath,
+    String? pubCache,
+    String? flutterRoot,
+  }) {
+    final dirs = <String>[];
+    switch (source) {
+      case 'hosted':
+        if (pubCache != null && version != null && version.isNotEmpty) {
+          final host = _hostDir(url);
+          dirs.add('$pubCache/hosted/$host/$name-$version');
+        }
+      case 'git':
+        if (pubCache != null && resolvedRef != null) {
+          final sub = (descPath == null || descPath.isEmpty || descPath == '.')
+              ? ''
+              : '/$descPath';
+          dirs.add('$pubCache/git/$name-$resolvedRef$sub');
+        }
+      case 'path':
+        if (descPath != null && descPath.isNotEmpty) {
+          final base = File(lockPath).parent.path;
+          dirs.add(descPath.startsWith('/') ? descPath : '$base/$descPath');
+        }
+      case 'sdk':
+        if (flutterRoot != null) {
+          dirs.add('$flutterRoot/packages/$name');
+          dirs.add('$flutterRoot/bin/cache/pkg/$name');
+          dirs.add(flutterRoot); // LICENSE racine du SDK, en dernier recours
+        }
+    }
+    for (final dir in dirs) {
+      for (final fn in _licenseFileNames) {
+        final f = File('$dir/$fn');
+        if (!f.existsSync()) continue;
+        try {
+          final spdx = identifyArchiveLicense(f.readAsStringSync());
+          if (spdx.isNotEmpty) return spdx;
+        } catch (_) {}
+      }
+    }
+    return '';
+  }
+
+  /// Nom de répertoire du cache pour un registre `hosted` : l'hôte de l'URL
+  /// (`https://pub.dev` → `pub.dev`), `pub.dev` par défaut.
+  String _hostDir(String? url) {
+    if (url == null || url.isEmpty) return 'pub.dev';
+    return url.replaceFirst(RegExp(r'^https?://'), '').replaceAll('/', '');
   }
 
   /// Parses the `dependencies:` section of a `pubspec.yaml` file. Version

@@ -215,6 +215,20 @@ ils sortent sans version) ; (2) chaque SDK est ajouté à la *toolchain* du SBOM
 que la version de `dart` figure au SBOM, `dart` n'ayant pas de paquet dans le
 lockfile.
 
+|`--pub-cache <dir>`
+|—
+|auto
+|Répertoire du cache pub (contient `hosted/<hôte>/<nom>-<version>/`). Le CLI y
+lit le fichier `LICENSE` de chaque paquet d'un `pubspec.lock` — le lockfile
+n'en contient aucune. Auto-détecté (`$PUB_CACHE`, sinon `~/.pub-cache` s'il
+existe) ; `--pub-cache ""` désactive la lecture.
+
+|`--flutter-root <dir>`
+|—
+|`$FLUTTER_ROOT`
+|Racine du SDK Flutter, pour lire le `LICENSE` des paquets `source: sdk`
+(`flutter`, `sky_engine`…).
+
 |`--cyclonedx-version <ver>`
 |—
 |`1.6`
@@ -392,7 +406,7 @@ un composant par dépendance, en plus du jar lui-même.
 
 |Lockfile Dart/Flutter (`pubspec.lock`)
 |`/opt/flutterapp/pubspec.lock`
-|Parseur pur Dart — versions résolues + fermeture transitive, toutes sources (hosted/git/path/sdk), hors `direct dev` ; PURL `pkg:pub/…`. Les paquets `source: sdk` sortent sans version (voir `--sdk-version`)
+|Parseur pur Dart — versions résolues + fermeture transitive, toutes sources (hosted/git/path/sdk), hors `direct dev` ; PURL `pkg:pub/…`. Paquets `source: sdk` sans version (voir `--sdk-version`). Licences lues depuis le cache pub (voir `--pub-cache` / `--flutter-root`)
 
 |Manifeste Dart/Flutter (`pubspec.yaml`)
 |`/opt/flutterapp/pubspec.yaml`

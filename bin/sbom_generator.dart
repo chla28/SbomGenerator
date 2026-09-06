@@ -193,6 +193,18 @@ Future<void> main(List<String> arguments) async {
           'Exemple : --sdk-version flutter=3.47.2 --sdk-version dart=3.9.0',
     )
     ..addOption(
+      'pub-cache',
+      help: 'Répertoire du cache pub (contient hosted/<hôte>/<nom>-<version>/).\n'
+          'Sert à lire le fichier LICENSE de chaque paquet d\'un pubspec.lock\n'
+          '(le lockfile ne contient aucune licence). Par défaut : \$PUB_CACHE,\n'
+          'sinon ~/.pub-cache s\'il existe. Passer "" pour désactiver.',
+    )
+    ..addOption(
+      'flutter-root',
+      help: 'Racine du SDK Flutter, pour lire le LICENSE des paquets\n'
+          '`source: sdk` (flutter, sky_engine…). Par défaut : \$FLUTTER_ROOT.',
+    )
+    ..addOption(
       'cyclonedx-version',
       defaultsTo: '1.6',
       allowed: _validCycloneDxVersions,
@@ -318,6 +330,25 @@ Future<void> main(List<String> arguments) async {
     }
     sdkVersions[entry.substring(0, eq).trim()] = entry.substring(eq + 1).trim();
   }
+  // Cache pub / racine Flutter pour lire les licences des paquets pub
+  // (le pubspec.lock n'en contient aucune). Auto-détection si non fourni.
+  String? pubCacheDir = args['pub-cache'] as String?;
+  if (pubCacheDir == null) {
+    final env = Platform.environment;
+    final candidate = env['PUB_CACHE'] ??
+        (env['HOME'] != null ? '${env['HOME']}/.pub-cache' : null);
+    if (candidate != null && Directory(candidate).existsSync()) {
+      pubCacheDir = candidate;
+    }
+  } else if (pubCacheDir.isEmpty) {
+    pubCacheDir = null; // --pub-cache "" → désactivé explicitement
+  }
+  final flutterRootDir =
+      (args['flutter-root'] as String?) ?? Platform.environment['FLUTTER_ROOT'];
+  if (verbose && pubCacheDir != null) {
+    print('Cache pub pour les licences : $pubCacheDir');
+  }
+
   final minQualityScore = args['min-quality-score'] as String?;
   final signSbom = args['sign'] as bool;
   if (verbose && licenseOverrides.isNotEmpty) {
@@ -457,8 +488,10 @@ Future<void> main(List<String> arguments) async {
     } else if (_isPomXml(ref)) {
       preloadedPackages.addAll(mavenParser.parsePomXml(ref));
     } else if (_isPubspecLock(ref)) {
-      preloadedPackages
-          .addAll(pubspecParser.parsePubspecLock(ref, sdkVersions: sdkVersions));
+      preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref,
+          sdkVersions: sdkVersions,
+          pubCache: pubCacheDir,
+          flutterRoot: flutterRootDir));
     } else if (_isPubspecYaml(ref)) {
       preloadedPackages
           .addAll(pubspecParser.parsePubspecYaml(ref, sdkVersions: sdkVersions));

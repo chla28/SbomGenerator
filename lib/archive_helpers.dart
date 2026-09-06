@@ -158,8 +158,16 @@ String identifyArchiveLicense(String text) {
 
   if (lower.contains('isc license')) return 'ISC';
 
-  if (lower.contains('bsd') && lower.contains('redistribution')) {
-    if (lower.contains('neither the name')) return 'BSD-3-Clause';
+  // The canonical BSD text ("Redistribution and use in source and binary
+  // forms…") frequently omits the word "BSD" entirely — e.g. the LICENSE
+  // shipped by nearly every Dart/Flutter package (Google-authored,
+  // BSD-3-Clause). Match on the body phrasing too.
+  if ((lower.contains('bsd') && lower.contains('redistribution')) ||
+      lower.contains('redistribution and use in source and binary forms')) {
+    if (lower.contains('neither the name') ||
+        lower.contains('endorse or promote products derived')) {
+      return 'BSD-3-Clause';
+    }
     return 'BSD-2-Clause';
   }
 

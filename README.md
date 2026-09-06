@@ -54,6 +54,7 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 - Go (`go.sum`/`go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`), Dart/Flutter (`pubspec.lock`/`pubspec.yaml`) : parsing pur Dart, expansion en `WheelPackage` avant la boucle principale (même mécanisme que requirements.txt, cardinalité 1 fichier → N paquets)
   - `pubspec.lock` : versions résolues + fermeture transitive complète ; toutes les sources (`hosted`, `git`, `path`, `sdk`). Les dépendances `dependency: "direct dev"` sont exclues (leurs transitives exclusives restent, faute d'information dans le lockfile).
   - Paquets `source: sdk` (`flutter`, `sky_engine`, `flutter_web_plugins`…) : le lockfile les note tous `version: "0.0.0"` (pas de vraie version pour les paquets livrés dans le SDK) — cette version factice est **omise** (`pkg:pub/flutter` sans version). `--sdk-version flutter=3.47.2` injecte la vraie version du SDK (répétable, ex. `--sdk-version dart=3.9.0`) et, en plus, inscrit chaque SDK dans la *toolchain* du SBOM (`metadata.tools.components` en CycloneDX, `creationInfo.creators` en SPDX) — c'est là qu'apparaît la version de `dart`, qui n'a pas de paquet dans le lockfile.
+  - **Licences** : `pubspec.lock` n'en contient aucune. Le CLI lit le fichier `LICENSE` de chaque paquet depuis le cache pub (`$PUB_CACHE` ou `~/.pub-cache`, auto-détecté ; `--pub-cache <dir>` pour forcer, `--pub-cache ""` pour désactiver) et pour les paquets `source: sdk` depuis `--flutter-root`. En pratique la licence est renseignée pour la quasi-totalité des dépendances.
   - `pubspec.yaml` : dépendances directes de la section `dependencies:` uniquement (la section `dev_dependencies:` est ignorée) ; version déduite de la contrainte quand elle est univoque (`^1.2.3`, `1.2.3`, `>=1.2.3`), sinon vide.
   - Dans un scan de dossier, si `pubspec.lock` et `pubspec.yaml` coexistent, seul le `.lock` est retenu.
 - Image OCI (`--image`) : analyse via `syft`, `trivy`, `skopeo` ou `cdxgen` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
@@ -130,6 +131,9 @@ Options :
       --sdk-version        Vraie version d'un SDK Dart/Flutter (<sdk>=<version>, répétable) :
                            applique la version aux paquets source: sdk correspondants ET
                            ajoute chaque SDK à metadata.tools (CycloneDX) / creators (SPDX)
+      --pub-cache          Cache pub pour lire le LICENSE des paquets d'un pubspec.lock
+                           (défaut : $PUB_CACHE puis ~/.pub-cache ; "" pour désactiver)
+      --flutter-root       Racine du SDK Flutter, pour le LICENSE des paquets source: sdk
       --min-quality-score  Score sbomqs minimum requis (ex. : 7.5) — code retour 2 si insuffisant
       --sign               Signer les fichiers SBOM avec cosign après génération
       --cyclonedx-version  Version CycloneDX générée : 1.6 (défaut) ou 1.7

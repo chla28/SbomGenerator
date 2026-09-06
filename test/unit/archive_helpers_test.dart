@@ -124,6 +124,19 @@ void main() {
       expect(identifyArchiveLicense(text), 'BSD-2-Clause');
     });
 
+    test('BSD-3-Clause sans le mot "BSD" (style paquets Dart/Google)', () {
+      // La quasi-totalité des paquets pub utilisent ce texte exact, sans
+      // jamais écrire "BSD".
+      const text = 'Copyright 2013, the Dart project authors.\n\n'
+          'Redistribution and use in source and binary forms, with or without\n'
+          'modification, are permitted provided that the following conditions '
+          'are met:\n'
+          '    * Neither the name of Google LLC nor the names of its\n'
+          '      contributors may be used to endorse or promote products '
+          'derived from this software.';
+      expect(identifyArchiveLicense(text), 'BSD-3-Clause');
+    });
+
     test('licence inconnue → chaîne vide', () {
       expect(identifyArchiveLicense('Proprietary License v1.0'), isEmpty);
     });

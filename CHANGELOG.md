@@ -22,6 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   d'`asciidoctor-pdf` n'échoue pas le build.
 
 ### Added
+- Licences des paquets Dart/Flutter : `pubspec.lock` n'en contient aucune ; le
+  CLI lit désormais le fichier `LICENSE` de chaque paquet depuis le cache pub
+  (`$PUB_CACHE` / `~/.pub-cache`, auto-détecté ; `--pub-cache <dir>` pour
+  forcer, `--pub-cache ""` pour désactiver) et depuis `--flutter-root` pour les
+  paquets `source: sdk`. En pratique la licence passe de « quasi aucune » à
+  « quasi toutes » (sur la GUI : 63/63 composants, score sbomqs 7.7 → 8.7).
+  `identifyArchiveLicense()` reconnaît en plus le texte BSD-3-Clause canonique
+  sans le mot « BSD » (cas de presque tous les paquets pub).
 - `--sdk-version <sdk>=<version>` (répétable) : renseigne la vraie version d'un
   SDK Dart/Flutter. Double effet — (1) applique la version aux paquets
   `source: sdk` correspondants d'un `pubspec.lock` / `pubspec.yaml` (que `pub`
