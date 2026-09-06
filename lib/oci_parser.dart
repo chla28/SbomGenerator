@@ -268,17 +268,25 @@ class OciParser {
         .join(' AND ');
 
     final metadata = (a['metadata'] as Map<String, dynamic>?) ?? {};
-    final arch = (metadata['Architecture'] as String?) ??
-        (metadata['Arch'] as String?) ??
-        '';
-    final vendor = (metadata['Vendor'] as String?) ?? '';
-    final summary = (metadata['Summary'] as String?) ??
-        (metadata['Description'] as String?) ??
-        (a['description'] as String?) ??
-        '';
-    final url = (metadata['URL'] as String?) ??
-        (metadata['HomePageURL'] as String?) ??
-        '';
+    // Les noms de champs varient selon le catalogueur syft : dpkg/apk
+    // exposent des clés en minuscules (`architecture`, `maintainer`), rpm
+    // `arch`/`vendor`, d'autres la casse Pascal.
+    final arch = _firstNonEmpty(metadata, const [
+      'Architecture', 'architecture', 'Arch', 'arch',
+    ]);
+    // `supplier`/`vendor` du composant : le mainteneur dpkg/apk fait un
+    // fournisseur tout à fait valable à défaut d'un champ Vendor rpm.
+    final vendor = _firstNonEmpty(metadata, const [
+      'Vendor', 'vendor', 'maintainer', 'Maintainer', 'author', 'Author',
+    ]);
+    final metaSummary = _firstNonEmpty(metadata, const [
+      'Summary', 'summary', 'Description', 'description',
+    ]);
+    final summary =
+        metaSummary.isNotEmpty ? metaSummary : ((a['description'] as String?) ?? '');
+    final url = _firstNonEmpty(metadata, const [
+      'URL', 'url', 'HomePageURL', 'homepage', 'Homepage',
+    ]);
 
     return OciPackage(
       name: name,
@@ -304,6 +312,16 @@ class OciParser {
         'java-archive' || 'java' => 'java',
         _ => type.toLowerCase(),
       };
+
+  /// Première valeur `String` non vide parmi [keys] dans [map] (les
+  /// catalogueurs syft n'emploient pas tous la même casse de clé).
+  static String _firstNonEmpty(Map<String, dynamic> map, List<String> keys) {
+    for (final k in keys) {
+      final v = map[k];
+      if (v is String && v.isNotEmpty) return v;
+    }
+    return '';
+  }
 
   // ── Backend Trivy ─────────────────────────────────────────────────────────────
 
@@ -1386,6 +1404,12 @@ OsInfo? ociParserSyftDistroToOsInfo(Map<String, dynamic> syftJson) =>
 /// lancer trivy.
 OsInfo? ociParserTrivyMetadataToOsInfo(Map<String, dynamic> trivyJson) =>
     OciParser()._trivyMetadataToOsInfo(trivyJson);
+
+/// Appelle [OciParser._syftArtifactToPackage] depuis les tests, sur un
+/// artefact syft (élément de `artifacts[]`) déjà décodé, sans lancer syft.
+OciPackage? ociParserSyftArtifactToPackage(
+        Map<String, dynamic> artifact, String imageRef) =>
+    OciParser()._syftArtifactToPackage(artifact, imageRef);
 
 /// Appelle [OciParser._cdxgenComponentToPackage] depuis les tests, sur un
 /// composant CycloneDX (élément de `components[]`) déjà décodé, sans lancer

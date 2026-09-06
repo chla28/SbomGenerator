@@ -692,8 +692,28 @@ générateurs (CycloneDX 1.6, SPDX 2.3, SPDX 3.0).
 . Détection d'expression composée (présence de `AND`/`OR`/`WITH` entourés d'espaces)
 . Résolution token par token dans `_sortedEntries` (tri longueur décroissante →
   évite les matches courts avant les longs)
-. Choix du champ CycloneDX : `expression` (composé), `id` (SPDX versionné ou
-  `LicenseRef-*`), `name` (inconnu sans numéro)
+. Choix du champ CycloneDX : `expression` (composé) ; sinon `id` **si et
+  seulement si** le token figure dans `kSpdxLicenseIds` (`lib/spdx_license_ids.dart`)
+  ou est une cible vérifiée de `_rpmToSpdx` ; sinon `name`. `LicenseRef-*` va
+  toujours en `name` (hors énumération SPDX du schéma CycloneDX).
+
+[WARNING]
+====
+Ne jamais rétablir l'ancienne heuristique « le token contient un tiret+chiffre
+→ `id` » : elle faisait passer en `license.id` les raccourcis `debian/copyright`
+(`GFDL-NIV-1.3`, `BSD-3-clause-Berkeley`, `GPL-2.0-only+-with-link-exception`…),
+produisant un SBOM CycloneDX rejeté par la validation de schéma (id hors
+énumération SPDX). Le champ `id` est désormais gardé par
+`_isSpdxLicenseId()` → `isSpdxLicenseId()` (appartenance exacte, sensible à la
+casse, à `kSpdxLicenseIds`).
+====
+
+`lib/spdx_license_ids.dart` est un instantané figé de la SPDX License List 3.x
+(identifiants licences + exceptions). Un id réellement SPDX absent de
+l'instantané dégrade proprement en `name` / `LicenseRef-…` (toujours
+schéma-valide) — la liste est donc volontairement large sans viser
+l'exhaustivité. `curl` en est retiré exprès : `debian/copyright` l'emploie
+comme nom vague, on le garde en texte libre.
 
 [TIP]
 ====
@@ -1014,6 +1034,13 @@ La référence est adaptée selon `OciRefType` :
 Les licences syft sont des objets `{spdxExpression, value}` — `spdxExpression`
 est préféré si non vide, sinon `value`. Plusieurs licences sont jointes par
 `' AND '`.
+
+`vendor`, `arch`, `summary` et `url` du composant sont lus via
+`_firstNonEmpty(metadata, [...])` : les catalogueurs syft n'emploient pas la
+même casse selon l'écosystème (dpkg/apk exposent `architecture` / `maintainer`
+en minuscules, rpm `arch` / `vendor`). Le mainteneur dpkg/apk sert de
+`supplier` du composant à défaut d'un champ `vendor` rpm — sans lui, le SBOM
+n'a aucun fournisseur de composant (métrique `comp_with_supplier` de sbomqs).
 
 === Backend Trivy (`_parseTrivy`)
 
@@ -2560,7 +2587,7 @@ ambiguïté avec les séparateurs de cellules AsciiDoc.
 3. RpmPackage : bomRef="pkg-bash-5.1.8-6.el9-x86_64", purl="pkg:rpm/bash@5.1.8-6.el9?arch=x86_64"
 4. LicenseNormalizer.toCycloneDxLicenses("GPL-3.0-or-later")
    → normalised = "GPL-3.0-or-later" (pas d'opérateur booléen)
-   → mapped = "GPL-3.0-or-later" (pas dans _rpmToSpdx, mais isVersioned=true)
+   → mapped = "GPL-3.0-or-later" (dans kSpdxLicenseIds → id)
    → {"license": {"id": "GPL-3.0-or-later"}}
 ....
 

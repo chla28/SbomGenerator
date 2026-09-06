@@ -150,12 +150,38 @@ void main() {
       expect(result[0]['license'].containsKey('name'), isTrue);
     });
 
-    test('utilise id pour une licence inconnue avec numéro de version', () {
-      // Contient "-1" → _looksLikeSpdxId + isVersioned = true → id
+    test(
+        'utilise name pour une licence inconnue même avec un numéro de '
+        'version (pas sur la liste SPDX)', () {
+      // Régression : l'ancienne heuristique "contient tiret+chiffre" mettait
+      // n'importe quel token versionné en `license.id`, or CycloneDX
+      // `license.id` est contraint par le schéma à l'énumération SPDX.
       final result =
           LicenseNormalizer.toCycloneDxLicenses('MyCustomLicense-1.0');
       expect(result, hasLength(1));
-      expect(result[0]['license'].containsKey('id'), isTrue);
+      expect(result[0]['license'].containsKey('id'), isFalse);
+      expect(result[0]['license']['name'], 'MyCustomLicense-1.0');
+    });
+
+    test('utilise id pour un identifiant SPDX versionné réel', () {
+      final result = LicenseNormalizer.toCycloneDxLicenses('GPL-3.0-only');
+      expect(result, hasLength(1));
+      expect(result[0]['license']['id'], 'GPL-3.0-only');
+    });
+
+    test(
+        'utilise name pour un raccourci debian/copyright ressemblant à un '
+        'id SPDX versionné (GFDL-NIV-1.3, BSD-3-clause-Berkeley…)', () {
+      for (final raw in [
+        'GFDL-NIV-1.3',
+        'BSD-3-clause-Berkeley',
+        'GPL-2.0-only+-with-link-exception',
+      ]) {
+        final result = LicenseNormalizer.toCycloneDxLicenses(raw);
+        expect(result, hasLength(1), reason: raw);
+        expect(result[0]['license'].containsKey('id'), isFalse, reason: raw);
+        expect(result[0]['license']['name'], raw, reason: raw);
+      }
     });
   });
 

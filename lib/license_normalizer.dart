@@ -1,3 +1,5 @@
+import 'spdx_license_ids.dart';
+
 /// Shared license normalisation for all SBOM generators.
 ///
 /// Converts raw RPM / Debian (`debian/copyright`, DEP-5) / Python license
@@ -184,23 +186,12 @@ class LicenseNormalizer {
 
     final mapped = _rpmToSpdx[s] ?? s;
 
-    if (_looksLikeSpdxId(mapped)) {
-      if (mapped.startsWith('LicenseRef-')) {
-        return [
-          {
-            'license': {'name': s}
-          }
-        ];
-      }
-      final fromTable = _rpmToSpdx.containsKey(s);
-      final isVersioned = mapped.contains(RegExp(r'-\d'));
-      if (fromTable || isVersioned) {
-        return [
-          {
-            'license': {'id': mapped}
-          }
-        ];
-      }
+    if (_isSpdxLicenseId(mapped)) {
+      return [
+        {
+          'license': {'id': mapped}
+        }
+      ];
     }
 
     return [
@@ -238,14 +229,13 @@ class LicenseNormalizer {
       };
       final concluded = normalised.split(' AND ').map((tok) {
         final mapped = _normaliseExpressionTokens(tok.trim());
-        // Only a term we actually recognise as a real SPDX id goes in
-        // `id` — an unmapped token (e.g. Debian's "curl") is syntactically
-        // alnum-only too, but claiming it as `id` would misrepresent it as
-        // SPDX-listed; `name` reports it as free text instead.
-        final key = _isTrustworthySpdxTerm(mapped) &&
-                !mapped.startsWith('LicenseRef-')
-            ? 'id'
-            : 'name';
+        // Only a term that is actually on the SPDX License List goes in
+        // `id` (CycloneDX `license.id` is schema-constrained to that
+        // enum) — an unmapped token (Debian's "curl", "permissive", or a
+        // `debian/copyright` short name like "BSD-3-clause-Berkeley" /
+        // "GFDL-NIV-1.3") is reported as free text via `name` instead, so
+        // the document stays schema-valid.
+        final key = _isSpdxLicenseId(mapped) ? 'id' : 'name';
         return <String, dynamic>{
           'license': {key: mapped, 'acknowledgement': 'concluded'}
         };
@@ -308,16 +298,25 @@ class LicenseNormalizer {
     return {...entry, 'acknowledgement': value};
   }
 
+  /// A term safe to emit as CycloneDX `license.id` (schema-constrained to the
+  /// SPDX License List enum): a real SPDX license id, or a hand-verified
+  /// mapping-table target. `LicenseRef-…` custom refs and unrecognised
+  /// Debian/RPM short names are excluded — they belong in `license.name`.
+  static bool _isSpdxLicenseId(String term) =>
+      !term.startsWith('LicenseRef-') &&
+      (isSpdxLicenseId(term) || _rpmToSpdx.containsValue(term));
+
   // A term counts as a real SPDX license/exception id — rather than a
-  // Debian-specific short name (`curl`, `permissive`, `public-domain`…) —
-  // when it's one of our known mapping-table targets, already a
-  // `LicenseRef-…` custom ref, or "looks versioned" (the same heuristic
-  // [toCycloneDxLicenses] uses to pick `id` vs `name`). Anything else is
+  // Debian-specific short name (`curl`, `permissive`, `public-domain`,
+  // `BSD-3-clause-Berkeley`…) — when it is on the SPDX License List, is a
+  // hand-verified mapping-table target, or is already a `LicenseRef-…`
+  // custom ref (valid as-is inside an SPDX expression). Anything else is
   // escaped so the SPDX expression stays syntactically valid.
   static bool _isTrustworthySpdxTerm(String term) =>
       term.startsWith('LicenseRef-') ||
-      _rpmToSpdx.containsValue(term) ||
-      (_looksLikeSpdxId(term) && term.contains(RegExp(r'-\d')));
+      isSpdxLicenseId(term) ||
+      isSpdxExceptionId(term) ||
+      _rpmToSpdx.containsValue(term);
 
   /// Escapes every AND/OR-separated term of an SPDX expression that isn't a
   /// [_isTrustworthySpdxTerm] to a valid `LicenseRef-<slug>`, so the whole
@@ -346,7 +345,8 @@ class LicenseNormalizer {
     if (withMatch != null) {
       final license = withMatch.group(1)!.trim();
       final exception = withMatch.group(2)!.trim();
-      if (_isTrustworthySpdxTerm(license) && _looksLikeSpdxId(exception)) {
+      if (_isTrustworthySpdxTerm(license) &&
+          (isSpdxExceptionId(exception) || _looksLikeSpdxId(exception))) {
         return t;
       }
       // Can't safely split a malformed WITH-clause — escape it whole.

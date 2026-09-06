@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- CycloneDX : `license.id` n'est plus attribué qu'aux identifiants réellement
+  présents sur la SPDX License List (nouvel instantané `lib/spdx_license_ids.dart`).
+  L'ancienne heuristique « le token contient un tiret suivi d'un chiffre » faisait
+  passer en `license.id` les raccourcis `debian/copyright` (`GFDL-NIV-1.3`,
+  `BSD-3-clause-Berkeley`, `GPL-2.0-only+-with-link-exception`…), produisant un SBOM
+  rejeté par la validation de schéma CycloneDX (score sbomqs `sbom_schema_valid` à 0).
+  Ces valeurs sont désormais portées en `license.name`. Même durcissement pour les
+  termes d'une expression SPDX (SPDX 2.3 / 3.0), escortés en `LicenseRef-…` s'ils ne
+  sont pas SPDX-listés.
+- Backend OCI syft : le mainteneur dpkg/apk (`metadata.maintainer`) et
+  l'architecture (`metadata.architecture`, clé en minuscules) sont désormais lus —
+  ils étaient ignorés car le code ne testait que des clés en casse Pascal
+  (`Vendor`, `Architecture`). Le SBOM d'une image OCI analysée via syft porte donc
+  maintenant un `supplier` de composant (métrique sbomqs `comp_with_supplier`) et
+  l'`arch` dans le PURL des paquets Debian/Alpine.
+
 ## [1.4.0] - 2026-09-06
 
 ### Added

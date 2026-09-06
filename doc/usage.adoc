@@ -1123,6 +1123,7 @@ sbom_generator/
 │   ├── oci_parser.dart            # Analyse images OCI (syft / trivy / skopeo / cdxgen)
 │   ├── archive_helpers.dart       # Helpers partagés tar + zip
 │   ├── license_normalizer.dart    # Normalisation SPDX centralisée
+│   ├── spdx_license_ids.dart      # Instantané SPDX License List
 │   ├── sbom_diff.dart             # Comparaison de SBOMs (sous-commande diff)
 │   ├── sbom_merger.dart           # Fusion de SBOMs (sous-commande merge)
 │   ├── sbom_reader.dart           # Lecteur SBOM (CycloneDX/SPDX) → List<Package> (convert, licenses)

@@ -188,6 +188,36 @@ void main() {
     });
   });
 
+  group('OciParser (backend syft) — champs de composant', () {
+    test('reprend le mainteneur dpkg (clé minuscule) comme vendor/supplier', () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'apt',
+        'version': '3.0.3',
+        'type': 'deb',
+        'metadata': {
+          'package': 'apt',
+          'architecture': 'amd64',
+          'maintainer': 'APT Development Team <deity@lists.debian.org>',
+        },
+      }, 'debian.tar')!;
+
+      expect(pkg.vendor, 'APT Development Team <deity@lists.debian.org>');
+      // La clé syft est `architecture` (minuscule) — était ignorée avant.
+      expect(pkg.arch, 'amd64');
+    });
+
+    test('reprend vendor rpm (clé minuscule)', () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'bash',
+        'version': '5.2.15',
+        'type': 'rpm',
+        'metadata': {'arch': 'x86_64', 'vendor': 'Red Hat, Inc.'},
+      }, 'ubi9.tar')!;
+      expect(pkg.vendor, 'Red Hat, Inc.');
+      expect(pkg.arch, 'x86_64');
+    });
+  });
+
   group('OciParser (backend cdxgen) — filtrage & normalisation des composants',
       () {
     test('conserve un composant deb avec son PURL et son arch', () {

@@ -352,6 +352,7 @@ sbom_generator/
 │   │                            #   cdxgen : SBOM CycloneDX natif, filtré aux PURL réels
 │   ├── archive_helpers.dart     # Helpers partagés tar/zip (parseFilename, identifyLicense)
 │   ├── license_normalizer.dart  # Normalisation SPDX centralisée (LicenseNormalizer)
+│   ├── spdx_license_ids.dart    # Instantané SPDX License List (garde-fou id vs name)
 │   ├── sbom_diff.dart           # Comparaison de SBOMs (SbomDiffer)
 │   ├── sbom_merger.dart         # Fusion de SBOMs (SbomMerger)
 │   ├── sbom_reader.dart         # Relecture d'un SBOM existant (sous-commande convert)
