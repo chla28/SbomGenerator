@@ -1042,6 +1042,28 @@ en minuscules, rpm `arch` / `vendor`). Le mainteneur dpkg/apk sert de
 `supplier` du composant à défaut d'un champ `vendor` rpm — sans lui, le SBOM
 n'a aucun fournisseur de composant (métrique `comp_with_supplier` de sbomqs).
 
+[[sec-syft-debian-purl]]
+==== Normalisation du qualifiant `distro` Debian (`_normalizeSyftSystemPurl`)
+
+Pour Debian, syft renseigne le qualifiant `distro` des PURL système et le
+champ racine `distro.versionID` avec la *point release* lue dans
+`/etc/debian_version` (ex. `debian-13.6`), et non le majeur `13` porté par
+`VERSION_ID` d'`/etc/os-release`. Grype tolère cette forme (il ne retient que
+le majeur), mais OSV-Scanner en mode « scan de SBOM » (scalibr) ne rattache un
+`pkg:deb/debian/...` à l'écosystème `Debian:13` que si `distro` vaut
+`debian-<majeur>` **ou** si `distro_name` porte un nom de code connu — avec
+`debian-13.6` il ne trouve *silencieusement* rien (0 CVE, sans erreur).
+
+`_normalizeSyftSystemPurl()` ramène donc `distro=debian-X.Y` à
+`distro=debian-X` et ajoute `distro_name=<codename>` (repris de
+`distro.versionCodename` fourni par syft), s'alignant sur ce que produit
+cdxgen. `_syftDistroToOsInfo()` applique la même troncature au majeur pour le
+composant `operating-system`. Traitement limité à `id == debian` : pour
+alpine (`3.20.3`), rhel (`9.6`)… le mineur porte une information et reste
+intact. Vérifié sur `haproxy:3.4.4` (Debian 13.6) : sans le correctif
+OSV-Scanner remontait 0 CVE là où Grype en voyait 163 (toutes `wont-fix` /
+`not-fixed`, sans version corrigée) ; avec, les trois scanners se recoupent.
+
 === Backend Trivy (`_parseTrivy`)
 
 Lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et le normalise via

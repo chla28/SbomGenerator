@@ -77,6 +77,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (`Vendor`, `Architecture`). Le SBOM d'une image OCI analysée via syft porte donc
   maintenant un `supplier` de composant (métrique sbomqs `comp_with_supplier`) et
   l'`arch` dans le PURL des paquets Debian/Alpine.
+- Backend OCI syft (Debian) : le qualifiant `distro` des PURL système et la
+  version du composant `operating-system` sont ramenés du *point release*
+  (`debian-13.6`, tel que syft le lit dans `/etc/debian_version`) au majeur
+  (`debian-13`, conforme à `VERSION_ID` d'`/etc/os-release`), et `distro_name`
+  (nom de code, ex. `trixie`) est ajouté. OSV-Scanner en mode « scan de SBOM »
+  ne rattachait pas `debian-13.6` à l'écosystème `Debian:13` et remontait
+  *silencieusement* 0 CVE sur ces SBOM : Grype restait alors seul, avec toutes
+  ses correspondances en `wont-fix` / `not-fixed` (statut du Debian Security
+  Tracker, sans version corrigée), donnant une image faussement rassurante.
+  Distributions non Debian (alpine `3.20.3`, rhel `9.6`…) inchangées : le
+  mineur y porte une information. Vérifié sur `haproxy:3.4.4`.
 
 ## [1.4.0] - 2026-09-06
 

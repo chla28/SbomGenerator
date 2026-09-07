@@ -1013,21 +1013,25 @@ ID Trivy une fois le préfixe retiré — 200 lignes de comparaison avant
 normalisation, 106 après.
 
 NOTE: Deux autres écarts, plus sévères que la nomenclature, affectent
-spécifiquement les paquets OS (Debian/Alpine/RPM) — aucun n'est corrigé
-côté GUI, mais ils expliquent des écarts de comptage bruts massifs entre
-scanners que `_normalizeVulnId` ne touche pas. **OSV-Scanner peut tomber à
-0 CVE sur un SBOM alors qu'il en trouve des centaines sur la même image
-scannée directement** : `osv-scanner scan source --sbom=...` interroge
-l'API OSV.dev avec le `purl` du SBOM tel quel, mais OSV.dev n'indexe les
-avis Debian que sous une forme purl très spécifique (paquet *source*,
-`arch=source`, nom de code de la distribution — ex.
-`pkg:deb/debian/openssl?arch=source&distro=trixie`), différente du purl
-standard produit par syft (`pkg:deb/debian/<paquet-binaire>@<version>?arch=amd64&distro=debian-13.6`).
-Vérifié empiriquement (`curl` direct vers `https://api.osv.dev/v1/query`
-avec chaque variante de purl) : toute forme hors du format source/codename
-renvoie `{}`. Sur une image Debian réelle (79 paquets), cela donnait 0 CVE
-via `osv-scanner scan source --sbom=`, contre 233 via `osv-scanner scan
-image --archive=...` (extraction interne, sans purl). **Grype et Trivy
+spécifiquement les paquets OS (Debian/Alpine/RPM) et expliquent des écarts
+de comptage bruts massifs entre scanners que `_normalizeVulnId` ne touche
+pas. **OSV-Scanner peut tomber à 0 CVE sur un SBOM alors qu'il en trouve
+des centaines sur la même image scannée directement.** Pour Debian, la
+cause est le qualifiant `distro` : OSV-Scanner ne rattache un
+`pkg:deb/debian/...` à l'écosystème `Debian:<n>` que si `distro` vaut
+`debian-<majeur>` **ou** si `distro_name` porte un nom de code connu.
+syft renseigne le *point release* (`distro=debian-13.6`, lu dans
+`/etc/debian_version`), qu'OSV-Scanner ne reconnaît pas. Le backend syft
+du CLI `sbom-generator` (que la GUI invoque pour produire les SBOM)
+corrige ce purl à la source — `distro=debian-13.6` → `distro=debian-13` +
+`distro_name=trixie` (voir `../../doc/developer.adoc`, section
+« Normalisation du qualifiant `distro` Debian ») — donc la GUI en
+bénéficie aussi. Restent hors de
+portée de ce correctif : Alpine/RPM (OSV.dev les indexe mal en mode
+« scan de SBOM ») et le fait que `osv-scanner scan image` (extraction
+interne, sans purl) reste plus exhaustif sur l'OS de base — sur une image
+Debian réelle (79 paquets), 233 CVE via `scan image --archive=...`.
+**Grype et Trivy
 n'ont par ailleurs pas la même exhaustivité sur les paquets OS Debian**
 (207 correspondances Grype contre 27 Trivy sur le même SBOM, alors que les
 deux utilisent leur matcher distro dédié — `dpkg-matcher` côté Grype,

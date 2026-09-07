@@ -195,23 +195,38 @@ complète de syft.</p>
 </div>
 <div class="paragraph">
 <p>Le même type d’écart existe pour OSV-Scanner, mais de façon bien plus
-radicale : sur les paquets de distribution (Debian/Alpine/RPM), lui donner
-un SBOM peut faire tomber le résultat à <strong>zéro</strong> CVE, alors que scanner
-l’image directement en trouve des centaines. En cause : <code>osv-scanner scan
-source --sbom=…​</code> interroge l’API OSV.dev avec le <code>purl</code> du SBOM tel
-quel, mais OSV.dev n’indexe les avis Debian que sous une forme purl très
-spécifique — paquet <strong>source</strong>, <code>arch=source</code>, nom de code de la
-distribution (ex. <code>pkg:deb/debian/openssl?arch=source&amp;distro=trixie</code>) —
-différente du purl standard produit par syft/sbom_generator pour un
-paquet Debian (<code>pkg:deb/debian/&lt;paquet-binaire&gt;@&lt;version&gt;?arch=amd64&amp;distro=debian-13.6</code>,
-conforme à la spec purl). Sur l’image Debian réelle citée plus haut, cela
-donnait 0 CVE via <code>osv-scanner scan source --sbom=</code>, contre 233 via
-<code>osv-scanner scan image</code> (qui fait sa propre extraction et n’utilise
-aucun purl). Ce n’est pas un défaut du SBOM généré — le même écart existe
-avec un SBOM produit par syft seul — mais une limite du mode « scan de
-SBOM » d’OSV-Scanner pour les paquets de distribution : pour une
-couverture OS fiable avec cet outil, mieux vaut scanner l’image
-directement plutôt que passer par un SBOM.</p>
+radicale : sur les paquets de distribution, lui donner un SBOM pouvait
+faire tomber le résultat à <strong>zéro</strong> CVE, alors que scanner l’image
+directement en trouve des centaines. OSV-Scanner en mode « scan de SBOM »
+ne rattache un <code>pkg:deb/debian/…​</code> à l’écosystème <code>Debian:13</code> que si le
+qualifiant <code>distro</code> vaut <code>debian-&lt;majeur&gt;</code> <strong>ou</strong> si <code>distro_name</code> porte
+un nom de code connu. Or syft renseigne pour Debian le <strong>point release</strong>
+(<code>distro=debian-13.6</code>, lu dans <code>/etc/debian_version</code>), qu’OSV-Scanner ne
+reconnaît pas → 0 CVE, sans erreur.</p>
+</div>
+<div class="paragraph">
+<p><code>sbom_generator</code> corrige désormais ce PURL à la source (backend syft) :
+<code>distro=debian-13.6</code> → <code>distro=debian-13</code> + ajout de <code>distro_name=trixie</code>.
+Sur <code>haproxy:3.4.4</code> (Debian 13.6), le SBOM syft passait ainsi de 0 CVE
+OSV-Scanner (Grype restant seul, toutes ses correspondances en
+« won’t fix » / « not fixed ») à une détection Debian complète recoupée
+par les trois scanners.</p>
+</div>
+<div class="paragraph">
+<p>Deux limites subsistent, indépendantes de ce correctif :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>les autres familles de paquets de distribution (Alpine, RPM/RHEL) —
+OSV.dev les indexe mal ou pas en mode « scan de SBOM » ;</p>
+</li>
+<li>
+<p><code>osv-scanner scan image</code>, qui fait sa propre extraction sans PURL,
+reste plus exhaustif sur l’OS de base. Pour une couverture OS
+maximale avec cet outil, scanner l’image directement.</p>
+</li>
+</ul>
 </div>
 </div>
 <div class="sect2">

@@ -161,6 +161,20 @@ void main() {
       expect(os.id, 'debian');
     });
 
+    test('ramène la point release Debian (13.6) au majeur (13)', () {
+      final os = ociParserSyftDistroToOsInfo({
+        'distro': {'id': 'debian', 'versionID': '13.6'},
+      })!;
+      expect(os.version, '13');
+    });
+
+    test('conserve le mineur pour une distro non Debian (rhel 9.6)', () {
+      final os = ociParserSyftDistroToOsInfo({
+        'distro': {'id': 'rhel', 'versionID': '9.6'},
+      })!;
+      expect(os.version, '9.6');
+    });
+
     test('retourne null quand syft n\'a détecté aucune base OS (scratch)',
         () {
       expect(ociParserSyftDistroToOsInfo({}), isNull);
@@ -204,6 +218,45 @@ void main() {
       expect(pkg.vendor, 'APT Development Team <deity@lists.debian.org>');
       // La clé syft est `architecture` (minuscule) — était ignorée avant.
       expect(pkg.arch, 'amd64');
+    });
+
+    test(
+        'ramène distro=debian-13.6 au majeur et ajoute distro_name '
+        '(compat OSV-Scanner)', () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'apt',
+        'version': '3.0.3',
+        'type': 'deb',
+        'purl': 'pkg:deb/debian/apt@3.0.3?arch=amd64&distro=debian-13.6',
+      }, 'debian.tar', distroCodename: 'trixie')!;
+
+      expect(pkg.purl,
+          'pkg:deb/debian/apt@3.0.3?arch=amd64&distro=debian-13&distro_name=trixie');
+    });
+
+    test('ajoute distro_name même quand distro=debian-13 est déjà au majeur',
+        () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'bash',
+        'version': '5.2.37',
+        'type': 'deb',
+        'purl': 'pkg:deb/debian/bash@5.2.37?arch=amd64&distro=debian-13',
+      }, 'debian.tar', distroCodename: 'trixie')!;
+
+      expect(pkg.purl,
+          'pkg:deb/debian/bash@5.2.37?arch=amd64&distro=debian-13&distro_name=trixie');
+    });
+
+    test('laisse intact un PURL alpine (le mineur y est signifiant)', () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'musl',
+        'version': '1.2.5',
+        'type': 'apk',
+        'purl': 'pkg:apk/alpine/musl@1.2.5?arch=x86_64&distro=alpine-3.20.3',
+      }, 'alpine.tar', distroCodename: 'v3.20')!;
+
+      expect(pkg.purl,
+          'pkg:apk/alpine/musl@1.2.5?arch=x86_64&distro=alpine-3.20.3');
     });
 
     test('reprend vendor rpm (clé minuscule)', () {

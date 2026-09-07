@@ -168,11 +168,14 @@ class OciParser {
       throw Exception('syft : impossible de parser le JSON : $e');
     }
 
+    final distro = data['distro'] as Map<String, dynamic>?;
+    final codename = (distro?['versionCodename'] as String?)?.trim();
+
     final artifacts = (data['artifacts'] as List?) ?? [];
     final packages = <Package>[];
     for (final a in artifacts) {
-      final pkg =
-          _syftArtifactToPackage(a as Map<String, dynamic>, imageRef);
+      final pkg = _syftArtifactToPackage(a as Map<String, dynamic>, imageRef,
+          distroCodename: codename);
       if (pkg != null) packages.add(pkg);
     }
     return (packages: packages, os: _syftDistroToOsInfo(data));
@@ -189,8 +192,16 @@ class OciParser {
     final distro = data['distro'] as Map<String, dynamic>?;
     if (distro == null) return null;
     final id = (distro['id'] as String?) ?? '';
-    final version = (distro['versionID'] as String?) ?? '';
+    var version = (distro['versionID'] as String?) ?? '';
     if (id.isEmpty || version.isEmpty) return null;
+    // Debian expose une release à deux niveaux : `13` (majeur, tel que le
+    // porte `VERSION_ID` d'os-release et qu'attendent Grype/OSV-Scanner) et
+    // `13.6` (point release, `/etc/debian_version`). syft renseigne le second
+    // dans `versionID` ; on ne garde que le majeur pour rester compatible
+    // avec les bases CVE Debian (voir aussi _normalizeSyftSystemPurl).
+    if (id.toLowerCase() == 'debian' && version.contains('.')) {
+      version = version.split('.').first;
+    }
     return OsInfo(
       id: _toTrivyOsFamily(id),
       version: version,
@@ -245,13 +256,15 @@ class OciParser {
       _trivyOsFamilyById[id.toLowerCase()] ?? id.toLowerCase();
 
   OciPackage? _syftArtifactToPackage(
-      Map<String, dynamic> a, String imageRef) {
+      Map<String, dynamic> a, String imageRef,
+      {String? distroCodename}) {
     final name = (a['name'] as String?) ?? '';
     final version = (a['version'] as String?) ?? '';
     if (name.isEmpty) return null;
 
     final type = _normalizeSyftType((a['type'] as String?) ?? 'generic');
-    final purlStr = (a['purl'] as String?) ?? '';
+    final purlStr =
+        _normalizeSyftSystemPurl((a['purl'] as String?) ?? '', distroCodename);
 
     // Licences : tableau d'objets {value, spdxExpression, …} ou de chaînes
     final licenses = (a['licenses'] as List?) ?? [];
@@ -303,6 +316,33 @@ class OciParser {
       packageType: type,
       purlOverride: purlStr,
     );
+  }
+
+  /// Aligne le qualifiant `distro` des PURL système produits par syft sur ce
+  /// qu'attendent les scanners.
+  ///
+  /// syft renseigne pour Debian `distro=debian-13.6` (point release lue dans
+  /// `/etc/debian_version`). Grype tolère cette forme, mais OSV-Scanner ne
+  /// rattache le paquet à l'écosystème `Debian:13` que si `distro` vaut
+  /// `debian-<majeur>` **ou** si `distro_name` porte un nom de code connu —
+  /// avec `debian-13.6` il ne trouve silencieusement rien.
+  ///
+  /// On ramène donc `debian-X.Y` à `debian-X` et on ajoute
+  /// `distro_name=<codename>` (aligné sur ce que produit cdxgen), quand syft
+  /// a fourni `versionCodename`. Les autres distributions (alpine 3.19,
+  /// rhel 9…) où le mineur porte une information sont laissées intactes.
+  String _normalizeSyftSystemPurl(String purl, String? codename) {
+    if (!purl.contains('distro=debian-')) return purl;
+    var out = purl.replaceAllMapped(
+      RegExp(r'distro=debian-(\d+)(?:\.\d+)+'),
+      (m) => 'distro=debian-${m[1]}',
+    );
+    if (codename != null &&
+        codename.isNotEmpty &&
+        !out.contains('distro_name=')) {
+      out = '$out&distro_name=${Uri.encodeComponent(codename)}';
+    }
+    return out;
   }
 
   String _normalizeSyftType(String type) => switch (type.toLowerCase()) {
@@ -1408,8 +1448,10 @@ OsInfo? ociParserTrivyMetadataToOsInfo(Map<String, dynamic> trivyJson) =>
 /// Appelle [OciParser._syftArtifactToPackage] depuis les tests, sur un
 /// artefact syft (élément de `artifacts[]`) déjà décodé, sans lancer syft.
 OciPackage? ociParserSyftArtifactToPackage(
-        Map<String, dynamic> artifact, String imageRef) =>
-    OciParser()._syftArtifactToPackage(artifact, imageRef);
+        Map<String, dynamic> artifact, String imageRef,
+        {String? distroCodename}) =>
+    OciParser()._syftArtifactToPackage(artifact, imageRef,
+        distroCodename: distroCodename);
 
 /// Appelle [OciParser._cdxgenComponentToPackage] depuis les tests, sur un
 /// composant CycloneDX (élément de `components[]`) déjà décodé, sans lancer
