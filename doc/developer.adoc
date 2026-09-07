@@ -2290,6 +2290,18 @@ pire sévérité, paquet, scanners) au-dessus d'un seuil — consommé par
 d'OSV-Scanner (`DEBIAN-CVE-…`) sont normalisés (`_distroPrefixedCveRe`) avant
 tout comptage/comparaison, comme dans le tableau de bord de la GUI.
 
+`cveNotes()` renvoie une `Map<String,String>` id → note, rendue en section
+« Notes par CVE » sous la matrice : une entrée par CVE que Grype signale
+sans correctif exploitable (`fixState` ≠ `fixed` et `fixedVersions` vide)
+alors qu'OSV-Scanner ou Trivy portent une version corrigée. Les runners
+(`_runGrype` / `_runOsv` / `_runTrivy`) alimentent ça en ajoutant à chaque
+finding `fixState` + `fixedVersions` (Grype `vulnerability.fix`), les
+événements `fixed` des plages `affected[].ranges[]` (OSV), et `FixedVersion`
+scindé (Trivy). Objectif : expliciter que la version corrigée d'un avis de
+distribution est en général celle d'`unstable`/`testing`, pas une mise à jour
+disponible pour la release stable installée — cf. `usage.adoc`, section
+« Pourquoi les scanners ne trouvent pas les mêmes CVE ».
+
 [source,dart]
 ----
 Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile, {bool quiet = false}) async {

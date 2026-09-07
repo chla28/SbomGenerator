@@ -923,6 +923,16 @@ le nombre de CVE (le code `1` reste réservé à `text` / `sarif`). C'est ce
 que `scripts/build-dist.sh` utilise pour joindre un PDF de synthèse à côté de
 l'archive de distribution.
 
+Une section *« Notes par CVE »* suit la matrice quand c'est pertinent : pour
+chaque CVE où Grype ne voit *aucun correctif* pour la distribution installée
+(état `won't fix` / `not fixed`, repris du statut `<no-dsa>` du Debian
+Security Tracker) alors qu'OSV-Scanner ou Trivy annoncent une version
+corrigée, une note précise que cette version est généralement le correctif
+porté dans les branches _unstable_ / _testing_ de la distribution — pas une
+mise à jour installable sur la release stable. Cette divergence est une
+source de confusion fréquente : les deux scanners ont raison, ils ne parlent
+simplement pas de la même chose.
+
 En plus du fichier, ces trois formats *listent sur stdout chaque CVE
 Critical (en rouge) et High (en orange)*, une ligne par CVE unique
 (dédupliquée entre scanners), avec le paquet concerné et les scanners qui

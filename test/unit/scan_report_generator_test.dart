@@ -53,6 +53,79 @@ void main() {
       expect(adoc, contains('| [.sev-high]#HIGH# | CVE-2026-9 | ✓ | — | ✓'));
     });
 
+    test('note par CVE : Grype won\'t fix + version corrigée annoncée ailleurs',
+        () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [
+            {
+              'id': 'CVE-2026-8376',
+              'severity': 'Critical',
+              'package': 'perl-base@5.40.1-6',
+              'fixState': 'wont-fix',
+              'fixedVersions': <String>[],
+            },
+          ],
+          'osv': [
+            {
+              'id': 'DEBIAN-CVE-2026-8376',
+              'severity': 'Critical',
+              'package': 'perl@5.40.1-6',
+              'fixedVersions': ['5.40.1-8'],
+            },
+          ],
+        },
+      );
+
+      expect(gen.cveNotes(), containsPair('CVE-2026-8376', contains('5.40.1-8')));
+      final md = gen.toMarkdown();
+      expect(md, contains('### Notes par CVE'));
+      expect(md, contains('**CVE-2026-8376** (`perl-base@5.40.1-6`)'));
+      expect(md, contains('unstable'));
+      expect(gen.toAsciiDoc(), contains('=== Notes par CVE'));
+    });
+
+    test('pas de note si Grype voit un correctif (fixState=fixed)', () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [
+            {
+              'id': 'CVE-2026-1',
+              'severity': 'High',
+              'package': 'foo@1',
+              'fixState': 'fixed',
+              'fixedVersions': ['2'],
+            },
+          ],
+          'osv': [
+            {'id': 'CVE-2026-1', 'severity': 'High', 'package': 'foo@1',
+             'fixedVersions': ['2']},
+          ],
+        },
+      );
+      expect(gen.cveNotes(), isEmpty);
+      expect(gen.toMarkdown(), isNot(contains('Notes par CVE')));
+    });
+
+    test('pas de note si aucun autre scanner n\'annonce de version corrigée', () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [
+            {'id': 'CVE-2026-2', 'severity': 'High', 'package': 'bar@1',
+             'fixState': 'wont-fix', 'fixedVersions': <String>[]},
+          ],
+          'osv': [
+            {'id': 'CVE-2026-2', 'severity': 'High', 'package': 'bar@1',
+             'fixedVersions': <String>[]},
+          ],
+        },
+      );
+      expect(gen.cveNotes(), isEmpty);
+    });
+
     test('comparaison inter-scanners omise si < 2 scanners exécutés', () {
       final gen = ScanReportGenerator(
         sbomPath: 's',

@@ -80,6 +80,77 @@ class ScanReportGenerator {
     return counts;
   }
 
+  /// CVE (id normalisé) → premier paquet non vide vu par un scanner.
+  Map<String, String> get _packageById {
+    final m = <String, String>{};
+    for (final s in _scannerOrder) {
+      for (final v in resultsByScanner[s] ?? const []) {
+        final id = _normalizeId((v['id'] as String?) ?? '');
+        final pkg = (v['package'] as String?) ?? '';
+        if (id.isNotEmpty && pkg.isNotEmpty && pkg != '@') {
+          m.putIfAbsent(id, () => pkg);
+        }
+      }
+    }
+    return m;
+  }
+
+  /// CVE (id normalisé) → note explicative, pour les cas où Grype ne voit
+  /// aucun correctif pour la distribution installée (« won't fix » /
+  /// « not fixed », statut `<no-dsa>` du Debian Security Tracker) alors
+  /// qu'OSV-Scanner ou Trivy annoncent une version corrigée — laquelle est,
+  /// pour un avis de distribution, généralement le correctif porté dans les
+  /// branches *unstable* / *testing*, pas une mise à jour installable sur la
+  /// release stable en place. Confusion fréquente : la note lève l'ambiguïté.
+  Map<String, String> cveNotes() {
+    final grype = resultsByScanner['grype'];
+    if (grype == null) return const {};
+
+    // Grype : la CVE dispose-t-elle d'un correctif exploitable ?
+    final grypeSeen = <String>{};
+    final grypeHasFix = <String, bool>{};
+    for (final v in grype) {
+      final id = _normalizeId((v['id'] as String?) ?? '');
+      if (id.isEmpty) continue;
+      grypeSeen.add(id);
+      final state = ((v['fixState'] as String?) ?? '').toLowerCase();
+      final vers = (v['fixedVersions'] as List?) ?? const [];
+      final hasFix = state == 'fixed' || vers.isNotEmpty;
+      grypeHasFix[id] = (grypeHasFix[id] ?? false) || hasFix;
+    }
+
+    // OSV-Scanner / Trivy : versions corrigées annoncées, par scanner.
+    final fixedBy = <String, Map<String, Set<String>>>{};
+    for (final s in const ['osv', 'trivy']) {
+      for (final v in resultsByScanner[s] ?? const []) {
+        final id = _normalizeId((v['id'] as String?) ?? '');
+        if (id.isEmpty) continue;
+        final vers = ((v['fixedVersions'] as List?) ?? const [])
+            .map((e) => '$e')
+            .where((e) => e.isNotEmpty)
+            .toSet();
+        if (vers.isEmpty) continue;
+        ((fixedBy[id] ??= {})[s] ??= <String>{}).addAll(vers);
+      }
+    }
+
+    final notes = <String, String>{};
+    for (final id in grypeSeen) {
+      if (grypeHasFix[id] == true) continue;
+      final fb = fixedBy[id];
+      if (fb == null || fb.isEmpty) continue;
+      final vers = <String>{for (final vs in fb.values) ...vs}.toList()..sort();
+      final who = fb.keys.map((s) => _scannerLabels[s]).join(' / ');
+      notes[id] = 'Grype ne voit aucun correctif pour la distribution '
+          'installée (« won\'t fix » / « non corrigé »). $who annonce une '
+          'version corrigée (${vers.map((v) => '`$v`').join(', ')}) : pour un '
+          'avis de distribution, il s\'agit en général du correctif porté dans '
+          'les branches *unstable* / *testing*, pas d\'une mise à jour '
+          'disponible pour la release stable en place.';
+    }
+    return notes;
+  }
+
   /// One row per unique (normalised) CVE across every scanner that ran,
   /// sorted by worst severity first.
   List<_CrossRow> _crossRows() {
@@ -99,16 +170,7 @@ class ScanReportGenerator {
         },
     };
     // Premier paquet non vide rencontré pour chaque CVE (tous scanners).
-    final pkgById = <String, String>{};
-    for (final s in _scannerOrder) {
-      for (final v in resultsByScanner[s] ?? const []) {
-        final id = _normalizeId((v['id'] as String?) ?? '');
-        final pkg = (v['package'] as String?) ?? '';
-        if (id.isNotEmpty && pkg.isNotEmpty && pkg != '@') {
-          pkgById.putIfAbsent(id, () => pkg);
-        }
-      }
-    }
+    final pkgById = _packageById;
     final all = <String>{for (final ids in idsByScanner.values) ...ids}.toList();
 
     // Sévérité affichée = la pire rapportée par un scanner quelconque
@@ -243,6 +305,21 @@ class ScanReportGenerator {
           'avis distro. Voir la documentation, section « Pourquoi Grype, '
           'OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».');
       b.writeln();
+
+      final notes = cveNotes();
+      if (notes.isNotEmpty) {
+        final pkgById = _packageById;
+        b.writeln('### Notes par CVE');
+        b.writeln();
+        for (final r in rows) {
+          final n = notes[r.id];
+          if (n == null) continue;
+          final pkg = pkgById[r.id] ?? '';
+          b.writeln('- **${_mdEsc(r.id)}**'
+              '${pkg.isEmpty ? '' : ' (`${_mdEsc(pkg)}`)'} — $n');
+        }
+        b.writeln();
+      }
     }
 
     b.writeln('---');
@@ -350,6 +427,21 @@ class ScanReportGenerator {
           'Trivy ne trouvent pas les mêmes CVE ».');
       b.writeln('====');
       b.writeln();
+
+      final notes = cveNotes();
+      if (notes.isNotEmpty) {
+        final pkgById = _packageById;
+        b.writeln('=== Notes par CVE');
+        b.writeln();
+        for (final r in rows) {
+          final n = notes[r.id];
+          if (n == null) continue;
+          final pkg = pkgById[r.id] ?? '';
+          b.writeln('* *${_adocEsc(r.id)}*'
+              '${pkg.isEmpty ? '' : ' (`${_adocEsc(pkg)}`)'} — $n');
+        }
+        b.writeln();
+      }
     }
 
     b.writeln('_Généré par sbom-generator._');

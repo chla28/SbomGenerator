@@ -1506,12 +1506,20 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile,
     return matches.map<Map<String, dynamic>>((m) {
       final vuln = m['vulnerability'] as Map<String, dynamic>? ?? {};
       final artifact = m['artifact'] as Map<String, dynamic>? ?? {};
+      final fix = vuln['fix'] as Map<String, dynamic>? ?? const {};
       return {
         'id': vuln['id'] ?? '',
         'severity': vuln['severity'] ?? 'Unknown',
         'package': '${artifact['name'] ?? ''}@${artifact['version'] ?? ''}',
         'published': vuln['publishedDate'],
         'modified': vuln['lastModifiedDate'],
+        // `fix.state` de Grype : `fixed` / `not-fixed` / `wont-fix` / `unknown`.
+        // Pour les paquets de distribution, `wont-fix` reprend le statut
+        // `<no-dsa>` du Debian Security Tracker (pas de mise à jour de sécurité
+        // dédiée pour la release stable installée).
+        'fixState': fix['state'] ?? '',
+        'fixedVersions':
+            (fix['versions'] as List?)?.map((e) => '$e').toList() ?? const [],
       };
     }).toList();
   } catch (e) {
@@ -1546,12 +1554,26 @@ Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile,
           final aliases = (v['aliases'] as List?)?.cast<String>() ?? [];
           final cve = aliases.firstWhere((a) => a.startsWith('CVE-'), orElse: () => '');
           final dbSev = (v['database_specific'] as Map?)?['severity'] as String? ?? '';
+          // Versions corrigées annoncées par OSV : événements `fixed` des
+          // plages `affected[].ranges[]`. Pour un avis Debian, c'est souvent
+          // la version de la branche `unstable`/`testing`, pas une mise à jour
+          // installable sur la release stable — d'où la note du rapport.
+          final fixed = <String>{};
+          for (final aff in (v['affected'] as List? ?? [])) {
+            for (final rg in ((aff as Map)['ranges'] as List? ?? [])) {
+              for (final ev in ((rg as Map)['events'] as List? ?? [])) {
+                final f = (ev as Map)['fixed'];
+                if (f != null && '$f'.isNotEmpty) fixed.add('$f');
+              }
+            }
+          }
           out.add({
             'id': cve.isNotEmpty ? cve : v['id'] ?? '',
             'severity': dbSev.isNotEmpty ? dbSev : 'Unknown',
             'package': '$name@$version',
             'published': v['published'],
             'modified': v['modified'],
+            'fixedVersions': fixed.toList(),
           });
         }
       }
@@ -1582,12 +1604,19 @@ Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile,
     final out = <Map<String, dynamic>>[];
     for (final res in (data['Results'] as List? ?? [])) {
       for (final v in (res['Vulnerabilities'] as List? ?? [])) {
+        final fixedRaw = (v['FixedVersion'] as String?) ?? '';
         out.add({
           'id': v['VulnerabilityID'] ?? '',
           'severity': v['Severity'] ?? 'Unknown',
           'package': '${v['PkgName'] ?? ''}@${v['InstalledVersion'] ?? ''}',
           'published': v['PublishedDate'],
           'modified': v['LastModifiedDate'],
+          'fixedVersions': fixedRaw.isEmpty
+              ? const <String>[]
+              : fixedRaw
+                  .split(RegExp(r'\s*(?:,|\|\|)\s*'))
+                  .where((s) => s.isNotEmpty)
+                  .toList(),
         });
       }
     }

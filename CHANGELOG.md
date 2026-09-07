@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `sbom-generator scan -f markdown|asciidoc|pdf` : section **« Notes par CVE »**
+  sous la matrice inter-scanners. Pour chaque CVE où Grype ne voit aucun
+  correctif pour la distribution installée (`won't fix` / `not fixed`, repris
+  du statut `<no-dsa>` du Debian Security Tracker) alors qu'OSV-Scanner ou
+  Trivy annoncent une version corrigée, une note précise que cette version est
+  en général le correctif des branches *unstable* / *testing* — pas une mise à
+  jour disponible pour la release stable. Lève une confusion fréquente : les
+  deux scanners ont raison, ils ne parlent pas de la même chose. Les runners
+  de scan capturent pour cela `fix.state` / versions corrigées de Grype, les
+  événements `fixed` d'OSV et le `FixedVersion` de Trivy.
+
 ## [1.4.1] - 2026-09-07
 
 ### Added
