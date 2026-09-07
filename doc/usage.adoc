@@ -989,7 +989,7 @@ précisément à obtenir l'union des trois plutôt que de se fier à un seul.
 |Date/heure de génération (UTC ISO 8601)
 
 |Outil
-|`sbom_generator 1.4.0`
+|`sbom_generator 1.4.1`
 
 |Auteur
 |Fixé à `sbom_generator` (non configurable)

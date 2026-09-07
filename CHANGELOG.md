@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-07
+
 ### Added
 - `sbom-generator scan` : nouveaux formats de sortie `markdown`, `asciidoc` et
   `pdf` (`-f`, écrits via `-o`) — un **rapport de synthèse inter-scanners** :
@@ -20,8 +22,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (`…-scan-report.pdf` ; avec `--rpm`, aussi `…-rpms-scan-report.pdf`).
   Best-effort : chaque scanner absent est omis, l'absence totale de scanner ou
   d'`asciidoctor-pdf` n'échoue pas le build.
-
-### Added
 - `sbom-generator scan -f markdown|asciidoc|pdf` liste désormais sur stdout,
   une ligne par CVE unique, chaque vulnérabilité **Critical (rouge)** et
   **High (orange)** — paquet concerné + scanners qui l'ont vue + décompte.
