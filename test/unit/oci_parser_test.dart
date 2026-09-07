@@ -247,6 +247,85 @@ void main() {
           'pkg:deb/debian/bash@5.2.37?arch=amd64&distro=debian-13&distro_name=trixie');
     });
 
+    test(
+        'retire upstream= du binaire quand un paquet source distinct existe '
+        '(évite le double comptage Grype)', () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'zlib1g',
+        'version': '1:1.3.dfsg+really1.3.1-1+b1',
+        'type': 'deb',
+        'metadata': {'source': 'zlib', 'sourceVersion': '1:1.3.dfsg+really1.3.1-1'},
+        'purl': 'pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1'
+            '?arch=amd64&distro=debian-13&upstream=zlib%401%3A1.3.dfsg&distro_name=trixie',
+      }, 'debian.tar')!;
+
+      expect(pkg.purl, isNot(contains('upstream=')));
+      expect(pkg.purl, contains('distro=debian-13'));
+      expect(pkg.purl, contains('distro_name=trixie'));
+    });
+
+    test('garde upstream= si la source est identique au nom binaire', () {
+      final pkg = ociParserSyftArtifactToPackage({
+        'name': 'bash',
+        'version': '5.2.37-2',
+        'type': 'deb',
+        'metadata': {'source': 'bash'},
+        'purl': 'pkg:deb/debian/bash@5.2.37-2?arch=amd64&distro=debian-13'
+            '&upstream=bash%405.2.37-2',
+      }, 'debian.tar')!;
+      expect(pkg.purl, contains('upstream='));
+    });
+
+    test('_syftSourcePackage : composant source dérivé du binaire', () {
+      final src = ociParserSyftSourcePackage({
+        'name': 'perl-base',
+        'version': '5.40.1-6',
+        'type': 'deb',
+        'metadata': {'source': 'perl'},
+        'purl': 'pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6'
+            '&upstream=perl',
+      }, 'trixie', 'debian.tar')!;
+
+      expect(src.name, 'perl');
+      expect(src.version, '5.40.1-6');
+      expect(src.packageType, 'deb');
+      expect(src.purl,
+          'pkg:deb/debian/perl@5.40.1-6?arch=amd64&distro=debian-13&distro_name=trixie');
+    });
+
+    test('_syftSourcePackage : utilise sourceVersion quand fournie', () {
+      final src = ociParserSyftSourcePackage({
+        'name': 'zlib1g',
+        'version': '1:1.3.dfsg+really1.3.1-1+b1',
+        'type': 'deb',
+        'metadata': {'source': 'zlib', 'sourceVersion': '1:1.3.dfsg+really1.3.1-1'},
+        'purl': 'pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1'
+            '?arch=amd64&distro=debian-13&upstream=zlib%401%3A1.3',
+      }, 'trixie', 'debian.tar')!;
+      expect(src.version, '1:1.3.dfsg+really1.3.1-1');
+      expect(src.purl, contains('zlib@1%3A1.3.dfsg%2Breally1.3.1-1?'));
+      expect(src.purl, isNot(contains('upstream=')));
+    });
+
+    test('_syftSourcePackage : null si source == nom, non-deb, ou déjà présent',
+        () {
+      expect(
+          ociParserSyftSourcePackage(
+              {'name': 'bash', 'type': 'deb', 'metadata': {'source': 'bash'}},
+              'trixie', 'i.tar'),
+          isNull);
+      expect(
+          ociParserSyftSourcePackage(
+              {'name': 'foo', 'type': 'npm', 'metadata': {'source': 'bar'}},
+              'trixie', 'i.tar'),
+          isNull);
+      expect(
+          ociParserSyftSourcePackage(
+              {'name': 'perl-base', 'type': 'deb', 'metadata': {'source': 'perl'}},
+              'trixie', 'i.tar', existingNames: {'perl'}),
+          isNull);
+    });
+
     test('laisse intact un PURL alpine (le mineur y est signifiant)', () {
       final pkg = ociParserSyftArtifactToPackage({
         'name': 'musl',

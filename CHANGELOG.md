@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Backend OCI syft : émission des **paquets source**. OSV.dev indexe les avis
+  Debian/Ubuntu par paquet *source* (`zlib`, `perl`), pas par binaire
+  (`zlib1g`, `perl-base`) ; syft ne liste que le binaire (avec un qualifiant
+  `upstream=`), qu'OSV-Scanner ne sait pas rattacher à un avis. Le backend
+  ajoute désormais un composant par paquet source distinct (`metadata.source`
+  / `sourceVersion` de syft), comme le fait cdxgen. Le qualifiant `upstream=`
+  est retiré du binaire correspondant pour que Grype ne compte pas la même
+  CVE deux fois. Vérifié sur `haproxy:3.4.4` : OSV-Scanner passe de 19 à 58
+  CVE Debian (parité avec le SBOM cdxgen), Grype garde exactement le même
+  ensemble de CVE uniques (le total brut se dégonfle de 163 à 80, il
+  sur-comptait la même CVE sur chaque binaire d'un même source), et la
+  section « Notes par CVE » du rapport passe de 4 à 40 entrées.
 - `sbom-generator scan -f markdown|asciidoc|pdf` : section **« Notes par CVE »**
   sous la matrice inter-scanners. Pour chaque CVE où Grype ne voit aucun
   correctif pour la distribution installée (`won't fix` / `not fixed`, repris

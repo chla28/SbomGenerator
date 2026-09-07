@@ -178,7 +178,79 @@ class OciParser {
           distroCodename: codename);
       if (pkg != null) packages.add(pkg);
     }
+
+    // Paquets source. OSV.dev indexe les avis Debian/Ubuntu par paquet
+    // *source* (`zlib`, `perl`), pas par paquet binaire (`zlib1g`,
+    // `perl-base`) : syft n'émet que le binaire (avec un qualifiant
+    // `upstream=`), qu'OSV-Scanner ne sait pas rattacher à un avis. On ajoute
+    // donc un composant par paquet source distinct — comme le fait cdxgen —
+    // sinon OSV-Scanner ne matche quasiment aucun paquet système. Grype et
+    // Trivy résolvent déjà binaire→source en interne et ne double-comptent
+    // pas (vérifié sur un SBOM cdxgen réel : 0 CVE dupliquée entre binaire et
+    // source).
+    final existingNames = {for (final p in packages) p.name};
+    final sourcePkgs = <String, Package>{};
+    for (final a in artifacts) {
+      final src = _syftSourcePackage(
+          a as Map<String, dynamic>, codename, imageRef, existingNames);
+      if (src != null) sourcePkgs.putIfAbsent(src.name, () => src);
+    }
+    packages.addAll(sourcePkgs.values);
+
     return (packages: packages, os: _syftDistroToOsInfo(data));
+  }
+
+  /// Composant du paquet *source* dérivé d'un artefact syft de paquet système,
+  /// quand syft indique une `metadata.source` différente du nom binaire.
+  /// Renvoie `null` si l'artefact n'est pas un paquet `deb`/`rpm`/`apk`, s'il
+  /// n'a pas de source distincte, ou si un composant porte déjà ce nom.
+  OciPackage? _syftSourcePackage(Map<String, dynamic> a, String? codename,
+      String imageRef, Set<String> existingNames) {
+    final type = _normalizeSyftType((a['type'] as String?) ?? 'generic');
+    if (type != 'deb' && type != 'rpm' && type != 'apk') return null;
+
+    final meta = (a['metadata'] as Map<String, dynamic>?) ?? const {};
+    final src = ((meta['source'] as String?) ?? '').trim();
+    final binName = (a['name'] as String?) ?? '';
+    if (src.isEmpty || src == binName || existingNames.contains(src)) {
+      return null;
+    }
+
+    final srcVer = ((meta['sourceVersion'] as String?) ?? '').trim();
+    final ver = srcVer.isNotEmpty ? srcVer : ((a['version'] as String?) ?? '');
+
+    // PURL source = PURL binaire normalisé, sans `upstream=`, avec le nom et
+    // la version du paquet source.
+    final rawPurl = (a['purl'] as String?) ?? '';
+    var purl = _normalizeSyftSystemPurl(rawPurl, codename)
+        .replaceAll(RegExp(r'&upstream=[^&]*'), '')
+        .replaceAll(RegExp(r'\?upstream=[^&]*&'), '?')
+        .replaceFirstMapped(
+          RegExp(r'^(pkg:(?:deb|rpm|apk)/[^/]+/)[^@?]+(?:@[^?]*)?'),
+          (m) =>
+              '${m[1]}${Uri.encodeComponent(src)}@${Uri.encodeComponent(ver)}',
+        );
+    if (!purl.startsWith('pkg:')) purl = '';
+
+    final vendor = _firstNonEmpty(meta, const [
+      'Vendor', 'vendor', 'maintainer', 'Maintainer', 'author', 'Author',
+    ]);
+
+    return OciPackage(
+      name: src,
+      version: ver,
+      license: '',
+      vendor: vendor,
+      url: '',
+      summary: '',
+      arch: _purlQualifier(rawPurl, 'arch'),
+      sourceRef: imageRef,
+      imageRef: imageRef,
+      requires: [],
+      provides: [src],
+      packageType: type,
+      purlOverride: purl,
+    );
   }
 
   /// Extrait l'OS de base depuis le champ racine `distro` de syft (absent si
@@ -263,8 +335,22 @@ class OciParser {
     if (name.isEmpty) return null;
 
     final type = _normalizeSyftType((a['type'] as String?) ?? 'generic');
-    final purlStr =
+    var purlStr =
         _normalizeSyftSystemPurl((a['purl'] as String?) ?? '', distroCodename);
+
+    final metadata = (a['metadata'] as Map<String, dynamic>?) ?? {};
+    final srcName = ((metadata['source'] as String?) ?? '').trim();
+    // Quand syft indique un paquet source distinct, `_parseSyft` émet ce
+    // paquet source comme composant à part (pour OSV-Scanner). On retire donc
+    // le qualifiant `upstream=` du binaire : sinon Grype résout binaire→source
+    // ET matche le composant source explicite → même CVE comptée deux fois
+    // (cdxgen, qui n'émet pas `upstream=`, ne double-compte pas).
+    if (srcName.isNotEmpty && srcName != name) {
+      purlStr = purlStr
+          .replaceAll(RegExp(r'&upstream=[^&]*'), '')
+          .replaceAll(RegExp(r'\?upstream=[^&]*&'), '?')
+          .replaceAll(RegExp(r'\?upstream=[^&]*$'), '');
+    }
 
     // Licences : tableau d'objets {value, spdxExpression, …} ou de chaînes
     final licenses = (a['licenses'] as List?) ?? [];
@@ -280,7 +366,6 @@ class OciParser {
         .where((s) => s.isNotEmpty)
         .join(' AND ');
 
-    final metadata = (a['metadata'] as Map<String, dynamic>?) ?? {};
     // Les noms de champs varient selon le catalogueur syft : dpkg/apk
     // exposent des clés en minuscules (`architecture`, `maintainer`), rpm
     // `arch`/`vendor`, d'autres la casse Pascal.
@@ -1452,6 +1537,14 @@ OciPackage? ociParserSyftArtifactToPackage(
         {String? distroCodename}) =>
     OciParser()._syftArtifactToPackage(artifact, imageRef,
         distroCodename: distroCodename);
+
+/// Appelle [OciParser._syftSourcePackage] depuis les tests, sur un artefact
+/// syft de paquet système déjà décodé.
+OciPackage? ociParserSyftSourcePackage(
+        Map<String, dynamic> artifact, String? distroCodename, String imageRef,
+        {Set<String> existingNames = const {}}) =>
+    OciParser()._syftSourcePackage(
+        artifact, distroCodename, imageRef, existingNames);
 
 /// Appelle [OciParser._cdxgenComponentToPackage] depuis les tests, sur un
 /// composant CycloneDX (élément de `components[]`) déjà décodé, sans lancer

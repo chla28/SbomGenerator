@@ -1016,21 +1016,22 @@ NOTE: Deux autres écarts, plus sévères que la nomenclature, affectent
 spécifiquement les paquets OS (Debian/Alpine/RPM) et expliquent des écarts
 de comptage bruts massifs entre scanners que `_normalizeVulnId` ne touche
 pas. **OSV-Scanner peut tomber à 0 CVE sur un SBOM alors qu'il en trouve
-des centaines sur la même image scannée directement.** Pour Debian, la
-cause est le qualifiant `distro` : OSV-Scanner ne rattache un
-`pkg:deb/debian/...` à l'écosystème `Debian:<n>` que si `distro` vaut
-`debian-<majeur>` **ou** si `distro_name` porte un nom de code connu.
-syft renseigne le *point release* (`distro=debian-13.6`, lu dans
-`/etc/debian_version`), qu'OSV-Scanner ne reconnaît pas. Le backend syft
-du CLI `sbom-generator` (que la GUI invoque pour produire les SBOM)
-corrige ce purl à la source — `distro=debian-13.6` → `distro=debian-13` +
-`distro_name=trixie` (voir `../../doc/developer.adoc`, section
-« Normalisation du qualifiant `distro` Debian ») — donc la GUI en
-bénéficie aussi. Restent hors de
-portée de ce correctif : Alpine/RPM (OSV.dev les indexe mal en mode
-« scan de SBOM ») et le fait que `osv-scanner scan image` (extraction
-interne, sans purl) reste plus exhaustif sur l'OS de base — sur une image
-Debian réelle (79 paquets), 233 CVE via `scan image --archive=...`.
+des centaines sur la même image scannée directement.** Pour Debian, deux
+causes, toutes deux corrigées par le backend syft du CLI `sbom-generator`
+(que la GUI invoque pour produire les SBOM — la GUI en bénéficie donc) :
+(1) le qualifiant `distro` — OSV-Scanner ne rattache un `pkg:deb/debian/...`
+à `Debian:<n>` que si `distro` vaut `debian-<majeur>` ou si `distro_name`
+porte un nom de code connu, or syft renseigne le *point release*
+(`distro=debian-13.6`) ; corrigé en `debian-13` + `distro_name=trixie`.
+(2) binaire vs source — OSV.dev indexe les avis Debian par paquet *source*
+(`zlib`, `perl`), pas binaire (`zlib1g`, `perl-base`) ; le backend émet donc
+un composant par paquet source (comme cdxgen) et retire `upstream=` du
+binaire. Voir `../../doc/developer.adoc`, sections « Paquets source » et
+« Normalisation du qualifiant `distro` Debian ». Sur `haproxy:3.4.4`,
+OSV-Scanner passe de ~19 à 58 CVE Debian. Reste hors de portée : Alpine/RPM
+(OSV.dev les indexe mal en mode « scan de SBOM ») et `osv-scanner scan
+image` (extraction interne, sans purl) plus exhaustif sur l'OS de base —
+sur une image Debian réelle (79 paquets), 233 CVE via `scan image`.
 **Grype et Trivy
 n'ont par ailleurs pas la même exhaustivité sur les paquets OS Debian**
 (207 correspondances Grype contre 27 Trivy sur le même SBOM, alors que les

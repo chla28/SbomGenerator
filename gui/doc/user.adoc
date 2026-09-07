@@ -1727,24 +1727,29 @@ ce n'est pas le SBOM qui invente des CVE : c'est `trivy image` qui en
 manque quelques-unes que `trivy sbom` retrouve grâce à la détection plus
 complète de syft.
 
-Le même type d'écart existe pour OSV-Scanner, mais de façon bien plus
-radicale : sur les paquets de distribution, lui donner un SBOM pouvait
-faire tomber le résultat à *zéro* CVE, alors que scanner l'image
-directement en trouve des centaines. OSV-Scanner en mode « scan de SBOM »
-ne rattache un `pkg:deb/debian/...` à l'écosystème `Debian:13` que si le
-qualifiant `distro` vaut `debian-<majeur>` **ou** si `distro_name` porte
-un nom de code connu. Or syft renseigne pour Debian le *point release*
-(`distro=debian-13.6`, lu dans `/etc/debian_version`), qu'OSV-Scanner ne
-reconnaît pas → 0 CVE, sans erreur.
+Le même type d'écart existait pour OSV-Scanner, mais de façon bien plus
+radicale : sur les paquets de distribution, lui donner un SBOM syft faisait
+tomber le résultat quasiment à *zéro* CVE, alors que scanner l'image
+directement en trouve des centaines. Deux causes, toutes deux corrigées à la
+source par `sbom_generator` (backend syft) :
 
-`sbom_generator` corrige désormais ce PURL à la source (backend syft) :
-`distro=debian-13.6` → `distro=debian-13` + ajout de `distro_name=trixie`.
-Sur `haproxy:3.4.4` (Debian 13.6), le SBOM syft passait ainsi de 0 CVE
-OSV-Scanner (Grype restant seul, toutes ses correspondances en
-« won't fix » / « not fixed ») à une détection Debian complète recoupée
-par les trois scanners.
+* *Qualifiant `distro`* — OSV-Scanner ne rattache un `pkg:deb/debian/...` à
+  l'écosystème `Debian:13` que si `distro` vaut `debian-<majeur>` ou si
+  `distro_name` porte un nom de code connu. syft renseigne le *point
+  release* (`distro=debian-13.6`, lu dans `/etc/debian_version`), non
+  reconnu. Corrigé : `debian-13.6` → `debian-13` + `distro_name=trixie`.
+* *Paquet binaire vs source* — OSV.dev indexe les avis Debian par paquet
+  *source* (`zlib`, `perl`), pas binaire (`zlib1g`, `perl-base`). syft ne
+  liste que le binaire (avec `upstream=`), qu'OSV-Scanner n'exploite pas.
+  Corrigé : un composant par paquet source distinct est ajouté (comme
+  cdxgen), et `upstream=` est retiré du binaire pour que Grype ne compte
+  pas la CVE deux fois.
 
-Deux limites subsistent, indépendantes de ce correctif :
+Sur `haproxy:3.4.4` (Debian 13.6), le SBOM syft passe ainsi de ~0 à 58 CVE
+OSV-Scanner (parité avec le SBOM cdxgen), recoupées par les trois scanners
+au lieu de Grype seul.
+
+Deux limites subsistent :
 
 * les autres familles de paquets de distribution (Alpine, RPM/RHEL) —
   OSV.dev les indexe mal ou pas en mode « scan de SBOM » ;

@@ -1042,6 +1042,31 @@ en minuscules, rpm `arch` / `vendor`). Le mainteneur dpkg/apk sert de
 `supplier` du composant à défaut d'un champ `vendor` rpm — sans lui, le SBOM
 n'a aucun fournisseur de composant (métrique `comp_with_supplier` de sbomqs).
 
+[[sec-syft-source-pkg]]
+==== Paquets source (`_syftSourcePackage`)
+
+OSV.dev indexe les avis Debian/Ubuntu par paquet *source* (`zlib`, `perl`,
+`sqlite3`), pas par paquet binaire (`zlib1g`, `perl-base`, `libsqlite3-0`).
+syft ne catalogue que le binaire, en y ajoutant un qualifiant PURL
+`upstream=<source>` — qu'OSV-Scanner (scalibr) ne sait pas exploiter : sur un
+SBOM syft brut, OSV-Scanner ne matche donc quasiment aucun paquet système
+(19 CVE sur `haproxy:3.4.4`, contre 58 avec un SBOM cdxgen).
+
+`_parseSyft` émet donc, en plus des binaires, un composant par paquet source
+distinct : `_syftSourcePackage()` lit `metadata.source` / `metadata.sourceVersion`
+de l'artefact, dérive le PURL source du PURL binaire normalisé (remplacement
+du nom et de la version, suppression de `upstream=`), et déduplique par nom
+de source. Un source n'est pas émis si un composant porte déjà ce nom (cas
+`perl` binaire + `perl-base`, tous deux de source `perl`).
+
+Corollaire : `_syftArtifactToPackage` retire `upstream=` du PURL du binaire
+dès que `metadata.source` diffère du nom. Sinon Grype résoudrait binaire→source
+*et* matcherait le composant source explicite → même CVE comptée deux fois
+(224 correspondances brutes au lieu de 80, 68 CVE en double). cdxgen, qui
+n'émet pas `upstream=`, ne double-compte pas — on s'aligne dessus. L'ensemble
+des CVE *uniques* rapportées par Grype est identique avant/après (vérifié) :
+seul le sur-comptage d'une CVE sur chaque binaire d'un même source disparaît.
+
 [[sec-syft-debian-purl]]
 ==== Normalisation du qualifiant `distro` Debian (`_normalizeSyftSystemPurl`)
 
