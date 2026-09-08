@@ -259,6 +259,25 @@ void main() {
       expect(find.text('EPSS'), findsNothing);
       expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
     });
+
+    testWidgets('clic sur une ligne : déplie le détail de la CVE',
+        (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+          _table(const [log4shell], exploitById: exploitMap));
+      await tester.pumpAndSettle();
+      expect(find.text('RAPPORTÉ PAR'), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.expand_more));
+      await tester.pumpAndSettle();
+      expect(find.text('RAPPORTÉ PAR'), findsOneWidget);
+      expect(find.text('NVD'), findsOneWidget);
+      // Bouton copier dans le panneau de détail.
+      expect(find.byIcon(Icons.copy), findsOneWidget);
+    });
   });
 
   group('scan_enrichment', () {

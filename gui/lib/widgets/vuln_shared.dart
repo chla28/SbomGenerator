@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
 import '../services/scan_enrichment.dart';
+import 'cve_detail.dart';
 import 'help_icon.dart';
 import 'pdf_report.dart';
 
@@ -749,10 +750,32 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   VulnSortCol _sortCol = VulnSortCol.severity;
   bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
 
+  final Set<String> _expanded = {};
+
   bool get _hasExploit => widget.exploitById.isNotEmpty;
 
   ExploitInfo _ex(T v) =>
       widget.exploitById[normalizeCveId(v.id)] ?? ExploitInfo.empty;
+
+  /// Détail (un seul scanner : celui de cet onglet) pour la ligne dépliée.
+  CveDetail _detailFor(T v) => CveDetail(
+        id: v.id,
+        views: [
+          ScannerCveView(
+            scanner: widget.toolName,
+            severity: v.severity,
+            packageName: v.packageName,
+            installedVersion: v.installedVersion,
+            fixedVersion: v.fixedVersion,
+            extra: widget.descriptionOf?.call(v) ??
+                widget.extraOf?.call(v) ??
+                '',
+            publishedDate: v.publishedDate,
+            modifiedDate: v.modifiedDate,
+          ),
+        ],
+        exploit: _ex(v),
+      );
 
   @override
   void dispose() {
@@ -1293,8 +1316,13 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                     final fg = severityFg(v.severity);
                     final bg = severityBg(v.severity);
                     final description = widget.descriptionOf?.call(v) ?? '';
-                    return ListTile(
+                    final key = '${v.id} ${v.packageName}'
+                        ' ${v.installedVersion}';
+                    final isOpen = _expanded.contains(key);
+                    final tile = ListTile(
                       dense: true,
+                      onTap: () => setState(() =>
+                          isOpen ? _expanded.remove(key) : _expanded.add(key)),
                       leading: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
@@ -1314,26 +1342,12 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                       title: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Tooltip(
-                            message: 'Copier l\'identifiant',
-                            child: InkWell(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: v.id));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('CVE copié'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                v.id,
-                                style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
+                          Text(
+                            v.id,
+                            style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
                           ),
                           if (v.occurrenceCount > 1) ...[
                             const SizedBox(width: 6),
@@ -1404,13 +1418,31 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                         ],
                       ),
                       isThreeLine: description.isNotEmpty || _hasExploit,
-                      trailing: widget.extraOf == null
-                          ? null
-                          : Text(
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.extraOf != null)
+                            Text(
                               widget.extraOf!(v),
                               style: const TextStyle(
                                   fontSize: 11, color: Colors.grey),
                             ),
+                          Icon(
+                              isOpen
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              size: 18,
+                              color: Colors.grey[500]),
+                        ],
+                      ),
+                    );
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        tile,
+                        if (isOpen)
+                          CveDetailPanel(detail: _detailFor(v)),
+                      ],
                     );
                   },
                 ),

@@ -1127,8 +1127,14 @@ Colonnes :
 * *Paquet* : nom du paquet concerné en gras
 * *Versions* : version installée, et version corrigée si disponible (après `→`).
   La mention `(won't fix)` indique que le mainteneur ne prévoit pas de correction.
-* *CVE* : identifiant cliquable — un clic copie l'identifiant dans le presse-papiers
+* *CVE* : identifiant de la vulnérabilité
 * *Type* : type de paquet (`rpm`, `python`, `deb`…)
+
+*Cliquer sur une ligne la déplie* et affiche le <<sec-cve-detail,détail complet
+de la CVE>> : paquet et versions, sévérité et dates telles que rapportées par
+le scanner, exploitabilité détaillée (KEV, EPSS, CVSS, PoC) et boutons de
+référence (NVD, CVE.org, osv.dev, CISA KEV). Le panneau de détail contient un
+bouton *copier l'identifiant*. Re-cliquer sur la ligne la referme.
 
 ==== Exploitabilité et exploitation active
 
@@ -1689,6 +1695,26 @@ KEV, puis EPSS décroissant, puis sévérité — quand l'enrichissement a produ
 des résultats ; par sévérité seule sinon. L'export AsciiDoc / PDF reprend
 exactement l'ordre affiché.
 
+[[sec-cve-detail]]
+*Détail d'une CVE* : cliquez sur une ligne (le chevron ▾ à droite l'indique)
+pour la déplier. Un panneau affiche alors, à partir des données déjà en
+mémoire :
+
+* le *paquet* concerné, sa version installée et la version corrigée, tels que
+  vus par chaque scanner ;
+* la *sévérité* et les *dates* de publication / modification, par scanner —
+  souvent différentes d'un outil à l'autre ;
+* l'*exploitabilité détaillée* : CISA KEV (date d'ajout, échéance de
+  remédiation, usage par un rançongiciel), score EPSS et son percentile,
+  sous-score d'exploitabilité CVSS avec le vecteur et la maturité de
+  l'exploit, dépôts PoC publics (liens cliquables) ;
+* des *boutons de référence* ouvrant NVD, CVE.org, osv.dev et — pour une CVE
+  du catalogue — CISA KEV dans le navigateur, plus un bouton *copier
+  l'identifiant*.
+
+Re-cliquer sur la ligne referme le panneau. Le même détail est disponible
+dans les onglets Grype / OSV-Scanner / Trivy.
+
 Si la liste dépasse la hauteur disponible, l'ascenseur vertical de l'onglet
 permet de tout parcourir — faites défiler vers le bas à l'intérieur de l'onglet
 Tableau de bord.
@@ -1825,7 +1851,12 @@ rapport reprenant l'intégralité de la vue affichée :
 * le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
   présence par outil, et colonnes KEV / EPSS si l'enrichissement a tourné),
   dans le *même ordre que celui affiché à l'écran*, avec les CVE préfixés
-  distro déjà normalisés (voir <<sec-pourquoi-ecarts-scanners>>).
+  distro déjà normalisés (voir <<sec-pourquoi-ecarts-scanners>>) ;
+* une section *« Détail des CVE prioritaires »* : un bloc par CVE au
+  catalogue CISA KEV, ou dont l'EPSS est ≥ 10 %, ou de sévérité Critical /
+  High — avec paquet, versions, sévérité et dates par scanner, et toute
+  l'information d'exploitabilité (KEV, EPSS, CVSS, PoC, liens). Reprend le
+  contenu du panneau de détail dépliable à l'écran.
 
 Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n'y a ici qu'une seule
 vue de synthèse — pas de lignes filtrées individuellement à exporter, mais

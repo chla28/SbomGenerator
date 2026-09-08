@@ -323,5 +323,25 @@ void main() {
       expect(find.widgetWithText(SortHeader, 'EPSS'), findsNothing);
       expect(find.widgetWithText(SortHeader, 'KEV'), findsNothing);
     });
+
+    testWidgets('clic sur une ligne : déplie le détail de la CVE, re-clic ferme',
+        (tester) async {
+      await pump(tester, ex: exploit);
+      // Détail fermé par défaut.
+      expect(find.text('Rapporté par'.toUpperCase()), findsNothing);
+
+      await tester.tap(find.text('CVE-BBB').first);
+      await tester.pumpAndSettle();
+      // Section du panneau de détail visible + infos KEV de CVE-BBB.
+      expect(find.text('RAPPORTÉ PAR'), findsOneWidget);
+      expect(
+          find.textContaining('exploitée activement dans la nature'),
+          findsOneWidget);
+      expect(find.text('NVD'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.expand_less));
+      await tester.pumpAndSettle();
+      expect(find.text('RAPPORTÉ PAR'), findsNothing);
+    });
   });
 }

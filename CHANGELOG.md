@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI** — clic sur un numéro de CVE (tableau de bord *et* onglets Grype /
+  OSV-Scanner / Trivy) : la ligne se déplie et affiche le détail complet de
+  la CVE — paquet & versions, sévérité et dates telles que rapportées par
+  chaque scanner, exploitabilité détaillée (CISA KEV avec date d'ajout /
+  échéance / rançongiciel, EPSS + percentile, sous-score CVSS + vecteur +
+  maturité, liens PoC cliquables), et boutons de référence vers NVD /
+  CVE.org / osv.dev / CISA KEV. Nouveau widget partagé
+  `gui/lib/widgets/cve_detail.dart`.
+- **GUI**, export PDF / AsciiDoc du tableau de bord : nouvelle section
+  « Détail des CVE prioritaires » — un bloc par CVE au catalogue CISA KEV,
+  ou EPSS ≥ 10 %, ou de sévérité Critical / High.
+
 ### Changed
 - **GUI**, tableau de bord : le tableau « Comparaison inter-scanners » est
   maintenant triable par colonne — sévérité, CVE / ID, présence par scanner

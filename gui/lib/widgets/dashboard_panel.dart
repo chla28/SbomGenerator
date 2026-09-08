@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../services/scan_enrichment.dart';
+import 'cve_detail.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
@@ -432,12 +433,12 @@ Future<void> _exportDashboard(
   buf.writeln();
   final withExploit = exploitById.isNotEmpty;
   ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
+  // Même ordre qu'à l'écran (colonne de tri active du tableau de bord).
+  final rows =
+      _sortCrossRows(crossRows, crossSortCol, crossSortAsc, exploitById);
   if (crossRows.isEmpty) {
     buf.writeln('_Aucune CVE détectée par les scanners exécutés._');
   } else {
-    // Même ordre qu'à l'écran (colonne de tri active du tableau de bord).
-    final rows =
-        _sortCrossRows(crossRows, crossSortCol, crossSortAsc, exploitById);
     if (withExploit) {
       buf.writeln('[cols="<1,<3,^1,<1,^1,^1,^1",options="header"]');
       buf.writeln('|===');
@@ -491,6 +492,33 @@ Future<void> _exportDashboard(
         'trouvent pas les mêmes CVE ».');
     buf.writeln('====');
     buf.writeln();
+  }
+
+  // ── Détail des CVE prioritaires ──
+  bool prioritised(_CrossRowData r) {
+    final e = ex(r.id);
+    return e.inKev ||
+        (e.epssScore ?? 0) >= 0.10 ||
+        const {'critical', 'high'}.contains(r.severity.toLowerCase());
+  }
+
+  final detailed = rows.where(prioritised).toList();
+  if (detailed.isNotEmpty) {
+    buf.writeln('== Détail des CVE prioritaires');
+    buf.writeln();
+    buf.writeln('${detailed.length} CVE retenue(s) : au catalogue CISA KEV, '
+        'ou EPSS >= 10 %, ou sévérité Critical / High.');
+    buf.writeln();
+    for (final r in detailed) {
+      final d = _crossCveDetail(r.id, grype, osv, trivy, exploitById);
+      buf.writeln('=== ${adocEscape(r.id)}');
+      buf.writeln();
+      buf.writeln('[cols="<1,<3"]');
+      buf.writeln('|===');
+      buf.write(d.toAdocRows(adocEscape));
+      buf.writeln('|===');
+      buf.writeln();
+    }
   }
 
   buf.writeln('_Généré par sbom_generator_gui._');
@@ -886,7 +914,64 @@ class _SevRow extends StatelessWidget {
 
 // ─── Section CVEs multi-scanners ─────────────────────────────────────────────
 
-class _CrossScannerSection extends StatelessWidget {
+/// Agrège toutes les infos disponibles (en mémoire) sur une CVE (id
+/// normalisé) depuis les trois scanners + l'enrichissement — pour la ligne
+/// dépliée et l'export.
+CveDetail _crossCveDetail(
+  String id,
+  List<GrypeVuln>? grype,
+  List<OsvVuln>? osv,
+  List<TrivyVuln>? trivy,
+  Map<String, ExploitInfo> exploitById,
+) {
+  final views = <ScannerCveView>[];
+  for (final v in grype ?? const <GrypeVuln>[]) {
+    if (_normalizeVulnId(v.id) != id) continue;
+    views.add(ScannerCveView(
+      scanner: 'Grype',
+      severity: v.severity,
+      packageName: v.packageName,
+      installedVersion: v.installedVersion,
+      fixedVersion: v.fixedVersion,
+      extra: v.packageType,
+      publishedDate: v.publishedDate,
+      modifiedDate: v.modifiedDate,
+    ));
+    break;
+  }
+  for (final v in osv ?? const <OsvVuln>[]) {
+    if (_normalizeVulnId(v.id) != id) continue;
+    views.add(ScannerCveView(
+      scanner: 'OSV-Scanner',
+      severity: v.severity,
+      packageName: v.packageName,
+      installedVersion: v.installedVersion,
+      fixedVersion: v.fixedVersion,
+      extra: v.ecosystem,
+      publishedDate: v.publishedDate,
+      modifiedDate: v.modifiedDate,
+    ));
+    break;
+  }
+  for (final v in trivy ?? const <TrivyVuln>[]) {
+    if (_normalizeVulnId(v.id) != id) continue;
+    views.add(ScannerCveView(
+      scanner: 'Trivy',
+      severity: v.severity,
+      packageName: v.packageName,
+      installedVersion: v.installedVersion,
+      fixedVersion: v.fixedVersion,
+      extra: v.title,
+      publishedDate: v.publishedDate,
+      modifiedDate: v.modifiedDate,
+    ));
+    break;
+  }
+  return CveDetail(
+      id: id, views: views, exploit: exploitById[id] ?? ExploitInfo.empty);
+}
+
+class _CrossScannerSection extends StatefulWidget {
   final List<GrypeVuln>? grypeVulns;
   final List<OsvVuln>? osvVulns;
   final List<TrivyVuln>? trivyVulns;
@@ -908,22 +993,33 @@ class _CrossScannerSection extends StatelessWidget {
   });
 
   @override
+  State<_CrossScannerSection> createState() => _CrossScannerSectionState();
+}
+
+class _CrossScannerSectionState extends State<_CrossScannerSection> {
+  final Set<String> _expanded = {};
+
+  @override
   Widget build(BuildContext context) {
     // Union complète : toutes les CVE vues par au moins un scanner — voir
     // _crossScannerRows. Le tri est appliqué par _sortCrossRows (partagé avec
     // l'export AsciiDoc + PDF pour que le rapport reflète exactement l'ordre
     // affiché).
-    final baseRows = _crossScannerRows(grypeVulns, osvVulns, trivyVulns);
+    final baseRows = _crossScannerRows(
+        widget.grypeVulns, widget.osvVulns, widget.trivyVulns);
     if (baseRows.isEmpty) return const SizedBox.shrink();
 
-    final hasExploit = exploitById.isNotEmpty;
-    ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
-    final rows = _sortCrossRows(baseRows, sortCol, sortAsc, exploitById);
+    final hasExploit = widget.exploitById.isNotEmpty;
+    ExploitInfo ex(String id) =>
+        widget.exploitById[id] ?? ExploitInfo.empty;
+    final rows = _sortCrossRows(
+        baseRows, widget.sortCol, widget.sortAsc, widget.exploitById);
     final kevCount =
         hasExploit ? rows.where((r) => ex(r.id).inKev).length : 0;
 
     Widget header(String label, _CrossSort col, {double? width}) => SortHeader(
-        label, sortCol == col, sortAsc, () => onSort(col),
+        label, widget.sortCol == col, widget.sortAsc,
+        () => widget.onSort(col),
         width: width);
 
     return Card(
@@ -962,6 +1058,7 @@ class _CrossScannerSection extends StatelessWidget {
                   header('Grype', _CrossSort.grype, width: 58),
                   header('OSV', _CrossSort.osv, width: 58),
                   header('Trivy', _CrossSort.trivy, width: 58),
+                  const SizedBox(width: 24),
                 ],
               ),
             ),
@@ -973,9 +1070,21 @@ class _CrossScannerSection extends StatelessWidget {
                 inOsv: row.inOsv,
                 inTrivy: row.inTrivy,
                 severity: row.severity,
-                scansRun: scansRun,
+                scansRun: widget.scansRun,
                 hasExploit: hasExploit,
                 exploit: hasExploit ? ex(row.id) : null,
+                expanded: _expanded.contains(row.id),
+                onToggle: () => setState(() {
+                  _expanded.contains(row.id)
+                      ? _expanded.remove(row.id)
+                      : _expanded.add(row.id);
+                }),
+                detail: _expanded.contains(row.id)
+                    ? CveDetailPanel(
+                        detail: _crossCveDetail(row.id, widget.grypeVulns,
+                            widget.osvVulns, widget.trivyVulns,
+                            widget.exploitById))
+                    : null,
               ),
           ],
         ),
@@ -993,6 +1102,9 @@ class _CrossRow extends StatelessWidget {
   final int scansRun;
   final bool hasExploit;
   final ExploitInfo? exploit;
+  final bool expanded;
+  final VoidCallback? onToggle;
+  final Widget? detail;
 
   const _CrossRow({
     required this.id,
@@ -1003,6 +1115,9 @@ class _CrossRow extends StatelessWidget {
     required this.scansRun,
     this.hasExploit = false,
     this.exploit,
+    this.expanded = false,
+    this.onToggle,
+    this.detail,
   });
 
   static Color _fg(String s) => switch (s.toLowerCase()) {
@@ -1031,10 +1146,18 @@ class _CrossRow extends StatelessWidget {
     // précisément l'écart de détection que ce tableau doit faire ressortir.
     final isIsolated = foundByCount == 1 && scansRun > 1;
 
-    return Container(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: onToggle,
+          child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: isIsolated ? const Color(0xFFFFF8E1) : null,
+        color: isIsolated
+            ? const Color(0xFFFFF8E1)
+            : (expanded ? Theme.of(context).colorScheme.surfaceContainerHigh
+                : null),
         border: Border(
           left: BorderSide(
             color: isIsolated ? Colors.amber[700]! : Colors.transparent,
@@ -1099,15 +1222,26 @@ class _CrossRow extends StatelessWidget {
           ],
           for (final present in [inGrype, inOsv, inTrivy])
             SizedBox(
-              width: 52,
+              width: 58,
               child: Icon(
                 present ? Icons.check_circle : Icons.radio_button_unchecked,
                 size: 14,
                 color: present ? Colors.green[600] : Colors.grey[300],
               ),
             ),
+          SizedBox(
+            width: 24,
+            child: Icon(
+                expanded ? Icons.expand_less : Icons.expand_more,
+                size: 18,
+                color: Colors.grey[500]),
+          ),
         ],
       ),
+          ),
+        ),
+        ?detail,
+      ],
     );
   }
 
