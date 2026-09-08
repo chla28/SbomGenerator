@@ -54,7 +54,7 @@ void main() {
       final creators =
           (sbom['creationInfo'] as Map)['creators'] as List<dynamic>;
       expect(creators, containsAll([
-        'Tool: sbom_generator-1.5.0',
+        'Tool: sbom_generator-1.5.1',
         'Tool: flutter-3.47.2',
         'Tool: dart-3.9.0',
       ]));
