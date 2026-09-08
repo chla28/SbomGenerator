@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `scripts/build-dist.sh` et `scripts/build-rpm-mock.sh` : la version par
+  défaut est désormais lue depuis le champ `version:` de `pubspec.yaml` au
+  lieu d'être figée à `1.4.0` — l'archive et les RPM portent la bonne
+  version même sans passer l'argument `VERSION`.
+
 ## [1.5.2] - 2026-09-08
 
 ### Added

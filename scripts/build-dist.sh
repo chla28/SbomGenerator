@@ -19,14 +19,18 @@
 # est bien celle en cours de packaging).
 #
 # Usage : ./scripts/build-dist.sh [VERSION] [--rpm]
-#   VERSION : numéro de version (défaut: 1.4.0)
+#   VERSION : numéro de version (défaut : champ `version:` de pubspec.yaml)
 #   --rpm   : génère également les paquets RPM (nécessite rpm-build)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-VERSION="1.4.0"
+# Version par défaut : celle du code (pubspec.yaml), pour qu'elle ne dérive
+# jamais du binaire réellement packagé. Surchargée par l'argument positionnel.
+VERSION="$(sed -n 's/^version:[[:space:]]*//p' "$PROJECT_DIR/pubspec.yaml" \
+  | head -1 | tr -d '[:space:]')"
+: "${VERSION:?impossible de lire la version depuis pubspec.yaml}"
 BUILD_RPM=false
 
 for _arg in "$@"; do
@@ -34,7 +38,8 @@ for _arg in "$@"; do
     --rpm)     BUILD_RPM=true ;;
     --help|-h)
       echo "Usage: $0 [VERSION] [--rpm]"
-      echo "  VERSION  numéro de version (défaut: 1.4.0)"
+      echo "  VERSION  numéro de version (défaut : version de pubspec.yaml,"
+      echo "           actuellement ${VERSION})"
       echo "  --rpm    génère les RPMs en plus du tar.gz (nécessite rpm-build)"
       exit 0 ;;
     -*)        echo "Option inconnue : $_arg" >&2; exit 1 ;;

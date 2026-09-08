@@ -8,7 +8,7 @@
 # (dist tag produit : .el9 / .el10, comme pour un vrai RHEL).
 #
 # Usage : ./scripts/build-rpm-mock.sh [VERSION] [--targets=fedora44,el9,el10] [--arch=x86_64]
-#   VERSION    numéro de version (défaut : 1.4.0)
+#   VERSION    numéro de version (défaut : champ `version:` de pubspec.yaml)
 #   --targets  sous-ensemble de cibles à construire (défaut : les trois)
 #   --arch     architecture cible (défaut : celle de la machine hôte)
 #
@@ -27,7 +27,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-VERSION="1.4.0"
+# Version par défaut : celle du code (pubspec.yaml). Surchargée par l'argument.
+VERSION="$(sed -n 's/^version:[[:space:]]*//p' "$PROJECT_DIR/pubspec.yaml" \
+  | head -1 | tr -d '[:space:]')"
+: "${VERSION:?impossible de lire la version depuis pubspec.yaml}"
 ARCH="$(uname -m)"
 TARGETS="fedora44,el9,el10"
 
@@ -37,7 +40,8 @@ for _arg in "$@"; do
     --arch=*)    ARCH="${_arg#--arch=}" ;;
     --help|-h)
       echo "Usage: $0 [VERSION] [--targets=fedora44,el9,el10] [--arch=x86_64]"
-      echo "  VERSION    numéro de version (défaut: 1.4.0)"
+      echo "  VERSION    numéro de version (défaut : version de pubspec.yaml,"
+      echo "             actuellement ${VERSION})"
       echo "  --targets  sous-ensemble de cibles, virgule-séparé (défaut: les trois)"
       echo "  --arch     architecture cible (défaut: $(uname -m))"
       exit 0 ;;
