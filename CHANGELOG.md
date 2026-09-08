@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-09-08
+
 ### Changed
 - **Rapports PDF** (GUI : tableau de bord et onglets Grype / OSV / Trivy ;
   CLI : `scan --format pdf|asciidoc`) — refonte visuelle :

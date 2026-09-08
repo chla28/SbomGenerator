@@ -570,7 +570,7 @@ pour Grype, `trivy-db` pour Trivy). Voir `doc/usage.adoc` pour le détail.
 | Champ | Contenu |
 |-------|---------|
 | Timestamp | Date/heure de génération (UTC ISO 8601) |
-| Outil | `sbom_generator 1.5.3` |
+| Outil | `sbom_generator 1.5.4` |
 | Auteur | Fixé à `sbom_generator` (non configurable) |
 | Supplier | Fixé à `local` (non configurable) |
 | Nom du composant racine | Configurable via `--name` (défaut : `Package Set`) |
