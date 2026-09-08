@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
+import '../services/scan_enrichment.dart';
 import 'help_icon.dart';
 import 'pdf_report.dart';
 
@@ -659,7 +660,7 @@ List<T> dedupeVulns<T extends VulnRow>(
   return [for (final e in merged.values) withOccurrenceCount(e.first, e.count)];
 }
 
-enum VulnSortCol { severity, cveId, package }
+enum VulnSortCol { severity, cveId, package, kev, epss }
 
 class VulnTableView<T extends VulnRow> extends StatefulWidget {
   final List<T> vulns;
@@ -694,6 +695,21 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
 
+  /// Signaux d'exploitabilité / exploitation active par CVE (id normalisé via
+  /// [normalizeCveId]). Vide = enrichissement non exécuté : les colonnes KEV /
+  /// EPSS / PoC et le filtre associé sont alors masqués.
+  final Map<String, ExploitInfo> exploitById;
+
+  /// Vrai tant que l'enrichissement en ligne est en cours (bandeau d'attente).
+  final bool enrichPending;
+
+  /// État du basculement « enrichir en ligne » (CISA KEV / EPSS / poc-in-github).
+  final bool enrichOnline;
+
+  /// Bascule l'enrichissement en ligne — l'appelant persiste le choix et
+  /// relance l'enrichissement. Null = pas de bouton affiché.
+  final ValueChanged<bool>? onEnrichOnlineChanged;
+
   const VulnTableView({
     super.key,
     required this.vulns,
@@ -711,6 +727,10 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
+    this.exploitById = const {},
+    this.enrichPending = false,
+    this.enrichOnline = true,
+    this.onEnrichOnlineChanged,
   });
 
   @override
@@ -721,8 +741,14 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   Set<String> _activeFilters = {};
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
+  bool _kevOnly = false;
   VulnSortCol _sortCol = VulnSortCol.severity;
   bool _sortAsc = true; // true = ascendant par _sevOrd (Critical=0 en premier)
+
+  bool get _hasExploit => widget.exploitById.isNotEmpty;
+
+  ExploitInfo _ex(T v) =>
+      widget.exploitById[normalizeCveId(v.id)] ?? ExploitInfo.empty;
 
   @override
   void dispose() {
@@ -743,6 +769,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           _sortAsc = !_sortAsc;
         } else {
           _sortCol = col;
+          // Sévérité/KEV/EPSS : le plus « à risque » d'abord au 1er clic.
           _sortAsc = col == VulnSortCol.severity;
         }
       });
@@ -751,6 +778,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     var list = _activeFilters.isEmpty
         ? widget.vulns
         : widget.vulns.where((v) => _activeFilters.contains(v.severity)).toList();
+    if (_kevOnly) {
+      list = list.where((v) => _ex(v).inKev).toList();
+    }
     if (_searchTerm.isNotEmpty) {
       final q = _searchTerm.toLowerCase();
       list = list
@@ -770,18 +800,116 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           VulnSortCol.severity => _sevOrd(a.severity).compareTo(_sevOrd(b.severity)),
           VulnSortCol.cveId    => a.id.compareTo(b.id),
           VulnSortCol.package  => a.packageName.compareTo(b.packageName),
+          // KEV puis (départage) EPSS ; EPSS décroissant.
+          VulnSortCol.kev => _riskCmp(a, b),
+          VulnSortCol.epss => -((_ex(a).epssScore ?? -1)
+              .compareTo(_ex(b).epssScore ?? -1)),
         };
         return _sortAsc ? cmp : -cmp;
       });
     return list;
   }
 
+  int _riskCmp(T a, T b) {
+    final ea = _ex(a), eb = _ex(b);
+    if (ea.inKev != eb.inKev) return ea.inKev ? -1 : 1;
+    return -((ea.epssScore ?? -1).compareTo(eb.epssScore ?? -1));
+  }
+
+  static const _exploitHeaders = ['KEV', 'EPSS', 'PoC'];
+
+  Widget _exploitBadges(ExploitInfo e) {
+    Widget pill(String text, Color color, {IconData? icon}) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withValues(alpha: 0.5), width: 0.6),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (icon != null) ...[
+              Icon(icon, size: 10, color: color),
+              const SizedBox(width: 2),
+            ],
+            Text(text,
+                style: TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+          ]),
+        );
+
+    final chips = <Widget>[];
+    if (e.inKev) {
+      chips.add(Tooltip(
+        message: 'CISA KEV — exploitée activement dans la nature'
+            '${e.kevDateAdded != null ? ' (ajoutée le '
+                '${e.kevDateAdded!.toIso8601String().substring(0, 10)})' : ''}'
+            '${e.kevRansomware ? ' · usage par rançongiciel' : ''}',
+        child: pill('KEV', Colors.red, icon: Icons.local_fire_department),
+      ));
+    }
+    if (e.epssScore != null) {
+      final pct = ((e.epssPercentile ?? 0) * 100).round();
+      chips.add(Tooltip(
+        message: 'EPSS — probabilité d\'exploitation à 30 jours '
+            '(percentile $pct)',
+        child: pill('EPSS ${e.epssScore!.toStringAsFixed(2)}',
+            e.epssScore! >= 0.10 ? Colors.deepOrange : Colors.blueGrey),
+      ));
+    }
+    if (e.pocKnown) {
+      chips.add(Tooltip(
+        message: e.pocCount > 0
+            ? '${e.pocCount} dépôt(s) PoC public(s) recensé(s)'
+            : 'Maturité de l\'exploit : ${e.exploitMaturity ?? "PoC"}',
+        child: pill(e.pocCount > 0 ? 'PoC ${e.pocCount}' : 'PoC',
+            Colors.purple, icon: Icons.code),
+      ));
+    }
+    if (e.cvssExploitabilityScore != null) {
+      chips.add(Tooltip(
+        message: 'Sous-score d\'exploitabilité CVSS (AV/AC/PR/UI)'
+            '${e.exploitMaturity != null ? ' · maturité ${e.exploitMaturity}' : ''}',
+        child: pill('expl. ${e.cvssExploitabilityScore!.toStringAsFixed(1)}',
+            Colors.teal),
+      ));
+    }
+    if (chips.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 2),
+        child: Text('aucun signal d\'exploitation',
+            style: TextStyle(fontSize: 10, color: Colors.grey)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Wrap(spacing: 4, runSpacing: 2, children: chips),
+    );
+  }
+
+  List<String> _exploitCells(T v) {
+    final e = _ex(v);
+    final epss = e.epssScore == null
+        ? '—'
+        : '${e.epssScore!.toStringAsFixed(2)} '
+            '(p${((e.epssPercentile ?? 0) * 100).round()})';
+    final poc = e.pocCount > 0
+        ? '${e.pocCount}'
+        : (e.pocKnown ? 'oui' : '—');
+    return [e.inKev ? 'oui' : '—', epss, poc];
+  }
+
   Future<void> _exportCsv(BuildContext context) async {
     final rows = _filtered;
     final buf = StringBuffer();
-    buf.writeln(widget.csvHeader);
+    buf.writeln(_hasExploit
+        ? '${widget.csvHeader},${_exploitHeaders.join(',')}'
+        : widget.csvHeader);
     for (final v in rows) {
-      buf.writeln(widget.csvRow(v).map(csvEscape).join(','));
+      final cells = [
+        ...widget.csvRow(v),
+        if (_hasExploit) ..._exploitCells(v),
+      ];
+      buf.writeln(cells.map(csvEscape).join(','));
     }
     final path = await FilePicker.saveFile(
       dialogTitle: widget.csvDialogTitle,
@@ -813,7 +941,13 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     for (final v in rows) {
       counts[v.severity] = (counts[v.severity] ?? 0) + 1;
     }
-    final columns = widget.csvHeader.split(',');
+    final columns = [
+      ...widget.csvHeader.split(','),
+      if (_hasExploit) ..._exploitHeaders,
+    ];
+    final kevCount = _hasExploit
+        ? rows.where((v) => _ex(v).inKev).length
+        : 0;
 
     final buf = StringBuffer();
     buf.writeln('= Rapport de vulnérabilités — ${widget.toolName}');
@@ -843,6 +977,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       buf.writeln(
           '| Filtre de date appliqué | ${_dateFilterSummary(widget.dateFilter)}');
     }
+    if (_hasExploit) {
+      buf.writeln('| CVE activement exploitées (CISA KEV) | $kevCount');
+    }
     buf.writeln('|===');
     buf.writeln();
 
@@ -867,7 +1004,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('| ${columns.join(' | ')}');
     buf.writeln();
     for (final v in rows) {
-      final cells = widget.csvRow(v);
+      final cells = [
+        ...widget.csvRow(v),
+        if (_hasExploit) ..._exploitCells(v),
+      ];
       final formatted = [
         pdfSeverityBadge(cells.first),
         ...cells.skip(1).map(adocEscape),
@@ -976,11 +1116,32 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                             }
                           }),
                         ),
-                    if (_activeFilters.isNotEmpty)
+                    if (_hasExploit &&
+                        (_kevOnly || widget.vulns.any((v) => _ex(v).inKev)))
+                      FilterChip(
+                        avatar: Icon(Icons.local_fire_department,
+                            size: 14,
+                            color: _kevOnly ? Colors.white : Colors.red),
+                        label: Text(
+                            'CISA KEV '
+                            '(${widget.vulns.where((v) => _ex(v).inKev).length})',
+                            style: const TextStyle(fontSize: 11)),
+                        labelStyle: TextStyle(
+                            fontSize: 11,
+                            color: _kevOnly ? Colors.white : Colors.red),
+                        backgroundColor: Colors.red.withValues(alpha: 0.12),
+                        selectedColor: Colors.red,
+                        selected: _kevOnly,
+                        onSelected: (v) => setState(() => _kevOnly = v),
+                      ),
+                    if (_activeFilters.isNotEmpty || _kevOnly)
                       ActionChip(
                         label: const Text('Tout voir',
                             style: TextStyle(fontSize: 11)),
-                        onPressed: () => setState(() => _activeFilters = {}),
+                        onPressed: () => setState(() {
+                          _activeFilters = {};
+                          _kevOnly = false;
+                        }),
                       ),
                   ],
                 ),
@@ -1013,6 +1174,23 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                 ),
               ),
               const SizedBox(width: 4),
+              if (widget.onEnrichOnlineChanged != null)
+                IconButton(
+                  icon: Icon(
+                    widget.enrichOnline
+                        ? Icons.cloud_done_outlined
+                        : Icons.cloud_off_outlined,
+                    size: 18,
+                    color: widget.enrichOnline ? null : Colors.grey,
+                  ),
+                  tooltip: widget.enrichOnline
+                      ? 'Enrichissement en ligne actif (CISA KEV / EPSS / '
+                          'poc-in-github) — cliquer pour passer hors-ligne'
+                      : 'Enrichissement hors-ligne (Grype + cache local '
+                          'seulement) — cliquer pour réactiver le réseau',
+                  onPressed: () =>
+                      widget.onEnrichOnlineChanged!(!widget.enrichOnline),
+                ),
               IconButton(
                 icon: const Icon(Icons.download_outlined, size: 18),
                 tooltip: 'Exporter CSV',
@@ -1050,6 +1228,14 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
               const SizedBox(width: 16),
               SortHeader('PAQUET', _sortCol == VulnSortCol.package, _sortAsc,
                   () => _onSort(VulnSortCol.package)),
+              if (_hasExploit) ...[
+                const SizedBox(width: 16),
+                SortHeader('KEV', _sortCol == VulnSortCol.kev, _sortAsc,
+                    () => _onSort(VulnSortCol.kev)),
+                const SizedBox(width: 16),
+                SortHeader('EPSS', _sortCol == VulnSortCol.epss, _sortAsc,
+                    () => _onSort(VulnSortCol.epss)),
+              ],
               if (widget.extraColumnHeader != null) ...[
                 const Spacer(),
                 Text(widget.extraColumnHeader!,
@@ -1061,6 +1247,16 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
             ],
           ),
         ),
+        if (widget.enrichPending)
+          Container(
+            width: double.infinity,
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            child: const Text(
+              'Enrichissement en ligne (CISA KEV / EPSS / PoC) en cours…',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
 
         // ── Liste ──
         Expanded(
@@ -1200,9 +1396,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          if (_hasExploit) _exploitBadges(_ex(v)),
                         ],
                       ),
-                      isThreeLine: description.isNotEmpty,
+                      isThreeLine: description.isNotEmpty || _hasExploit,
                       trailing: widget.extraOf == null
                           ? null
                           : Text(

@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI** — enrichissement exploitabilité dans les onglets de scan (Grype /
+  OSV-Scanner / Trivy) et le tableau de bord, aligné sur la ligne de commande :
+  - pastilles *KEV* (CISA, rouge), *EPSS*, *PoC* et *expl. CVSS* sous chaque
+    ligne de vulnérabilité, colonnes triables *KEV* / *EPSS* ;
+  - filtre *CISA KEV (N)* à côté des filtres de sévérité ;
+  - bouton ☁ (barre d'outils de la table) pour basculer l'enrichissement en
+    ligne / hors-ligne — choix mémorisé (`shared_preferences`), partagé par les
+    trois onglets ;
+  - colonnes *KEV* / *EPSS* / *PoC* ajoutées aux exports CSV et AsciiDoc/PDF ;
+  - le tableau de bord marque et priorise les CVE KEV / EPSS élevé dans sa
+    comparaison inter-scanners.
+  Nouveau `gui/lib/services/vuln_enrichment.dart` (copie synchronisée du module
+  CLI) + `gui/lib/services/scan_enrichment.dart`. Grype exposant KEV/EPSS/CVSS
+  nativement, seul le signal PoC déclenche une requête réseau pour cet onglet ;
+  cache 24 h partagé avec la CLI sous `~/.cache/sbom-generator/`.
+
 ## [1.5.0] - 2026-09-08
 
 ### Added

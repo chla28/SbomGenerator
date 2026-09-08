@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
+import '../services/scan_enrichment.dart';
+import '../services/settings_service.dart';
 import '../services/trivy_runner.dart';
 import 'help_icon.dart';
 import '../services/version_service.dart';
@@ -106,6 +108,7 @@ class TrivyVuln implements VulnRow {
 class TrivyPanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
   final void Function(List<TrivyVuln>)? onVulnsChanged;
+  final void Function(Map<String, ExploitInfo>)? onExploitChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -114,6 +117,7 @@ class TrivyPanel extends StatefulWidget {
     super.key,
     required this.outputFiles,
     this.onVulnsChanged,
+    this.onExploitChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -149,6 +153,11 @@ class _TrivyPanelState extends State<TrivyPanel>
   bool _parseFailed = false;
   int? _exitCode;
 
+  Map<String, ExploitInfo> _exploitById = const {};
+  bool _enrichPending = false;
+  bool _enrichOnline = true;
+  int _enrichRun = 0;
+
   ToolVersionInfo? _versionInfo;
 
   @override
@@ -156,8 +165,36 @@ class _TrivyPanelState extends State<TrivyPanel>
     super.initState();
     _resultTabs = TabController(length: 2, vsync: this);
     _updateAutoFile();
+    SettingsService.loadScanEnrichOnline()
+        .then((v) { if (mounted) setState(() => _enrichOnline = v); });
     VersionService.checkTrivy()
         .then((info) { if (mounted) setState(() => _versionInfo = info); });
+  }
+
+  /// Enrichit les CVE trouvées avec les signaux d'exploitabilité. Trivy
+  /// n'expose ni KEV ni EPSS : le réseau est requis (CISA KEV + FIRST EPSS +
+  /// PoC).
+  Future<void> _enrich(String rawJson, List<TrivyVuln> vulns) async {
+    final ids = {for (final v in vulns) normalizeCveId(v.id)}..remove('');
+    if (ids.isEmpty) return;
+    final run = ++_enrichRun;
+    setState(() => _enrichPending = _enrichOnline);
+    try {
+      final result = await enrichCves(
+        ids,
+        seed: seedsFromTrivyJson(rawJson),
+        online: _enrichOnline,
+      );
+      if (mounted && run == _enrichRun) {
+        setState(() {
+          _exploitById = result;
+          _enrichPending = false;
+        });
+        widget.onExploitChanged?.call(result);
+      }
+    } catch (_) {
+      if (mounted && run == _enrichRun) setState(() => _enrichPending = false);
+    }
   }
 
   @override
@@ -285,8 +322,10 @@ class _TrivyPanelState extends State<TrivyPanel>
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
+                _exploitById = const {};
               });
               widget.onVulnsChanged?.call(_vulns);
+              _enrich(jsonOutput, vulns);
             } catch (e) {
               setState(() {
                 _jsonOutput = jsonOutput;
@@ -423,6 +462,16 @@ class _TrivyPanelState extends State<TrivyPanel>
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
+                  exploitById: _exploitById,
+                  enrichPending: _enrichPending,
+                  enrichOnline: _enrichOnline,
+                  onEnrichOnlineChanged: (v) {
+                    setState(() => _enrichOnline = v);
+                    SettingsService.saveScanEnrichOnline(v);
+                    if (_vulns.isNotEmpty && _jsonOutput.isNotEmpty) {
+                      _enrich(_jsonOutput, _vulns);
+                    }
+                  },
                 ),
                 JsonView(json: _jsonOutput),
               ],

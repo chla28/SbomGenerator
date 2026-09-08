@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
+import '../services/scan_enrichment.dart';
 import 'dashboard_panel.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
@@ -66,6 +67,27 @@ class _ResultsPanelState extends State<ResultsPanel>
   List<GrypeVuln>? _grypeVulns;
   List<OsvVuln>? _osvVulns;
   List<TrivyVuln>? _trivyVulns;
+
+  // Signaux d'exploitabilité par scanner (id CVE normalisé → ExploitInfo),
+  // fusionnés pour le tableau de bord.
+  Map<String, ExploitInfo> _grypeExploit = const {};
+  Map<String, ExploitInfo> _osvExploit = const {};
+  Map<String, ExploitInfo> _trivyExploit = const {};
+
+  Map<String, ExploitInfo> get _mergedExploit {
+    final out = <String, ExploitInfo>{};
+    for (final m in [_grypeExploit, _osvExploit, _trivyExploit]) {
+      for (final e in m.entries) {
+        final cur = out[e.key];
+        // On garde l'entrée qui porte le plus de signal (KEV > … > rien).
+        if (cur == null || (!cur.hasAnySignal && e.value.hasAnySignal) ||
+            (!cur.inKev && e.value.inKev)) {
+          out[e.key] = e.value;
+        }
+      }
+    }
+    return out;
+  }
 
   // Filtres date indépendants par scanner
   CveDateFilter _grypeFilter = CveDateFilter.empty;
@@ -402,12 +424,14 @@ class _ResultsPanelState extends State<ResultsPanel>
                 grypeVulns: _grypeVulns,
                 osvVulns: _osvVulns,
                 trivyVulns: _trivyVulns,
+                exploitById: _mergedExploit,
               ),
 
               // Tab 3 : Grype
               GrypePanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _grypeVulns = v),
+                onExploitChanged: (m) => setState(() => _grypeExploit = m),
                 dateFilter: _grypeFilter,
                 onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
                 onPropagate: (f) => setState(() {
@@ -420,6 +444,7 @@ class _ResultsPanelState extends State<ResultsPanel>
               OsvPanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _osvVulns = v),
+                onExploitChanged: (m) => setState(() => _osvExploit = m),
                 dateFilter: _osvFilter,
                 onDateFilterChanged: (f) => setState(() => _osvFilter = f),
                 onPropagate: (f) => setState(() {
@@ -432,6 +457,7 @@ class _ResultsPanelState extends State<ResultsPanel>
               TrivyPanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _trivyVulns = v),
+                onExploitChanged: (m) => setState(() => _trivyExploit = m),
                 dateFilter: _trivyFilter,
                 onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
                 onPropagate: (f) => setState(() {

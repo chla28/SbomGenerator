@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/osv_runner.dart';
+import '../services/scan_enrichment.dart';
+import '../services/settings_service.dart';
 import '../services/version_service.dart';
 import 'help_icon.dart';
 import 'vuln_shared.dart';
@@ -175,6 +177,7 @@ class OsvVuln implements VulnRow {
 class OsvPanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
   final void Function(List<OsvVuln>)? onVulnsChanged;
+  final void Function(Map<String, ExploitInfo>)? onExploitChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -183,6 +186,7 @@ class OsvPanel extends StatefulWidget {
     super.key,
     required this.outputFiles,
     this.onVulnsChanged,
+    this.onExploitChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -212,6 +216,11 @@ class _OsvPanelState extends State<OsvPanel>
   bool _parseFailed = false;
   int? _exitCode;
 
+  Map<String, ExploitInfo> _exploitById = const {};
+  bool _enrichPending = false;
+  bool _enrichOnline = true;
+  int _enrichRun = 0;
+
   ToolVersionInfo? _versionInfo;
 
   @override
@@ -219,8 +228,35 @@ class _OsvPanelState extends State<OsvPanel>
     super.initState();
     _resultTabs = TabController(length: 2, vsync: this);
     _updateAutoFile();
+    SettingsService.loadScanEnrichOnline()
+        .then((v) { if (mounted) setState(() => _enrichOnline = v); });
     VersionService.checkOsv()
         .then((info) { if (mounted) setState(() => _versionInfo = info); });
+  }
+
+  /// Enrichit les CVE trouvées avec les signaux d'exploitabilité. OSV n'expose
+  /// ni KEV ni EPSS : le réseau est requis (CISA KEV + FIRST EPSS + PoC).
+  Future<void> _enrich(String rawJson, List<OsvVuln> vulns) async {
+    final ids = {for (final v in vulns) normalizeCveId(v.id)}..remove('');
+    if (ids.isEmpty) return;
+    final run = ++_enrichRun;
+    setState(() => _enrichPending = _enrichOnline);
+    try {
+      final result = await enrichCves(
+        ids,
+        seed: seedsFromOsvJson(rawJson),
+        online: _enrichOnline,
+      );
+      if (mounted && run == _enrichRun) {
+        setState(() {
+          _exploitById = result;
+          _enrichPending = false;
+        });
+        widget.onExploitChanged?.call(result);
+      }
+    } catch (_) {
+      if (mounted && run == _enrichRun) setState(() => _enrichPending = false);
+    }
   }
 
   @override
@@ -334,8 +370,10 @@ class _OsvPanelState extends State<OsvPanel>
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
+                _exploitById = const {};
               });
               widget.onVulnsChanged?.call(_vulns);
+              _enrich(jsonOutput, vulns);
             } catch (e) {
               setState(() {
                 _jsonOutput = jsonOutput;
@@ -457,6 +495,16 @@ class _OsvPanelState extends State<OsvPanel>
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
+                  exploitById: _exploitById,
+                  enrichPending: _enrichPending,
+                  enrichOnline: _enrichOnline,
+                  onEnrichOnlineChanged: (v) {
+                    setState(() => _enrichOnline = v);
+                    SettingsService.saveScanEnrichOnline(v);
+                    if (_vulns.isNotEmpty && _jsonOutput.isNotEmpty) {
+                      _enrich(_jsonOutput, _vulns);
+                    }
+                  },
                 ),
                 JsonView(json: _jsonOutput),
               ],

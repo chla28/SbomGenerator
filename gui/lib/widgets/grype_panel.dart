@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/grype_runner.dart';
+import '../services/scan_enrichment.dart';
+import '../services/settings_service.dart';
 import '../services/version_service.dart';
 import 'vuln_shared.dart';
 
@@ -112,6 +114,7 @@ class GrypeVuln implements VulnRow {
 class GrypePanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
   final void Function(List<GrypeVuln>)? onVulnsChanged;
+  final void Function(Map<String, ExploitInfo>)? onExploitChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -120,6 +123,7 @@ class GrypePanel extends StatefulWidget {
     super.key,
     required this.outputFiles,
     this.onVulnsChanged,
+    this.onExploitChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -164,6 +168,12 @@ class _GrypePanelState extends State<GrypePanel>
   bool _parseFailed = false;
   int? _exitCode;
 
+  // Enrichissement exploitabilité (CISA KEV / EPSS / PoC)
+  Map<String, ExploitInfo> _exploitById = const {};
+  bool _enrichPending = false;
+  bool _enrichOnline = true;
+  int _enrichRun = 0;
+
   // Version outil
   ToolVersionInfo? _versionInfo;
 
@@ -183,6 +193,8 @@ class _GrypePanelState extends State<GrypePanel>
     super.initState();
     _resultTabs = TabController(length: 3, vsync: this);
     _updateAutoFile();
+    SettingsService.loadScanEnrichOnline()
+        .then((v) { if (mounted) setState(() => _enrichOnline = v); });
     VersionService.checkGrype()
         .then((info) { if (mounted) setState(() => _versionInfo = info); });
   }
@@ -338,8 +350,10 @@ class _GrypePanelState extends State<GrypePanel>
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
+                _exploitById = const {};
               });
               widget.onVulnsChanged?.call(_vulns);
+              _enrich(jsonOutput, vulns);
             } catch (e) {
               setState(() {
                 _jsonOutput = jsonOutput;
@@ -372,6 +386,32 @@ class _GrypePanelState extends State<GrypePanel>
         }
       },
     );
+  }
+
+  /// Enrichit les CVE trouvées avec les signaux d'exploitabilité (best-effort,
+  /// asynchrone). Grype fournit déjà KEV/EPSS/CVSS dans son JSON — le réseau ne
+  /// sert qu'au signal PoC quand l'enrichissement en ligne est activé.
+  Future<void> _enrich(String rawJson, List<GrypeVuln> vulns) async {
+    final ids = {for (final v in vulns) normalizeCveId(v.id)}..remove('');
+    if (ids.isEmpty) return;
+    final run = ++_enrichRun;
+    setState(() => _enrichPending = _enrichOnline);
+    try {
+      final result = await enrichCves(
+        ids,
+        seed: seedsFromGrypeJson(rawJson),
+        online: _enrichOnline,
+      );
+      if (mounted && run == _enrichRun) {
+        setState(() {
+          _exploitById = result;
+          _enrichPending = false;
+        });
+        widget.onExploitChanged?.call(result);
+      }
+    } catch (_) {
+      if (mounted && run == _enrichRun) setState(() => _enrichPending = false);
+    }
   }
 
   void _stop() {
@@ -504,6 +544,16 @@ class _GrypePanelState extends State<GrypePanel>
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
+                  exploitById: _exploitById,
+                  enrichPending: _enrichPending,
+                  enrichOnline: _enrichOnline,
+                  onEnrichOnlineChanged: (v) {
+                    setState(() => _enrichOnline = v);
+                    SettingsService.saveScanEnrichOnline(v);
+                    if (_vulns.isNotEmpty && _jsonOutput.isNotEmpty) {
+                      _enrich(_jsonOutput, _vulns);
+                    }
+                  },
                 ),
                 JsonView(json: _jsonOutput),
                 _TemplateView(

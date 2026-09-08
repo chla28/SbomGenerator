@@ -11,6 +11,7 @@ class SettingsService {
   static const _configKey = 'sbom_config_v1';
   static const _themeKey = 'theme_mode';
   static const _themeColorKey = 'theme_color_index';
+  static const _scanEnrichKey = 'scan_enrich_online_v1';
 
   static String get cliBinary {
     final exeDir = p.dirname(Platform.resolvedExecutable);
@@ -63,6 +64,20 @@ class SettingsService {
   static Future<int> loadThemeColorIndex() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_themeColorKey) ?? 0;
+  }
+
+  // ── Enrichissement CVE (exploitabilité / exploitation active) ─────────────
+
+  /// Autoriser les requêtes réseau (CISA KEV / EPSS / poc-in-github) lors d'un
+  /// scan de vulnérabilités. Défaut : activé.
+  static Future<bool> loadScanEnrichOnline() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_scanEnrichKey) ?? true;
+  }
+
+  static Future<void> saveScanEnrichOnline(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_scanEnrichKey, value);
   }
 
   // ── Profils de configuration ──────────────────────────────────────────────

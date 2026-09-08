@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../services/scan_enrichment.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
@@ -16,11 +17,16 @@ class DashboardPanel extends StatelessWidget {
   final List<OsvVuln>? osvVulns;
   final List<TrivyVuln>? trivyVulns;
 
+  /// Signaux d'exploitabilité par CVE (id normalisé), fusionnés depuis les
+  /// trois onglets. Vide = enrichissement non exécuté.
+  final Map<String, ExploitInfo> exploitById;
+
   const DashboardPanel({
     super.key,
     required this.grypeVulns,
     required this.osvVulns,
     required this.trivyVulns,
+    this.exploitById = const {},
   });
 
   // Normalise les sévérités en clé minuscule commune
@@ -71,6 +77,7 @@ class DashboardPanel extends StatelessWidget {
                       osv: osv,
                       trivy: trivy,
                       crossRows: _crossScannerRows(grype, osv, trivy),
+                      exploitById: exploitById,
                     ),
           ),
 
@@ -128,6 +135,7 @@ class DashboardPanel extends StatelessWidget {
               osvVulns: osv,
               trivyVulns: trivy,
               scansRun: scansRun,
+              exploitById: exploitById,
             ),
           ],
         ],
@@ -235,6 +243,7 @@ Future<void> _exportDashboard(
   required List<OsvVuln>? osv,
   required List<TrivyVuln>? trivy,
   required List<_CrossRowData> crossRows,
+  Map<String, ExploitInfo> exploitById = const {},
 }) async {
   final path = await FilePicker.saveFile(
     dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
@@ -326,20 +335,47 @@ Future<void> _exportDashboard(
 
   buf.writeln('== Comparaison inter-scanners');
   buf.writeln();
+  final withExploit = exploitById.isNotEmpty;
+  ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
   if (crossRows.isEmpty) {
     buf.writeln('_Aucune CVE détectée par les scanners exécutés._');
   } else {
-    buf.writeln('[cols="<1,<3,^1,^1,^1",options="header"]');
-    buf.writeln('|===');
-    buf.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy');
-    for (final row in crossRows) {
-      buf.writeln('| ${pdfSeverityBadge(row.severity)} '
-          '| ${adocEscape(row.id)} '
-          '| ${row.inGrype ? '✓' : '—'} '
-          '| ${row.inOsv ? '✓' : '—'} '
-          '| ${row.inTrivy ? '✓' : '—'}');
+    final rows = withExploit
+        ? ([...crossRows]..sort((a, b) {
+            final ea = ex(a.id), eb = ex(b.id);
+            if (ea.inKev != eb.inKev) return ea.inKev ? -1 : 1;
+            return -((ea.epssScore ?? -1).compareTo(eb.epssScore ?? -1));
+          }))
+        : crossRows;
+    if (withExploit) {
+      buf.writeln('[cols="<1,<3,^1,<1,^1,^1,^1",options="header"]');
+      buf.writeln('|===');
+      buf.writeln('| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV-Scanner '
+          '| Trivy');
+      for (final row in rows) {
+        final e = ex(row.id);
+        buf.writeln('| ${pdfSeverityBadge(row.severity)} '
+            '| ${adocEscape(row.id)} '
+            '| ${e.inKev ? '✓' : '—'} '
+            '| ${e.epssScore == null ? '—' : e.epssScore!.toStringAsFixed(2)} '
+            '| ${row.inGrype ? '✓' : '—'} '
+            '| ${row.inOsv ? '✓' : '—'} '
+            '| ${row.inTrivy ? '✓' : '—'}');
+      }
+      buf.writeln('|===');
+    } else {
+      buf.writeln('[cols="<1,<3,^1,^1,^1",options="header"]');
+      buf.writeln('|===');
+      buf.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy');
+      for (final row in rows) {
+        buf.writeln('| ${pdfSeverityBadge(row.severity)} '
+            '| ${adocEscape(row.id)} '
+            '| ${row.inGrype ? '✓' : '—'} '
+            '| ${row.inOsv ? '✓' : '—'} '
+            '| ${row.inTrivy ? '✓' : '—'}');
+      }
+      buf.writeln('|===');
     }
-    buf.writeln('|===');
   }
   buf.writeln();
 
@@ -764,12 +800,14 @@ class _CrossScannerSection extends StatelessWidget {
   final List<OsvVuln>? osvVulns;
   final List<TrivyVuln>? trivyVulns;
   final int scansRun;
+  final Map<String, ExploitInfo> exploitById;
 
   const _CrossScannerSection({
     required this.grypeVulns,
     required this.osvVulns,
     required this.trivyVulns,
     required this.scansRun,
+    this.exploitById = const {},
   });
 
   @override
@@ -777,9 +815,32 @@ class _CrossScannerSection extends StatelessWidget {
     // Union complète : toutes les CVE vues par au moins un scanner, triées
     // par sévérité max — voir _crossScannerRows (partagé avec l'export
     // AsciiDoc + PDF pour que le rapport reflète exactement ce tableau).
-    final rows = _crossScannerRows(grypeVulns, osvVulns, trivyVulns);
+    var rows = _crossScannerRows(grypeVulns, osvVulns, trivyVulns);
 
     if (rows.isEmpty) return const SizedBox.shrink();
+
+    final hasExploit = exploitById.isNotEmpty;
+    ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
+    if (hasExploit) {
+      int sevOrd(String s) => switch (s.toLowerCase()) {
+            'critical' => 0,
+            'high' => 1,
+            'medium' => 2,
+            'low' => 3,
+            _ => 4,
+          };
+      // Priorisation : KEV d'abord, puis EPSS décroissant, puis sévérité.
+      rows = [...rows]..sort((a, b) {
+          final ea = ex(a.id), eb = ex(b.id);
+          if (ea.inKev != eb.inKev) return ea.inKev ? -1 : 1;
+          final e = -((ea.epssScore ?? -1).compareTo(eb.epssScore ?? -1));
+          if (e != 0) return e;
+          return sevOrd(a.severity).compareTo(sevOrd(b.severity));
+        });
+    }
+    final kevCount = hasExploit
+        ? rows.where((r) => ex(r.id).inKev).length
+        : 0;
 
     return Card(
       child: Padding(
@@ -792,7 +853,8 @@ class _CrossScannerSection extends StatelessWidget {
                 const Icon(Icons.join_inner, size: 18, color: Colors.deepOrange),
                 const SizedBox(width: 8),
                 Text(
-                  'Comparaison inter-scanners (${rows.length} CVE)',
+                  'Comparaison inter-scanners (${rows.length} CVE'
+                  '${kevCount > 0 ? ', dont $kevCount CISA KEV' : ''})',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
                 ),
@@ -842,6 +904,7 @@ class _CrossScannerSection extends StatelessWidget {
                 inTrivy: row.inTrivy,
                 severity: row.severity,
                 scansRun: scansRun,
+                exploit: hasExploit ? ex(row.id) : null,
               ),
           ],
         ),
@@ -857,6 +920,7 @@ class _CrossRow extends StatelessWidget {
   final bool inTrivy;
   final String severity;
   final int scansRun;
+  final ExploitInfo? exploit;
 
   const _CrossRow({
     required this.id,
@@ -865,6 +929,7 @@ class _CrossRow extends StatelessWidget {
     required this.inTrivy,
     required this.severity,
     required this.scansRun,
+    this.exploit,
   });
 
   static Color _fg(String s) => switch (s.toLowerCase()) {
@@ -935,13 +1000,47 @@ class _CrossRow extends StatelessWidget {
             const SizedBox(width: 4),
           ],
           Expanded(
-            child: Text(
-              id,
-              style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500),
-            ),
+            child: Row(children: [
+              Flexible(
+                child: Text(
+                  id,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+              if (exploit?.inKev ?? false) ...[
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: 'CISA KEV — exploitée activement dans la nature'
+                      '${(exploit?.kevRansomware ?? false) ? ' · rançongiciel' : ''}',
+                  child: const Icon(Icons.local_fire_department,
+                      size: 13, color: Colors.red),
+                ),
+              ],
+              if ((exploit?.epssScore ?? 0) >= 0.10) ...[
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: 'EPSS ${exploit!.epssScore!.toStringAsFixed(2)} — '
+                      'probabilité d\'exploitation élevée',
+                  child: Text(
+                    'EPSS ${exploit!.epssScore!.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepOrange),
+                  ),
+                ),
+              ] else if (exploit?.pocKnown ?? false) ...[
+                const SizedBox(width: 6),
+                const Tooltip(
+                  message: 'Exploit / PoC public recensé',
+                  child: Icon(Icons.code, size: 12, color: Colors.purple),
+                ),
+              ],
+            ]),
           ),
           for (final present in [inGrype, inOsv, inTrivy])
             SizedBox(
