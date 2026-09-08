@@ -79,7 +79,7 @@ partie du pipeline sans reconstruire un SBOM depuis les paquets :
 | `convert -i <a> -f <fmt>` | `sbom_reader.dart` + générateurs | Relit un SBOM existant et le réexporte vers un/plusieurs formats |
 | `licenses -i <a> -o <adoc>` | `sbom_reader.dart` + `license_report_generator.dart` | Rapport AsciiDoc des licences, regroupé par licence, avec alertes copyleft |
 | `validate <a> [<b>…]` | (inline dans `bin/sbom_generator.dart`) | Vérifie la structure minimale d'un ou plusieurs SBOM |
-| `scan --sbom <a>` | (inline dans `bin/sbom_generator.dart`) | Interroge grype/osv-scanner/trivy sur un SBOM déjà généré, filtre par date |
+| `scan --sbom <a>` | (inline) + `scan_report_generator.dart` + `vuln_enrichment.dart` | Interroge grype/osv-scanner/trivy, filtre par date, enrichit chaque CVE (CISA KEV, EPSS, PoC, exploitabilité CVSS), rend en texte / SARIF / rapport md-adoc-pdf |
 
 Tous les générateurs et le lecteur SBOM travaillent sur `List<Package>` — la
 classe abstraite commune à `RpmPackage`, `WheelPackage`, `DebPackage` et
@@ -1008,26 +1008,33 @@ déjà généré, avec filtrage temporel :
 
 Options : `--sbom <fichier>` (obligatoire), `--scanner <grype|osv|trivy|all>`
 (défaut `grype`), `--cve-after`/`--cve-before <AAAA-MM-JJ>`,
-`--cve-date-field <published|modified|latest>` (défaut `published`),
-`--include-undated` (inclut les CVE sans date, exclues par défaut dès qu'un
-filtre de date est actif), `--format <text|sarif>` (défaut `text`),
-`--output <fichier>` (fichier de sortie pour `--format sarif` ; sans cette
-option, le SARIF est affiché sur stdout).
+`--cve-date-field <published|modified|latest>`, `--include-undated`,
+`--format <text|sarif|markdown|asciidoc|pdf>` (défaut `text`),
+`--output <fichier>`, `--sort <severity|risk>`. Enrichissement (actif par
+défaut) : `--enrich`/`--no-enrich` (+ `SBOMGEN_OFFLINE=1`), `--no-poc`,
+`--enrich-timeout <s>`, filtres `--only-kev` / `--epss-min <0..1>`.
 
 Architecture interne :
 
 | Fonction | Rôle |
 |---|---|
-| `_runScan()` | Parse les arguments, orchestre les scanners demandés |
-| `_runScanner()` | Dispatch vers `_runGrype()` / `_runOsv()` / `_runTrivy()` |
-| `_runGrype()` / `_runOsv()` / `_runTrivy()` | Lance le scanner via `Process.run()` (capture `ProcessException` si le binaire est introuvable → message explicite, pas de crash), parse son JSON propre, retourne une liste normalisée `{id, severity, package, published, modified}` |
-| `_filterByDate()` | Applique `after`/`before`/`includeUndated` sur le champ de date choisi |
-| `_printScanResults()` | Trie par sévérité décroissante (Critical → Unknown) et affiche un tableau texte par scanner (`--format text`) |
-| `_buildSarifReport()` | Construit un rapport SARIF 2.1.0 (un `run` par scanner interrogé, une `rule` par identifiant de vulnérabilité, `level` dérivé de la sévérité via `_sarifLevel()`) — `--format sarif` |
+| `_runScan()` | Parse les arguments, orchestre les scanners, l'enrichissement et le rendu |
+| `_runGrype()` / `_runOsv()` / `_runTrivy()` | Lancent le scanner via `Process.run()` (échec = message explicite, pas de crash), parsent son JSON propre → liste normalisée `{id, severity, package, published, modified, fixState, fixedVersions, cvssVector, kevSeed…}` |
+| `_filterByDate()` / `_filterByExploit()` | Filtres date puis `--only-kev` / `--epss-min` |
+| `_enrichFindings()` | Rassemble les CVE + graines, appelle `VulnEnricher` (`lib/vuln_enrichment.dart`), injecte l'`ExploitInfo` dans chaque finding — best-effort |
+| `_printScanResults()` | Tableau texte par scanner, colonnes `KEV` / `EPSS` / `PoC`, tri sévérité ou risque |
+| `_buildSarifReport()` | SARIF 2.1.0 + propriétés `kev` / `epss` / `poc` / `cvssExploitability` par résultat |
+| `_writeScanReport()` | `markdown` / `asciidoc` / `pdf` : délègue à `ScanReportGenerator` (`lib/scan_report_generator.dart`) — résumé, matrice CVE × scanner, « Notes par CVE », « Exploitabilité et exploitation active » / « Priorisation par risque » |
 
-Code retour : `0` si aucune vulnérabilité dans la plage demandée (tous
-scanners confondus), `1` si au moins une trouvée ou en cas d'erreur de
-scanner (l'échec d'un scanner n'empêche pas les autres de s'exécuter).
+`lib/vuln_enrichment.dart` (`VulnEnricher`, `parseCvssVector`) : CISA KEV +
+EPSS (FIRST) + PoC (poc-in-github) via `dart:io HttpClient`, cache 24 h sous
+`~/.cache/sbom-generator/`, repli sur cache si réseau KO. Grype fournissant
+déjà KEV/EPSS/CVSS, le réseau ne complète que les CVE vues par OSV/Trivy et
+le signal PoC. Détail complet : `doc/developer.adoc`.
+
+Code retour (`text` / `sarif`) : `0` si aucune vulnérabilité dans la plage,
+`1` sinon (ou erreur de scanner) ; les formats rapport renvoient `0` dès
+qu'un fichier est écrit.
 
 ### Options CI/CD
 

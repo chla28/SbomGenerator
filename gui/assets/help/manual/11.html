@@ -74,9 +74,69 @@ un</strong> scanner — pas seulement celles communes à plusieurs : c’est jus
 gardant les CVE isolées (vues par un seul scanner alors que plusieurs ont
 tourné) qu’on repère les écarts de détection entre outils. Ces lignes
 isolées portent une bordure ambre, une icône ⚠ et un tooltip « Vu par un
-seul scanner sur N » pour les distinguer d’un coup d’œil. Les lignes sont
-triées par sévérité décroissante ; une coche ✓ / — indique la présence ou
-l’absence dans chaque scanner.</p>
+seul scanner sur N » pour les distinguer d’un coup d’œil. Une coche ✓ / —
+indique la présence ou l’absence dans chaque scanner.</p>
+</div>
+<div class="paragraph">
+<p><strong>Tri</strong> : cliquez sur un en-tête de colonne pour trier, cliquez à nouveau pour
+inverser (la flèche ↑ / ↓ indique la colonne et le sens actifs) :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>SÉV.</strong> — sévérité (Critical en tête) ;</p>
+</li>
+<li>
+<p><strong>CVE / ID</strong> — ordre alphabétique ;</p>
+</li>
+<li>
+<p><strong>Grype</strong> / <strong>OSV</strong> / <strong>Trivy</strong> — CVE vues par ce scanner d’abord (✓ avant —),
+pour isoler d’un clic ce que chaque outil détecte seul ;</p>
+</li>
+<li>
+<p><strong>KEV</strong> et <strong>EPSS</strong> (colonnes présentes uniquement si l’enrichissement a
+tourné, cf. <a href="#sec-exploitabilite">[sec-exploitabilite]</a>) — CVE du catalogue CISA en tête, ou
+score EPSS décroissant.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Par défaut, les lignes sont ordonnées par <strong>priorisation du risque</strong> — CISA
+KEV, puis EPSS décroissant, puis sévérité — quand l’enrichissement a produit
+des résultats ; par sévérité seule sinon. L’export AsciiDoc / PDF reprend
+exactement l’ordre affiché.</p>
+</div>
+<div id="sec-cve-detail" class="paragraph">
+<p><strong>Détail d’une CVE</strong> : cliquez sur une ligne (le chevron ▾ à droite l’indique)
+pour la déplier. Un panneau affiche alors, à partir des données déjà en
+mémoire :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>le <strong>paquet</strong> concerné, sa version installée et la version corrigée, tels que
+vus par chaque scanner ;</p>
+</li>
+<li>
+<p>la <strong>sévérité</strong> et les <strong>dates</strong> de publication / modification, par scanner —
+souvent différentes d’un outil à l’autre ;</p>
+</li>
+<li>
+<p>l'<strong>exploitabilité détaillée</strong> : CISA KEV (date d’ajout, échéance de
+remédiation, usage par un rançongiciel), score EPSS et son percentile,
+sous-score d’exploitabilité CVSS avec le vecteur et la maturité de
+l’exploit, dépôts PoC publics (liens cliquables) ;</p>
+</li>
+<li>
+<p>des <strong>boutons de référence</strong> ouvrant NVD, CVE.org, osv.dev et — pour une CVE
+du catalogue — CISA KEV dans le navigateur, plus un bouton <strong>copier
+l’identifiant</strong>.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Re-cliquer sur la ligne referme le panneau. Le même détail est disponible
+dans les onglets Grype / OSV-Scanner / Trivy.</p>
 </div>
 <div class="paragraph">
 <p>Si la liste dépasse la hauteur disponible, l’ascenseur vertical de l’onglet
@@ -264,14 +324,23 @@ scan — « indisponible » si l’outil n’est plus dans le <code>PATH</code>)
 </li>
 <li>
 <p>le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
-présence par outil), avec les CVE préfixés distro déjà normalisés (voir
-<a href="#sec-pourquoi-ecarts-scanners">Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</a>).</p>
+présence par outil, et colonnes KEV / EPSS si l’enrichissement a tourné),
+dans le <strong>même ordre que celui affiché à l’écran</strong>, avec les CVE préfixés
+distro déjà normalisés (voir <a href="#sec-pourquoi-ecarts-scanners">Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</a>) ;</p>
+</li>
+<li>
+<p>une section <strong>« Détail des CVE prioritaires »</strong> : un bloc par CVE au
+catalogue CISA KEV, ou dont l’EPSS est ≥ 10 %, ou de sévérité Critical /
+High — avec paquet, versions, sévérité et dates par scanner, et toute
+l’information d’exploitabilité (KEV, EPSS, CVSS, PoC, liens). Reprend le
+contenu du panneau de détail dépliable à l’écran.</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
 <p>Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n’y a ici qu’une seule
-vue de synthèse — pas de lignes filtrées/triées individuellement à exporter.</p>
+vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
+la colonne de tri active du tableau inter-scanners est respectée.</p>
 </div>
 <div class="paragraph">
 <p>Le bouton reste désactivé tant qu’aucun scanner n’a été exécuté. Une fois le

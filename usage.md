@@ -23,6 +23,8 @@ Prend en charge les formats de sortie **CycloneDX 1.6/1.7**, **SPDX 2.3**, **SPD
 | `trivy` | — | `--image` avec `--oci-tool trivy` | Analyse d'images OCI — tous types de paquets |
 | `skopeo` + `tar` | — | `--image` avec `--oci-tool skopeo` | Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python, npm |
 | `grype` / `osv-scanner` / `trivy` | — | sous-commande `scan` | Recherche de vulnérabilités connues sur un SBOM déjà généré |
+| accès réseau | — | enrichissement CVE de `scan` | CISA KEV, EPSS, poc-in-github (optionnel : `--no-enrich`, cache 24 h) |
+| `asciidoctor-pdf` | — | `scan --format pdf` | Conversion du rapport de synthèse en PDF (sinon le `.adoc` est conservé) |
 | `sbomqs` | — | `--min-quality-score` | Score de qualité du SBOM généré |
 | `cosign` | — | `--sign` | Signature cryptographique du SBOM généré |
 
@@ -512,17 +514,37 @@ par date de publication/modification :
 # Export SARIF (intégration GitHub Code Scanning) vers un fichier
 ./sbom_generator scan --sbom sbom.cdx.json --scanner all \
   --format sarif --output resultats.sarif
+
+# Rapport de synthèse inter-scanners (markdown | asciidoc | pdf)
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format pdf --output scan-report.pdf
+
+# Priorisation par exploitabilité
+./sbom_generator scan --sbom sbom.cdx.json --only-kev --sort risk
+./sbom_generator scan --sbom sbom.cdx.json --epss-min 0.1
+./sbom_generator scan --sbom sbom.cdx.json --no-enrich   # hors-ligne (CI)
 ```
 
 Scanners disponibles (`--scanner`) : `grype` (défaut), `osv`, `trivy`, ou
 `all` pour les trois. Champ de date (`--cve-date-field`) : `published`
 (défaut), `modified`, ou `latest` (la plus récente des deux). Format de
-sortie (`--format`) : `text` (défaut, coloré console) ou `sarif` (SARIF
-2.1.0, écrit dans `--output <fichier>` ou affiché sur stdout si omis).
-Résultats `text` triés par sévérité décroissante. L'absence d'un scanner
-demandé est signalée sans faire échouer les autres. Codes de retour : `0` =
-aucune vulnérabilité dans la plage demandée, `1` = au moins une trouvée (ou
-erreur de scanner).
+sortie (`--format`) : `text` (défaut, coloré console), `sarif` (SARIF 2.1.0),
+ou `markdown` / `asciidoc` / `pdf` (rapport de synthèse inter-scanners écrit
+dans `--output` — résumé, matrice CVE × scanner, section « Priorisation par
+risque »). Résultats `text` triés par sévérité décroissante, ou par risque
+avec `--sort risk`. L'absence d'un scanner demandé est signalée sans faire
+échouer les autres. Codes de retour (`text` / `sarif`) : `0` = aucune
+vulnérabilité dans la plage demandée, `1` = au moins une trouvée (ou erreur
+de scanner) ; les formats rapport renvoient `0` dès qu'un fichier est écrit.
+
+**Exploitabilité et exploitation active** : chaque CVE est enrichie (actif
+par défaut) avec **CISA KEV** (exploitée dans la nature), **EPSS**
+(probabilité d'exploitation à 30 j), un signal **PoC public** et le
+sous-score d'**exploitabilité CVSS**. Colonnes `KEV` / `EPSS` / `PoC` en
+`--format text`, propriétés `kev` / `epss` / `poc` en SARIF, section dédiée
+dans les rapports. `--no-enrich` (ou `SBOMGEN_OFFLINE=1`) coupe toute requête
+réseau ; `--no-poc` ne coupe que la source tierce. Filtres : `--only-kev`,
+`--epss-min <0..1>`. Cache 24 h sous `~/.cache/sbom-generator/`.
 
 **Pourquoi les scanners ne trouvent pas les mêmes CVE** : avec `--scanner
 all`, une bonne partie des CVE sont normalement signalées par un seul
@@ -713,6 +735,8 @@ sbom_generator/
 │   ├── sbom_merger.dart            # Fusion de SBOM (sous-commande merge)
 │   ├── sbom_reader.dart            # Lecteur SBOM (CycloneDX/SPDX) → List<Package>
 │   ├── license_report_generator.dart # Rapport de licences AsciiDoc (sous-commande licenses)
+│   ├── scan_report_generator.dart  # Rapport de synthèse inter-scanners (scan -f md/adoc/pdf)
+│   ├── vuln_enrichment.dart        # Enrichissement CVE : CISA KEV, EPSS, PoC, exploitabilité CVSS
 │   ├── policy_checker.dart         # Licences interdites + score qualité CI/CD
 │   ├── cyclonedx_generator.dart    # Générateur CycloneDX 1.6/1.7
 │   ├── spdx_generator.dart         # Générateur SPDX 2.3

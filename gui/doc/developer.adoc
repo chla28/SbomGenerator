@@ -117,19 +117,24 @@ gui/
 │   │   ├── grype_runner.dart         # Exécute grype (SBOM ou image), stream d'événements
 │   │   ├── osv_runner.dart           # Exécute osv-scanner (SBOM ou image), stream d'événements
 │   │   ├── trivy_runner.dart         # Exécute trivy (SBOM ou image), stream d'événements
+│   │   ├── vuln_enrichment.dart      # Copie synchro du module CLI : CISA KEV / EPSS / PoC / CVSS
+│   │   ├── scan_enrichment.dart      # Graines depuis le JSON des scanners + normalizeCveId + enrichCves
 │   │   ├── version_service.dart      # Détection version installée + dernière release GitHub
-│   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème couleur
+│   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème + enrichissement
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 13 onglets
+│       ├── results_panel.dart        # Panneau droit : 13 onglets ; fusionne les ExploitInfo des 3 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
 │       ├── vuln_shared.dart          # VulnRow, VulnTableView : tableau de vulnérabilités
-│       │                             #   partagé (tri/filtre/recherche/export CSV+AsciiDoc+PDF)
+│       │                             #   partagé (tri/filtre/recherche/export CSV+AsciiDoc+PDF,
+│       │                             #   colonnes KEV/EPSS, ligne dépliable CveDetailPanel)
 │       │                             #   + ScanSourceToggle/ImageRefField (source SBOM/image)
+│       ├── cve_detail.dart           # CveDetail / ScannerCveView / CveDetailPanel — détail CVE partagé
 │       ├── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
 │       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
+│       │                             #   (comparaison inter-scanners triable + lignes dépliables)
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
 │       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
 │       ├── sbom_merge_panel.dart     # Onglet Fusion SBOM — fusionne plusieurs SBOM
@@ -142,6 +147,7 @@ gui/
 │   ├── widget_test.dart
 │   ├── config_panel_input_test.dart
 │   ├── dashboard_panel_test.dart
+│   ├── cve_detail_test.dart
 │   ├── sbom_merge_panel_test.dart
 │   ├── sbom_licenses_panel_test.dart
 │   ├── vuln_shared_test.dart
@@ -540,6 +546,58 @@ RHEL 9.6/Keycloak : `trivy sbom` trouvait 3 CVE HIGH
 Voir `user.adoc`, section « Pourquoi Grype, OSV-Scanner et Trivy ne
 trouvent pas les mêmes CVE ».
 
+[[sec-enrichissement]]
+==== `services/vuln_enrichment.dart` + `scan_enrichment.dart` — enrichissement CVE
+
+La GUI ne dépend pas du paquet racine : `services/vuln_enrichment.dart` est
+une **copie synchronisée** de `lib/vuln_enrichment.dart` du CLI (garder les
+deux identiques — les corps de classe le sont, seul le commentaire d'en-tête
+diffère). Il fournit `VulnEnricher` (CISA KEV via le flux CISA, EPSS via
+l'API FIRST, PoC via `poc-in-github.motikan2010.net`, tout en `dart:io
+HttpClient`, cache 24 h sous `~/.cache/sbom-generator/` partagé avec le CLI,
+repli sur le cache si le réseau échoue), `parseCvssVector()` et les modèles
+`CveSeed` / `ExploitInfo`.
+
+`scan_enrichment.dart` fait le pont avec les panneaux :
+
+* `normalizeCveId(id)` — même regex distro que `_normalizeVulnId` du tableau
+  de bord ;
+* `seedsFromGrypeJson` / `seedsFromOsvJson` / `seedsFromTrivyJson` — extraient
+  les *graines* du JSON brut de chaque scanner : vecteur CVSS pour tous, et
+  **KEV + EPSS natifs pour Grype** (qui les porte dans sa base — autant de
+  requêtes réseau évitées) ;
+* `enrichCves(ids, {seed, online})` — instancie `VulnEnricher` et renvoie
+  `Map<String, ExploitInfo>`.
+
+Chaque panneau (`grype_panel` / `osv_panel` / `trivy_panel`), après
+`dedupeVulns`, appelle `_enrich(rawJson, vulns)` : construit les graines,
+appelle `enrichCves` (best-effort, `_enrichRun` garde contre les courses),
+`setState(_exploitById)`, puis remonte via `onExploitChanged`. `ResultsPanel`
+fusionne les trois maps (`_mergedExploit`, priorité aux entrées portant le
+plus de signal) et la passe à `DashboardPanel`. Le bouton `☁` (barre d'outils
+de `VulnTableView`) bascule `online` ; le choix est persisté par
+`SettingsService.saveScanEnrichOnline()` (clé `scan_enrich_online_v1`, défaut
+activé) et partagé par les trois onglets.
+
+[[sec-cve-detail-widget]]
+==== `widgets/cve_detail.dart` — détail d'une CVE (partagé)
+
+* `ScannerCveView` — ce qu'*un* scanner rapporte (sévérité, paquet, versions,
+  dates, champ libre `extra` = type / écosystème / titre).
+* `CveDetail { id, List<ScannerCveView> views, ExploitInfo exploit }` — agrège
+  1 à 3 vues. Getters : `isCve` / `isGhsa`, `description` (meilleure phrase
+  parmi les `extra`, ignore les champs courts), `links` (NVD / CVE.org /
+  osv.dev / CISA KEV ou GitHub Advisory selon le type), `toAdocRows(esc)`
+  pour l'export.
+* `CveDetailPanel` — `StatelessWidget` affiché dans la ligne dépliée :
+  sections Paquet(s), *Rapporté par* (table scanner × sévérité × dates),
+  *Exploitabilité* (KEV / EPSS / CVSS + vecteur / PoC + liens `launchUrl`),
+  *Références* (`OutlinedButton` → navigateur), bouton *copier l'identifiant*.
+
+Construit côté tableau de bord par `_crossCveDetail` (3 scanners) et côté
+onglets par `_VulnTableViewState._detailFor` (1 scanner). Ne dépend d'aucun
+fichier de panneau — pas de cycle d'import.
+
 [[sec-version-service]]
 ==== `services/version_service.dart` — Version installée + mise à jour GitHub
 
@@ -637,6 +695,10 @@ Le service gère également la *persistance* via `shared_preferences` :
 
 |`loadThemeColorIndex()`
 |Retourne l'index sauvegardé, ou `0` (Indigo) par défaut
+
+|`saveScanEnrichOnline(bool)` / `loadScanEnrichOnline()`
+|Autoriser les requêtes réseau d'enrichissement CVE (clé
+`scan_enrich_online_v1`, défaut `true`) — bouton `☁` des onglets de scan
 
 |`listProfiles()`
 |Retourne la liste des noms de profils sauvegardés (clé `profile_names_v1`)
@@ -944,20 +1006,24 @@ affiche `_ErrorBanner` sans bloquer l'autre. Les deux outils sont indépendants.
 
 ==== `widgets/dashboard_panel.dart` — Onglet Tableau de bord
 
-`DashboardPanel` est un `StatelessWidget`. Il reçoit les résultats des trois
-scanners en paramètre (valeur `null` = scanner pas encore exécuté) :
+`DashboardPanel` est un `StatefulWidget`. Il reçoit les résultats des trois
+scanners en paramètre (valeur `null` = scanner pas encore exécuté), plus la
+map `exploitById` fusionnée par `ResultsPanel` depuis les trois onglets :
 
 [source,dart]
 ----
-class DashboardPanel extends StatelessWidget {
+class DashboardPanel extends StatefulWidget {
   final List<GrypeVuln>? grypeVulns;
   final List<OsvVuln>?  osvVulns;
   final List<TrivyVuln>? trivyVulns;
+  final Map<String, ExploitInfo> exploitById;
 }
 ----
 
 Ces listes sont stockées dans l'état de `ResultsPanel` et transmises ici.
-Il n'y a pas de flutter state local : tout est calculé à chaque `build()`.
+`_DashboardPanelState` ne tient que l'état de tri de la comparaison
+inter-scanners (`_CrossSort? _crossSort`, `bool _crossSortAsc`) ; le reste est
+calculé à chaque `build()`.
 
 Structure :
 
@@ -967,13 +1033,19 @@ Structure :
   qu'aucun scanner n'a tourné)
 * `_ScannerCard` × 3 — une carte par scanner avec `_SeverityBar` (barres
   empilées `Expanded(flex: N)` colorées) et `_SevRow` (un rang par sévérité)
-* `_CrossScannerSection` — liste complète des CVE vues par *au moins un*
-  scanner (pas seulement celles communes à plusieurs — c'est justement en
-  gardant les CVE isolées qu'on repère les écarts de détection entre
-  scanners), triées par sévérité décroissante, colonnes : SÉVÉRITÉ / CVE ID
-  / Grype ✓ / OSV ✓ / Trivy ✓. Une CVE vue par un seul scanner alors que
-  plusieurs ont tourné (`isIsolated`) porte un marqueur visuel distinct
-  (bordure ambre + icône, tooltip « Vu par un seul scanner sur N »).
+* `_CrossScannerSection` (`StatefulWidget`, tient le `Set<String> _expanded`) —
+  liste complète des CVE vues par *au moins un* scanner (pas seulement celles
+  communes à plusieurs — c'est justement en gardant les CVE isolées qu'on
+  repère les écarts de détection entre scanners). Colonnes triables via
+  `SortHeader` : SÉV. / CVE-ID / (KEV / EPSS si enrichissement) / Grype ✓ /
+  OSV ✓ / Trivy ✓ + chevron. Le tri est appliqué par la fonction pure
+  `_sortCrossRows(rows, _CrossSort, asc, exploitById)` (colonnes `severity`,
+  `cveId`, `grype`/`osv`/`trivy` = présence d'abord, `kev` = priorisation
+  risque KEV→EPSS→sévérité, `epss` = score) — **partagée avec l'export** pour
+  que le PDF reflète l'ordre affiché. Défaut : `kev` si enrichissement, sinon
+  `severity`. Une CVE vue par un seul scanner (`isIsolated`) porte un marqueur
+  ambre. Cliquer une ligne déplie un `CveDetailPanel` construit par
+  `_crossCveDetail(id, …)` (agrège les vues des 3 scanners + `ExploitInfo`).
 
 Toutes les entrées sont affichées via un `for` loop dans un `Column` ; le défilement
 est assuré par le `SingleChildScrollView` qui enveloppe l'ensemble du `DashboardPanel`.
@@ -1063,18 +1135,19 @@ par `_exportDashboard`, garantissant que le rapport exporté correspond
 exactement au tableau affiché (aucune logique dupliquée entre les deux).
 
 `_exportDashboard(context, {scansRun, uniqueIds, grype, osv, trivy,
-crossRows})` construit le rapport AsciiDoc en quatre sections (`== Résumé
-global`, `== Outils` — voir <<sec-pdf-report>> —, `== Répartition par
-scanner` avec un `=== <Nom>` par scanner, sa barre `buildSeverityBarSvg`/
-`svgImageMacro` et son décompte par sévérité via `DashboardPanel._countByKey`
-— méthode privée statique, accessible car même fichier — avec
-`pdfSeverityBadge` sur chaque libellé, `== Comparaison inter-scanners`
-reprenant `crossRows` avec `pdfSeverityBadge` sur la colonne Sévérité), puis
-suit exactement le même patron que `_VulnTableViewState._exportAsciiDoc()`
-(voir <<sec-vuln-shared>>) : écriture du `.adoc` via `FilePicker.saveFile`,
-tentative de conversion via `runAsciidoctorPdf(path, pdfPath)` (voir
-<<sec-pdf-report>>), retour utilisateur via `SnackBar` (succès, échec de
-conversion, ou outil absent).
+crossRows, exploitById, crossSortCol, crossSortAsc})` construit le rapport
+AsciiDoc : `== Résumé global`, `== Outils` (voir <<sec-pdf-report>>),
+`== Répartition par scanner` (un `=== <Nom>` par scanner avec sa barre
+`buildSeverityBarSvg`/`svgImageMacro` et son décompte par sévérité via
+`DashboardPanel._countByKey`), `== Comparaison inter-scanners` — `crossRows`
+trié par `_sortCrossRows` avec la colonne de tri **active à l'écran**
+(`crossSortCol`/`crossSortAsc`), colonnes KEV / EPSS ajoutées si
+`exploitById` non vide —, puis `== Détail des CVE prioritaires` : un bloc
+`=== CVE-xxxx` par CVE au catalogue CISA KEV, ou EPSS >= 10 %, ou de sévérité
+Critical/High, rendu par `CveDetail.toAdocRows(adocEscape)`
+(<<sec-cve-detail-widget>>). Suit ensuite le même patron que
+`_VulnTableViewState._exportAsciiDoc()` : écriture du `.adoc` via
+`FilePicker.saveFile`, conversion via `runAsciidoctorPdf`, retour `SnackBar`.
 
 ==== `widgets/sbom_tree_panel.dart` — Onglet Arborescence SBOM
 
@@ -1564,11 +1637,25 @@ l'outil n'a pas de champ de classification
 
 |`descriptionOf`
 |Texte descriptif optionnel en 2e ligne (ex. le titre de la CVE pour Trivy)
+
+|`exploitById` / `enrichPending`
+|`Map<String, ExploitInfo>` (id normalisé → signaux d'exploitabilité) et
+drapeau « enrichissement en cours ». Vide = enrichissement non exécuté :
+colonnes KEV/EPSS, filtre « CISA KEV » et badges masqués
+
+|`enrichOnline` / `onEnrichOnlineChanged`
+|État et bascule du bouton `☁` de la barre d'outils (en ligne / hors-ligne) —
+l'appelant persiste le choix (`SettingsService`) et relance l'enrichissement
 |===
 
-`_VulnTableViewState<T>` maintient recherche, tri (`VulnSortCol`), filtres de
-sévérité (`_activeFilters`) et le filtre de date (délégué à
-`widget.dateFilter.matches(...)`) — le getter `_filtered` compose les quatre.
+`_VulnTableViewState<T>` maintient recherche, tri (`VulnSortCol` — étendu avec
+`kev` et `epss`), filtres de sévérité (`_activeFilters`), filtre `_kevOnly`,
+filtre de date, et le `Set<String> _expanded` des lignes dépliées — le getter
+`_filtered` compose les filtres. Chaque ligne (`ListTile`) est cliquable : le
+tap déplie/replie un `CveDetailPanel` (voir <<sec-cve-detail-widget>>) construit
+à partir de la ligne (`_detailFor`, une seule vue scanner) et de
+`exploitById`. Le clic ne copie plus l'identifiant — le bouton « copier »
+est dans le panneau de détail.
 
 [[sec-scan-source-widgets]]
 === `ScanSourceToggle` / `ImageRefField` / `looksLikeLocalPath`

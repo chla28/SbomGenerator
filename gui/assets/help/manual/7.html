@@ -471,16 +471,76 @@ cumulable avec les filtres par sévérité et par recherche textuelle.
 La mention <code>(won’t fix)</code> indique que le mainteneur ne prévoit pas de correction.</p>
 </li>
 <li>
-<p><strong>CVE</strong> : identifiant cliquable — un clic copie l’identifiant dans le presse-papiers</p>
+<p><strong>CVE</strong> : identifiant de la vulnérabilité</p>
 </li>
 <li>
 <p><strong>Type</strong> : type de paquet (<code>rpm</code>, <code>python</code>, <code>deb</code>…)</p>
 </li>
 </ul>
 </div>
+<div class="paragraph">
+<p><strong>Cliquer sur une ligne la déplie</strong> et affiche le <a href="#sec-cve-detail">détail complet
+de la CVE</a> : paquet et versions, sévérité et dates telles que rapportées par
+le scanner, exploitabilité détaillée (KEV, EPSS, CVSS, PoC) et boutons de
+référence (NVD, CVE.org, osv.dev, CISA KEV). Le panneau de détail contient un
+bouton <strong>copier l’identifiant</strong>. Re-cliquer sur la ligne la referme.</p>
+</div>
 </div>
 <div class="sect3">
-<h4 id="_vue_json">8.7.3. Vue JSON</h4>
+<h4 id="_exploitabilité_et_exploitation_active">8.7.3. Exploitabilité et exploitation active</h4>
+<div id="sec-exploitabilite" class="paragraph">
+<p>Après chaque scan, l’application enrichit les CVE trouvées avec quatre signaux
+de priorisation, affichés sous forme de pastilles sous chaque ligne et de
+colonnes triables <strong>KEV</strong> / <strong>EPSS</strong> :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>KEV</strong> (pastille rouge 🔥) — la CVE est au catalogue <strong>CISA Known Exploited
+Vulnerabilities</strong> : exploitation active confirmée dans la nature. Le survol
+indique la date d’ajout et l’éventuel usage par un rançongiciel.</p>
+</li>
+<li>
+<p><strong>EPSS</strong> — score <strong>Exploit Prediction Scoring System</strong> (FIRST.org), de 0 à 1 :
+probabilité d’exploitation dans les 30 jours, avec son percentile.</p>
+</li>
+<li>
+<p><strong>PoC</strong> — un exploit public est recensé (dépôts GitHub via <code>poc-in-github</code>,
+ou maturité <code>E:</code> du vecteur CVSS).</p>
+</li>
+<li>
+<p><strong>expl.</strong> — sous-score d’exploitabilité du vecteur CVSS (AV/AC/PR/UI), de 0
+à 3,9, calculé localement.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Grype fournit déjà KEV, EPSS et le vecteur CVSS dans sa base : pour l’onglet
+Grype, seul le signal PoC nécessite une requête réseau. Pour OSV-Scanner et
+Trivy, l’enrichissement KEV/EPSS se fait en ligne. Les réponses sont mises en
+cache 24 h dans <code>~/.cache/sbom-generator/</code> (partagé avec la ligne de commande).</p>
+</div>
+<div class="paragraph">
+<p><strong>Filtre CISA KEV</strong> : une pastille <strong>CISA KEV (N)</strong> apparaît à côté des filtres de
+sévérité dès qu’une CVE exploitée est présente — cliquez dessus pour n’afficher
+que ces CVE. Le tri <strong>KEV</strong> place les CVE du catalogue en tête ; le tri <strong>EPSS</strong>
+ordonne par probabilité décroissante.</p>
+</div>
+<div class="paragraph">
+<p><strong>Basculer en ligne / hors-ligne</strong> : l’icône ☁ dans la barre d’outils de la table
+active ou coupe les requêtes réseau d’enrichissement. Le choix est mémorisé
+(comme le thème) et partagé par les trois onglets de scan. Hors-ligne, seules
+les données fournies par Grype et le cache local sont utilisées.</p>
+</div>
+<div class="paragraph">
+<p>Les exports CSV et AsciiDoc/PDF gagnent les colonnes <strong>KEV</strong>, <strong>EPSS</strong> et <strong>PoC</strong>
+quand l’enrichissement a produit des résultats ; le <strong>tableau de bord</strong> marque
+les CVE KEV/EPSS élevé dans sa comparaison inter-scanners et les remonte en
+tête.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_vue_json">8.7.4. Vue JSON</h4>
 <div id="sec-vue-json" class="paragraph">
 <p>Affiche la sortie JSON brute de grype, formatée et indentée. Utile pour
 inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées…).</p>
@@ -490,7 +550,7 @@ inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées�
 </div>
 </div>
 <div class="sect3">
-<h4 id="_vue_template">8.7.4. Vue Template</h4>
+<h4 id="_vue_template">8.7.5. Vue Template</h4>
 <div id="sec-vue-template" class="paragraph">
 <p>Affiche le résultat de la génération du fichier template (CSV ou autre format
 personnalisé). Visible uniquement si un fichier template a été configuré

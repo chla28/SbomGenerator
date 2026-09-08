@@ -87,6 +87,8 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 - `unzip` (pour les archives `.jar`, et pour `--oci-tool skopeo`)
 - `syft`, `trivy`, `skopeo` ou `cdxgen` (uniquement pour `--image`, selon le backend choisi ; `cdxgen` requiert Node.js)
 - `grype`, `osv-scanner` ou `trivy` (uniquement pour la sous-commande `scan`)
+- accès réseau (uniquement pour l'enrichissement CVE de `scan` : CISA KEV, EPSS,
+  poc-in-github ; `--no-enrich` ou `SBOMGEN_OFFLINE=1` s'en passe, cache 24 h)
 - `asciidoctor-pdf` (uniquement pour `scan --format pdf` ; sinon le `.adoc` est conservé)
 - `sbomqs` (uniquement pour `--min-quality-score`)
 - `cosign` (uniquement pour `--sign`)
@@ -166,7 +168,14 @@ sbom_generator validate --strict sbom.cdx.json
 sbom_generator scan --sbom sbom.cdx.json
 sbom_generator scan --sbom sbom.cdx.json --scanner all --cve-after 2024-01-01
 
-# Rapport de synthèse inter-scanners (markdown | asciidoc | pdf)
+# Chaque CVE est enrichie (CISA KEV, EPSS, PoC public, exploitabilité CVSS) ;
+# filtrer / prioriser :
+sbom_generator scan --sbom sbom.cdx.json --only-kev --sort risk
+sbom_generator scan --sbom sbom.cdx.json --epss-min 0.1
+sbom_generator scan --sbom sbom.cdx.json --no-enrich   # hors-ligne (CI)
+
+# Rapport de synthèse inter-scanners (markdown | asciidoc | pdf), avec section
+# « Priorisation par risque » et propriétés kev/epss/poc en SARIF
 sbom_generator scan --sbom sbom.cdx.json --scanner all -f pdf -o scan-report.pdf
 ```
 
@@ -373,6 +382,7 @@ sbom_generator/
 │   ├── sbom_merger.dart         # Fusion de SBOMs (SbomMerger)
 │   ├── sbom_reader.dart         # Relecture d'un SBOM existant (sous-commande convert)
 │   ├── scan_report_generator.dart # Rapport de synthèse inter-scanners (scan -f md/adoc/pdf)
+│   ├── vuln_enrichment.dart     # Enrichissement CVE : CISA KEV, EPSS, PoC, exploitabilité CVSS
 │   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
 │   ├── cyclonedx_generator.dart # Format CycloneDX 1.6/1.7 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
