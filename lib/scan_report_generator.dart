@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'vuln_enrichment.dart';
+
 /// Builds a cross-scanner vulnerability *synthesis* report (Markdown /
 /// AsciiDoc) from the normalised results of `sbom_generator scan`.
 ///
@@ -18,11 +20,17 @@ class ScanReportGenerator {
   final DateTime generatedAt;
   final Map<String, String?> toolVersions;
 
+  /// Signaux d'exploitabilité / exploitation active par CVE (id normalisé).
+  /// Vide = enrichissement non exécuté : les sections/colonnes dédiées sont
+  /// alors omises.
+  final Map<String, ExploitInfo> exploitById;
+
   ScanReportGenerator({
     required this.sbomPath,
     required this.resultsByScanner,
     DateTime? generatedAt,
     this.toolVersions = const {},
+    this.exploitById = const {},
   }) : generatedAt = generatedAt ?? DateTime.now();
 
   static const _scannerOrder = ['grype', 'osv', 'trivy'];
@@ -225,6 +233,83 @@ class ScanReportGenerator {
     ];
   }
 
+  // ── Exploitabilité / exploitation active ─────────────────────────────────
+
+  /// Seuil EPSS au-delà duquel une CVE est comptée « à surveiller ».
+  static const epssWatchThreshold = 0.10;
+
+  ExploitInfo _exploitFor(String id) =>
+      exploitById[id] ?? ExploitInfo.empty;
+
+  /// L'enrichissement a-t-il produit au moins un signal exploitable ?
+  bool get hasExploitData =>
+      exploitById.values.any((e) => e.hasAnySignal);
+
+  int get _kevCount => _crossRows().where((r) => _exploitFor(r.id).inKev).length;
+
+  int get _epssWatchCount => _crossRows()
+      .where((r) => (_exploitFor(r.id).epssScore ?? 0) >= epssWatchThreshold)
+      .length;
+
+  int get _pocCount =>
+      _crossRows().where((r) => _exploitFor(r.id).pocKnown).length;
+
+  /// Une CVE mérite-t-elle de figurer dans la « Priorisation par risque » ?
+  /// (KEV, PoC public, ou EPSS au-dessus du seuil de veille.)
+  bool _isPrioritised(String id) {
+    final e = _exploitFor(id);
+    return e.inKev ||
+        e.pocKnown ||
+        (e.epssScore ?? 0) >= epssWatchThreshold;
+  }
+
+  /// Lignes inter-scanners avec au moins un signal d'exploitation notable,
+  /// ordonnées par risque décroissant (KEV, puis EPSS, puis sévérité).
+  List<_CrossRow> _riskRows() {
+    final rows =
+        _crossRows().where((r) => _isPrioritised(r.id)).toList();
+    rows.sort((a, b) {
+      final ra = _exploitFor(a.id).riskScore(a.severity);
+      final rb = _exploitFor(b.id).riskScore(b.severity);
+      final c = rb.compareTo(ra);
+      return c != 0 ? c : a.id.compareTo(b.id);
+    });
+    return rows;
+  }
+
+  /// Nombre de CVE écartées de la « Priorisation par risque » faute de signal.
+  int get _riskRowsOmitted =>
+      _crossRows().where((r) => !_isPrioritised(r.id)).length;
+
+  /// `0.97 (p99)` / `—`.
+  static String _fmtEpss(ExploitInfo e) {
+    if (e.epssScore == null) return '—';
+    final pct = ((e.epssPercentile ?? 0) * 100).round();
+    return '${e.epssScore!.toStringAsFixed(2)} (p$pct)';
+  }
+
+  static String _fmtDate(DateTime? d) {
+    if (d == null) return '—';
+    String p(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${p(d.month)}-${p(d.day)}';
+  }
+
+  /// `2.8` / `—`, éventuellement suffixé de la maturité de l'exploit.
+  static String _fmtExploitability(ExploitInfo e) {
+    final parts = <String>[];
+    if (e.cvssExploitabilityScore != null) {
+      parts.add(e.cvssExploitabilityScore!.toStringAsFixed(1));
+    }
+    if (e.exploitMaturity != null) parts.add('mat. ${e.exploitMaturity}');
+    return parts.isEmpty ? '—' : parts.join(', ');
+  }
+
+  static String _fmtPoc(ExploitInfo e) {
+    if (e.pocCount > 0) return '${e.pocCount} dépôt(s)';
+    if (e.pocKnown) return 'oui';
+    return '—';
+  }
+
   // ── Markdown ─────────────────────────────────────────────────────────────
 
   String toMarkdown() {
@@ -244,6 +329,12 @@ class ScanReportGenerator {
         '${run.isEmpty ? "" : " (${run.map((s) => _scannerLabels[s]).join(', ')})"} |');
     b.writeln('| CVE uniques (tous scanners) | $_uniqueCveCount |');
     b.writeln('| Résultats bruts cumulés | $_totalFindings |');
+    if (hasExploitData) {
+      b.writeln('| CVE activement exploitées (CISA KEV) | $_kevCount |');
+      b.writeln('| CVE avec EPSS ≥ '
+          '${(epssWatchThreshold * 100).round()} % | $_epssWatchCount |');
+      b.writeln('| CVE avec PoC / exploit public | $_pocCount |');
+    }
     b.writeln();
 
     if (toolVersions.isNotEmpty) {
@@ -322,6 +413,69 @@ class ScanReportGenerator {
       }
     }
 
+    if (hasExploitData) {
+      final pkgById = _packageById;
+      b.writeln('## Exploitabilité et exploitation active');
+      b.writeln();
+
+      final kevRows =
+          _riskRows().where((r) => _exploitFor(r.id).inKev).toList();
+      if (kevRows.isNotEmpty) {
+        b.writeln('### CVE activement exploitées (CISA KEV)');
+        b.writeln();
+        b.writeln('| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel |');
+        b.writeln('|---|---|---|---|:-:|');
+        for (final r in kevRows) {
+          final e = _exploitFor(r.id);
+          b.writeln('| ${_mdEsc(r.id)} '
+              '| ${_mdEsc(pkgById[r.id] ?? r.package)} '
+              '| ${_fmtDate(e.kevDateAdded)} '
+              '| ${_fmtDate(e.kevDueDate)} '
+              '| ${e.kevRansomware ? '⚠️ oui' : '—'} |');
+        }
+        b.writeln();
+      }
+
+      b.writeln('### Priorisation par risque');
+      b.writeln();
+      final riskRows = _riskRows();
+      if (riskRows.isEmpty) {
+        b.writeln('_Aucune CVE avec signal d\'exploitation notable '
+            '(CISA KEV, PoC public, ou EPSS ≥ '
+            '${(epssWatchThreshold * 100).round()} %)._');
+        b.writeln();
+      } else {
+        b.writeln('CVE avec un signal d\'exploitation notable, ordonnées par : '
+            'KEV, puis probabilité EPSS, puis sévérité.');
+        b.writeln();
+        b.writeln('| CVE / ID | Sévérité | Paquet | KEV | EPSS | Exploitabilité CVSS | PoC public |');
+        b.writeln('|---|---|---|:-:|---|---|---|');
+        for (final r in riskRows) {
+          final e = _exploitFor(r.id);
+          b.writeln('| ${_mdEsc(r.id)} '
+              '| ${r.severity.isEmpty ? "?" : r.severity.toUpperCase()} '
+              '| ${_mdEsc(pkgById[r.id] ?? r.package)} '
+              '| ${e.inKev ? '✓' : '—'} '
+              '| ${_fmtEpss(e)} '
+              '| ${_fmtExploitability(e)} '
+              '| ${_fmtPoc(e)} |');
+        }
+        b.writeln();
+        if (_riskRowsOmitted > 0) {
+          b.writeln('> $_riskRowsOmitted autre(s) CVE sans signal d\'exploitation '
+              'notable ne sont pas listées ici (voir la matrice ci-dessus).');
+          b.writeln();
+        }
+      }
+      b.writeln('> **KEV** : CVE au catalogue CISA Known Exploited '
+          'Vulnerabilities — exploitation active confirmée. **EPSS** : '
+          'probabilité d\'exploitation dans les 30 jours (score et percentile, '
+          'FIRST.org). **Exploitabilité CVSS** : sous-score AV/AC/PR/UI (0–3,9) '
+          'et maturité de l\'exploit quand elle est publiée. **PoC public** : '
+          'dépôt(s) d\'exploit recensé(s).');
+      b.writeln();
+    }
+
     b.writeln('---');
     b.writeln();
     b.writeln('_Généré par sbom-generator._');
@@ -352,6 +506,12 @@ class ScanReportGenerator {
     b.writeln('| Scanners exécutés | ${run.length} / 3');
     b.writeln('| CVE uniques (tous scanners confondus) | $_uniqueCveCount');
     b.writeln('| Résultats bruts cumulés | $_totalFindings');
+    if (hasExploitData) {
+      b.writeln('| CVE activement exploitées (CISA KEV) | $_kevCount');
+      b.writeln('| CVE avec EPSS >= '
+          '${(epssWatchThreshold * 100).round()} % | $_epssWatchCount');
+      b.writeln('| CVE avec PoC / exploit public | $_pocCount');
+    }
     b.writeln('|===');
     b.writeln();
 
@@ -442,6 +602,78 @@ class ScanReportGenerator {
         }
         b.writeln();
       }
+    }
+
+    if (hasExploitData) {
+      final pkgById = _packageById;
+      b.writeln('== Exploitabilité et exploitation active');
+      b.writeln();
+
+      final kevRows =
+          _riskRows().where((r) => _exploitFor(r.id).inKev).toList();
+      if (kevRows.isNotEmpty) {
+        b.writeln('=== CVE activement exploitées (CISA KEV)');
+        b.writeln();
+        b.writeln('[cols="<2,<2,<1,<1,^1",options="header"]');
+        b.writeln('|===');
+        b.writeln('| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel');
+        for (final r in kevRows) {
+          final e = _exploitFor(r.id);
+          b.writeln('| ${_adocEsc(r.id)} '
+              '| ${_adocEsc(pkgById[r.id] ?? r.package)} '
+              '| ${_fmtDate(e.kevDateAdded)} '
+              '| ${_fmtDate(e.kevDueDate)} '
+              '| ${e.kevRansomware ? 'oui' : '—'}');
+        }
+        b.writeln('|===');
+        b.writeln();
+      }
+
+      b.writeln('=== Priorisation par risque');
+      b.writeln();
+      final riskRows = _riskRows();
+      if (riskRows.isEmpty) {
+        b.writeln('_Aucune CVE avec signal d\'exploitation notable '
+            '(CISA KEV, PoC public, ou EPSS >= '
+            '${(epssWatchThreshold * 100).round()} %)._');
+        b.writeln();
+      } else {
+        b.writeln('CVE avec un signal d\'exploitation notable, ordonnées par : '
+            'KEV, puis probabilité EPSS, puis sévérité.');
+        b.writeln();
+        b.writeln('[cols="<2,<1,<2,^1,<1,<2,<1",options="header"]');
+        b.writeln('|===');
+        b.writeln('| CVE / ID | Sévérité | Paquet | KEV | EPSS '
+            '| Exploitabilité CVSS | PoC public');
+        for (final r in riskRows) {
+          final e = _exploitFor(r.id);
+          b.writeln('| ${_adocEsc(r.id)} '
+              '| ${_sevBadge(r.severity)} '
+              '| ${_adocEsc(pkgById[r.id] ?? r.package)} '
+              '| ${e.inKev ? '✓' : '—'} '
+              '| ${_fmtEpss(e)} '
+              '| ${_adocEsc(_fmtExploitability(e))} '
+              '| ${_fmtPoc(e)}');
+        }
+        b.writeln('|===');
+        b.writeln();
+        if (_riskRowsOmitted > 0) {
+          b.writeln('NOTE: $_riskRowsOmitted autre(s) CVE sans signal '
+              'd\'exploitation notable ne sont pas listées ici (voir la '
+              'matrice ci-dessus).');
+          b.writeln();
+        }
+      }
+      b.writeln('[NOTE]');
+      b.writeln('====');
+      b.writeln('*KEV* : CVE au catalogue CISA Known Exploited Vulnerabilities '
+          '— exploitation active confirmée. *EPSS* : probabilité d\'exploitation '
+          'dans les 30 jours (score et percentile, FIRST.org). '
+          '*Exploitabilité CVSS* : sous-score AV/AC/PR/UI (0–3,9) et maturité de '
+          'l\'exploit quand elle est publiée. *PoC public* : dépôt(s) d\'exploit '
+          'recensé(s).');
+      b.writeln('====');
+      b.writeln();
     }
 
     b.writeln('_Généré par sbom-generator._');

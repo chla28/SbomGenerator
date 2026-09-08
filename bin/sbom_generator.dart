@@ -30,6 +30,7 @@ import 'package:sbom_generator/csv_generator.dart';
 import 'package:sbom_generator/sbom_reader.dart';
 import 'package:sbom_generator/scan_report_generator.dart';
 import 'package:sbom_generator/license_report_generator.dart';
+import 'package:sbom_generator/vuln_enrichment.dart';
 
 const _version = '1.4.2';
 
@@ -1242,6 +1243,32 @@ Future<void> _runScan(List<String> arguments) async {
             '  auto    si stdout est un terminal et NO_COLOR non défini (défaut)\n'
             '  always  toujours (utile derrière un pipe : build-dist.sh)\n'
             '  never   jamais (préfixes [CRITICAL]/[HIGH])')
+    ..addFlag('enrich',
+        defaultsTo: true,
+        help: 'Enrichir chaque CVE avec les signaux d\'exploitabilité :\n'
+            '  CISA KEV (exploitée dans la nature), EPSS (probabilité),\n'
+            '  PoC public, sous-score d\'exploitabilité CVSS.\n'
+            '  --no-enrich : hors-ligne, uniquement ce que les scanners\n'
+            '  fournissent déjà + le cache local. Forcé par SBOMGEN_OFFLINE=1.')
+    ..addFlag('poc',
+        defaultsTo: true,
+        help: 'Interroger la source PoC tierce (poc-in-github). --no-poc\n'
+            'garde KEV/EPSS et la maturité « E: » du vecteur CVSS.')
+    ..addOption('enrich-timeout',
+        defaultsTo: '8',
+        help: 'Délai maximal (secondes) par requête d\'enrichissement.')
+    ..addFlag('only-kev',
+        negatable: false,
+        help: 'Ne garder que les CVE présentes au catalogue CISA KEV.')
+    ..addOption('epss-min',
+        help: 'Ne garder que les CVE dont le score EPSS est ≥ cette valeur '
+            '(0..1, ex. 0.1).')
+    ..addOption('sort',
+        allowed: ['severity', 'risk'],
+        defaultsTo: 'severity',
+        help: 'Ordre d\'affichage console.\n'
+            '  severity  pire sévérité d\'abord (défaut)\n'
+            '  risk      KEV, puis EPSS décroissant, puis sévérité')
     ..addFlag('help',
         abbr: 'h',
         negatable: false,
@@ -1268,6 +1295,24 @@ Future<void> _runScan(List<String> arguments) async {
   final format = args['format'] as String;
   final colorMode = args['color'] as String;
   final outputPath = args['output'] as String?;
+  final offlineEnv = Platform.environment['SBOMGEN_OFFLINE'] == '1';
+  final enrich = (args['enrich'] as bool) && !offlineEnv;
+  final wantPoc = args['poc'] as bool;
+  final onlyKev = args['only-kev'] as bool;
+  final sortMode = args['sort'] as String;
+
+  double? epssMin;
+  final rawEpssMin = args['epss-min'] as String?;
+  if (rawEpssMin != null) {
+    epssMin = double.tryParse(rawEpssMin);
+    if (epssMin == null || epssMin < 0 || epssMin > 1) {
+      stderr.writeln('scan: --epss-min doit être un nombre entre 0 et 1 '
+          '(reçu "$rawEpssMin")');
+      exit(1);
+    }
+  }
+  var enrichTimeout = int.tryParse(args['enrich-timeout'] as String) ?? 8;
+  if (enrichTimeout < 1) enrichTimeout = 8;
 
   if (!_validScanners.contains(scanner)) {
     stderr.writeln('scan: scanner invalide "$scanner". Valides : ${_validScanners.join(', ')}');
@@ -1318,19 +1363,42 @@ Future<void> _runScan(List<String> arguments) async {
 
   final quiet = format == 'sarif' || isReport;
   final resultsByScanner = <String, List<Map<String, dynamic>>>{};
-  int totalShown = 0;
   for (final s in scanners) {
     final vulns = await _runScanner(s, sbomFile, quiet: quiet);
     if (vulns == null) continue;
+    resultsByScanner[s] =
+        _filterByDate(vulns, dateField, after, before, includeUndated);
+  }
 
-    final filtered = _filterByDate(vulns, dateField, after, before, includeUndated);
-    resultsByScanner[s] = filtered;
-    if (!quiet) _printScanResults(s, filtered, after, before, dateField);
+  // Enrichissement CVE (exploitabilité / exploitation active) — une passe pour
+  // tous les scanners, avant les filtres --only-kev / --epss-min.
+  final exploitById = await _enrichFindings(
+    resultsByScanner,
+    enrich: enrich,
+    poc: wantPoc,
+    timeoutSeconds: enrichTimeout,
+    quiet: quiet,
+  );
+
+  if (onlyKev || epssMin != null) {
+    for (final s in resultsByScanner.keys.toList()) {
+      resultsByScanner[s] =
+          _filterByExploit(resultsByScanner[s]!, onlyKev, epssMin);
+    }
+  }
+
+  int totalShown = 0;
+  for (final s in scanners) {
+    final filtered = resultsByScanner[s];
+    if (filtered == null) continue;
+    if (!quiet) {
+      _printScanResults(s, filtered, after, before, dateField, sortMode);
+    }
     totalShown += filtered.length;
   }
 
   if (format == 'sarif') {
-    final sarif = _buildSarifReport(resultsByScanner, sbomFile);
+    final sarif = _buildSarifReport(resultsByScanner, sbomFile, exploitById);
     final json = const JsonEncoder.withIndent('  ').convert(sarif);
     if (outputPath != null) {
       await File(outputPath).writeAsString(json);
@@ -1349,6 +1417,7 @@ Future<void> _runScan(List<String> arguments) async {
     final gen = ScanReportGenerator(
       sbomPath: sbomFile,
       resultsByScanner: resultsByScanner,
+      exploitById: exploitById,
       toolVersions: {
         'sbom-generator': _version,
         for (final s in scanners)
@@ -1357,7 +1426,7 @@ Future<void> _runScan(List<String> arguments) async {
                 await _scannerVersion(s) ?? 'inconnue',
       },
     );
-    _printSeverityAlerts(gen, colorMode);
+    _printSeverityAlerts(gen, colorMode, exploitById);
     await _writeScanReport(format, outputPath!, gen);
     // Un rapport produit n'est pas un échec, quel que soit le nombre de CVE.
     exit(0);
@@ -1369,7 +1438,8 @@ Future<void> _runScan(List<String> arguments) async {
 /// Affiche, une ligne par CVE unique, les vulnérabilités Critical (rouge) et
 /// High (orange) — pendant un build (`scan -f markdown|asciidoc|pdf`). Best
 /// effort : n'échoue jamais et n'affecte pas le code de retour.
-void _printSeverityAlerts(ScanReportGenerator gen, String colorMode) {
+void _printSeverityAlerts(ScanReportGenerator gen, String colorMode,
+    Map<String, ExploitInfo> exploitById) {
   final alerts = gen.alerts();
   if (alerts.isEmpty) return;
 
@@ -1380,17 +1450,28 @@ void _printSeverityAlerts(ScanReportGenerator gen, String colorMode) {
   };
   const red = '\x1B[1;31m', orange = '\x1B[38;5;208m', reset = '\x1B[0m';
 
-  var crit = 0, high = 0;
+  var crit = 0, high = 0, kevCount = 0;
   for (final a in alerts) {
     final isCrit = a.severity.toLowerCase() == 'critical';
     isCrit ? crit++ : high++;
     final label = isCrit ? 'CRITICAL' : 'HIGH';
     final srcs = a.scanners.isEmpty ? '' : '  (${a.scanners.join(', ')})';
     final pkg = a.package.isEmpty ? '' : '  ${a.package}';
-    final line = '[$label] ${a.id}$pkg$srcs';
+    final e = exploitById[a.id] ?? ExploitInfo.empty;
+    final marks = StringBuffer();
+    if (e.inKev) {
+      marks.write('  [KEV]');
+      kevCount++;
+    }
+    if (e.epssScore != null) {
+      marks.write('  EPSS ${e.epssScore!.toStringAsFixed(2)}');
+    }
+    if (e.pocKnown && !e.inKev) marks.write('  [PoC]');
+    final line = '[$label] ${a.id}$pkg$srcs$marks';
     stdout.writeln(color ? '${isCrit ? red : orange}$line$reset' : line);
   }
-  final summary = '→ $crit CVE critique(s), $high CVE High';
+  final kevSuffix = kevCount > 0 ? ', dont $kevCount au catalogue CISA KEV' : '';
+  final summary = '→ $crit CVE critique(s), $high CVE High$kevSuffix';
   stdout.writeln(color ? '$red$summary$reset' : summary);
 }
 
@@ -1507,6 +1588,13 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile,
       final vuln = m['vulnerability'] as Map<String, dynamic>? ?? {};
       final artifact = m['artifact'] as Map<String, dynamic>? ?? {};
       final fix = vuln['fix'] as Map<String, dynamic>? ?? const {};
+      final (cvssVector, cvssBase) = _cvssFromGrype(vuln['cvss'] as List?);
+      // Grype expose nativement CISA KEV et EPSS dans sa base — inutile
+      // d'interroger le réseau pour ces CVE (cf. `VulnEnricher`, graine).
+      final kev = (vuln['knownExploited'] as List?) ?? const [];
+      final kev0 = kev.isNotEmpty ? kev.first as Map<String, dynamic> : null;
+      final epss = (vuln['epss'] as List?) ?? const [];
+      final epss0 = epss.isNotEmpty ? epss.first as Map<String, dynamic> : null;
       return {
         'id': vuln['id'] ?? '',
         'severity': vuln['severity'] ?? 'Unknown',
@@ -1520,6 +1608,19 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile,
         'fixState': fix['state'] ?? '',
         'fixedVersions':
             (fix['versions'] as List?)?.map((e) => '$e').toList() ?? const [],
+        if (cvssVector != null) 'cvssVector': cvssVector,
+        if (cvssBase != null) 'cvssBaseScore': cvssBase,
+        if (kev0 != null) 'kevSeed': true,
+        if (kev0 != null) 'kevDateAdded': kev0['dateAdded'],
+        if (kev0 != null) 'kevDueDate': kev0['dueDate'],
+        if (kev0 != null)
+          'kevRansomware': ((kev0['knownRansomwareCampaignUse'] as String?) ??
+                      '')
+                  .toLowerCase() ==
+              'known',
+        if (epss0 != null) 'epssSeed': (epss0['epss'] as num?)?.toDouble(),
+        if (epss0 != null)
+          'epssPercentileSeed': (epss0['percentile'] as num?)?.toDouble(),
       };
     }).toList();
   } catch (e) {
@@ -1567,6 +1668,8 @@ Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile,
               }
             }
           }
+          final (cvssVector, cvssBase) =
+              _cvssFromOsv(v['severity'] as List?);
           out.add({
             'id': cve.isNotEmpty ? cve : v['id'] ?? '',
             'severity': dbSev.isNotEmpty ? dbSev : 'Unknown',
@@ -1574,6 +1677,8 @@ Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile,
             'published': v['published'],
             'modified': v['modified'],
             'fixedVersions': fixed.toList(),
+            if (cvssVector != null) 'cvssVector': cvssVector,
+            if (cvssBase != null) 'cvssBaseScore': cvssBase,
           });
         }
       }
@@ -1605,6 +1710,7 @@ Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile,
     for (final res in (data['Results'] as List? ?? [])) {
       for (final v in (res['Vulnerabilities'] as List? ?? [])) {
         final fixedRaw = (v['FixedVersion'] as String?) ?? '';
+        final (cvssVector, cvssBase) = _cvssFromTrivy(v['CVSS'] as Map?);
         out.add({
           'id': v['VulnerabilityID'] ?? '',
           'severity': v['Severity'] ?? 'Unknown',
@@ -1617,6 +1723,8 @@ Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile,
                   .split(RegExp(r'\s*(?:,|\|\|)\s*'))
                   .where((s) => s.isNotEmpty)
                   .toList(),
+          if (cvssVector != null) 'cvssVector': cvssVector,
+          if (cvssBase != null) 'cvssBaseScore': cvssBase,
         });
       }
     }
@@ -1625,6 +1733,136 @@ Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile,
     stderr.writeln('trivy: impossible de parser le JSON: $e');
     return null;
   }
+}
+
+/// Vecteur CVSS + score de base retenus depuis le tableau `vulnerability.cvss`
+/// de Grype : on préfère une entrée `Primary`, sinon la première avec un
+/// vecteur non vide.
+(String?, double?) _cvssFromGrype(List? cvss) {
+  if (cvss == null || cvss.isEmpty) return (null, null);
+  Map<String, dynamic>? best;
+  for (final c in cvss) {
+    final m = c as Map<String, dynamic>;
+    if ((m['vector'] as String?)?.isNotEmpty != true) continue;
+    best ??= m;
+    if ((m['type'] as String?)?.toLowerCase() == 'primary') {
+      best = m;
+      break;
+    }
+  }
+  if (best == null) return (null, null);
+  final metrics = best['metrics'] as Map<String, dynamic>? ?? const {};
+  return (
+    best['vector'] as String?,
+    (metrics['baseScore'] as num?)?.toDouble(),
+  );
+}
+
+/// Vecteur CVSS + score depuis `vulnerabilities[].severity` d'OSV-Scanner
+/// (`[{type: CVSS_V3|CVSS_V4, score: "CVSS:3.1/AV:N/..."}]` — le champ `score`
+/// contient le vecteur). On garde la version la plus élevée disponible.
+(String?, double?) _cvssFromOsv(List? severity) {
+  if (severity == null || severity.isEmpty) return (null, null);
+  String? pick;
+  for (final s in severity) {
+    final m = s as Map<String, dynamic>;
+    final vec = m['score'] as String?;
+    if (vec == null || !vec.startsWith('CVSS:')) continue;
+    if (pick == null || vec.compareTo(pick) > 0) pick = vec;
+  }
+  return (pick, null);
+}
+
+/// Vecteur CVSS + score depuis la map `CVSS` de Trivy (`{nvd: {V3Vector,
+/// V3Score, ...}, redhat: {...}}`). On préfère NVD, puis n'importe quelle
+/// source fournissant un vecteur v3.
+(String?, double?) _cvssFromTrivy(Map? cvss) {
+  if (cvss == null || cvss.isEmpty) return (null, null);
+  Map<String, dynamic>? src = (cvss['nvd'] as Map?)?.cast<String, dynamic>();
+  src ??= cvss.values
+      .whereType<Map>()
+      .cast<Map<String, dynamic>>()
+      .firstWhere((m) => (m['V3Vector'] as String?)?.isNotEmpty == true,
+          orElse: () => const {});
+  final vec = src['V3Vector'] as String?;
+  final score = (src['V3Score'] as num?)?.toDouble();
+  return ((vec?.isNotEmpty == true) ? vec : null, score);
+}
+
+final RegExp _distroCveRe = RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$');
+
+/// Retire un préfixe d'avis de distribution (`DEBIAN-CVE-2026-1` → `CVE-2026-1`)
+/// pour dédupliquer entre scanners — même logique que `ScanReportGenerator`.
+String _normalizeCveId(String id) =>
+    _distroCveRe.firstMatch(id)?.group(1) ?? id;
+
+/// Enrichit tous les findings (tous scanners) avec leur [ExploitInfo] : KEV,
+/// EPSS, PoC public, sous-score d'exploitabilité CVSS. Une seule passe réseau.
+/// Best-effort : toute erreur laisse un [ExploitInfo.empty]. Retourne la map
+/// id normalisé → [ExploitInfo] (consommée par le rapport de synthèse).
+Future<Map<String, ExploitInfo>> _enrichFindings(
+  Map<String, List<Map<String, dynamic>>> resultsByScanner, {
+  required bool enrich,
+  required bool poc,
+  required int timeoutSeconds,
+  required bool quiet,
+}) async {
+  final ids = <String>{};
+  final seed = <String, CveSeed>{};
+  for (final vulns in resultsByScanner.values) {
+    for (final v in vulns) {
+      final id = _normalizeCveId((v['id'] as String?) ?? '');
+      if (id.isEmpty) continue;
+      ids.add(id);
+      final s = CveSeed(
+        cvssVector: v['cvssVector'] as String?,
+        cvssBaseScore: (v['cvssBaseScore'] as num?)?.toDouble(),
+        kev: v['kevSeed'] == true,
+        kevDateAdded: _parseDate(v['kevDateAdded'] as String?),
+        kevDueDate: _parseDate(v['kevDueDate'] as String?),
+        kevRansomware: v['kevRansomware'] == true,
+        epssScore: (v['epssSeed'] as num?)?.toDouble(),
+        epssPercentile: (v['epssPercentileSeed'] as num?)?.toDouble(),
+      );
+      seed[id] = seed.containsKey(id) ? seed[id]!.merge(s) : s;
+    }
+  }
+  if (ids.isEmpty) return const {};
+
+  Map<String, ExploitInfo> byId;
+  try {
+    byId = await VulnEnricher(
+      enableNetwork: enrich,
+      enablePoc: enrich && poc,
+      timeout: Duration(seconds: timeoutSeconds),
+    ).enrich(ids, seed: seed);
+  } catch (e) {
+    if (!quiet) stderr.writeln('scan: enrichissement CVE indisponible ($e)');
+    byId = {for (final id in ids) id: ExploitInfo.empty};
+  }
+
+  for (final vulns in resultsByScanner.values) {
+    for (final v in vulns) {
+      v['exploit'] =
+          byId[_normalizeCveId((v['id'] as String?) ?? '')] ?? ExploitInfo.empty;
+    }
+  }
+  return byId;
+}
+
+/// Applique `--only-kev` / `--epss-min` sur des findings déjà enrichis.
+List<Map<String, dynamic>> _filterByExploit(
+  List<Map<String, dynamic>> vulns,
+  bool onlyKev,
+  double? epssMin,
+) {
+  if (!onlyKev && epssMin == null) return vulns;
+  return vulns.where((v) {
+    final e = v['exploit'] as ExploitInfo? ?? ExploitInfo.empty;
+    if (onlyKev && !e.inKev) return false;
+    if (epssMin != null && (e.epssScore ?? 0) < epssMin) return false;
+    return true;
+  }).toList();
 }
 
 List<Map<String, dynamic>> _filterByDate(
@@ -1672,11 +1910,20 @@ void _printScanResults(
   DateTime? after,
   DateTime? before,
   String field,
+  String sortMode,
 ) {
   final sevOrder = {'Critical': 0, 'CRITICAL': 0, 'High': 1, 'HIGH': 1,
       'Medium': 2, 'MEDIUM': 2, 'Low': 3, 'LOW': 3, 'Unknown': 4, 'UNKNOWN': 4};
-  vulns.sort((a, b) =>
-      (sevOrder[a['severity']] ?? 5).compareTo(sevOrder[b['severity']] ?? 5));
+  ExploitInfo ex(Map<String, dynamic> v) =>
+      v['exploit'] as ExploitInfo? ?? ExploitInfo.empty;
+  if (sortMode == 'risk') {
+    vulns.sort((a, b) => ex(b)
+        .riskScore(b['severity'] as String? ?? '')
+        .compareTo(ex(a).riskScore(a['severity'] as String? ?? '')));
+  } else {
+    vulns.sort((a, b) =>
+        (sevOrder[a['severity']] ?? 5).compareTo(sevOrder[b['severity']] ?? 5));
+  }
 
   final filterDesc = StringBuffer();
   if (after != null || before != null) {
@@ -1688,15 +1935,26 @@ void _printScanResults(
 
   if (vulns.isEmpty) return;
 
-  const w0 = 12, w1 = 20, w2 = 36;
-  stdout.writeln(
-      '${'SÉVÉRITÉ'.padRight(w0)}  ${'CVE / ID'.padRight(w1)}  PAQUET');
-  stdout.writeln('${'-' * w0}  ${'-' * w1}  ${'-' * w2}');
+  const w0 = 10, w1 = 20, w2 = 30, w3 = 4, w4 = 10;
+  stdout.writeln('${'SÉVÉRITÉ'.padRight(w0)}  ${'CVE / ID'.padRight(w1)}  '
+      '${'PAQUET'.padRight(w2)}  ${'KEV'.padRight(w3)}  ${'EPSS'.padRight(w4)}  PoC');
+  stdout.writeln('${'-' * w0}  ${'-' * w1}  ${'-' * w2}  ${'-' * w3}  '
+      '${'-' * w4}  ---');
   for (final v in vulns) {
+    final e = ex(v);
     final sev = (v['severity'] as String).padRight(w0);
     final id = (v['id'] as String).padRight(w1);
-    final pkg = v['package'] as String;
-    stdout.writeln('$sev  $id  $pkg');
+    final pkg = (v['package'] as String).padRight(w2);
+    final kev = (e.inKev ? '✓' : '—').padRight(w3);
+    final epss = (e.epssScore == null
+            ? '—'
+            : '${e.epssScore!.toStringAsFixed(2)} p'
+                '${((e.epssPercentile ?? 0) * 100).round()}')
+        .padRight(w4);
+    final poc = e.pocCount > 0
+        ? '✓${e.pocCount}'
+        : (e.pocKnown ? '✓' : (e.hasAnySignal || e.cvssVector != null ? '—' : '?'));
+    stdout.writeln('$sev  $id  $pkg  $kev  $epss  $poc');
   }
 }
 
@@ -1734,11 +1992,27 @@ Exemples:
   sbom-generator scan --sbom sbom.cdx.json --scanner all \\
     --format pdf --output scan-report.pdf
 
+  # Seulement les CVE activement exploitées (CISA KEV), triées par risque
+  sbom-generator scan --sbom sbom.cdx.json --scanner all \\
+    --only-kev --sort risk
+
+  # Prioriser : CVE avec une probabilité d'exploitation EPSS ≥ 10 %
+  sbom-generator scan --sbom sbom.cdx.json --epss-min 0.1
+
+  # Hors-ligne : pas de requête réseau (KEV/EPSS/PoC seulement via Grype + cache)
+  sbom-generator scan --sbom sbom.cdx.json --no-enrich
+
+Enrichissement : chaque CVE est complétée par CISA KEV (exploitée dans la
+nature), EPSS (probabilité d'exploitation à 30 jours), un signal PoC public
+et le sous-score d'exploitabilité CVSS. Actif par défaut ; --no-enrich (ou
+SBOMGEN_OFFLINE=1) le désactive, --no-poc ne coupe que la source tierce.
+
 En --format markdown/asciidoc/pdf, chaque CVE Critical (rouge) et High
 (orange) est aussi listée sur stdout, une ligne par CVE unique
-(dédupliquée entre scanners) — utile pendant un build. --color auto par
-défaut (couleur si stdout est un terminal et NO_COLOR non défini) ;
---color always force la couleur derrière un pipe.
+(dédupliquée entre scanners), avec les marqueurs [KEV] / EPSS / [PoC] —
+utile pendant un build. --color auto par défaut (couleur si stdout est un
+terminal et NO_COLOR non défini) ; --color always force la couleur
+derrière un pipe.
 
 Codes de retour:
   text / sarif :
@@ -1756,6 +2030,7 @@ Codes de retour:
 Map<String, dynamic> _buildSarifReport(
   Map<String, List<Map<String, dynamic>>> resultsByScanner,
   String sbomFile,
+  Map<String, ExploitInfo> exploitById,
 ) {
   final runs = <Map<String, dynamic>>[];
 
@@ -1769,18 +2044,35 @@ Map<String, dynamic> _buildSarifReport(
       if (id.isEmpty) continue;
       final severity = (v['severity'] as String?) ?? 'Unknown';
       final pkg = (v['package'] as String?) ?? '';
+      final e = (v['exploit'] as ExploitInfo?) ??
+          exploitById[_normalizeCveId(id)] ??
+          ExploitInfo.empty;
+      final exploitProps = <String, dynamic>{
+        'kev': e.inKev,
+        if (e.epssScore != null) 'epss': e.epssScore,
+        if (e.epssPercentile != null) 'epssPercentile': e.epssPercentile,
+        'poc': e.pocKnown,
+        if (e.cvssExploitabilityScore != null)
+          'cvssExploitability': e.cvssExploitabilityScore,
+      };
+      // KEV → priorité maximale dans GitHub Code Scanning.
+      final score = e.inKev ? '9.5' : _sarifSecurityScore(severity);
 
       rulesById.putIfAbsent(id, () => {
             'id': id,
             'shortDescription': {'text': '$id — sévérité $severity'},
             'helpUri': 'https://osv.dev/vulnerability/$id',
-            'properties': {'security-severity': _sarifSecurityScore(severity)},
+            'properties': {
+              'security-severity': score,
+              ...exploitProps,
+            },
           });
 
       results.add({
         'ruleId': id,
         'level': _sarifLevel(severity),
         'message': {'text': 'Paquet vulnérable : $pkg (sévérité $severity)'},
+        'properties': exploitProps,
         'locations': [
           {
             'physicalLocation': {

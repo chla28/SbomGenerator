@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `sbom-generator scan` : **enrichissement des CVE avec les signaux
+  d'exploitabilité et d'exploitation active** (`lib/vuln_enrichment.dart`),
+  actif par défaut.
+  - **CISA KEV** — la CVE est activement exploitée dans la nature (date
+    d'ajout, échéance de remédiation, usage par un rançongiciel) ;
+  - **EPSS** (FIRST.org) — probabilité d'exploitation à 30 jours (score +
+    percentile) ;
+  - **PoC / exploit public** — dépôts recensés par `poc-in-github` +
+    maturité `E:` du vecteur CVSS ;
+  - **exploitabilité CVSS** — sous-score AV/AC/PR/UI calculé localement.
+  Grype fournissant déjà KEV/EPSS/CVSS dans sa base, les requêtes réseau ne
+  servent qu'à compléter les CVE vues uniquement par OSV-Scanner / Trivy et à
+  récupérer le signal PoC ; réponses mises en cache 24 h sous
+  `~/.cache/sbom-generator/`, repli sur le cache en cas de coupure.
+- `scan` : nouvelles options `--enrich` / `--no-enrich` (aussi
+  `SBOMGEN_OFFLINE=1`), `--no-poc`, `--enrich-timeout`, `--only-kev`,
+  `--epss-min <x>` et `--sort severity|risk`.
+- `scan --format text` : colonnes `KEV` / `EPSS` / `PoC`. Les alertes
+  Critical/High des formats rapport portent les marqueurs `[KEV]`,
+  `EPSS <score>`, `[PoC]`.
+- Rapport de synthèse (`markdown` / `asciidoc` / `pdf`) : section
+  **« Exploitabilité et exploitation active »** — liste des CVE CISA KEV et
+  tableau **« Priorisation par risque »** (KEV, puis EPSS, puis sévérité) —
+  et compteurs KEV/EPSS/PoC dans le résumé global.
+- `scan --format sarif` : propriétés `kev`, `epss`, `epssPercentile`, `poc`,
+  `cvssExploitability` sur chaque résultat ; `security-severity` relevé à
+  `9.5` pour une CVE KEV (priorisation GitHub Code Scanning).
+
 ## [1.4.2] - 2026-09-07
 
 ### Added

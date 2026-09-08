@@ -2241,6 +2241,28 @@ inter-scanners — voir `_reportScanFormats`)
 |—
 |Fichier de sortie. Obligatoire pour `markdown` / `asciidoc` / `pdf` ; pour
 `sarif`, stdout si omis
+
+|`--enrich` / `--no-enrich`
+|activé
+|Enrichissement exploitabilité (KEV / EPSS / PoC / CVSS). `--no-enrich` ou
+`SBOMGEN_OFFLINE=1` → aucune requête réseau
+
+|`--no-poc`
+|—
+|Coupe la seule source tierce (poc-in-github) ; KEV / EPSS / maturité `E:`
+restent renseignés
+
+|`--enrich-timeout <s>`
+|`8`
+|Délai maximal par requête réseau d'enrichissement
+
+|`--only-kev` / `--epss-min <x>`
+|—
+|Filtres de priorisation appliqués après enrichissement, tous formats
+
+|`--sort <valeur>`
+|`severity`
+|Ordre d'affichage console : `severity` ou `risk` (KEV → EPSS → sévérité)
 |===
 
 Codes de retour : `text` / `sarif` gardent le contrat historique (`1` si au
@@ -2273,15 +2295,32 @@ polluer la sortie JSON)
 |`_filterByDate()`
 |Applique `after` / `before` / `includeUndated` sur le champ de date choisi
 
+|`_enrichFindings()`
+|Après tous les scanners, avant les filtres : rassemble les identifiants
+(normalisés via `_normalizeCveId`) + une `CveSeed` par CVE (vecteur CVSS,
+et pour Grype KEV/EPSS natifs), appelle `VulnEnricher.enrich()`
+(`lib/vuln_enrichment.dart`), puis injecte l'`ExploitInfo` obtenu dans
+chaque finding (`v['exploit']`). Best-effort : toute exception laisse
+`ExploitInfo.empty`. Retourne la map id → `ExploitInfo` pour le rapport
+
+|`_filterByExploit()`
+|Applique `--only-kev` / `--epss-min` sur des findings déjà enrichis
+
+|`_cvssFromGrype/Osv/Trivy()`
+|Extraient `(vecteur CVSS, score de base)` du JSON propre à chaque scanner
+(`vulnerability.cvss[]`, `severity[].score`, `CVSS.<src>.V3Vector`)
+
 |`_printScanResults()`
-|Trie par sévérité décroissante (`Critical` → `Unknown`) et affiche un
-tableau texte par scanner interrogé, avec rappel du filtre appliqué
-(`--format text`)
+|Trie par sévérité décroissante (`Critical` → `Unknown`), ou par risque si
+`--sort risk`, et affiche un tableau texte par scanner — colonnes
+`KEV` / `EPSS` / `PoC` en plus (`--format text`)
 
 |`_buildSarifReport()`
 |Construit un rapport SARIF 2.1.0 (un `run` par scanner interrogé, une
 `rule` déduite par identifiant de vulnérabilité, `level` via `_sarifLevel()`,
-`security-severity` via `_sarifSecurityScore()`) — `--format sarif`
+`security-severity` via `_sarifSecurityScore()` — relevé à `9.5` si KEV).
+Chaque `result` et `rule` porte les propriétés `kev` / `epss` /
+`epssPercentile` / `poc` / `cvssExploitability` — `--format sarif`
 
 |`_writeScanReport()`
 |`--format markdown` / `asciidoc` / `pdf` : reçoit le `ScanReportGenerator`
@@ -2293,8 +2332,9 @@ conserve le `.adoc`, avertit, mais ne fait pas échouer la commande
 |`_printSeverityAlerts()`
 |Avant l'écriture du fichier (formats rapport uniquement) : liste sur stdout
 `ScanReportGenerator.alerts()` — une ligne par CVE unique Critical (rouge
-`\e[1;31m`) / High (orange `\e[38;5;208m`), avec paquet + scanners, puis un
-décompte. `--color auto` (défaut) = `stdout.hasTerminal && !NO_COLOR` ;
+`\e[1;31m`) / High (orange `\e[38;5;208m`), avec paquet + scanners, les
+marqueurs `[KEV]` / `EPSS <score>` / `[PoC]`, puis un décompte (dont le
+nombre de CVE KEV). `--color auto` (défaut) = `stdout.hasTerminal && !NO_COLOR` ;
 `always` / `never` forcent. Best-effort, sans effet sur le code de retour
 
 |`_scannerVersion()`
@@ -2326,6 +2366,48 @@ scindé (Trivy). Objectif : expliciter que la version corrigée d'un avis de
 distribution est en général celle d'`unstable`/`testing`, pas une mise à jour
 disponible pour la release stable installée — cf. `usage.adoc`, section
 « Pourquoi les scanners ne trouvent pas les mêmes CVE ».
+
+==== Enrichissement exploitabilité (`lib/vuln_enrichment.dart`)
+
+`VulnEnricher.enrich(ids, {seed})` renvoie une `Map<String, ExploitInfo>`
+(id normalisé → signaux). C'est, avec `renderAsciiDocToPdf`, le seul point
+d'I/O du paquet : requêtes HTTP `dart:io` (aucune dépendance ajoutée) et un
+cache disque sous `~/.cache/sbom-generator/` (`kev.json`, `epss.json`,
+`poc.json`), TTL 24 h.
+
+[cols="1,3", options="header"]
+|===
+|Signal |Source & stratégie
+
+|CISA KEV
+|Grype (`vulnerability.knownExploited`, via `seed`) + flux
+`known_exploited_vulnerabilities.json` (une requête, couvre OSV/Trivy).
+Réseau KO → cache, même périmé ; sinon map vide
+
+|EPSS
+|Grype (`vulnerability.epss`, via `seed`) + API FIRST
+`api.first.org/data/v1/epss?cve=…` par lots de 100. Cache par CVE
+
+|PoC public
+|API `poc-in-github.motikan2010.net` (pool de 6, `enablePoc`) **+** maturité
+`E:` du vecteur CVSS (`parseCvssVector`, ≥ _Proof-of-Concept_)
+
+|Exploitabilité CVSS
+|`parseCvssVector()` — pur, `8.22 × AV × AC × PR × UI` pour un vecteur v3.x ;
+`null` sinon (v2/v4 : seule la maturité `E:` est extraite)
+|===
+
+`enableNetwork == false` (`--no-enrich` / `SBOMGEN_OFFLINE=1`) : lecture du
+cache seul, jamais de requête. `ExploitInfo.riskScore(severity)` fournit la
+clé de tri « priorisation par risque » (KEV pèse 1000, EPSS 0–100, sévérité
+0–4). Les URL des sources et le répertoire de cache sont injectables
+(constructeur) pour les tests — cf. `test/unit/vuln_enrichment_test.dart`
+(serveur `HttpServer` local).
+
+`ScanReportGenerator` reçoit cette map via `exploitById` (défaut `const {}`
+= sections omises) : compteurs KEV/EPSS/PoC dans le résumé, section
+« Exploitabilité et exploitation active » (liste KEV + tableau
+« Priorisation par risque ») en Markdown comme en AsciiDoc.
 
 [source,dart]
 ----

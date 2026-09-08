@@ -854,6 +854,35 @@ filtrage optionnel par date de publication ou de modification des CVE.
 |désactivé
 |Inclut les CVE sans date connue dans les résultats filtrés
 
+|`--enrich` / `--no-enrich`
+|activé
+|Enrichit chaque CVE avec les signaux d'exploitabilité (CISA KEV, EPSS, PoC
+public, sous-score CVSS). `--no-enrich` (ou `SBOMGEN_OFFLINE=1`) : aucune
+requête réseau — seuls les champs déjà fournis par les scanners (Grype
+expose nativement KEV + EPSS) et le cache local sont utilisés.
+
+|`--no-poc`
+|—
+|Ne pas interroger la source PoC tierce (poc-in-github). KEV, EPSS et la
+maturité `E:` du vecteur CVSS restent renseignés.
+
+|`--enrich-timeout <s>`
+|`8`
+|Délai maximal, en secondes, par requête d'enrichissement.
+
+|`--only-kev`
+|—
+|Ne garde que les CVE présentes au catalogue CISA KEV.
+
+|`--epss-min <x>`
+|—
+|Ne garde que les CVE dont le score EPSS est ≥ `x` (entre 0 et 1).
+
+|`--sort <valeur>`
+|`severity`
+|Ordre d'affichage console : `severity` (pire sévérité d'abord) ou `risk`
+(KEV, puis EPSS décroissant, puis sévérité).
+
 |`--format <valeur>` / `-f`
 |`text`
 |`text` (console colorée), `sarif` (SARIF 2.1.0), ou `markdown` / `asciidoc` /
@@ -897,6 +926,15 @@ formats rapport : `auto` (couleur si terminal + `NO_COLOR` non défini),
 # Rapport de synthèse PDF (Grype + OSV-Scanner + Trivy)
 ./sbom_generator scan --sbom sbom.cdx.json --scanner all \
   --format pdf --output scan-report.pdf
+
+# Uniquement les CVE activement exploitées (CISA KEV), triées par risque
+./sbom_generator scan --sbom sbom.cdx.json --scanner all --only-kev --sort risk
+
+# Prioriser : CVE avec une probabilité d'exploitation EPSS ≥ 10 %
+./sbom_generator scan --sbom sbom.cdx.json --epss-min 0.1
+
+# Hors-ligne (CI sans accès réseau) : signaux via Grype + cache seulement
+./sbom_generator scan --sbom sbom.cdx.json --no-enrich
 ----
 
 Les résultats `--format text` sont triés par sévérité décroissante
@@ -947,6 +985,58 @@ demandée (tous scanners confondus), `1` = au moins une CVE trouvée, ou erreur
 de scanner. Les formats rapport (`markdown` / `asciidoc` / `pdf`) renvoient
 `0` dès qu'un rapport est écrit ; `1` seulement si `--output` manque ou si
 aucun scanner n'a produit de résultat.
+
+=== Exploitabilité et exploitation active
+
+La sévérité (CVSS) dit la gravité *potentielle* d'une faille, pas si un
+attaquant peut ou va s'en servir. `scan` complète donc chaque CVE avec quatre
+signaux de priorisation :
+
+[cols="1,3", options="header"]
+|===
+|Signal |Ce qu'il indique
+
+|*CISA KEV*
+|La CVE est au catalogue _Known Exploited Vulnerabilities_ de la CISA :
+exploitation active *confirmée* dans la nature. Le rapport reprend la date
+d'ajout, l'échéance de remédiation et l'éventuel usage par un rançongiciel.
+
+|*EPSS*
+|Score _Exploit Prediction Scoring System_ (FIRST.org), 0 à 1 : probabilité
+que la CVE soit exploitée dans les 30 jours, avec son percentile (rang
+relatif parmi toutes les CVE).
+
+|*PoC / exploit public*
+|Un exploit est réellement disponible : dépôt(s) GitHub recensé(s) par
+`poc-in-github`, ou maturité `E:` (au moins _Proof-of-Concept_) du vecteur
+CVSS quand un CNA la publie.
+
+|*Exploitabilité CVSS*
+|Sous-score d'exploitabilité du vecteur (0 à 3,9) : combine vecteur d'attaque
+(AV), complexité (AC), privilèges (PR) et interaction (UI). Calculé
+localement, sans réseau.
+|===
+
+Sources : Grype fournit déjà KEV, EPSS et le vecteur CVSS dans sa base — les
+requêtes réseau ne servent qu'à enrichir les CVE vues uniquement par
+OSV-Scanner / Trivy et à récupérer le signal PoC. Les réponses sont mises en
+cache 24 h sous `~/.cache/sbom-generator/` ; en cas de coupure réseau, le
+cache (même périmé) prend le relais. `--no-enrich` (ou `SBOMGEN_OFFLINE=1`)
+désactive tout appel réseau.
+
+En `--format text`, trois colonnes s'ajoutent au tableau : `KEV` (✓/—),
+`EPSS` (score + percentile), `PoC` (`✓n` = _n_ dépôts, `✓` = maturité CVSS,
+`—` = aucun, `?` = inconnu). Les alertes Critical/High des formats rapport
+portent les marqueurs `[KEV]`, `EPSS <score>` et `[PoC]`. Le rapport de
+synthèse gagne une section *« Exploitabilité et exploitation active »* : liste
+des CVE KEV avec dates, puis un tableau *« Priorisation par risque »* trié par
+KEV, puis EPSS, puis sévérité. En `--format sarif`, chaque résultat porte les
+propriétés `kev`, `epss`, `epssPercentile`, `poc` et `cvssExploitability`, et
+`security-severity` passe à `9.5` pour une CVE KEV (priorisation GitHub Code
+Scanning).
+
+`--only-kev` et `--epss-min` restreignent la sortie (tous formats) ;
+`--sort risk` réordonne l'affichage console.
 
 === Pourquoi les scanners ne trouvent pas les mêmes CVE
 

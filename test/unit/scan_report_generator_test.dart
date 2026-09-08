@@ -1,4 +1,5 @@
 import 'package:sbom_generator/scan_report_generator.dart';
+import 'package:sbom_generator/vuln_enrichment.dart';
 import 'package:test/test.dart';
 
 Map<String, dynamic> _v(String id, String sev) =>
@@ -218,6 +219,83 @@ void main() {
         },
       );
       expect(gen.toAsciiDoc(), contains(r'GHSA-x\|y'));
+    });
+
+    group('exploitabilité', () {
+      final gen = ScanReportGenerator(
+        sbomPath: 's',
+        resultsByScanner: {
+          'grype': [
+            _v('CVE-2021-44228', 'Critical'),
+            _v('CVE-2021-45046', 'Critical'),
+            _v('CVE-2020-9999', 'High'),
+          ],
+          'trivy': [_v('CVE-2021-44228', 'Critical')],
+        },
+        exploitById: {
+          'CVE-2021-44228': ExploitInfo(
+            inKev: true,
+            kevDateAdded: DateTime(2021, 12, 10),
+            kevDueDate: DateTime(2021, 12, 24),
+            kevRansomware: true,
+            epssScore: 0.97,
+            epssPercentile: 0.999,
+            pocKnown: true,
+            pocCount: 42,
+            cvssExploitabilityScore: 3.9,
+            exploitMaturity: 'High',
+          ),
+          'CVE-2021-45046': ExploitInfo(
+            epssScore: 0.30, epssPercentile: 0.98, pocKnown: true, pocCount: 3),
+          // Aucun signal notable → écartée de la priorisation.
+          'CVE-2020-9999': ExploitInfo(epssScore: 0.02),
+        },
+      );
+
+      test('résumé global : compteurs KEV / EPSS / PoC', () {
+        final md = gen.toMarkdown();
+        expect(md, contains('| CVE activement exploitées (CISA KEV) | 1 |'));
+        expect(md, contains('| CVE avec EPSS ≥ 10 % | 2 |'));
+        expect(md, contains('| CVE avec PoC / exploit public | 2 |'));
+      });
+
+      test('section CISA KEV listée avec dates et rançongiciel', () {
+        final md = gen.toMarkdown();
+        expect(md, contains('### CVE activement exploitées (CISA KEV)'));
+        expect(md, contains('CVE-2021-44228'));
+        expect(md, contains('2021-12-10'));
+        expect(md, contains('2021-12-24'));
+        expect(md, contains('⚠️ oui'));
+      });
+
+      test('priorisation par risque : KEV en tête, sans-signal écartée', () {
+        final md = gen.toMarkdown();
+        final section = md.substring(md.indexOf('### Priorisation par risque'));
+        expect(section.indexOf('CVE-2021-44228'),
+            lessThan(section.indexOf('CVE-2021-45046')));
+        expect(section, contains('3.9, mat. High'));
+        expect(section, isNot(contains('CVE-2020-9999')),
+            reason: 'sans signal → hors tableau');
+        expect(section, contains('1 autre(s) CVE sans signal'));
+      });
+
+      test('AsciiDoc : section exploitabilité rendue', () {
+        final adoc = gen.toAsciiDoc();
+        expect(adoc, contains('== Exploitabilité et exploitation active'));
+        expect(adoc, contains('=== Priorisation par risque'));
+      });
+
+      test('exploitById vide → aucune section ni colonne', () {
+        final plain = ScanReportGenerator(
+          sbomPath: 's',
+          resultsByScanner: {
+            'grype': [_v('CVE-2021-44228', 'Critical')],
+          },
+        );
+        final md = plain.toMarkdown();
+        expect(md, isNot(contains('Priorisation par risque')));
+        expect(md, isNot(contains('CISA KEV')));
+      });
     });
   });
 }
