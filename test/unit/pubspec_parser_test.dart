@@ -1,6 +1,10 @@
 import 'dart:io';
+import 'package:sbom_generator/models.dart';
 import 'package:sbom_generator/pubspec_parser.dart';
 import 'package:test/test.dart';
+
+final _archiveSha = 'a' * 64;
+final _argsSha = 'b' * 64;
 
 void main() {
   late Directory tmp;
@@ -24,7 +28,7 @@ packages:
     dependency: transitive
     description:
       name: archive
-      sha256: "abc123def"
+      sha256: "$_archiveSha"
       url: "https://pub.dev"
     source: hosted
     version: "3.4.10"
@@ -32,7 +36,7 @@ packages:
     dependency: "direct main"
     description:
       name: args
-      sha256: deadbeef
+      sha256: $_argsSha
       url: "https://pub.dev"
     source: hosted
     version: "2.4.2"
@@ -46,11 +50,11 @@ sdks:
       expect(args.version, '2.4.2');
       expect(args.packageType, 'pub');
       expect(args.purl, 'pkg:pub/args@2.4.2');
-      expect(args.sha256Header, 'deadbeef');
+      expect(args.hashes, [PackageHash('SHA-256', _argsSha)]);
       expect(args.url, 'https://pub.dev/packages/args');
 
       final archive = pkgs.firstWhere((p) => p.name == 'archive');
-      expect(archive.sha256Header, 'abc123def');
+      expect(archive.hashes, [PackageHash('SHA-256', _archiveSha)]);
     });
 
     test('exclut les dépendances "direct dev" mais garde les transitives', () {

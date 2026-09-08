@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'hash_utils.dart' show packageHashFromSri;
 import 'models.dart';
 
 /// Parses npm `package-lock.json` files (lockfileVersion 1, 2, and 3).
@@ -57,6 +58,7 @@ class NpmParser {
       String name, String version, Map<String, dynamic> data, String path) {
     final license = _extractLicense(data);
     final resolved = (data['resolved'] as String?) ?? '';
+    final integrity = packageHashFromSri(data['integrity'] as String?);
     return WheelPackage(
       name: name,
       version: version,
@@ -66,6 +68,7 @@ class NpmParser {
       vendor: '',
       arch: 'any',
       sourceRef: path,
+      hashes: [if (integrity != null) integrity],
       requires: [],
       provides: [name],
       packageType: 'npm',

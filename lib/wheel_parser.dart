@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
 
 String _normalizePyName(String name) =>
@@ -35,7 +36,7 @@ sys.stdout.buffer.write(z.read(name))
       return null;
     }
 
-    return _buildPackage(path, _parseRfc822(text));
+    return _buildPackage(path, _parseRfc822(text), hashes: hashLocalFile(path));
   }
 
   /// Parse an already-extracted RFC 822 metadata text (PKG-INFO / METADATA).
@@ -48,7 +49,7 @@ sys.stdout.buffer.write(z.read(name))
   }
 
   WheelPackage? _buildPackage(String path, Map<String, List<String>> headers,
-      {String packageType = 'pypi'}) {
+      {String packageType = 'pypi', List<PackageHash> hashes = const []}) {
     final name = headers['name']?.first ?? '';
     if (name.isEmpty) {
       stderr.writeln('Warning: no Name in METADATA for "$path"');
@@ -113,6 +114,7 @@ sys.stdout.buffer.write(z.read(name))
       vendor: vendor,
       arch: arch,
       sourceRef: path,
+      hashes: hashes,
       requires: requires,
       provides: provides,
       packageType: packageType,

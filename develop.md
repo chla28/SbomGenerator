@@ -106,7 +106,7 @@ abstract class Package {
   String get vendor;
   String get arch;
   String get sourceRef;
-  String get sha256Header;
+  List<PackageHash> get hashes;   // empreintes de l'artefact (souvent vide)
   List<String> get requires;
   List<String> get provides;
 
@@ -118,6 +118,30 @@ abstract class Package {
   String get packageType;   // 'rpm' | 'pypi' | 'source' | 'deb' | 'maven' | 'golang' | 'npm' | …
 }
 ```
+
+`PackageHash(alg, content)` (`lib/models.dart`) : `alg` au format CycloneDX
+(`SHA-256`, `SHA-512`, `SHA-1`, `MD5`, `SHA3-256`…), `content` en
+hexadécimal minuscule. **N'y placer que le condensat d'un artefact réel** —
+les formats dérivés (hash d'en-tête RPM, dirhash Go `h1:`, checksum APK
+`Q1…`) sont rejetés et traités comme métadonnée à part. `RpmPackage` porte
+en plus `headerSha256` (`%{SHA256HEADER}`, émis en propriété
+`rpm:header-sha256`).
+
+Collecte (opportuniste, sans réseau — voir `lib/hash_utils.dart`) :
+
+| Source | Provenance de l'empreinte |
+|---|---|
+| npm `package-lock.json`, yarn v1 `yarn.lock` | champ `integrity` (SRI base64 → hex) / fragment `#<sha1>` du `resolved` |
+| `pubspec.lock` | `sha256` de l'archive pub.dev |
+| images OCI (Trivy) | champ `Digest` du paquet (`"<algo>:<hex>"`) |
+| images OCI (Syft) | `metadata.archiveDigests` / `metadata.digest` (ex. SHA-1 des JAR) |
+| images OCI (cdxgen) | tableau `hashes` du composant CycloneDX |
+| fichiers `.rpm` / `.deb` / `.jar` / `.whl` en entrée directe | SHA-256 + SHA-512 calculés (`package:crypto`) |
+
+Émission : CycloneDX `component.hashes`, SPDX 2.3 `package.checksums`
+(libellés via `spdx2Alg`), SPDX 3.0 `element.verifiedUsing` (`Hash`,
+libellés via `spdx3Alg`). `sbom_reader` relit les trois formes lors d'un
+`convert`.
 
 ### Classe `OsInfo` (hors hiérarchie `Package`)
 
@@ -1513,7 +1537,8 @@ retourne une structure testable sans I/O). `MarkdownGenerator`,
 | `pkg.vendor` | `supplier.name` + `publisher` | `supplier: "Organization: …"` | `suppliedBy` (URI org) |
 | `pkg.url` | `externalReferences[website]` | `downloadLocation` | `software:downloadLocation` |
 | `pkg.summary` | `description` | `summary` | `summary` |
-| `pkg.sha256Header` | `hashes[SHA-256]` | — | — |
+| `pkg.hashes` (`PackageHash`) | `hashes[alg/content]` | `checksums[algorithm/checksumValue]` | `verifiedUsing[Hash]` |
+| **RPM** `headerSha256` | `properties[rpm:header-sha256]` | `annotations` | `annotation` |
 | **RPM** `release`, `epoch`, `arch`, `buildTime` | `properties[rpm:*]` | `annotations` | `annotation` |
 | **RPM** `requires` × N | `properties[rpm:requires]` × N | — | — |
 | **Python/Source** `arch` | `properties[pypi:/source:platform]` | `annotations` | `annotation` |

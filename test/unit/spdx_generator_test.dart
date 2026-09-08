@@ -113,6 +113,41 @@ void main() {
           (withoutVendor['packages'] as List).single as Map<String, dynamic>;
       expect(pkgWithout.containsKey('supplier'), isFalse);
     });
+
+    test('checksums émis depuis Package.hashes, libellés SPDX', () {
+      final pkg = WheelPackage(
+        name: 'lib', version: '1.0', license: 'MIT', url: '', summary: '',
+        vendor: '', arch: 'any', sourceRef: '',
+        hashes: [PackageHash('SHA-256', 'a' * 64), PackageHash('SHA-512', 'b' * 128)],
+        requires: const [], provides: const [], packageType: 'npm',
+      );
+      final p = (generator.generate([pkg], [])['packages'] as List)
+          .single as Map<String, dynamic>;
+      expect(p['checksums'], [
+        {'algorithm': 'SHA256', 'checksumValue': 'a' * 64},
+        {'algorithm': 'SHA512', 'checksumValue': 'b' * 128},
+      ]);
+    });
+
+    test('pas de clé checksums si aucun hash', () {
+      final p = (generator.generate([_pkg(name: 'foo')], [])['packages'] as List)
+          .single as Map<String, dynamic>;
+      expect(p.containsKey('checksums'), isFalse);
+    });
+
+    test('hash d\'en-tête RPM → annotation, jamais checksums', () {
+      final pkg = RpmPackage(
+        name: 'bash', version: '5.2', release: '1.el9', arch: 'x86_64',
+        epoch: '(none)', license: 'GPL', vendor: '', url: '', buildTime: '',
+        summary: '', requires: const [], provides: const [],
+        headerSha256: 'f' * 64,
+      );
+      final p = (generator.generate([pkg], [])['packages'] as List)
+          .single as Map<String, dynamic>;
+      expect(p.containsKey('checksums'), isFalse);
+      expect((p['annotations'] as List).first['comment'],
+          contains('rpm:header-sha256=${'f' * 64}'));
+    });
   });
 
   group('SpdxGenerator.generate — relations', () {

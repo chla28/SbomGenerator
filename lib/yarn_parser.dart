@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'hash_utils.dart' show packageHash, packageHashFromSri;
 import 'models.dart';
 
 /// Parses `yarn.lock` files (yarn v1 classic and yarn v2+ Berry formats).
@@ -61,8 +62,16 @@ class YarnParser {
       } else if (trimmed.startsWith('resolved ')) {
         var r = trimmed.substring('resolved '.length).replaceAll('"', '').trim();
         final h = r.indexOf('#');
-        if (h > 0) r = r.substring(0, h);
+        if (h > 0) {
+          // Le fragment `#<hex>` d'un `resolved` yarn v1 est le SHA-1 du tarball.
+          current!.hash ??= packageHash('SHA-1', r.substring(h + 1));
+          r = r.substring(0, h);
+        }
         current!.resolved = r;
+      } else if (trimmed.startsWith('integrity ')) {
+        current!.hash = packageHashFromSri(
+                trimmed.substring('integrity '.length).replaceAll('"', '')) ??
+            current!.hash;
       }
     }
     flush();
@@ -159,6 +168,7 @@ class YarnParser {
         vendor: '',
         arch: 'any',
         sourceRef: path,
+        hashes: [if (b.hash != null) b.hash!],
         requires: [],
         provides: [b.name],
         packageType: 'npm',
@@ -169,5 +179,6 @@ class _YarnBlock {
   final String name;
   String version = '';
   String resolved = '';
+  PackageHash? hash;
   _YarnBlock(this.name);
 }

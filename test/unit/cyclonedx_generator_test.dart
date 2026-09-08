@@ -45,6 +45,44 @@ WheelPackage _maven({
 void main() {
   final generator = CycloneDxGenerator();
 
+  group('CycloneDxGenerator.generate — hashes', () {
+    Map<String, dynamic> component(List<Package> pkgs) =>
+        (generator.generate(pkgs, [])['components'] as List)
+            .whereType<Map<String, dynamic>>()
+            .firstWhere((c) => c['type'] == 'library');
+
+    test('Package.hashes → tableau hashes multi-algorithme', () {
+      final pkg = WheelPackage(
+        name: 'lib', version: '1.0', license: '', url: '', summary: '',
+        vendor: '', arch: 'any', sourceRef: '',
+        hashes: [PackageHash('SHA-512', 'b' * 128)],
+        requires: const [], provides: const ['lib'], packageType: 'npm',
+      );
+      expect(component([pkg])['hashes'], [
+        {'alg': 'SHA-512', 'content': 'b' * 128},
+      ]);
+    });
+
+    test('pas de clé hashes si le paquet n\'en a pas', () {
+      expect(component([_rpm(name: 'bash')]).containsKey('hashes'), isFalse);
+    });
+
+    test('hash d\'en-tête RPM → propriété rpm:header-sha256, pas hashes', () {
+      final pkg = RpmPackage(
+        name: 'bash', version: '5.2', release: '1.el9', arch: 'x86_64',
+        epoch: '(none)', license: 'GPL', vendor: '', url: '', buildTime: '',
+        summary: '', requires: const [], provides: const [],
+        headerSha256: 'f' * 64,
+      );
+      final c = component([pkg]);
+      expect(c.containsKey('hashes'), isFalse);
+      expect(
+          (c['properties'] as List).any((p) =>
+              p['name'] == 'rpm:header-sha256' && p['value'] == 'f' * 64),
+          isTrue);
+    });
+  });
+
   group('CycloneDxGenerator.generate — specVersion', () {
     test('génère en 1.6 par défaut', () {
       final sbom = generator.generate([_rpm(name: 'bash')], []);

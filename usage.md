@@ -641,7 +641,7 @@ cvd_policy_url: "https://acme.example/security/policy"
 | Nom, version | Selon le type de paquet (voir « Types de références acceptées ») |
 | PURL | Identifiant de paquet universel, calculé selon l'écosystème |
 | CPE 2.3 | Calculé uniquement pour les paquets RPM |
-| Checksum | SHA-256 de l'en-tête RPM (paquets RPM uniquement) |
+| Empreinte(s) | Condensat de l'artefact quand il est connu sans requête réseau : `integrity` des lockfiles npm/yarn, `sha256` de `pubspec.lock`, `Digest` Trivy / digests Syft (images OCI), ou SHA-256+SHA-512 calculés pour un fichier `.rpm`/`.deb`/`.jar`/`.whl` passé en entrée. Émise en `hashes` (CycloneDX), `checksums` (SPDX 2.3), `verifiedUsing` (SPDX 3.0). Le hash de l'en-tête RPM est exposé à part (`rpm:header-sha256`). Souvent absente pour les paquets système d'une image (rien à hacher). |
 | Licence | Normalisée vers SPDX (expression ou identifiant) |
 | Supplier | Fournisseur du paquet, quand l'information est disponible |
 | Description | Résumé court, quand disponible |

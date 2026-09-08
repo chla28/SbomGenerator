@@ -5,6 +5,34 @@ String _safeId(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '-');
 String _normalizePyName(String name) =>
     name.toLowerCase().replaceAll(RegExp(r'[-_.]+'), '-');
 
+// ── Empreinte cryptographique d'un artefact ────────────────────────────────
+
+/// Empreinte cryptographique de l'artefact distribuable d'un paquet
+/// (le fichier `.rpm` / `.whl` / `.jar` / l'archive du registre…).
+///
+/// [alg] utilise les libellés CycloneDX (`SHA-256`, `SHA-512`, `SHA-1`,
+/// `MD5`, `SHA3-256`…) ; les générateurs SPDX les convertissent. [content]
+/// est le condensat en hexadécimal minuscule.
+///
+/// N'y placer que le condensat d'un artefact réel : un hash « dérivé » (hash
+/// d'en-tête RPM, dirhash Go `h1:`, checksum APK `Q1…`) n'a pas sa place ici
+/// et tromperait un consommateur qui vérifie un téléchargement.
+class PackageHash {
+  final String alg;
+  final String content;
+  const PackageHash(this.alg, this.content);
+
+  @override
+  bool operator ==(Object other) =>
+      other is PackageHash && other.alg == alg && other.content == content;
+
+  @override
+  int get hashCode => Object.hash(alg, content);
+
+  @override
+  String toString() => '$alg:$content';
+}
+
 // ── OS de base d'une image de conteneur ─────────────────────────────────────
 
 /// Système d'exploitation de base d'une image de conteneur, tel que détecté
@@ -51,7 +79,10 @@ abstract class Package {
   String get vendor;
   String get arch;
   String get sourceRef;
-  String get sha256Header;
+
+  /// Empreintes cryptographiques de l'artefact du paquet (souvent vide : les
+  /// paquets déjà installés dans une image n'ont pas d'artefact à hacher).
+  List<PackageHash> get hashes;
   List<String> get requires;
   List<String> get provides;
 
@@ -89,7 +120,12 @@ class RpmPackage extends Package {
   @override
   final List<String> provides;
   @override
-  final String sha256Header;
+  final List<PackageHash> hashes;
+
+  /// Condensat SHA-256 de l'*en-tête* RPM (`%{SHA256HEADER}`) — **pas** le hash
+  /// du fichier `.rpm`. Émis comme propriété/annotation dédiée, jamais comme
+  /// empreinte d'artefact.
+  final String headerSha256;
   final String sourceRpm;
   @override
   final String sourceRef;
@@ -107,7 +143,8 @@ class RpmPackage extends Package {
     required this.summary,
     required this.requires,
     required this.provides,
-    this.sha256Header = '',
+    this.hashes = const [],
+    this.headerSha256 = '',
     this.sourceRpm = '',
     this.sourceRef = '',
   });
@@ -168,7 +205,7 @@ class WheelPackage extends Package {
   @override
   final String sourceRef;
   @override
-  final String sha256Header;
+  final List<PackageHash> hashes;
   @override
   final List<String> requires;
   @override
@@ -185,7 +222,7 @@ class WheelPackage extends Package {
     required this.vendor,
     required this.arch,
     required this.sourceRef,
-    this.sha256Header = '',
+    this.hashes = const [],
     required this.requires,
     required this.provides,
     String packageType = 'pypi',
@@ -281,7 +318,7 @@ class DebPackage extends Package {
   @override
   final String sourceRef;
   @override
-  final String sha256Header;
+  final List<PackageHash> hashes;
   @override
   final List<String> requires;
   @override
@@ -296,7 +333,7 @@ class DebPackage extends Package {
     required this.url,
     required this.summary,
     required this.sourceRef,
-    this.sha256Header = '',
+    this.hashes = const [],
     required this.requires,
     required this.provides,
   });
@@ -353,7 +390,7 @@ class OciPackage extends Package {
   @override
   final String sourceRef;
   @override
-  final String sha256Header;
+  final List<PackageHash> hashes;
   @override
   final List<String> requires;
   @override
@@ -377,7 +414,7 @@ class OciPackage extends Package {
     required this.arch,
     required this.sourceRef,
     required this.imageRef,
-    this.sha256Header = '',
+    this.hashes = const [],
     required this.requires,
     required this.provides,
     String packageType = 'generic',

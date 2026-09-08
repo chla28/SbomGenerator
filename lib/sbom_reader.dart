@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'hash_utils.dart'
+    show hashesFromCycloneDx, packageHash;
 import 'models.dart';
 
 /// Detected format of a SBOM file.
@@ -127,17 +129,6 @@ class SbomReader {
       }
     }
 
-    String sha256 = '';
-    final hashes = c['hashes'] as List?;
-    if (hashes != null) {
-      for (final h in hashes.whereType<Map<String, dynamic>>()) {
-        if (h['alg'] == 'SHA-256') {
-          sha256 = (h['content'] as String?) ?? '';
-          break;
-        }
-      }
-    }
-
     return WheelPackage(
       name: name,
       version: version,
@@ -147,7 +138,7 @@ class SbomReader {
       vendor: vendor,
       arch: 'any',
       sourceRef: '',
-      sha256Header: sha256,
+      hashes: hashesFromCycloneDx(c['hashes']),
       requires: [],
       provides: [name],
       packageType: packageType,
@@ -186,10 +177,23 @@ class SbomReader {
       vendor: vendor,
       arch: 'any',
       sourceRef: '',
+      hashes: _spdxChecksums(p['checksums']),
       requires: [],
       provides: [name],
       packageType: _purlToType(purl),
     );
+  }
+
+  /// Relit un tableau SPDX `checksums` (`[{algorithm, checksumValue}]`).
+  List<PackageHash> _spdxChecksums(Object? node) {
+    if (node is! List) return const [];
+    final out = <PackageHash>[];
+    for (final c in node.whereType<Map<String, dynamic>>()) {
+      final h = packageHash(
+          (c['algorithm'] as String?) ?? '', (c['checksumValue'] as String?) ?? '');
+      if (h != null && !out.contains(h)) out.add(h);
+    }
+    return out;
   }
 
   String? _spdx2Purl(Map<String, dynamic> p) {
@@ -228,10 +232,25 @@ class SbomReader {
       vendor: '',
       arch: 'any',
       sourceRef: '',
+      hashes: _spdx3Hashes(node['verifiedUsing']),
       requires: [],
       provides: [name],
       packageType: _purlToType(purl),
     );
+  }
+
+  /// Relit un tableau SPDX 3.0 `verifiedUsing` (`[{type: Hash, algorithm,
+  /// hashValue}]`).
+  List<PackageHash> _spdx3Hashes(Object? node) {
+    if (node is! List) return const [];
+    final out = <PackageHash>[];
+    for (final h in node.whereType<Map<String, dynamic>>()) {
+      if (h['type'] != 'Hash') continue;
+      final ph = packageHash(
+          (h['algorithm'] as String?) ?? '', (h['hashValue'] as String?) ?? '');
+      if (ph != null && !out.contains(ph)) out.add(ph);
+    }
+    return out;
   }
 
   String? _spdx3Purl(Map<String, dynamic> node) {

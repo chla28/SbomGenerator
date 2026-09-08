@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
 
 /// Parses Debian .deb archives using the system `dpkg-deb` binary.
@@ -41,6 +42,7 @@ class DebParser {
       url: fields['homepage'] ?? '',
       summary: summary,
       sourceRef: path,
+      hashes: hashLocalFile(path),
       requires: requires,
       provides: [name],
     );

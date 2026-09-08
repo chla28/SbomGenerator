@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'hash_utils.dart';
 import 'models.dart';
 
 /// Queries RPM metadata using the system `rpm` binary.
@@ -60,8 +61,11 @@ class RpmParser {
 
     // Sanitise checksum: rpm returns "(none)" when unavailable
     final sha256Raw = parts[9].trim();
-    final sha256 =
+    final headerSha256 =
         (sha256Raw == '(none)' || sha256Raw.isEmpty) ? '' : sha256Raw;
+
+    // Hash de l'artefact : seulement si la référence est un fichier .rpm réel.
+    final fileHashes = isFile ? hashLocalFile(packageRef) : const <PackageHash>[];
 
     final sourceRpmRaw = parts[10].trim();
     final sourceRpm =
@@ -77,7 +81,8 @@ class RpmParser {
       vendor: parts[6].trim(),
       url: parts[7].trim(),
       buildTime: parts[8].trim(),
-      sha256Header: sha256,
+      hashes: fileHashes,
+      headerSha256: headerSha256,
       sourceRpm: sourceRpm,
       summary: parts[11].trim(),
       requires: requires,

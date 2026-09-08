@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'archive_helpers.dart' show identifyArchiveLicense;
+import 'hash_utils.dart' show packageHash;
 import 'models.dart';
 
 /// Parses Dart/Flutter dependency files: `pubspec.lock` and `pubspec.yaml`
@@ -73,6 +74,10 @@ class PubspecParser {
             ? (sdkVersions[sdkName ?? ''] ?? '')
             : (version ?? '');
         if (name.isNotEmpty && seen.add('$name@$ver')) {
+          final sha = sha256;
+          final archiveHash = (sha != null && sha.isNotEmpty)
+              ? packageHash('SHA-256', sha)
+              : null;
           packages.add(WheelPackage(
             name: name,
             version: ver,
@@ -93,7 +98,7 @@ class PubspecParser {
             vendor: '',
             arch: 'any',
             sourceRef: path,
-            sha256Header: sha256 ?? '',
+            hashes: [if (archiveHash != null) archiveHash],
             requires: [],
             provides: [name],
             packageType: 'pub',

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
 
 /// Parses standalone Java `.jar` files to recover Maven coordinates.
@@ -90,6 +91,9 @@ class JarParser {
   };
 
   Future<List<WheelPackage>> parseJarFile(String path) async {
+    // Hash du .jar lui-même — appliqué uniquement au composant qui décrit le
+    // jar, pas aux dépendances relocalisées d'un uber-jar.
+    final ownHashes = hashLocalFile(path);
     final basename = path.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
     final match = _versionSep.firstMatch(basename);
     final prefix = match != null ? basename.substring(0, match.start) : null;
@@ -117,7 +121,7 @@ class JarParser {
     WheelPackage? ownPackage;
     if (ownFromPom != null) {
       final (groupId, artifactId, version) = ownFromPom;
-      ownPackage = _toPackage(path, groupId, artifactId, version);
+      ownPackage = _toPackage(path, groupId, artifactId, version, ownHashes);
     } else if (prefix != null) {
       final version = basename.substring(match!.start + 1);
       final lastDot = prefix.lastIndexOf('.');
@@ -133,7 +137,7 @@ class JarParser {
             await _groupIdFromManifest(path) ??
             prefix;
       }
-      ownPackage = _toPackage(path, groupId, artifactId, version);
+      ownPackage = _toPackage(path, groupId, artifactId, version, ownHashes);
     }
 
     if (ownPackage == null && embedded.isEmpty) {
@@ -151,8 +155,9 @@ class JarParser {
     ];
   }
 
-  WheelPackage _toPackage(
-      String path, String groupId, String artifactId, String version) {
+  WheelPackage _toPackage(String path, String groupId, String artifactId,
+      String version,
+      [List<PackageHash> hashes = const []]) {
     final name = groupId.isNotEmpty ? '$groupId:$artifactId' : artifactId;
 
     return WheelPackage(
@@ -166,6 +171,7 @@ class JarParser {
       vendor: groupId,
       arch: 'any',
       sourceRef: path,
+      hashes: hashes,
       requires: const [],
       provides: [name],
       packageType: 'maven',

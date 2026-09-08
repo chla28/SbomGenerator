@@ -38,6 +38,27 @@ List<Map<String, dynamic>> _findAllType(Map<String, dynamic> sbom, String type) 
 void main() {
   final generator = Spdx3Generator();
 
+  group('Spdx3Generator.generate — verifiedUsing', () {
+    test('Package.hashes → verifiedUsing avec libellés HashAlgorithm', () {
+      final pkg = WheelPackage(
+        name: 'lib', version: '1.0', license: '', url: '', summary: '',
+        vendor: '', arch: 'any', sourceRef: '',
+        hashes: [PackageHash('SHA-256', 'a' * 64)],
+        requires: const [], provides: const ['lib'], packageType: 'npm',
+      );
+      final elem = _findType(generator.generate([pkg], []), 'software:Package');
+      expect(elem['verifiedUsing'], [
+        {'type': 'Hash', 'algorithm': 'sha256', 'hashValue': 'a' * 64},
+      ]);
+    });
+
+    test('aucun verifiedUsing sans hash', () {
+      final elem =
+          _findType(generator.generate([_pkg(name: 'foo')], []), 'software:Package');
+      expect(elem.containsKey('verifiedUsing'), isFalse);
+    });
+  });
+
   group('Spdx3Generator.generate — enveloppe du document', () {
     test('produit un JSON-LD avec @context et @graph', () {
       final sbom = generator.generate([_pkg(name: 'foo')], []);

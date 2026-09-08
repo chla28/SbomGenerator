@@ -101,7 +101,7 @@ abstract class Package {
   String get vendor;
   String get arch;
   String get sourceRef;
-  String get sha256Header;
+  List<PackageHash> get hashes;   // empreintes de l'artefact (souvent vide)
   List<String> get requires;
   List<String> get provides;
 
@@ -117,6 +117,40 @@ abstract class Package {
 La fonction utilitaire de bibliothèque `_safeId(String s)` remplace tout
 caractère hors `[a-zA-Z0-9._-]` par `-`. Elle est utilisée dans les
 implémentations de `bomRef` et `spdxId` de tous les types de paquets.
+
+=== Empreintes cryptographiques — `PackageHash` et `lib/hash_utils.dart`
+
+`PackageHash(alg, content)` : `alg` au format CycloneDX (`SHA-256`,
+`SHA-512`, `SHA-1`, `MD5`, `SHA3-256`…), `content` hexadécimal minuscule.
+`lib/hash_utils.dart` centralise la collecte et n'accepte **que le condensat
+hexadécimal d'un artefact réel** (bonne longueur pour l'algorithme) :
+
+* `normalizeHashAlg` / `packageHash` — liste blanche d'algorithmes,
+  validation hex ; rejette `h1`, `Q1…`, `sha224`, valeurs tronquées ;
+* `packageHashFromDigestString` — `"<algo>:<hex>"` (champ `Digest` de Trivy) ;
+* `packageHashFromSri` — Subresource Integrity `"sha512-<base64>"`
+  (npm/yarn) → hexadécimal ;
+* `hashesFromSyftMetadata` — `metadata.archiveDigests` / `digests` / `digest`
+  d'un artefact Syft ;
+* `hashesFromCycloneDx` — tableau `hashes` d'un composant cdxgen ;
+* `hashLocalFile` — SHA-256 + SHA-512 d'un fichier local (`package:crypto`) ;
+* `spdx2Alg` / `spdx3Alg` — conversion des libellés vers `SHA256` /
+  `sha256` / `sha3_256`.
+
+Populé par : `npm_parser`, `yarn_parser` (v1), `pubspec_parser`,
+`rpm_parser` / `deb_parser` / `jar_parser` / `wheel_parser` (entrée fichier
+directe), `oci_parser` (chemins Syft, Trivy, cdxgen). `RpmPackage` porte en
+plus `headerSha256` (`%{SHA256HEADER}` — hash de l'*en-tête* RPM, pas du
+fichier `.rpm`), émis en propriété/annotation `rpm:header-sha256`.
+
+Émis par les trois générateurs (CycloneDX `hashes`, SPDX 2.3 `checksums`,
+SPDX 3.0 `verifiedUsing`) et relu par `sbom_reader` lors d'un `convert`.
+
+NOTE: Pour un SBOM issu d'une image OCI, la plupart des paquets système
+restent sans empreinte (installés dans l'image, pas d'artefact à hacher ;
+ni Syft ni Trivy ne reconstruisent le condensat). La couverture progresse
+surtout sur les paquets applicatifs et, via le champ `Digest` de Trivy, une
+partie des RPM.
 
 === Classe `OsInfo` (hors hiérarchie `Package`)
 
@@ -1777,7 +1811,7 @@ NOTE: `identifyArchiveLicense()` reconnaît désormais le texte BSD-3-Clause
 canonique (« Redistribution and use in source and binary forms… / endorse or
 promote products derived ») même sans le mot « BSD » — c'est le `LICENSE` de la
 quasi-totalité des paquets pub (rédigés par Google).
-* `description.sha256` (hosted) → `WheelPackage.sha256Header`.
+* `description.sha256` (hosted) → `WheelPackage.hashes` (`PackageHash('SHA-256', …)`).
 * `description.url` → homepage (`https://pub.dev/packages/<name>` pour
   pub.dev, `<registre>/packages/<name>` pour un registre privé, l'URL du dépôt
   pour `git`).
@@ -3174,10 +3208,15 @@ Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` et
 |`summary`
 |`summary`
 
-|`pkg.sha256Header`
-|`hashes[SHA-256]`
-|—
-|—
+|`pkg.hashes` (`PackageHash`)
+|`hashes[alg/content]`
+|`checksums[algorithm/checksumValue]`
+|`verifiedUsing[Hash]`
+
+|*RPM* `headerSha256`
+|`properties[rpm:header-sha256]`
+|`annotations`
+|`annotation`
 
 |`pkg.sourceRef` (si `.rpm`/`.whl`)
 |`externalReferences[distribution]`

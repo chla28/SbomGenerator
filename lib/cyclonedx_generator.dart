@@ -355,9 +355,9 @@ class CycloneDxGenerator {
       component['description'] = pkg.summary;
     }
 
-    if (_hasValue(pkg.sha256Header)) {
+    if (pkg.hashes.isNotEmpty) {
       component['hashes'] = [
-        {'alg': 'SHA-256', 'content': pkg.sha256Header},
+        for (final h in pkg.hashes) {'alg': h.alg, 'content': h.content},
       ];
     }
 
@@ -430,6 +430,10 @@ class CycloneDxGenerator {
           {'name': 'rpm:epoch', 'value': pkg.epoch},
         if (_hasValue(pkg.buildTime))
           {'name': 'rpm:buildTime', 'value': pkg.buildTime},
+        // Condensat de l'en-tête RPM — pas le hash du fichier .rpm, d'où une
+        // propriété dédiée plutôt qu'une entrée `hashes`.
+        if (_hasValue(pkg.headerSha256))
+          {'name': 'rpm:header-sha256', 'value': pkg.headerSha256},
       ]);
       for (final req in pkg.requires) {
         properties.add({'name': 'rpm:requires', 'value': req});

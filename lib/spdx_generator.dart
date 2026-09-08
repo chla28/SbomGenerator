@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'hash_utils.dart' show spdx2Alg;
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -157,6 +158,13 @@ class SpdxGenerator {
 
     if (_hasValue(pkg.summary)) spdxPkg['summary'] = pkg.summary;
 
+    if (pkg.hashes.isNotEmpty) {
+      spdxPkg['checksums'] = [
+        for (final h in pkg.hashes)
+          {'algorithm': spdx2Alg(h.alg), 'checksumValue': h.content},
+      ];
+    }
+
     if (_hasValue(pkg.vendor)) {
       spdxPkg['supplier'] = 'Organization: ${pkg.vendor}';
     }
@@ -180,7 +188,8 @@ class SpdxGenerator {
   String _annotationComment(Package pkg) {
     if (pkg is RpmPackage) {
       return 'arch=${pkg.arch}; epoch=${pkg.epoch}; release=${pkg.release}'
-          '${_hasValue(pkg.buildTime) ? "; buildTime=${pkg.buildTime}" : ""}';
+          '${_hasValue(pkg.buildTime) ? "; buildTime=${pkg.buildTime}" : ""}'
+          '${_hasValue(pkg.headerSha256) ? "; rpm:header-sha256=${pkg.headerSha256}" : ""}';
     }
     if (pkg is DebPackage) return 'deb:arch=${pkg.arch}';
     if (pkg is WheelPackage) {

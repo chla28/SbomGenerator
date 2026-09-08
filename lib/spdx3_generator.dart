@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'hash_utils.dart' show spdx3Alg;
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -200,6 +201,17 @@ class Spdx3Generator {
     if (_hasValue(pkg.summary)) elem['summary'] = pkg.summary;
     if (_hasValue(pkg.url)) elem['software:downloadLocation'] = pkg.url;
 
+    if (pkg.hashes.isNotEmpty) {
+      elem['verifiedUsing'] = [
+        for (final h in pkg.hashes)
+          {
+            'type': 'Hash',
+            'algorithm': spdx3Alg(h.alg),
+            'hashValue': h.content,
+          },
+      ];
+    }
+
     elem['concludedLicense'] = _normalizeLicense(pkg.license);
     elem['declaredLicense'] = _normalizeLicense(pkg.license);
     elem['copyrightText'] = 'NOASSERTION';
@@ -229,6 +241,8 @@ class Spdx3Generator {
         if (pkg.epoch != '(none)' && pkg.epoch.isNotEmpty)
           'rpm:epoch=${pkg.epoch}',
         if (_hasValue(pkg.buildTime)) 'rpm:buildTime=${pkg.buildTime}',
+        if (_hasValue(pkg.headerSha256))
+          'rpm:header-sha256=${pkg.headerSha256}',
       ].join('; ');
     }
     if (pkg is DebPackage) return 'deb:arch=${pkg.arch}';

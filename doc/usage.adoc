@@ -1206,9 +1206,15 @@ précisément à obtenir l'union des trois plutôt que de se fier à un seul.
 |calculé
 |`cpe:2.3:a:<vendor>:<name>:<version>:*:…`
 
-|Checksum
+|Empreinte en-tête
 |`%{SHA256HEADER}`
-|SHA-256 de l'en-tête RPM
+|SHA-256 de l'*en-tête* RPM (pas du fichier `.rpm`) — émis en propriété
+`rpm:header-sha256`, jamais comme empreinte d'artefact
+
+|Empreinte artefact
+|calculée / relayée
+|SHA-256 + SHA-512 du fichier si un `.rpm` est passé directement en entrée ;
+sinon vide. Émise en `hashes` / `checksums` / `verifiedUsing`
 
 |Licence
 |`%{LICENSE}`
@@ -1230,6 +1236,29 @@ précisément à obtenir l'union des trois plutôt que de se fier à un seul.
 |`rpm:arch`, `rpm:release`, `rpm:requires`
 |Métadonnées RPM additionnelles
 |===
+
+=== Empreintes cryptographiques des composants
+
+`sbom_generator` renseigne l'empreinte d'un composant **sans requête
+réseau**, quand la source la fournit :
+
+* `integrity` des lockfiles npm (`package-lock.json`) et yarn v1
+  (`yarn.lock`), et `sha256` de `pubspec.lock` ;
+* champ `Digest` de Trivy et digests d'artefact de Syft (ex. SHA-1 des JAR)
+  lors de l'analyse d'une image OCI (`--image`) ;
+* empreintes des composants produits par cdxgen ;
+* SHA-256 + SHA-512 calculés localement pour un fichier `.rpm` / `.deb` /
+  `.jar` / `.whl` passé directement en entrée.
+
+Seuls les condensats hexadécimaux d'un artefact réel sont retenus (les
+formats dérivés — dirhash Go `h1:`, checksum APK `Q1…` — sont écartés). Le
+condensat de l'en-tête RPM (`%{SHA256HEADER}`) est exposé comme propriété
+`rpm:header-sha256` et non comme empreinte d'artefact.
+
+L'empreinte est écrite dans `hashes` (CycloneDX), `checksums` (SPDX 2.3) et
+`verifiedUsing` (SPDX 3.0). *Pour un SBOM issu d'une image, la plupart des
+paquets système restent sans empreinte* : ils sont installés dans l'image,
+pas présents sous forme d'artefact à hacher.
 
 === Dépendances
 

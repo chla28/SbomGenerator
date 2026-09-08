@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'hash_utils.dart'
+    show hashesFromCycloneDx, hashesFromSyftMetadata, packageHashFromDigestString;
 import 'models.dart';
 
 /// Format de la référence OCI fournie par l'utilisateur.
@@ -396,6 +398,7 @@ class OciParser {
       arch: arch,
       sourceRef: imageRef,
       imageRef: imageRef,
+      hashes: hashesFromSyftMetadata(metadata),
       requires: [],
       provides: [name],
       packageType: type,
@@ -560,6 +563,10 @@ class OciParser {
     final deps = (p['DependsOn'] as List?) ?? [];
     final requires = deps.map((d) => d.toString()).toList();
 
+    // Champ `Digest` de trivy (`"<algo>:<hex>"`) — présent pour une partie des
+    // paquets système (RPM surtout).
+    final digest = packageHashFromDigestString(p['Digest'] as String?);
+
     return OciPackage(
       name: name,
       version: version,
@@ -570,6 +577,7 @@ class OciParser {
       arch: arch,
       sourceRef: imageRef,
       imageRef: imageRef,
+      hashes: [if (digest != null) digest],
       requires: requires,
       provides: [name],
       packageType: packageType,
@@ -1440,15 +1448,6 @@ class OciParser {
       }
     }
 
-    var sha256 = '';
-    for (final h in ((c['hashes'] as List?) ?? const [])
-        .whereType<Map<String, dynamic>>()) {
-      if (h['alg'] == 'SHA-256') {
-        sha256 = (h['content'] as String?) ?? '';
-        break;
-      }
-    }
-
     return OciPackage(
       name: name,
       version: (c['version'] as String?) ?? '',
@@ -1459,7 +1458,7 @@ class OciParser {
       arch: _purlQualifier(purl, 'arch'),
       sourceRef: imageRef,
       imageRef: imageRef,
-      sha256Header: sha256,
+      hashes: hashesFromCycloneDx(c['hashes']),
       requires: const [],
       provides: [name],
       packageType: pkgType,

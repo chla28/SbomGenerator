@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:sbom_generator/models.dart';
 import 'package:sbom_generator/oci_parser.dart';
 
 void main() {
@@ -362,7 +363,7 @@ void main() {
             '?arch=all&distro=debian-12&distro_name=bookworm',
         'supplier': {'name': 'Debian Adduser Developers'},
         'hashes': [
-          {'alg': 'SHA-256', 'content': 'abc123'},
+          {'alg': 'SHA-256', 'content': 'c' * 64},
         ],
         'licenses': [
           {
@@ -380,7 +381,7 @@ void main() {
       expect(pkg.arch, 'all');
       expect(pkg.license, 'GPL-2.0-or-later');
       expect(pkg.vendor, 'Debian Adduser Developers');
-      expect(pkg.sha256Header, 'abc123');
+      expect(pkg.hashes, [PackageHash('SHA-256', 'c' * 64)]);
     });
 
     test('écarte les composants de type file (inventaire fichiers cdxgen)', () {

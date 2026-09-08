@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Empreintes cryptographiques des composants** (`Package.hashes`) émises
+  dans les trois formats : CycloneDX (`hashes`), SPDX 2.3 (`checksums`),
+  SPDX 3.0 (`verifiedUsing`). Collecte opportuniste, sans requête réseau :
+  - `integrity` des lockfiles npm / yarn v1 (SRI base64 → hexadécimal) et
+    `sha256` de `pubspec.lock` ;
+  - champ `Digest` de Trivy et digests d'artefact de Syft (`archiveDigests`
+    / `digest`, ex. JAR) lors de l'analyse d'images OCI ;
+  - `hashes` des composants produits par cdxgen ;
+  - calcul SHA-256 + SHA-512 des fichiers `.rpm` / `.deb` / `.jar` / `.whl`
+    fournis directement en entrée.
+  Seuls les condensats hexadécimaux d'un artefact réel sont retenus ; les
+  formats dérivés (dirhash Go `h1:`, checksum APK `Q1…`) sont écartés.
+- Le condensat de l'en-tête RPM (`%{SHA256HEADER}`), auparavant émis à tort
+  comme empreinte d'artefact `SHA-256` du composant CycloneDX, est désormais
+  exposé comme propriété/annotation dédiée `rpm:header-sha256` (ce n'est pas
+  le hash du fichier `.rpm`).
+- Nouvelle dépendance : `package:crypto` (calcul des empreintes de fichiers).
+
+### Notes
+- Pour un SBOM issu d'une image OCI, la plupart des paquets système restent
+  sans empreinte : ils sont installés dans l'image, pas présents sous forme
+  d'artefact, et ni Syft ni Trivy ne reconstruisent leur condensat. La
+  couverture s'améliore surtout pour les paquets applicatifs et, via Trivy,
+  une partie des RPM.
+
 ## [1.5.5] - 2026-09-09
 
 ### Added

@@ -61,6 +61,14 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
   - `cdxgen` : produit un SBOM CycloneDX complet dont on ne retient que les composants porteurs d'un PURL d'écosystème réel (l'inventaire fichier par fichier de cdxgen et ses actifs cryptographiques sont écartés) ; l'OS de base est reconstitué depuis le qualifiant `distro=` des PURL système
 - Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`, `pubspec.yaml`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
+**Empreintes cryptographiques :** l'empreinte d'un composant est renseignée
+sans requête réseau quand la source la fournit — `integrity` des lockfiles
+npm/yarn, `sha256` de `pubspec.lock`, `Digest` Trivy / digests Syft (images
+OCI), ou SHA-256+SHA-512 calculés pour un fichier `.rpm`/`.deb`/`.jar`/`.whl`
+passé en entrée. Émise en `hashes` (CycloneDX), `checksums` (SPDX 2.3),
+`verifiedUsing` (SPDX 3.0). Le hash de l'en-tête RPM est exposé à part
+(`rpm:header-sha256`). Souvent absente pour les paquets système d'une image.
+
 **Formats de sortie :**
 
 | `-f` | Standard | Contenu |
@@ -367,7 +375,8 @@ sbom_generator/
 │                                #   diff/merge/convert/validate/scan
 ├── lib/
 │   ├── models.dart              # Package, RpmPackage, WheelPackage, DebPackage,
-│   │                            #   OciPackage, PackageDependency, generateUuidV4()
+│   │                            #   OciPackage, PackageHash, PackageDependency, generateUuidV4()
+│   ├── hash_utils.dart          # Collecte/normalisation des empreintes (SRI, Digest, fichiers)
 │   ├── rpm_parser.dart          # Interrogation rpm (3 appels en Future.wait)
 │   ├── wheel_parser.dart        # Lecture des .whl (ZIP + RFC 822)
 │   ├── tar_parser.dart          # Lecture des .tar/.tar.gz/.tgz
