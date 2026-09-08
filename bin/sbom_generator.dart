@@ -32,7 +32,7 @@ import 'package:sbom_generator/scan_report_generator.dart';
 import 'package:sbom_generator/license_report_generator.dart';
 import 'package:sbom_generator/vuln_enrichment.dart';
 
-const _version = '1.4.2';
+const _version = '1.5.0';
 
 const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
