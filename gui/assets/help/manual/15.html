@@ -1,94 +1,103 @@
 
-<h2 id="_onglet_fusion_sbom">16. Onglet Fusion SBOM</h2>
+<h2 id="_onglet_comparaison_sbom">16. Onglet Comparaison SBOM</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Fusion SBOM</strong> combine plusieurs fichiers SBOM en un seul document,
-en dédupliquant les composants communs. Il orchestre la sous-commande
-<code>sbom-generator merge</code> en arrière-plan.</p>
+<p>L’onglet <strong>Comparaison SBOM</strong> met en évidence les différences entre deux
+fichiers SBOM (par exemple avant / après une mise à jour).</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ [➕ Ajouter des fichiers…]  [📂 Fichiers générés]   3 fichier(s) sélectionné(s) ─┐
-  │  📄 base.cdx.json         /chemin/vers/base.cdx.json                      [✕]  │
-  │  📄 extra-1.cdx.json      /chemin/vers/extra-1.cdx.json                   [✕]  │
-  │  📄 extra-2.cdx.json      /chemin/vers/extra-2.cdx.json                   [✕]  │
-  └──────────────────────────────────────────────────────────────────────────────┘
+<pre>  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
+  │ [ /chemin/vers/avant.cdx.json ] [📂]  │  │ [ /chemin/vers/après.cdx.json ] [📂] │
+  └───────────────────────────────────────┘  └──────────────────────────────────────┘
+                                                                    [Comparer]
 
-  [ Fichier de sortie : merged.cdx.json ]  [ Nom du document (optionnel) ]  [🔀 Fusionner]
+  Ajoutés : 5  │  Supprimés : 3  │  Modifiés : 8  │  Inchangés : 230
 
-  ✔ Fusion réussie → merged.cdx.json</pre>
+  Filtre : [✓ Ajoutés] [✓ Supprimés] [✓ Modifiés] [ Inchangés]
+  Recherche : [ openssl…                             ]
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
+  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
+  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
+  └─────────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sélection_des_fichiers_à_fusionner">16.1. Sélection des fichiers à fusionner</h3>
+<h3 id="_chargement_des_fichiers">16.1. Chargement des fichiers</h3>
 <div class="paragraph">
-<p>Deux façons d’alimenter la liste :</p>
+<p>Sélectionnez un fichier dans chaque emplacement (SBOM A et SBOM B) via le
+bouton 📂 ou en saisissant un chemin. Les formats CycloneDX, SPDX 2.x et
+SPDX 3.0 JSON-LD sont supportés (mêmes formats que l’onglet Arborescence) ;
+les deux fichiers comparés n’ont pas besoin d’être dans le même format.</p>
+</div>
+<div class="paragraph">
+<p>Cliquez sur <strong>Comparer</strong> pour lancer la comparaison. Le bouton est actif
+uniquement si les deux fichiers sont sélectionnés.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_barre_de_compteurs">16.2. Barre de compteurs</h3>
+<div class="paragraph">
+<p>Affiche le nombre de composants dans chaque catégorie :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 20%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">+  (vert)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Ajoutés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans B, absents de A</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">−  (rouge)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Supprimés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans A, absents de B</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">~  (orange)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Modifiés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans A et B, mais avec version ou licence différente</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">=  (gris)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Inchangés</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Identiques dans A et B</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_filtres_et_recherche">16.3. Filtres et recherche</h3>
+<div class="paragraph">
+<p>Les puces de filtre permettent d’afficher ou masquer chaque catégorie.
+Par défaut, les composants <strong>Inchangés</strong> sont masqués pour se concentrer
+sur les différences.</p>
+</div>
+<div class="paragraph">
+<p>Le champ de recherche filtre sur le nom du composant en temps réel, en
+combinaison avec les filtres de catégorie.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_colonne_de_différences">16.4. Colonne de différences</h3>
+<div class="paragraph">
+<p>Pour les composants <strong>Modifiés</strong> :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>➕ Ajouter des fichiers…</strong> : ouvre un menu à deux entrées —
-<strong>.json / .jsonld</strong> (filtre le sélecteur sur ces extensions) ou
-<strong>Tous les fichiers</strong> (aucun filtre, pour les SBOM dont l’extension n’est pas
-<code>.json</code>, ex. <code>.cdx</code>, <code>.spdx</code>, <code>bom</code>, ou sans extension). Sélection multiple
-possible dans les deux cas. Le contenu doit rester du JSON CycloneDX ou
-SPDX 2.x quel que soit le nom du fichier.</p>
+<p>La <strong>version</strong> affiche l’ancienne valeur barrée et la nouvelle valeur en vert</p>
 </li>
 <li>
-<p><strong>📂 Fichiers générés</strong> : menu listant les fichiers SBOM produits pendant la
-session courante (mêmes formats que l’onglet Arborescence, hors SPDX 3.0
-— voir Contraintes ci-dessous).</p>
+<p>La <strong>licence</strong> affiche l’ancienne valeur barrée et la nouvelle valeur en vert</p>
 </li>
 </ul>
-</div>
-<div class="paragraph">
-<p>Chaque fichier de la liste peut être retiré individuellement via le bouton
-<strong>✕</strong>. Le bouton <strong>🔀 Fusionner</strong> n’est actif qu’à partir de deux fichiers
-sélectionnés et d’un chemin de sortie renseigné.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_fichier_de_sortie_et_nom_du_document">16.2. Fichier de sortie et nom du document</h3>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Fichier de sortie</strong> : chemin du document fusionné produit (valeur par
-défaut : <code>merged.cdx.json</code>).</p>
-</li>
-<li>
-<p><strong>Nom du document</strong> (optionnel) : s’il est renseigné, remplace le nom du
-document dans le fichier fusionné ; sinon, le nom du premier fichier
-source est conservé.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_lancement_et_résultat">16.3. Lancement et résultat</h3>
-<div class="paragraph">
-<p>Le bouton <strong>🔀 Fusionner</strong> lance <code>sbom-generator merge</code> avec les fichiers
-sélectionnés. Le déroulé de la commande (journal) s’affiche sous les
-champs, suivi d’une bannière de résultat :</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>✔ Fusion réussie → &lt;fichier&gt;</strong> (vert) en cas de succès.</p>
-</li>
-<li>
-<p><strong>✘ Échec de la fusion (code N)</strong> (rouge) en cas d’échec — consultez le
-journal affiché pour le détail de l’erreur.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_contraintes">16.4. Contraintes</h3>
-<div class="paragraph">
-<p>Tous les fichiers sélectionnés doivent être dans le même format (celui du
-premier fichier de la liste) : CycloneDX ou SPDX 2.3. Le format de sortie
-suit celui du premier fichier. Le format SPDX 3.0 (JSON-LD) n’est pas pris
-en charge en entrée pour la fusion.</p>
 </div>
 </div>
 </div>

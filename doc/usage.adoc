@@ -142,6 +142,7 @@ sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator licenses -i <sbom-source> -o <licences.adoc>
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
+sbom_generator cra --sbom <fichier> [options]
 ....
 
 === Options
@@ -1037,6 +1038,85 @@ Scanning).
 
 `--only-kev` et `--epss-min` restreignent la sortie (tous formats) ;
 `--sort risk` réordonne l'affichage console.
+
+=== Rapport de conformité Cyber Resilience Act (`cra`)
+
+Produit un rapport de conformité au Règlement (UE) 2024/2847 (*Cyber
+Resilience Act*) à partir d'un SBOM et, optionnellement, d'une analyse de
+vulnérabilités.
+
+[IMPORTANT]
+====
+Le rapport ne couvre que les exigences *vérifiables automatiquement* :
+
+* *format et complétude du SBOM* — format d'usage courant lisible par machine
+  et couverture des dépendances (Annexe I §2 point 1) ; champs de données par
+  composant (BSI TR-03183-2 : nom, version, fournisseur, identifiant unique
+  PURL/CPE, empreinte, licence) ; éléments minimaux NTIA 2021 ;
+* *gestion des vulnérabilités* — inventaire des vulnérabilités connues
+  (point 1) et disponibilité des correctifs (point 2) ;
+* *vulnérabilités activement exploitées* — toute CVE au catalogue CISA KEV est
+  signalée comme déclenchant l'obligation de notification à l'ENISA et au CSIRT
+  coordinateur *sous 24 h* (art. 14).
+
+Les autres obligations du CRA (mécanisme de diffusion sécurisé des mises à
+jour, politique de divulgation coordonnée effective, conception sûre par
+défaut, tests réguliers, notifications réglementaires, déclaration UE de
+conformité) *relèvent du fabricant* et sont seulement listées. **Ce document
+n'est pas une déclaration de conformité.**
+====
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Défaut |Description
+
+|`--sbom <fichier>` / `-s` |_(obligatoire)_ |SBOM à évaluer (CycloneDX ou SPDX JSON)
+|`--config <cra.yaml>` / `-c` |`./cra.yaml` si présent |Métadonnées fabricant / produit (voir ci-dessous)
+|`--manufacturer` / `--product` / `--product-version` |— |Surchargent le fichier de config
+|`--support-until <AAAA-MM-JJ>` |— |Date de fin de la période de support (art. 13 §8)
+|`--vuln-contact <e-mail\|URL>` |— |Adresse de signalement des vulnérabilités (Annexe I §2 point 6)
+|`--cvd-policy-url <URL>` |— |Politique de divulgation coordonnée (point 5)
+|`--scan` / `--no-scan` |activé |Lancer une analyse de vulnérabilités pour évaluer l'inventaire et les correctifs
+|`--scanner <grype\|osv\|trivy\|all>` |`grype` |Scanner(s) à utiliser avec `--scan`
+|`--enrich` / `--no-enrich` |activé |Enrichissement CISA KEV / EPSS (réseau)
+|`--format <pdf\|asciidoc\|json>` / `-f` |`pdf` |Format de sortie
+|`--output <fichier>` / `-o` |— |Requis pour `pdf` / `asciidoc` ; `json` sur stdout si omis
+|===
+
+[source,bash]
+----
+# Rapport PDF, métadonnées depuis cra.yaml, analyse Grype
+./sbom_generator cra --sbom sbom.cdx.json --config cra.yaml -o rapport-cra.pdf
+
+# Rapport JSON machine-lisible sans analyse de vulnérabilités
+./sbom_generator cra --sbom sbom.cdx.json --no-scan --format json
+
+# Métadonnées en ligne de commande
+./sbom_generator cra --sbom sbom.cdx.json --manufacturer "ACME Corp" \
+  --product WidgetOS --product-version 3.2.1 -o rapport-cra.pdf
+----
+
+Fichier `cra.yaml` (toutes les clés sont facultatives, `clé: valeur` par
+ligne, `#` pour un commentaire) :
+
+[source,yaml]
+----
+manufacturer: "ACME Corp"
+product: "WidgetOS"
+product_version: "3.2.1"
+support_until: "2030-12-31"
+vulnerability_contact: "security@acme.example"
+cvd_policy_url: "https://acme.example/security/policy"
+----
+
+À défaut de valeur fournie, `cra` tente de déduire le fabricant et le produit
+de `metadata.component` / `metadata.supplier` du SBOM.
+
+Le PDF suit la même charte que le rapport `scan` (page de garde, résumé
+exécutif chiffré, verdict). Codes de retour : `0` = conforme ou conforme avec
+réserves sur le périmètre vérifié, `2` = non conforme (au moins un point
+bloquant : format non lisible par machine, champ obligatoire manquant,
+vulnérabilité sans correctif, CVE activement exploitée).
 
 === Pourquoi les scanners ne trouvent pas les mêmes CVE
 

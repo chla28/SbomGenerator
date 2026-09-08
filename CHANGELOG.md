@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Rapport de conformité Cyber Resilience Act** — nouvelle sous-commande
+  CLI `sbom_generator cra --sbom <fichier>` et nouvel onglet *Conformité CRA*
+  dans la GUI. Évalue un SBOM contre le **sous-ensemble d'exigences du
+  Règlement (UE) 2024/2847 vérifiables automatiquement**, clairement délimité :
+  - *format et complétude du SBOM* — format d'usage courant lisible par
+    machine et couverture des dépendances (Annexe I §2 point 1), champs de
+    données par composant (BSI TR-03183-2 : nom, version, fournisseur,
+    identifiant unique PURL/CPE, empreinte, licence), éléments minimaux
+    NTIA 2021 ;
+  - *gestion des vulnérabilités* — inventaire des vulnérabilités connues et
+    disponibilité des correctifs (Annexe I §2 points 1-2), via `--scan` ;
+  - *vulnérabilités activement exploitées* — toute CVE au catalogue CISA KEV
+    est signalée comme déclenchant la notification à l'ENISA sous 24 h
+    (art. 14).
+  - Métadonnées fabricant/produit depuis un fichier `cra.yaml`, des options
+    (`--manufacturer`, `--product`, `--product-version`, `--support-until`,
+    `--vuln-contact`, `--cvd-policy-url` ; priment sur le fichier) ou, à
+    défaut, `metadata.component` du SBOM.
+  - Sorties `--format pdf` (même charte que le rapport `scan`), `asciidoc`
+    ou `json` (schéma `sbom-generator/cra-report/1`). Code de retour `2` si
+    non conforme (format non lisible par machine, champ obligatoire manquant,
+    vulnérabilité sans correctif, CVE activement exploitée).
+  - Les autres obligations du CRA relèvent du fabricant : elles sont listées,
+    non évaluées. **Le rapport n'est pas une déclaration de conformité.**
+
 ## [1.5.4] - 2026-09-08
 
 ### Changed

@@ -1,254 +1,122 @@
 
-<h2 id="_problèmes_courants">21. Problèmes courants</h2>
+<h2 id="_sous_commande_scan_analyse_cve_en_ligne_de_commande">21. Sous-commande <code>scan</code> — Analyse CVE en ligne de commande</h2>
 <div class="sectionbody">
-<div class="sect2">
-<h3 id="_sbom_generator_introuvable">21.1. <code>sbom-generator</code> introuvable</h3>
 <div class="paragraph">
-<p><strong>Symptôme</strong> : la génération échoue immédiatement avec une erreur du type
-<code>sbom-generator: commande introuvable</code>.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : vérifiez que le binaire <code>sbom-generator</code> est accessible dans le PATH :</p>
+<p>La sous-commande <code>scan</code> permet d’exécuter les mêmes analyses CVE que le GUI
+directement depuis le terminal, avec filtrage par date intégré. Elle ne
+nécessite pas d’interface graphique.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which sbom-generator
-sbom-generator --version</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Si le binaire est installé à un emplacement non standard, placez-le dans
-un dossier du PATH ou créez un lien symbolique :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">ln -s /chemin/vers/sbom-generator /usr/local/bin/sbom-generator</code></pre>
-</div>
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator scan --sbom &lt;fichier.cdx.json&gt; [options]</code></pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_syft_skopeo_cdxgen_introuvable">21.2. <code>syft</code> / <code>skopeo</code> / <code>cdxgen</code> introuvable</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : la génération échoue avec le message
-<code>syft introuvable ou non fonctionnel — requis pour --image.</code></p>
+<h3 id="_options">21.1. Options</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 16.6666%;">
+<col style="width: 50.0001%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Option</th>
+<th class="tableblock halign-left valign-top">Défaut</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--sbom &lt;chemin&gt;</code> (ou <code>-s</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>obligatoire</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fichier SBOM à analyser (CycloneDX, SPDX…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--scanner &lt;nom&gt;</code> (ou <code>-S</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Scanner à utiliser : <code>grype</code>, <code>osv</code>, <code>trivy</code>, ou <code>all</code> (les trois)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-after &lt;YYYY-MM-DD&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>aucun</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">N’afficher que les CVE dont la date est postérieure à cette valeur (inclusive)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-before &lt;YYYY-MM-DD&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>aucun</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">N’afficher que les CVE dont la date est antérieure à cette valeur (inclusive,
+fin de journée)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-date-field &lt;champ&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>published</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Champ de date utilisé : <code>published</code>, <code>modified</code>, ou <code>latest</code> (la plus récente
+des deux)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--include-undated</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>désactivé</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Inclure les CVE dont le champ de date est absent des données du scanner</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--help</code> (ou <code>-h</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">—</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Afficher l’aide de la sous-commande</p></td>
+</tr>
+</tbody>
+</table>
 </div>
-<div class="paragraph">
-<p><strong>Solution</strong> : installez l’outil manquant et vérifiez qu’il est dans le PATH :</p>
+<div class="sect2">
+<h3 id="_codes_de_retour">21.2. Codes de retour</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>0</strong> — aucune CVE dans la plage demandée (ou aucune CVE trouvée du tout)</p>
+</li>
+<li>
+<p><strong>1</strong> — au moins une CVE trouvée dans la plage, ou erreur d’un scanner</p>
+</li>
+</ul>
 </div>
+</div>
+<div class="sect2">
+<h3 id="_exemples">21.3. Exemples</h3>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Syft
-curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-  | sh -s -- -b /usr/local/bin
-syft version
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Toutes les CVE Grype depuis le 1er janvier 2024
+sbom-generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
 
-# Skopeo (Fedora/RHEL)
-sudo dnf install skopeo
-skopeo --version
+# CVE OSV-Scanner entre deux dates
+sbom-generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
 
-# cdxgen (npm, requiert Node.js)
-npm install -g @cyclonedx/cdxgen
-cdxgen --version</code></pre>
+# Tous les scanners, date de modification, CVE sans date incluses
+sbom-generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Utiliser dans un script CI (retour 1 si CVE récentes détectées)
+sbom-generator scan --sbom sbom.cdx.json \
+  --cve-after "$(date -d '90 days ago' +%F)" &amp;&amp; echo "OK" || echo "CVE récentes !"</code></pre>
 </div>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_échec_de_lanalyse_oci">21.3. Échec de l’analyse OCI</h3>
+<h3 id="_format_de_sortie">21.4. Format de sortie</h3>
 <div class="paragraph">
-<p><strong>Symptôme</strong> : <code>Échec de l’analyse OCI : …</code> dans le journal.</p>
-</div>
-<div class="paragraph">
-<p><strong>Causes possibles et solutions :</strong></p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Image de registre inaccessible</strong> : vérifiez la connexion réseau et
-l’authentification (<code>docker login</code> ou <code>skopeo login</code>).</p>
-</li>
-<li>
-<p><strong>Archive tar corrompue ou format non reconnu</strong> : regénérez l’archive
-avec <code>docker save &lt;image&gt; -o /path/image.tar</code> (ou compressée :
-<code>docker save &lt;image&gt; | gzip &gt; /path/image.tar.gz</code>).
-Les formats <code>.tar</code>, <code>.tar.gz</code> et <code>.tgz</code> sont supportés.</p>
-</li>
-<li>
-<p><strong>Répertoire OCI layout invalide</strong> : vérifiez que <code>index.json</code> est présent
-à la racine du répertoire.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_grype_introuvable">21.4. <code>grype</code> introuvable</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : l’analyse Grype échoue avec le message
-<code>grype introuvable. Installez-le : <a href="https://github.com/anchore/grype" class="bare">https://github.com/anchore/grype</a></code>.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : installez grype (voir <a href="#_installer_grype">Installer grype</a>) et vérifiez qu’il
-est dans le PATH :</p>
+<p>La commande affiche pour chaque scanner une table textuelle triée par
+sévérité décroissante :</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which grype
-grype version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_osv_scanner_introuvable">21.5. <code>osv-scanner</code> introuvable</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : l’analyse OSV-Scanner échoue avec un message du type
-<code>osv-scanner: commande introuvable</code> ou le fichier SBOM n’est pas trouvé.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : vérifiez que <code>osv-scanner</code> est dans le PATH de votre session
-graphique (pas seulement dans le terminal) :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which osv-scanner
-osv-scanner --version</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Si <code>osv-scanner</code> est installé via <code>go install</code> dans <code>~/go/bin</code>, ce dossier
-n’est souvent pas dans le PATH graphique. Ajoutez-le dans <code>~/.profile</code> :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">export PATH="$HOME/go/bin:$PATH"</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Puis reconnectez-vous ou relancez le GUI.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_trivy_introuvable">21.6. <code>trivy</code> introuvable</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : l’analyse Trivy échoue avec un message du type
-<code>trivy: commande introuvable</code>.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : vérifiez que <code>trivy</code> est dans le PATH :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which trivy
-trivy --version</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Installez-le si nécessaire (voir <a href="#_installer_trivy_optionnel">Installer trivy (optionnel)</a>).</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_la_base_de_données_trivy_est_obsolète">21.7. La base de données Trivy est obsolète</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : Trivy affiche un avertissement sur l’âge de sa base de données.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : laissez <strong>--skip-db-update</strong> décoché (comportement par défaut)
-pour que Trivy mette à jour sa base automatiquement au lancement.
-En environnement hors-ligne, mettez à jour manuellement :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">trivy image --download-db-only</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_aucune_vulnérabilité_détectée_malgré_un_sbom_chargé">21.8. Aucune vulnérabilité détectée malgré un SBOM chargé</h3>
-<div class="paragraph">
-<p><strong>Causes possibles :</strong></p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Le fichier SBOM sélectionné n’est pas un format reconnu par grype.
-Grype supporte nativement CycloneDX JSON (<code>.cdx.json</code>) et SPDX JSON
-(<code>.spdx.json</code>). Le format SPDX 3.0 JSON-LD peut nécessiter une version
-récente de grype.</p>
-</li>
-<li>
-<p>La base de données de vulnérabilités grype est obsolète.
-Grype la met à jour automatiquement au premier lancement,
-mais peut avoir besoin d’une mise à jour manuelle :</p>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">grype db update</code></pre>
-</div>
-</div>
-</li>
-<li>
-<p>La version RHEL sélectionnée dans <strong>Distro</strong> ne correspond pas aux paquets
-du SBOM. Essayez <strong>(aucune)</strong> pour laisser grype détecter automatiquement.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_avertissements_de_licence">21.9. Avertissements de licence</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : des lignes <code>Warning: licence inconnue pour 'paquet'</code> apparaissent
-dans la progression.</p>
-</div>
-<div class="paragraph">
-<p><strong>Explication</strong> : <code>sbom-generator</code> n’a pas pu déterminer la licence SPDX du
-paquet. Le SBOM est généré quand même avec la valeur <code>NOASSERTION</code> pour
-la licence concernée.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : utilisez un fichier <strong>override de licences</strong> (<code>--license-map</code>)
-pour définir manuellement la licence des paquets non reconnus.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_le_score_sbomqs_napparaît_pas">21.10. Le score sbomqs n’apparaît pas</h3>
-<div class="paragraph">
-<p><strong>Causes possibles :</strong></p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><code>sbomqs</code> n’est pas installé ou n’est pas dans le PATH.
-Vérifiez avec <code>which sbomqs</code>. Si absent, installez-le
-(voir <a href="#_installer_sbomqs_optionnel">Installer sbomqs (optionnel)</a>).</p>
-</li>
-<li>
-<p>L’option <strong>Score qualité sbomqs</strong> n’est pas cochée dans la section <strong>Options</strong>.</p>
-</li>
-<li>
-<p>Aucun fichier JSON SBOM n’a été généré dans la session courante.
-sbomqs ne s’exécute que sur les formats <code>.cdx.json</code>, <code>.spdx.json</code> ou <code>.jsonld</code>.
-Assurez-vous qu’au moins un de ces formats est sélectionné.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_la_conversion_pdf_échoue">21.11. La conversion PDF échoue</h3>
-<div class="paragraph">
-<p><strong>Symptôme</strong> : le message <code>asciidoctor-pdf introuvable</code> apparaît dans les logs
-(génération SBOM) ou dans le message de confirmation (export AsciiDoc + PDF
-d’un onglet Grype/OSV-Scanner/Trivy — le fichier <code>.adoc</code> est alors tout de
-même produit).</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong> : installez <code>asciidoctor-pdf</code> (voir <a href="#_installer_asciidoctor_pdf_optionnel">Installer asciidoctor-pdf (optionnel)</a>).</p>
-</div>
-<div class="paragraph">
-<p>Si <code>asciidoctor-pdf</code> est installé mais introuvable, assurez-vous que le
-dossier des gems Ruby est dans le PATH :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">gem environment gemdir
-# Exemple : /home/user/.local/share/gem/ruby/3.2.0
-export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"</code></pre>
+<pre>── Grype ──────────────────────────────────────────
+  3 CVE(s) trouvée(s)  Filtre : champ=published  après=2024-01-01
+
+SÉVÉRITÉ      CVE / ID              PAQUET
+------------  --------------------  ------------------------------------
+Critical      CVE-2024-1234         openssl@1.1.1k
+High          CVE-2024-5678         bash@5.0.17
+Medium        CVE-2024-9012         zlib@1.2.11</pre>
 </div>
 </div>
 </div>

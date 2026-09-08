@@ -2102,7 +2102,7 @@ La boucle de résolution de dépendances est skippée si *tous* les formats
 demandés sont `markdown` ou `asciidoc` (les deux formats tabulaires ne
 nécessitent pas les relations de dépendances).
 
-=== Sous-commandes `diff`, `merge`, `convert`, `licenses`, `validate` et `scan` _(nouveau)_
+=== Sous-commandes `diff`, `merge`, `convert`, `licenses`, `validate`, `scan` et `cra` _(nouveau)_
 
 Routage avant le parsing principal :
 
@@ -2114,6 +2114,7 @@ if (arguments.first == 'convert')  { await _runConvert(arguments.sublist(1));  r
 if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); return; }
 if (arguments.first == 'licenses') { await _runLicenses(arguments.sublist(1)); return; }
 if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     return; }
+if (arguments.first == 'cra')      { await _runCra(arguments.sublist(1));      return; }
 ----
 
 *`_runDiff(args)`* : valide 2 arguments positionnels, charge les fichiers via
@@ -2452,6 +2453,75 @@ Codes de retour : `0` si aucune vulnérabilité dans la plage demandée (tous
 scanners confondus), `1` si au moins une trouvée ou en cas d'erreur de scanner.
 
 Voir `doc/usage.adoc` pour des exemples d'utilisation complets.
+
+=== Sous-commande `cra` — rapport de conformité Cyber Resilience Act _(nouveau)_
+
+`_runCra(args)` (dispatché sur `arguments.first == 'cra'`) produit un rapport
+de conformité au *Règlement (UE) 2024/2847* restreint au **sous-ensemble
+d'exigences automatiquement vérifiables** à partir d'un SBOM. Le rapport
+délimite explicitement son périmètre et **n'est pas une déclaration de
+conformité** — les exigences non vérifiables sont seulement listées comme
+« relevant du fabricant ».
+
+Toute la logique est dans `lib/cra_report.dart` (pur, aucun I/O sauf le PDF).
+`_runCra` se limite à l'orchestration :
+
+. parse les arguments, valide `--sbom`, `SbomReader.loadJson` (rejette un
+  format inconnu) ;
+. métadonnées : `CraMetadata` des flags CLI `.merge(` config `cra.yaml` `)`,
+  la config étant `--config` ou `./cra.yaml` s'il existe ; les trous restants
+  sont comblés depuis `metadata.component` / `metadata.supplier` du SBOM ;
+. si `--scan` : boucle `_runScanner` sur `--scanner` (défaut `grype`) puis
+  `_enrichFindings(... poc: false, quiet: true)` ;
+. `Process.run('sbomqs', ['score', '--basic', sbom])` best-effort ;
+. construit `CraReportGenerator` et sérialise : `json` → stdout ou `-o`
+  (exit 2 si verdict `fail`) ; `asciidoc` / `pdf` → écrit le `.adoc` puis
+  `renderAsciiDocToPdf` ;
+. `stdout` : `Verdict (périmètre vérifié) : …` + `exit(verdict == fail ? 2 : 0)`.
+
+Check-list croisée sur quatre référentiels : **BSI TR-03183-2** (champs de
+données par composant : nom, version, fournisseur, identifiant unique
+PURL/CPE, empreinte, licence, relations de dépendance), **CRA Annexe I §2**
+(inventaire des vulnérabilités connues, disponibilité des correctifs),
+**NTIA 2021** (sept éléments minimaux), **CRA art. 14** (toute CVE au
+catalogue CISA KEV → notification ENISA sous 24 h).
+
+[cols="1,3", options="header"]
+|===
+|Membre de `cra_report.dart` |Rôle
+
+|`CraMetadata`
+|`merge(other)` (this prioritaire) ; `parseConfig(text)` — `cra.yaml` plat
+(`clé: valeur` par ligne, `#` commentaire, clés FR + EN)
+
+|`CraStatus` `{ ok, partial, fail, na }`
+|extension `.badge` (rôle AsciiDoc) et `.json` (`name`)
+
+|`_FieldCheck`
+|couverture d'un champ BSI (`covered`/`total`, `offenders`, `ratio`, `status`)
+
+|`CraReportGenerator`
+|`fieldChecks`, `dependencyStatus`, `ntiaElements`, `_cves` (dédupliqués par
+ID normalisé), `sevCount()`, `cvesWithoutFix`, `kevCves`, `blockers`,
+`verdict`, `verdictSentence` ; sorties `toAsciiDoc()`, `toJson()` (schéma
+`sbom-generator/cra-report/1`, `regulation` `EU 2024/2847`), `toJsonString()`
+|===
+
+Verdict : `blockers` non vide → `fail` (exit 2) ; sinon `partial` si un champ
+est partiel ou si aucun scan n'a été lancé ; sinon `ok`. Points bloquants :
+format non lisible par machine, champ BSI obligatoire manquant, CVE sans
+correctif disponible, CVE au catalogue CISA KEV.
+
+Le PDF réutilise le thème asciidoctor-pdf du rapport `scan`
+(`renderAsciiDocToPdf` ré-exporté). La GUI
+(`gui/lib/widgets/cra_panel.dart`, onglet « Conformité CRA ») ne porte pas
+cette logique : elle exécute `sbom-generator cra --format json` via
+`Process.run` et affiche le JSON.
+
+Tests : `test/unit/cra_report_test.dart` (`parseConfig`, `merge`,
+`CraReportGenerator` sur CDX complet / CDX minimal / avec KEV / SPDX 2.3),
+`test/integration/cra_test.dart` (`@TestOn('posix')`, CLI réelle `--no-scan`),
+`gui/test/cra_panel_test.dart` (rendu du formulaire).
 
 === Options CI/CD _(nouveau)_
 

@@ -80,6 +80,7 @@ partie du pipeline sans reconstruire un SBOM depuis les paquets :
 | `licenses -i <a> -o <adoc>` | `sbom_reader.dart` + `license_report_generator.dart` | Rapport AsciiDoc des licences, regroupé par licence, avec alertes copyleft |
 | `validate <a> [<b>…]` | (inline dans `bin/sbom_generator.dart`) | Vérifie la structure minimale d'un ou plusieurs SBOM |
 | `scan --sbom <a>` | (inline) + `scan_report_generator.dart` + `vuln_enrichment.dart` | Interroge grype/osv-scanner/trivy, filtre par date, enrichit chaque CVE (CISA KEV, EPSS, PoC, exploitabilité CVSS), rend en texte / SARIF / rapport md-adoc-pdf |
+| `cra --sbom <a>` | `cra_report.dart` (+ `sbom_reader.dart`, `vuln_enrichment.dart`, `scan_report_generator.dart` pour le PDF) | Rapport de conformité Cyber Resilience Act (UE 2024/2847) — **sous-ensemble automatiquement vérifiable uniquement** : format/complétude du SBOM (BSI TR-03183-2, NTIA 2021, couverture des dépendances), inventaire + correctifs des vulnérabilités connues (via `--scan`), alerte art. 14 sur les CVE au catalogue CISA KEV. Sortie json / asciidoc / pdf. Exit 2 si point bloquant |
 
 Tous les générateurs et le lecteur SBOM travaillent sur `List<Package>` — la
 classe abstraite commune à `RpmPackage`, `WheelPackage`, `DebPackage` et
@@ -1123,6 +1124,52 @@ for (final pkg in packages) {
 
 `\r` + `\x1B[K` (ANSI EL) pour écraser la ligne courante sans défiler. Barre
 de 32 cellules `█`/`░`, compteur `current/total` et pourcentage.
+
+---
+
+## `lib/cra_report.dart` — Rapport de conformité CRA (sous-commande `cra`)
+
+Génère un rapport de conformité au **Règlement (UE) 2024/2847** (Cyber
+Resilience Act) restreint au **sous-ensemble d'exigences automatiquement
+vérifiables** à partir d'un SBOM. Le rapport affiche explicitement son
+périmètre et **n'est pas une déclaration de conformité**.
+
+Référentiels croisés dans la check-list :
+
+- **BSI TR-03183-2** — champs de données obligatoires par composant : nom,
+  version, fournisseur/créateur, identifiant unique (PURL ou CPE), empreinte
+  cryptographique, licence ; relations de dépendance.
+- **CRA Annexe I §2** — traitement des vulnérabilités : inventaire des
+  vulnérabilités connues (point 1), disponibilité des correctifs (point 2).
+- **NTIA 2021** — sept éléments minimaux d'un SBOM.
+- **CRA art. 14 / seuil ENISA** — toute CVE au catalogue **CISA KEV** est
+  signalée comme déclenchant la notification sous 24 h.
+
+| Membre | Rôle |
+|---|---|
+| `CraMetadata` | Métadonnées fabricant/produit ; `merge(other)` (this prioritaire) ; `parseConfig(text)` lit un `cra.yaml` plat (`clé: valeur`, `#` commentaire, clés FR + EN) |
+| `CraStatus` (`ok` / `partial` / `fail` / `na`) | Statut d'un point de contrôle ; extension `.badge` (AsciiDoc) et `.json` |
+| `_FieldCheck` | Couverture d'un champ BSI sur les composants (`covered`/`total`, `offenders`, `ratio`, `status`) |
+| `CraReportGenerator` | Cœur : `fieldChecks`, `dependencyStatus`, `ntiaElements`, `_cves` (dédupliqués), `sevCount()`, `cvesWithoutFix`, `kevCves`, `blockers`, `verdict`, `verdictSentence` ; sorties `toAsciiDoc()`, `toJson()` (schéma `sbom-generator/cra-report/1`), `toJsonString()` |
+
+Entrées : SBOM chargé (`SbomReader.loadJson`), métadonnées fusionnées
+(flags CLI > `cra.yaml` > `metadata.component` du SBOM), résultats de scan +
+`ExploitInfo` optionnels (via `--scan`), sortie `sbomqs score` best-effort,
+versions d'outils.
+
+Verdict : `blockers` non vide → `fail` (exit 2) ; sinon `partial` si un champ
+est partiel ou si aucun scan n'a été lancé ; sinon `ok`. Points bloquants :
+format non lisible par machine, champ BSI obligatoire manquant, CVE sans
+correctif disponible, CVE au catalogue CISA KEV.
+
+PDF : `cra` écrit le `.adoc` puis appelle `renderAsciiDocToPdf()`
+(ré-exporté depuis `scan_report_generator.dart`) — même thème
+asciidoctor-pdf que le rapport `scan` (page de garde, résumé exécutif,
+verdict).
+
+GUI : `gui/lib/widgets/cra_panel.dart` (onglet « Conformité CRA ») ne porte
+pas cette logique — il exécute le binaire `sbom-generator cra --format json`
+via `Process.run` et affiche le résultat.
 
 ---
 

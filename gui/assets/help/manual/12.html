@@ -1,122 +1,147 @@
 
-<h2 id="_onglet_arborescence_sbom">13. Onglet Arborescence SBOM</h2>
+<h2 id="_onglet_tableau_de_bord_synthèse_cve">13. Onglet Tableau de bord — Synthèse CVE</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Arborescence SBOM</strong> permet d’explorer les composants d’un fichier
-SBOM (CycloneDX ou SPDX) sans ouvrir un éditeur JSON.</p>
+<p>L’onglet <strong>Tableau de bord</strong> présente une vue de synthèse qui agrège les
+résultats des trois scanners (Grype, OSV-Scanner, Trivy) sans avoir à
+naviguer entre chaque onglet. Il se peuple automatiquement après l’exécution
+des analyses.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ Fichier : [ sbom.cdx.json ▼ ]  [📂 Ouvrir…]                      ─┐
-  │  CycloneDX 1.6  •  Mon Application 2.1.0  •  246 composants          │
-  ├─ Grouper par : [Aucun] [Type] [Licence]                               │
-  ├────────────────────────────────────────────────────────────────────────┤
-  │ ▶ rpm  (132)                                                           │
-  │ ▼ python  (89)                                                         │
-  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
-  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
-  │    ...                                                                 │
-  │ ▶ deb  (25)                                                            │
-  └────────────────────────────────────────────────────────────────────────┘</pre>
+<pre>  ┌─ Synthèse globale ─────────────────────────────────────────────  [⬥]─┐
+  │  3 scanners exécutés  •  87 CVE uniques                              │
+  └────────────────────────────────────────────────────────────────────┘
+
+  ┌─ Grype (42) ───────────┐  ┌─ OSV-Scanner (31) ─────┐  ┌─ Trivy (38) ─────┐
+  │ CRITICAL  ██  5        │  │ CRITICAL  █   3         │  │ CRITICAL  ██  4   │
+  │ HIGH      ████ 18      │  │ HIGH      ████ 15       │  │ HIGH      ████ 16 │
+  │ MEDIUM    ███ 14       │  │ MEDIUM    ██  10        │  │ MEDIUM    ██  14  │
+  │ LOW       █   5        │  │ LOW       █   3         │  │ LOW       █   4   │
+  └────────────────────────┘  └────────────────────────┘  └──────────────────┘
+
+  ┌─ Comparaison inter-scanners (87 CVE) ─────────────────────────────────┐
+  │ CRITICAL  CVE-2021-3711   Grype ✓  OSV ✓  Trivy ✓                   │
+  │ HIGH      CVE-2023-38545  Grype ✓  OSV ✓  Trivy ✗                   │
+  │ ⚠ MEDIUM  CVE-2024-9999   Grype ✓  OSV ✗  Trivy ✗                   │
+  └──────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sélection_du_fichier_sbom">13.1. Sélection du fichier SBOM</h3>
+<h3 id="_cartes_par_scanner">13.1. Cartes par scanner</h3>
 <div class="paragraph">
-<p>Le menu déroulant liste les fichiers SBOM générés dans la session courante.
-Le premier fichier <code>.cdx.json</code>, <code>.spdx.json</code> ou <code>.spdx3.jsonld</code> est
-sélectionné automatiquement.</p>
-</div>
-<div class="paragraph">
-<p>Le bouton <strong>Ouvrir…</strong> permet de charger n’importe quel fichier du système
-de fichiers.</p>
-</div>
-<div class="paragraph">
-<p>Formats supportés :</p>
+<p>Chaque scanner dispose d’une carte affichant :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>CycloneDX 1.6</strong> — <code>.cdx.json</code> (champ <code>components[]</code>)</p>
+<p>La répartition par sévérité (barres empilées colorées)</p>
 </li>
 <li>
-<p><strong>SPDX 2.x</strong> — <code>.spdx.json</code> (champ <code>packages[]</code>)</p>
+<p>Le nombre de vulnérabilités par niveau</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Les cartes des scanners non encore exécutés affichent un message d’invite.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_synthèse_globale">13.2. Synthèse globale</h3>
+<div class="paragraph">
+<p>Le bandeau supérieur indique :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Le nombre de scanners ayant produit des résultats (sur 3)</p>
 </li>
 <li>
-<p><strong>SPDX 3.0 JSON-LD</strong> — <code>.spdx3.jsonld</code></p>
+<p>Le nombre total de CVE <strong>uniques</strong> (union des identifiants de tous les
+scanners exécutés)</p>
+</li>
+<li>
+<p>Le bouton ⬥ d’export AsciiDoc + PDF (voir <a href="#sec-dashboard-export">Export AsciiDoc + PDF</a>)</p>
 </li>
 </ul>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_barre_dinformations">13.2. Barre d’informations</h3>
+<h3 id="_comparaison_inter_scanners">13.3. Comparaison inter-scanners</h3>
 <div class="paragraph">
-<p>Après le chargement, une ligne de métadonnées s’affiche :</p>
+<p>Le tableau en bas liste <strong>toutes</strong> les vulnérabilités détectées par <strong>au moins
+un</strong> scanner — pas seulement celles communes à plusieurs : c’est justement en
+gardant les CVE isolées (vues par un seul scanner alors que plusieurs ont
+tourné) qu’on repère les écarts de détection entre outils. Ces lignes
+isolées portent une bordure ambre, une icône ⚠ et un tooltip « Vu par un
+seul scanner sur N » pour les distinguer d’un coup d’œil. Une coche ✓ / —
+indique la présence ou l’absence dans chaque scanner.</p>
+</div>
+<div class="paragraph">
+<p><strong>Tri</strong> : cliquez sur un en-tête de colonne pour trier, cliquez à nouveau pour
+inverser (la flèche ↑ / ↓ indique la colonne et le sens actifs) :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>Format et version du SBOM</p>
+<p><strong>SÉV.</strong> — sévérité (Critical en tête) ;</p>
 </li>
 <li>
-<p>Nom du document / composant principal</p>
+<p><strong>CVE / ID</strong> — ordre alphabétique ;</p>
 </li>
 <li>
-<p>Nombre total de composants</p>
+<p><strong>Grype</strong> / <strong>OSV</strong> / <strong>Trivy</strong> — CVE vues par ce scanner d’abord (✓ avant —),
+pour isoler d’un clic ce que chaque outil détecte seul ;</p>
+</li>
+<li>
+<p><strong>KEV</strong> et <strong>EPSS</strong> (colonnes présentes uniquement si l’enrichissement a
+tourné, cf. <a href="#sec-exploitabilite">[sec-exploitabilite]</a>) — CVE du catalogue CISA en tête, ou
+score EPSS décroissant.</p>
 </li>
 </ul>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_groupement">13.3. Groupement</h3>
 <div class="paragraph">
-<p>Le sélecteur <strong>Grouper par</strong> propose trois modes :</p>
+<p>Par défaut, les lignes sont ordonnées par <strong>priorisation du risque</strong> — CISA
+KEV, puis EPSS décroissant, puis sévérité — quand l’enrichissement a produit
+des résultats ; par sévérité seule sinon. L’export AsciiDoc / PDF reprend
+exactement l’ordre affiché.</p>
 </div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 40%;">
-<col style="width: 60%;">
-</colgroup>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Aucun</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Tous les composants dans une liste plate triée par nom</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Type</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Regroupement par type de paquet (rpm, python, deb…)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Licence</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Regroupement par expression de licence SPDX</p></td>
-</tr>
-</tbody>
-</table>
-<div class="paragraph">
-<p>Les groupes sont repliables. Cliquez sur l’en-tête d’un groupe pour
-l’ouvrir ou le fermer.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_détails_dun_composant">13.4. Détails d’un composant</h3>
-<div class="paragraph">
-<p>Cliquez sur un composant pour afficher ses détails (champ expansible) :</p>
+<div id="sec-cve-detail" class="paragraph">
+<p><strong>Détail d’une CVE</strong> : cliquez sur une ligne (le chevron ▾ à droite l’indique)
+pour la déplier. Un panneau affiche alors, à partir des données déjà en
+mémoire :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>PURL</strong> (Package URL) — cliquable pour copier dans le presse-papiers</p>
+<p>le <strong>paquet</strong> concerné, sa version installée et la version corrigée, tels que
+vus par chaque scanner ;</p>
 </li>
 <li>
-<p><strong>Version</strong></p>
+<p>la <strong>sévérité</strong> et les <strong>dates</strong> de publication / modification, par scanner —
+souvent différentes d’un outil à l’autre ;</p>
 </li>
 <li>
-<p><strong>Type</strong></p>
+<p>l'<strong>exploitabilité détaillée</strong> : CISA KEV (date d’ajout, échéance de
+remédiation, usage par un rançongiciel), score EPSS et son percentile,
+sous-score d’exploitabilité CVSS avec le vecteur et la maturité de
+l’exploit, dépôts PoC publics (liens cliquables) ;</p>
 </li>
 <li>
-<p><strong>Licence</strong></p>
+<p>des <strong>boutons de référence</strong> ouvrant NVD, CVE.org, osv.dev et — pour une CVE
+du catalogue — CISA KEV dans le navigateur, plus un bouton <strong>copier
+l’identifiant</strong>.</p>
 </li>
 </ul>
+</div>
+<div class="paragraph">
+<p>Re-cliquer sur la ligne referme le panneau. Le même détail est disponible
+dans les onglets Grype / OSV-Scanner / Trivy.</p>
+</div>
+<div class="paragraph">
+<p>Si la liste dépasse la hauteur disponible, l’ascenseur vertical de l’onglet
+permet de tout parcourir — faites défiler vers le bas à l’intérieur de l’onglet
+Tableau de bord.</p>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -125,17 +150,220 @@ l’ouvrir ou le fermer.</p>
 <div class="title">Note</div>
 </td>
 <td class="content">
-Les composants sans PURL dans le SBOM n’affichent pas ce champ.
+OSV-Scanner préfixe parfois un CVE par l’origine de l’avis distro (ex.
+<code>DEBIAN-CVE-2026-13221</code> pour un paquet Debian) là où Grype et Trivy
+rapportent le même identifiant nu (<code>CVE-2026-13221</code>). Le tableau normalise
+automatiquement ce genre de préfixe avant comparaison — la vulnérabilité
+n’apparaît donc qu’une seule fois, sous sa forme CVE nue, au lieu de deux
+lignes distinctes dont une marquée à tort « vue par un seul scanner ».
 </td>
 </tr>
 </tbody></table>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_persistance_de_létat_2">13.5. Persistance de l’état</h3>
+<h3 id="sec-pourquoi-ecarts-scanners">13.4. Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</h3>
 <div class="paragraph">
-<p>L’onglet mémorise son état (fichier sélectionné, groupement, groupes
-ouverts/fermés) lors de la navigation entre onglets.</p>
+<p>Il est normal — et attendu — qu’une bonne partie des lignes du tableau
+inter-scanners soient isolées (vues par un seul outil). Sur une même image
+Keycloak (RHEL 9.6, ~450 Mo) analysée directement par Grype et par Trivy,
+une comparaison brute des identifiants ne fait ressortir que 72 CVE
+communes sur ~210 identifiants uniques de chaque côté — un écart qui a deux
+causes bien distinctes :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Nomenclature d’identifiant différente (cause principale, pas un vrai
+écart de détection)</strong> — sur les paquets Java (JAR/Maven), Grype nomme ses
+trouvailles avec l’identifiant <strong>GitHub Security Advisory</strong>
+(<code>GHSA-xxxx-xxxx-xxxx</code>, sa source principale pour cet écosystème) tandis
+que Trivy préfère l’identifiant <strong>CVE</strong> correspondant. C’est la même
+vulnérabilité sous deux noms différents — Grype liste d’ailleurs le CVE
+lié dans son champ <code>relatedVulnerabilities</code>. Sur cette même image, les
+deux outils ne semblaient d’accord que sur 2 CVE Java sur ~135 de chaque
+côté ; une fois les <code>GHSA-*</code> de Grype résolus vers leur CVE lié, l’accord
+monte à 132/135 (~98 %). Sur les paquets RPM (base OS), où les deux
+outils utilisent nativement l’identifiant CVE, l’accord était déjà direct
+à ~94 % (70 CVE communes sur ~75 de chaque côté).</p>
+</li>
+<li>
+<p><strong>Autre nomenclature différente, celle-ci normalisée automatiquement</strong> —
+sur les paquets Debian, OSV-Scanner nomme certains de ses avis
+<code>DEBIAN-CVE-xxxx-xxxxx</code> (origine Debian Security Tracker) là où Grype et
+Trivy rapportent l’identifiant CVE nu correspondant. Contrairement au cas
+GHSA↔CVE ci-dessus, le tableau de comparaison du Tableau de bord résout
+ce préfixe automatiquement (voir <a href="#sec-dashboard-export">Export AsciiDoc + PDF</a>) — sur une image
+Debian réelle, cela a réduit le nombre de lignes de la comparaison
+inter-scanners de 200 à 106 (près de la moitié n’étaient que ce doublon
+de nomenclature).</p>
+</li>
+<li>
+<p><strong>Écarts réels résiduels (fraîcheur et couverture des bases)</strong> — Grype
+(base Anchore) et Trivy (<code>trivy-db</code>) republient leurs bases de
+vulnérabilités à des rythmes et depuis des sources pas parfaitement
+identiques (NVD, GHSA, OVAL/CSAF Red Hat…). Un CVE tout juste publié, ou
+pas encore mappé au CPE exact d’un paquet, peut apparaître chez l’un
+avant l’autre. Les règles de correspondance de version (bornes affectées,
+epoch RPM) et le score de sévérité retenu (CVSS NVD vs fournisseur vs
+distro) peuvent aussi différer légèrement d’un moteur à l’autre.</p>
+</li>
+<li>
+<p><strong>Grype et Trivy n’ont pas la même exhaustivité sur les paquets OS
+Debian</strong> — sur une image Debian réelle (79 paquets), Grype rapportait 207
+correspondances contre seulement 27 pour Trivy, sur le même SBOM. Ce
+n’est pourtant pas un problème de faux positifs par CPE : les deux
+outils utilisent bien leur matcher distro dédié (<code>dpkg-matcher</code> côté
+Grype). L’écart vient de la complétude des données reprises — Grype
+remonte l’intégralité du Debian Security Tracker, y compris les avis
+marqués <code>&lt;no-dsa&gt;</code> (bug mineur que Debian a choisi de ne jamais corriger)
+et les CVE sans version corrigée connue, là où Trivy ne remonte qu’un
+sous-ensemble plus restreint. Vérification faite sur
+<code>security-tracker.debian.org</code> : une CVE citée uniquement par Grype
+(<code>CVE-2026-19499</code> sur <code>glibc</code>/trixie) y est bien listée « vulnerable »
+avec la note <code>&lt;no-dsa&gt; (Minor issue)</code> — Grype la rapporte donc à raison
+(état « won’t fix »), Trivy l’omet simplement. Aucun des deux n’a tort :
+Trivy est plus conservateur (CVE au statut tranché), Grype plus
+exhaustif mais plus bruyant.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Aucun des deux scanners n’est « la » vérité : chacun a sa base et sa
+granularité de correspondance propres. C’est précisément la raison d’être
+de cet onglet — voir l’union des trois scanners plutôt que se fier à un
+seul pour maximiser la couverture de détection.</p>
+</div>
+<div class="paragraph">
+<p>Un écart peut aussi apparaître avec un <strong>seul et même</strong> scanner selon qu’on
+lui donne un SBOM ou l’image directement — typiquement dans l’onglet
+Trivy (voir <a href="#sec-onglet-trivy-source">Sélection de la source à analyser</a>) entre les modes <strong>Fichier SBOM</strong>
+(<code>trivy sbom</code>) et <strong>Image de conteneur</strong> (<code>trivy image</code>). Sur cette même
+image Keycloak, <code>trivy sbom</code> sur un SBOM généré avec le backend <code>syft</code>
+trouvait 3 CVE HIGH (<code>micrometer-core</code>, <code>postgresql</code>) absentes de
+<code>trivy image</code> en direct : l’analyseur de jars intégré à Trivy identifie
+un jar via <code>pom.properties</code>, puis <code>MANIFEST.MF</code>, puis un lookup SHA-1
+dans sa base <code>trivy-java-db</code> (indexée depuis Maven Central) — et abandonne
+silencieusement le paquet si les trois échouent, ce qui arrive pour des
+jars rebuilds internes (ex. <code>.redhat-000xx</code>) sans <code>pom.properties</code> et
+absents de Maven Central. Le cataloguer de syft, lui, sait retrouver ces
+paquets en parsant le nom de fichier <code>&lt;groupId&gt;.&lt;artifactId&gt;-&lt;version&gt;.jar</code>
+(convention du packaging Quarkus « fast-jar » de cette image). Là encore,
+ce n’est pas le SBOM qui invente des CVE : c’est <code>trivy image</code> qui en
+manque quelques-unes que <code>trivy sbom</code> retrouve grâce à la détection plus
+complète de syft.</p>
+</div>
+<div class="paragraph">
+<p>Le même type d’écart existait pour OSV-Scanner, mais de façon bien plus
+radicale : sur les paquets de distribution, lui donner un SBOM syft faisait
+tomber le résultat quasiment à <strong>zéro</strong> CVE, alors que scanner l’image
+directement en trouve des centaines. Deux causes, toutes deux corrigées à la
+source par <code>sbom_generator</code> (backend syft) :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Qualifiant <code>distro</code></strong> — OSV-Scanner ne rattache un <code>pkg:deb/debian/…​</code> à
+l’écosystème <code>Debian:13</code> que si <code>distro</code> vaut <code>debian-&lt;majeur&gt;</code> ou si
+<code>distro_name</code> porte un nom de code connu. syft renseigne le <strong>point
+release</strong> (<code>distro=debian-13.6</code>, lu dans <code>/etc/debian_version</code>), non
+reconnu. Corrigé : <code>debian-13.6</code> → <code>debian-13</code> + <code>distro_name=trixie</code>.</p>
+</li>
+<li>
+<p><strong>Paquet binaire vs source</strong> — OSV.dev indexe les avis Debian par paquet
+<strong>source</strong> (<code>zlib</code>, <code>perl</code>), pas binaire (<code>zlib1g</code>, <code>perl-base</code>). syft ne
+liste que le binaire (avec <code>upstream=</code>), qu’OSV-Scanner n’exploite pas.
+Corrigé : un composant par paquet source distinct est ajouté (comme
+cdxgen), et <code>upstream=</code> est retiré du binaire pour que Grype ne compte
+pas la CVE deux fois.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Sur <code>haproxy:3.4.4</code> (Debian 13.6), le SBOM syft passe ainsi de ~0 à 58 CVE
+OSV-Scanner (parité avec le SBOM cdxgen), recoupées par les trois scanners
+au lieu de Grype seul.</p>
+</div>
+<div class="paragraph">
+<p>Deux limites subsistent :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>les autres familles de paquets de distribution (Alpine, RPM/RHEL) —
+OSV.dev les indexe mal ou pas en mode « scan de SBOM » ;</p>
+</li>
+<li>
+<p><code>osv-scanner scan image</code>, qui fait sa propre extraction sans PURL,
+reste plus exhaustif sur l’OS de base. Pour une couverture OS
+maximale avec cet outil, scanner l’image directement.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-dashboard-export">13.5. Export AsciiDoc + PDF</h3>
+<div class="paragraph">
+<p>Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte un
+rapport reprenant l’intégralité de la vue affichée :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>le résumé global (scanners exécutés, CVE uniques) ;</p>
+</li>
+<li>
+<p>la section <strong>Outils</strong> : version de sbom_generator_gui et version de chaque
+scanner exécuté (détectées via <code>&lt;outil&gt; --version</code> au moment de l’export,
+donc toujours à jour même si l’outil a été mis à jour depuis le dernier
+scan — « indisponible » si l’outil n’est plus dans le <code>PATH</code>) ;</p>
+</li>
+<li>
+<p>pour chaque scanner : sa répartition par sévérité avec barre colorée (ou
+« Non exécuté » / « Aucune vulnérabilité détectée » selon le cas) ;</p>
+</li>
+<li>
+<p>le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
+présence par outil, et colonnes KEV / EPSS si l’enrichissement a tourné),
+dans le <strong>même ordre que celui affiché à l’écran</strong>, avec les CVE préfixés
+distro déjà normalisés (voir <a href="#sec-pourquoi-ecarts-scanners">Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</a>) ;</p>
+</li>
+<li>
+<p>une section <strong>« Détail des CVE prioritaires »</strong> : un bloc par CVE au
+catalogue CISA KEV, ou dont l’EPSS est ≥ 10 %, ou de sévérité Critical /
+High — avec paquet, versions, sévérité et dates par scanner, et toute
+l’information d’exploitabilité (KEV, EPSS, CVSS, PoC, liens). Reprend le
+contenu du panneau de détail dépliable à l’écran.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n’y a ici qu’une seule
+vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
+la colonne de tri active du tableau inter-scanners est respectée.</p>
+</div>
+<div class="paragraph">
+<p>Le bouton reste désactivé tant qu’aucun scanner n’a été exécuté. Une fois le
+fichier <code>.adoc</code> écrit (emplacement choisi via une boîte de dialogue), la
+conversion en PDF via <code>asciidoctor-pdf</code> est tentée automatiquement ; si
+l’outil n’est pas installé, le fichier <code>.adoc</code> reste produit et un message
+l’indique — même comportement que l’export des onglets de scan (voir
+<a href="#sec-vue-table">[sec-vue-table]</a>). Le PDF reprend les couleurs du Tableau de bord (badges
+de sévérité, barre de répartition, en-têtes bleus) — voir <a href="#sec-vue-table">[sec-vue-table]</a>
+pour le détail du thème.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Le Tableau de bord se met à jour automatiquement chaque fois qu’une analyse
+est lancée dans un onglet scanner. Aucune action supplémentaire n’est requise.
+</td>
+</tr>
+</tbody></table>
 </div>
 </div>
 </div>

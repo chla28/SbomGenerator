@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/scan_enrichment.dart';
+import 'cra_panel.dart';
 import 'dashboard_panel.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
@@ -109,7 +110,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 13, vsync: this);
+    _tabs = TabController(length: 14, vsync: this);
   }
 
   @override
@@ -319,6 +320,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(Icons.gpp_good_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Conformité CRA'),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Icon(Icons.verified_outlined, size: 16),
                     SizedBox(width: 6),
                     Text('Qualité SBOM'),
@@ -482,25 +493,28 @@ class _ResultsPanelState extends State<ResultsPanel>
                 }),
               ),
 
-              // Tab 6 : Qualité SBOM
+              // Tab 6 : Conformité CRA
+              CraPanel(outputFiles: widget.outputFiles),
+
+              // Tab 7 : Qualité SBOM
               QualityPanel(outputFiles: widget.outputFiles),
 
-              // Tab 7 : Arborescence SBOM
+              // Tab 8 : Arborescence SBOM
               SbomTreePanel(outputFiles: widget.outputFiles),
 
-              // Tab 8 : Comparaison SBOM
+              // Tab 9 : Comparaison SBOM
               SbomDiffPanel(outputFiles: widget.outputFiles),
 
-              // Tab 9 : Fusion SBOM
+              // Tab 10 : Fusion SBOM
               SbomMergePanel(outputFiles: widget.outputFiles),
 
-              // Tab 10 : Licences SBOM
+              // Tab 11 : Licences SBOM
               SbomLicensesPanel(outputFiles: widget.outputFiles),
 
-              // Tab 11 : Visionneuse SBOM
+              // Tab 12 : Visionneuse SBOM
               const SbomViewerPanel(),
 
-              // Tab 12 : Aperçu SBOM
+              // Tab 13 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,

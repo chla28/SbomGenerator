@@ -285,10 +285,11 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : treize onglets — Progression (avec export
+*Panneau droit — Résultats* : quatorze onglets — Progression (avec export
 des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
 (synthèse CVE multi-scanners), Grype, OSV-Scanner et Trivy (analyses CVE),
-Qualité SBOM (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
+Conformité CRA (rapport de conformité Cyber Resilience Act), Qualité SBOM
+(sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
 composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
 (combine plusieurs SBOM en un seul), Licences SBOM (rapport de conformité
 des licences au format AsciiDoc), Visionneuse SBOM (exploration
@@ -1452,6 +1453,82 @@ liste.
 Le champ *Publication* correspond à `PublishedDate` du JSON Trivy, le
 champ *Modification* à `LastModifiedDate`. L'option *Propager* copie le
 filtre vers les onglets Grype et OSV-Scanner.
+
+[[sec-onglet-cra]]
+== Onglet Conformité CRA — Cyber Resilience Act
+
+L'onglet *Conformité CRA* produit un rapport de conformité au *Règlement
+(UE) 2024/2847* (Cyber Resilience Act) à partir d'un SBOM. Il pilote la
+sous-commande `sbom-generator cra` (le binaire configuré dans les
+paramètres) et affiche son résultat.
+
+[IMPORTANT]
+====
+Le rapport ne couvre que les exigences du CRA *vérifiables automatiquement*
+à partir d'un SBOM et d'une analyse de vulnérabilités connues :
+
+* *format et complétude du SBOM* — format d'usage courant lisible par
+  machine, couverture des dépendances (Annexe I §2 point 1), champs de
+  données par composant (BSI TR-03183-2 : nom, version, fournisseur,
+  identifiant unique PURL/CPE, empreinte, licence), éléments minimaux
+  NTIA 2021 ;
+* *gestion des vulnérabilités* — inventaire des vulnérabilités connues et
+  disponibilité des correctifs (Annexe I §2 points 1-2) ;
+* *vulnérabilités activement exploitées* — toute CVE au catalogue CISA KEV
+  est signalée comme déclenchant l'obligation de notification à l'ENISA
+  *sous 24 h* (art. 14).
+
+Les autres obligations du CRA (diffusion sécurisée des mises à jour,
+politique de divulgation coordonnée effective, conception sûre par défaut,
+tests réguliers, notifications réglementaires, déclaration UE de conformité)
+relèvent du fabricant et sont seulement listées. *Ce rapport n'est pas une
+déclaration de conformité.*
+====
+
+=== Renseigner le formulaire
+
+*Fichier SBOM à évaluer* : pré-rempli avec le premier SBOM généré
+(`.cdx.json` / `.spdx.json`, sinon `.json`). Le bouton *Choisir* ouvre un
+sélecteur de fichier.
+
+*Métadonnées produit (facultatif)* : section repliable — Fabricant, Produit,
+Version du produit, Fin de support (`AAAA-MM-JJ`), Contact de signalement des
+vulnérabilités, URL de la politique de divulgation coordonnée. Le bouton
+*Charger un cra.yaml* importe ces valeurs depuis un fichier
+(`clé: valeur` par ligne). Les champs saisis ici priment sur le fichier ;
+les valeurs manquantes sont déduites de `metadata.component` du SBOM.
+
+*Analyser les vulnérabilités connues* : coché par défaut. Lance un scanner
+(*Grype* par défaut, ou OSV-Scanner / Trivy / les trois) pour évaluer
+l'inventaire des vulnérabilités et la disponibilité des correctifs, avec
+enrichissement CISA KEV / EPSS. Décoché, le rapport se limite à l'analyse
+du SBOM et signale que la gestion des vulnérabilités n'a pas pu être
+attestée.
+
+=== Lancer et exporter
+
+*Évaluer* : exécute l'analyse et affiche le résultat sous le formulaire :
+
+* *bandeau de verdict* — Conforme / Partiel / Non conforme sur le périmètre
+  vérifié, avec la phrase de synthèse ;
+* *quatre indicateurs* — champs SBOM conformes, éléments NTIA, vulnérabilités
+  sans correctif, CVE activement exploitées (KEV) ;
+* *points bloquants* — liste des motifs de non-conformité, le cas échéant ;
+* *tableau des champs de données SBOM* (BSI TR-03183-2) avec couverture et
+  statut par champ ;
+* rappel du format du SBOM, du nombre de composants et de relations de
+  dépendance, et du décompte des vulnérabilités.
+
+*Exporter le rapport PDF* : régénère le rapport complet en PDF (page de
+garde, résumé exécutif, identification du produit, analyse détaillée du
+SBOM, gestion des vulnérabilités, exigences relevant du fabricant,
+conclusion) et l'enregistre à l'emplacement choisi. La conversion PDF
+requiert `asciidoctor-pdf`.
+
+Un rapport *Non conforme* n'est pas une erreur : il liste les points à
+corriger. Motifs bloquants : format non lisible par machine, champ
+obligatoire insuffisamment renseigné, vulnérabilité sans correctif
+disponible, CVE au catalogue CISA KEV.
 
 == Onglet Qualité SBOM — Évaluation de la qualité
 

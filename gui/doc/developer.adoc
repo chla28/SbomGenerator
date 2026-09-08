@@ -123,10 +123,11 @@ gui/
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème + enrichissement
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 13 onglets ; fusionne les ExploitInfo des 3 onglets
+│       ├── results_panel.dart        # Panneau droit : 14 onglets ; fusionne les ExploitInfo des 3 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
+│       ├── cra_panel.dart            # Onglet Conformité CRA — pilote `sbom-generator cra`
 │       ├── vuln_shared.dart          # VulnRow, VulnTableView : tableau de vulnérabilités
 │       │                             #   partagé (tri/filtre/recherche/export CSV+AsciiDoc+PDF,
 │       │                             #   colonnes KEV/EPSS, ligne dépliable CveDetailPanel)
@@ -147,6 +148,7 @@ gui/
 │   ├── widget_test.dart
 │   ├── config_panel_input_test.dart
 │   ├── dashboard_panel_test.dart
+│   ├── cra_panel_test.dart
 │   ├── cve_detail_test.dart
 │   ├── pdf_report_test.dart
 │   ├── sbom_merge_panel_test.dart
@@ -935,6 +937,46 @@ c'est un widget public partagé, défini dans `vuln_shared.dart` (voir
 <<sec-vuln-shared>>) et importé par `grype_panel.dart` / `osv_panel.dart` /
 `trivy_panel.dart`.
 
+==== `widgets/cra_panel.dart` — Onglet Conformité CRA
+
+`CraPanel` (`StatefulWidget`) pilote la sous-commande CLI
+`sbom-generator cra` — rapport de conformité *Cyber Resilience Act*
+(Règlement (UE) 2024/2847), périmètre vérifiable automatiquement uniquement.
+Comme les autres panneaux qui dépendent du binaire, il **ne porte pas** la
+logique d'analyse (celle-ci vit dans `lib/cra_report.dart` côté CLI) : il
+construit une ligne de commande et exécute
+`Process.run(SettingsService.cliBinary, [...])`.
+
+Paramètre : `List<OutputFile> outputFiles` — la liste des SBOM générés, pour
+pré-remplir le champ « Fichier SBOM » (`.cdx.json` / `.spdx.json` en
+priorité, sinon `.json` ; jamais un `.pdf`).
+
+État de `_CraPanelState` : sept `TextEditingController` (SBOM + six
+métadonnées produit), `String? _configPath` (fichier `cra.yaml`), `bool
+_scan` (défaut `true`), `String _scanner` (défaut `grype`), plus
+`_running` / `_error` / `Map<String, dynamic>? _result`.
+
+* `_run()` — `cra --sbom <p> --format json` (+ `--scan`/`--no-scan`,
+  `--scanner`, `_metaArgs()`). Le JSON est lu sur `stdout` *même si*
+  `exitCode == 2` (rapport non conforme) ; seul un `stdout` ne commençant
+  pas par `{` est traité comme une erreur.
+* `_exportPdf()` — `FilePicker.saveFile` puis `cra ... --format pdf -o
+  <path>` ; `exitCode` 0 ou 2 = succès (fichier écrit).
+* `_metaArgs()` — n'ajoute `--manufacturer` / `--product` /
+  `--product-version` / `--support-until` / `--vuln-contact` /
+  `--cvd-policy-url` que pour les champs non vides, plus `--config` si un
+  `cra.yaml` est chargé.
+
+`_CraResultView` (privé) rend le JSON : bandeau de verdict
+(`verdict` / `verdictSentence`), quatre tuiles KPI (`sbom.fieldChecks`
+« ok », `ntiaMinimumElements` « ok » / 7, `vulnerabilities.withoutFix`,
+`vulnerabilities.activelyExploited`), liste `blockers`, `Table` des
+`fieldChecks` (champ / couverture / statut), rappel format + composants +
+relations de dépendance.
+
+Test : `test/cra_panel_test.dart` (rendu du formulaire, auto-remplissage du
+SBOM, présence des boutons, dépliage des métadonnées).
+
 ==== `widgets/quality_panel.dart` — Onglet Qualité SBOM
 
 `QualityPanel` est un `StatefulWidget` autonome avec `AutomaticKeepAliveClientMixin`.
@@ -1362,7 +1404,7 @@ Sous-widgets privés :
 
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **13 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **14 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -1393,30 +1435,34 @@ Sous-widgets privés :
 |`TrivyPanel(onVulnsChanged: ...)` — panneau d'analyse trivy autonome
 
 |6
+|Conformité CRA
+|`CraPanel` — pilote `sbom-generator cra`, affiche le verdict de conformité
+
+|7
 |Qualité SBOM
 |`QualityPanel` — sbomqs + sbom-scorecard en parallèle
 
-|7
+|8
 |Arborescence
 |`SbomTreePanel` — exploration des composants du SBOM
 
-|8
+|9
 |Comparaison
 |`SbomDiffPanel` — diff entre deux fichiers SBOM
 
-|9
+|10
 |Fusion
 |`SbomMergePanel` — fusionne plusieurs SBOM via `sbom-generator merge`
 
-|10
+|11
 |Licences
 |`SbomLicensesPanel` — rapport de licences AsciiDoc via `sbom-generator licenses`
 
-|11
+|12
 |Visionneuse
 |`SbomViewerPanel` — exploration interactive d'un fichier SBOM externe
 
-|12
+|13
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
 |===
@@ -2054,7 +2100,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 13, vsync: this);  // ResultsPanel : 13 onglets
+    _tabs = TabController(length: 14, vsync: this);  // ResultsPanel : 14 onglets
   }
 
   @override
@@ -2128,17 +2174,17 @@ Stream<GrypeEvent> run({
 
 === Ajouter un onglet dans ResultsPanel
 
-Le `TabController` est actuellement à `length: 13` (Progression, Résultats,
-Tableau de bord, Grype, OSV-Scanner, Trivy, Qualité SBOM, Arborescence,
-Comparaison, Fusion, Licences, Visionneuse, Aperçu). Exemple réel : l'ajout
-de l'onglet *Licences* (`SbomLicensesPanel`, 11^e^ → 13^e^ onglet) a suivi
-exactement ces étapes.
+Le `TabController` est actuellement à `length: 14` (Progression, Résultats,
+Tableau de bord, Grype, OSV-Scanner, Trivy, Conformité CRA, Qualité SBOM,
+Arborescence, Comparaison, Fusion, Licences, Visionneuse, Aperçu). Exemple
+réel : l'ajout de l'onglet *Conformité CRA* (`CraPanel`, inséré à l'index 6,
+`length` 13 → 14) a suivi exactement ces étapes.
 
 . Dans `results_panel.dart`, modifier l'initialisation du contrôleur :
 +
 [source,dart]
 ----
-_tabs = TabController(length: 13, vsync: this);  // était 12
+_tabs = TabController(length: 14, vsync: this);  // était 13
 ----
 
 . Ajouter un `Tab(...)` dans le `TabBar`, à la position choisie :

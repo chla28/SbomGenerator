@@ -31,6 +31,7 @@ import 'package:sbom_generator/sbom_reader.dart';
 import 'package:sbom_generator/scan_report_generator.dart';
 import 'package:sbom_generator/license_report_generator.dart';
 import 'package:sbom_generator/vuln_enrichment.dart';
+import 'package:sbom_generator/cra_report.dart';
 
 const _version = '1.5.4';
 
@@ -78,6 +79,12 @@ Future<void> main(List<String> arguments) async {
   // Sous-commande `licenses` : génère un rapport de licences AsciiDoc
   if (arguments.isNotEmpty && arguments.first == 'licenses') {
     await _runLicenses(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `cra` : rapport de conformité Cyber Resilience Act
+  if (arguments.isNotEmpty && arguments.first == 'cra') {
+    await _runCra(arguments.sublist(1));
     return;
   }
 
@@ -2429,6 +2436,221 @@ Usage:
 Formats source supportés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD
 
 ${parser.usage}
+''');
+}
+
+// ── Sous-commande cra ─────────────────────────────────────────────────────────
+
+Future<void> _runCra(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('sbom', abbr: 's', mandatory: true,
+        help: 'Fichier SBOM à évaluer (CycloneDX JSON ou SPDX JSON).')
+    ..addOption('config', abbr: 'c',
+        help: 'Fichier de métadonnées fabricant/produit (clé: valeur par '
+            'ligne). Défaut : ./cra.yaml s\'il existe.')
+    ..addOption('manufacturer', help: 'Nom du fabricant (surcharge --config).')
+    ..addOption('product', help: 'Nom du produit.')
+    ..addOption('product-version', help: 'Version du produit.')
+    ..addOption('support-until',
+        help: 'Date de fin de support (AAAA-MM-JJ).')
+    ..addOption('vuln-contact',
+        help: 'Adresse (e-mail ou URL) de signalement des vulnérabilités.')
+    ..addOption('cvd-policy-url',
+        help: 'URL de la politique de divulgation coordonnée.')
+    ..addFlag('scan', defaultsTo: true,
+        help: 'Lancer une analyse de vulnérabilités (grype/osv/trivy) pour '
+            'évaluer l\'inventaire et les correctifs. --no-scan pour s\'en '
+            'passer.')
+    ..addOption('scanner', abbr: 'S', defaultsTo: 'grype',
+        help: 'Scanner(s) : grype (défaut), osv, trivy, all.')
+    ..addFlag('enrich', defaultsTo: true,
+        help: 'Enrichir les CVE (CISA KEV / EPSS). --no-enrich pour rester '
+            'hors-ligne.')
+    ..addOption('format', abbr: 'f', defaultsTo: 'pdf',
+        allowed: ['pdf', 'asciidoc', 'json'],
+        help: 'Format de sortie : pdf (défaut), asciidoc, json.')
+    ..addOption('output', abbr: 'o',
+        help: 'Fichier de sortie. Requis pour pdf/asciidoc ; json sur stdout '
+            'si omis.')
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('cra: ${e.message}');
+    _printCraUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) { _printCraUsage(parser); exit(0); }
+
+  final sbomFile = args['sbom'] as String;
+  final format = args['format'] as String;
+  final outputPath = args['output'] as String?;
+  final doScan = args['scan'] as bool;
+
+  if (!await File(sbomFile).exists()) {
+    stderr.writeln('cra: fichier SBOM introuvable : $sbomFile');
+    exit(1);
+  }
+  if ((format == 'pdf' || format == 'asciidoc') && outputPath == null) {
+    stderr.writeln('cra: --output <fichier> est requis pour --format $format.');
+    exit(1);
+  }
+
+  final Map<String, dynamic> sbomJson;
+  try {
+    sbomJson = await SbomReader.loadJson(sbomFile);
+  } catch (e) {
+    stderr.writeln('cra: impossible de lire le SBOM : $e');
+    exit(1);
+  }
+  if (SbomReader.detectFormat(sbomJson) == SbomFormat.unknown) {
+    stderr.writeln('cra: format SBOM non reconnu (CycloneDX / SPDX attendu).');
+    exit(1);
+  }
+
+  // Métadonnées : cra.yaml (ou ./cra.yaml par défaut) puis surcharge CLI.
+  var meta = const CraMetadata();
+  final configPath = args['config'] as String? ??
+      (await File('cra.yaml').exists() ? 'cra.yaml' : null);
+  if (configPath != null) {
+    if (!await File(configPath).exists()) {
+      stderr.writeln('cra: fichier de config introuvable : $configPath');
+      exit(1);
+    }
+    meta = CraMetadata.parseConfig(await File(configPath).readAsString());
+  }
+  final cli = CraMetadata(
+    manufacturer: args['manufacturer'] as String?,
+    product: args['product'] as String?,
+    productVersion: args['product-version'] as String?,
+    supportUntil: args['support-until'] as String?,
+    vulnerabilityContact: args['vuln-contact'] as String?,
+    cvdPolicyUrl: args['cvd-policy-url'] as String?,
+  );
+  meta = cli.merge(meta);
+
+  // Analyse de vulnérabilités (optionnelle).
+  Map<String, List<Map<String, dynamic>>>? scanResults;
+  var exploitById = <String, ExploitInfo>{};
+  final toolVersions = <String, String?>{};
+  if (doScan) {
+    final scanner = args['scanner'] as String;
+    final scanners = scanner == 'all' ? ['grype', 'osv', 'trivy'] : [scanner];
+    scanResults = {};
+    for (final s in scanners) {
+      final vulns = await _runScanner(s, sbomFile, quiet: true);
+      if (vulns == null) continue;
+      scanResults[s] = vulns;
+      toolVersions[{'grype': 'Grype', 'osv': 'OSV-Scanner', 'trivy': 'Trivy'}[s]!]
+          = await _scannerVersion(s) ?? 'inconnue';
+    }
+    if (scanResults.isEmpty) {
+      stderr.writeln('cra: aucun scanner disponible — rapport produit sans '
+          'inventaire de vulnérabilités (utilisez --no-scan pour l\'assumer).');
+      scanResults = null;
+    } else {
+      exploitById = await _enrichFindings(
+        scanResults,
+        enrich: args['enrich'] as bool,
+        poc: false,
+        timeoutSeconds: 8,
+        quiet: true,
+      );
+    }
+  }
+
+  // Score sbomqs (best-effort).
+  String? sbomqsOut;
+  try {
+    final r = await Process.run('sbomqs', ['score', '--basic', sbomFile]);
+    if (r.exitCode == 0) sbomqsOut = (r.stdout as String).trim();
+  } catch (_) {}
+
+  final gen = CraReportGenerator(
+    sbomPath: sbomFile,
+    sbom: sbomJson,
+    meta: meta,
+    scanResults: scanResults,
+    exploitById: exploitById,
+    toolVersions: toolVersions,
+    sbomqsOutput: sbomqsOut,
+  );
+
+  if (format == 'json') {
+    final s = gen.toJsonString();
+    if (outputPath != null) {
+      await File(outputPath).writeAsString('$s\n');
+      stdout.writeln('Rapport CRA (JSON) écrit → $outputPath');
+    } else {
+      print(s);
+    }
+    exit(gen.verdict == CraStatus.fail ? 2 : 0);
+  }
+
+  final adocPath = format == 'asciidoc'
+      ? outputPath!
+      : (outputPath!.toLowerCase().endsWith('.pdf')
+          ? '${outputPath.substring(0, outputPath.length - 4)}.adoc'
+          : '$outputPath.adoc');
+  await File(adocPath).writeAsString(gen.toAsciiDoc());
+
+  if (format == 'asciidoc') {
+    stdout.writeln('Rapport CRA (AsciiDoc) écrit → $adocPath');
+  } else {
+    try {
+      final r = await renderAsciiDocToPdf(adocPath, outputPath);
+      if (r.exitCode == 0) {
+        stdout.writeln('Rapport CRA (PDF) écrit → $outputPath');
+      } else {
+        stderr.writeln('cra: asciidoctor-pdf a échoué (code ${r.exitCode}) — '
+            'AsciiDoc conservé → $adocPath');
+      }
+    } on ProcessException {
+      stderr.writeln('cra: asciidoctor-pdf introuvable — PDF non généré, '
+          'AsciiDoc conservé → $adocPath');
+    }
+  }
+
+  final v = gen.verdict;
+  stdout.writeln('Verdict (périmètre vérifié) : ${switch (v) {
+    CraStatus.ok => 'conforme',
+    CraStatus.partial => 'conforme avec réserves',
+    CraStatus.fail => 'NON conforme (${gen.blockers.length} point(s) bloquant(s))',
+    CraStatus.na => 'non évalué',
+  }}');
+  exit(v == CraStatus.fail ? 2 : 0);
+}
+
+void _printCraUsage(ArgParser parser) {
+  stdout.writeln('''
+sbom_generator cra – Rapport de conformité Cyber Resilience Act (UE 2024/2847).
+
+Périmètre : éléments vérifiables automatiquement uniquement — format et
+complétude du SBOM (Annexe I §2 point 1, BSI TR-03183-2, éléments minimaux
+NTIA), inventaire des vulnérabilités connues et disponibilité des correctifs
+(Annexe I §2 points 1-2), vulnérabilités activement exploitées (art. 14).
+Les autres obligations du CRA relèvent du fabricant. Ce rapport n'est pas une
+déclaration de conformité.
+
+Usage:
+  sbom-generator cra --sbom sbom.cdx.json --format pdf -o rapport-cra.pdf
+  sbom-generator cra --sbom sbom.cdx.json --config cra.yaml -o rapport-cra.pdf
+  sbom-generator cra --sbom sbom.cdx.json --no-scan --format json
+
+Fichier cra.yaml (toutes les clés sont facultatives) :
+  manufacturer: "ACME Corp"
+  product: "WidgetOS"
+  product_version: "3.2.1"
+  support_until: "2030-12-31"
+  vulnerability_contact: "security@acme.example"
+  cvd_policy_url: "https://acme.example/security/policy"
+
+${parser.usage}
+
+Codes de retour : 0 = conforme / conforme avec réserves, 2 = non conforme
+(au moins un point bloquant sur le périmètre vérifié).
 ''');
 }
 

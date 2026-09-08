@@ -75,6 +75,7 @@ sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator licenses -i <sbom-source> -o <licences.adoc>
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
+sbom_generator cra --sbom <fichier> [options]
 ```
 
 ### Options (génération de SBOM)
@@ -560,6 +561,62 @@ côté ; après résolution des alias `GHSA-*` → CVE côté Java, il montait �
 étaient déjà d'accord à ~94 %). Le résidu s'explique par la
 fraîcheur/couverture différente des bases de vulnérabilités (Anchore DB
 pour Grype, `trivy-db` pour Trivy). Voir `doc/usage.adoc` pour le détail.
+
+---
+
+### Rapport de conformité Cyber Resilience Act (`cra`)
+
+Produit un rapport de conformité au Règlement (UE) 2024/2847 (*Cyber
+Resilience Act*) à partir d'un SBOM et, optionnellement, d'une analyse de
+vulnérabilités.
+
+```bash
+# Rapport PDF, métadonnées depuis cra.yaml, analyse Grype
+./sbom_generator cra --sbom sbom.cdx.json --config cra.yaml -o rapport-cra.pdf
+
+# Rapport JSON machine-lisible, sans analyse de vulnérabilités
+./sbom_generator cra --sbom sbom.cdx.json --no-scan --format json
+
+# Métadonnées en ligne de commande (elles priment sur cra.yaml)
+./sbom_generator cra --sbom sbom.cdx.json --manufacturer "ACME Corp" \
+  --product WidgetOS --product-version 3.2.1 -o rapport-cra.pdf
+```
+
+**Périmètre : sous-ensemble vérifiable automatiquement uniquement.** Le
+rapport évalue le **format et la complétude du SBOM** (format lisible par
+machine, couverture des dépendances, champs BSI TR-03183-2 par composant,
+éléments minimaux NTIA 2021), la **gestion des vulnérabilités connues**
+(inventaire + disponibilité des correctifs, via `--scan`) et signale toute
+CVE au **catalogue CISA KEV** comme déclenchant l'obligation de notification
+à l'ENISA **sous 24 h** (art. 14). Les autres obligations du CRA (diffusion
+sécurisée des mises à jour, divulgation coordonnée, conception sûre par
+défaut, notifications réglementaires, déclaration UE de conformité) relèvent
+du fabricant et sont seulement listées. **Ce document n'est pas une
+déclaration de conformité.**
+
+Options : `--sbom/-s` (obligatoire), `--config/-c <cra.yaml>` (par défaut
+`./cra.yaml` s'il existe), `--manufacturer` / `--product` /
+`--product-version` / `--support-until` / `--vuln-contact` /
+`--cvd-policy-url` (métadonnées ; priment sur le fichier ; à défaut déduites
+de `metadata.component` du SBOM), `--scan` / `--no-scan` (défaut activé),
+`--scanner <grype|osv|trivy|all>` (défaut `grype`), `--enrich` /
+`--no-enrich`, `--format <pdf|asciidoc|json>` (défaut `pdf`), `--output/-o`.
+Codes de retour : `0` = conforme (avec ou sans réserve sur le périmètre
+vérifié), `2` = non conforme (point bloquant : format non lisible par
+machine, champ obligatoire manquant, vulnérabilité sans correctif, CVE
+activement exploitée).
+
+Fichier `cra.yaml` (clés facultatives, `clé: valeur` par ligne, `#` pour un
+commentaire) :
+
+```yaml
+manufacturer: "ACME Corp"
+product: "WidgetOS"
+product_version: "3.2.1"
+support_until: "2030-12-31"
+vulnerability_contact: "security@acme.example"
+cvd_policy_url: "https://acme.example/security/policy"
+```
 
 ---
 

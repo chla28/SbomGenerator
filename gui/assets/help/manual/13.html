@@ -1,40 +1,35 @@
 
-<h2 id="_onglet_visionneuse_sbom">14. Onglet Visionneuse SBOM</h2>
+<h2 id="_onglet_arborescence_sbom">14. Onglet Arborescence SBOM</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Visionneuse SBOM</strong> permet d’ouvrir et d’explorer n’importe quel
-fichier SBOM CycloneDX ou SPDX depuis le système de fichiers, indépendamment
-d’une génération en cours.</p>
+<p>L’onglet <strong>Arborescence SBOM</strong> permet d’explorer les composants d’un fichier
+SBOM (CycloneDX ou SPDX) sans ouvrir un éditeur JSON.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─────────────────────────────────────────────────────────────────────────┐
-  │  [📂 Ouvrir un fichier SBOM…]                                           │
-  │  CycloneDX 1.6  •  Keycloak 26.0.0  •  453 composants                  │
-  │                                                                         │
-  │  [ Rechercher nom, version, licence… ]  [ Tous les types ▼ ]           │
-  │                                                                         │
-  │  Nom ▲          Version        Type    Licence           PURL           │
-  │  ─────────────────────────────────────────────────────────────────────  │
-  │  snakeyaml      2.0            java    Apache-2.0        pkg:maven/…    │
-  │  requests       2.31.0         pypi    Apache-2.0        pkg:pypi/…     │
-  │  bash           5.1.8-6.el9    rpm     GPL-3.0-or-later  pkg:rpm/…      │
-  │  ...                                                                    │
-  │                               ┌─ Détails ────────────────────────────┐  │
-  │                               │  Nom      snakeyaml                  │  │
-  │                               │  Version  2.0                        │  │
-  │                               │  Type     java                       │  │
-  │                               │  Licence  Apache-2.0                 │  │
-  │                               │  PURL     pkg:maven/org.yaml/…       │  │
-  │                               └──────────────────────────────────────┘  │
-  └─────────────────────────────────────────────────────────────────────────┘</pre>
+<pre>  ┌─ Fichier : [ sbom.cdx.json ▼ ]  [📂 Ouvrir…]                      ─┐
+  │  CycloneDX 1.6  •  Mon Application 2.1.0  •  246 composants          │
+  ├─ Grouper par : [Aucun] [Type] [Licence]                               │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ ▶ rpm  (132)                                                           │
+  │ ▼ python  (89)                                                         │
+  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
+  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
+  │    ...                                                                 │
+  │ ▶ deb  (25)                                                            │
+  └────────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_ouverture_dun_fichier">14.1. Ouverture d’un fichier</h3>
+<h3 id="_sélection_du_fichier_sbom">14.1. Sélection du fichier SBOM</h3>
 <div class="paragraph">
-<p>Cliquez sur <strong>📂 Ouvrir un fichier SBOM…</strong> pour parcourir le système de fichiers.
-Le sélecteur propose les extensions <code>.json</code>, <code>.jsonld</code>, <code>.cdx.json</code>, <code>.spdx.json</code>.</p>
+<p>Le menu déroulant liste les fichiers SBOM générés dans la session courante.
+Le premier fichier <code>.cdx.json</code>, <code>.spdx.json</code> ou <code>.spdx3.jsonld</code> est
+sélectionné automatiquement.</p>
+</div>
+<div class="paragraph">
+<p>Le bouton <strong>Ouvrir…</strong> permet de charger n’importe quel fichier du système
+de fichiers.</p>
 </div>
 <div class="paragraph">
 <p>Formats supportés :</p>
@@ -42,73 +37,86 @@ Le sélecteur propose les extensions <code>.json</code>, <code>.jsonld</code>, <
 <div class="ulist">
 <ul>
 <li>
-<p><strong>CycloneDX 1.6</strong> — <code>components[]</code> avec champs <code>name</code>, <code>version</code>, <code>type</code>, <code>purl</code>,
-<code>licenses</code>, <code>description</code></p>
+<p><strong>CycloneDX 1.6</strong> — <code>.cdx.json</code> (champ <code>components[]</code>)</p>
 </li>
 <li>
-<p><strong>SPDX 2.x</strong> — <code>packages[]</code> avec champs <code>name</code>, <code>versionInfo</code>, <code>licenseConcluded</code>,
-<code>summary</code>, <code>externalRefs[purl]</code></p>
+<p><strong>SPDX 2.x</strong> — <code>.spdx.json</code> (champ <code>packages[]</code>)</p>
 </li>
 <li>
-<p><strong>SPDX 3.0 JSON-LD</strong> — éléments <code>software:Package</code> du graphe <code>@graph</code>, avec
-champs <code>name</code>, <code>software:packageVersion</code>, <code>concludedLicense</code>/<code>declaredLicense</code>,
-<code>summary</code>, <code>externalIdentifier[purl]</code></p>
+<p><strong>SPDX 3.0 JSON-LD</strong> — <code>.spdx3.jsonld</code></p>
 </li>
 </ul>
 </div>
-<div class="paragraph">
-<p>La barre d’informations affiche le format détecté, le nom du document et le
-nombre total de composants chargés.</p>
-</div>
 </div>
 <div class="sect2">
-<h3 id="_filtre_et_recherche">14.2. Filtre et recherche</h3>
+<h3 id="_barre_dinformations">14.2. Barre d’informations</h3>
 <div class="paragraph">
-<p>Le champ de recherche filtre les composants en temps réel sur :</p>
+<p>Après le chargement, une ligne de métadonnées s’affiche :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>le nom du paquet</p>
+<p>Format et version du SBOM</p>
 </li>
 <li>
-<p>la version</p>
+<p>Nom du document / composant principal</p>
 </li>
 <li>
-<p>la licence</p>
-</li>
-<li>
-<p>le PURL</p>
+<p>Nombre total de composants</p>
 </li>
 </ul>
 </div>
+</div>
+<div class="sect2">
+<h3 id="_groupement">14.3. Groupement</h3>
 <div class="paragraph">
-<p>Le menu déroulant <strong>Tous les types</strong> filtre par type d’écosystème (<code>rpm</code>, <code>java</code>,
-<code>pypi</code>, <code>npm</code>, <code>deb</code>, <code>apk</code>…). Les deux filtres se combinent.</p>
+<p>Le sélecteur <strong>Grouper par</strong> propose trois modes :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Aucun</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Tous les composants dans une liste plate triée par nom</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Type</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Regroupement par type de paquet (rpm, python, deb…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Licence</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Regroupement par expression de licence SPDX</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Les groupes sont repliables. Cliquez sur l’en-tête d’un groupe pour
+l’ouvrir ou le fermer.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_tableau_des_composants">14.3. Tableau des composants</h3>
+<h3 id="_détails_dun_composant">14.4. Détails d’un composant</h3>
 <div class="paragraph">
-<p>Le tableau affiche les colonnes <strong>Nom</strong>, <strong>Version</strong>, <strong>Type</strong>, <strong>Licence</strong> et <strong>PURL</strong>.
-Cliquez sur un en-tête de colonne pour trier par ordre croissant, cliquez à
-nouveau pour inverser l’ordre.</p>
+<p>Cliquez sur un composant pour afficher ses détails (champ expansible) :</p>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_panneau_de_détails">14.4. Panneau de détails</h3>
-<div class="paragraph">
-<p>Cliquez sur une ligne du tableau pour afficher un panneau de détails sur la
-droite, récapitulant tous les champs du composant sélectionné : nom, version,
-type, licence, description et PURL.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_persistance">14.5. Persistance</h3>
-<div class="paragraph">
-<p>Le fichier ouvert et les filtres actifs sont mémorisés lors de la navigation
-entre onglets. Le fichier n’est pas rechargé automatiquement si son contenu
-change sur disque.</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>PURL</strong> (Package URL) — cliquable pour copier dans le presse-papiers</p>
+</li>
+<li>
+<p><strong>Version</strong></p>
+</li>
+<li>
+<p><strong>Type</strong></p>
+</li>
+<li>
+<p><strong>Licence</strong></p>
+</li>
+</ul>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -117,11 +125,17 @@ change sur disque.</p>
 <div class="title">Note</div>
 </td>
 <td class="content">
-La Visionneuse SBOM est un onglet autonome — il peut être utilisé avec
-n’importe quel fichier SBOM, pas uniquement ceux générés par sbom_generator.
+Les composants sans PURL dans le SBOM n’affichent pas ce champ.
 </td>
 </tr>
 </tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_persistance_de_létat_2">14.5. Persistance de l’état</h3>
+<div class="paragraph">
+<p>L’onglet mémorise son état (fichier sélectionné, groupement, groupes
+ouverts/fermés) lors de la navigation entre onglets.</p>
 </div>
 </div>
 </div>

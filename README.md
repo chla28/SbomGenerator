@@ -86,10 +86,10 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 - `dpkg-deb` (pour les paquets Debian `.deb`)
 - `unzip` (pour les archives `.jar`, et pour `--oci-tool skopeo`)
 - `syft`, `trivy`, `skopeo` ou `cdxgen` (uniquement pour `--image`, selon le backend choisi ; `cdxgen` requiert Node.js)
-- `grype`, `osv-scanner` ou `trivy` (uniquement pour la sous-commande `scan`)
-- accès réseau (uniquement pour l'enrichissement CVE de `scan` : CISA KEV, EPSS,
+- `grype`, `osv-scanner` ou `trivy` (uniquement pour les sous-commandes `scan` et `cra`)
+- accès réseau (uniquement pour l'enrichissement CVE de `scan` / `cra` : CISA KEV, EPSS,
   poc-in-github ; `--no-enrich` ou `SBOMGEN_OFFLINE=1` s'en passe, cache 24 h)
-- `asciidoctor-pdf` (uniquement pour `scan --format pdf` ; sinon le `.adoc` est conservé)
+- `asciidoctor-pdf` (uniquement pour `scan`/`cra` `--format pdf` ; sinon le `.adoc` est conservé)
 - `sbomqs` (uniquement pour `--min-quality-score`)
 - `cosign` (uniquement pour `--sign`)
 
@@ -112,6 +112,7 @@ sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator validate <sbom1> [<sbom2> ...] [--strict]
 sbom_generator scan --sbom <fichier> [options]
+sbom_generator cra --sbom <fichier> [options]
 
 Options :
   -i, --input              Fichier d'entrée (requis si --image absent)
@@ -177,6 +178,13 @@ sbom_generator scan --sbom sbom.cdx.json --no-enrich   # hors-ligne (CI)
 # Rapport de synthèse inter-scanners (markdown | asciidoc | pdf), avec section
 # « Priorisation par risque » et propriétés kev/epss/poc en SARIF
 sbom_generator scan --sbom sbom.cdx.json --scanner all -f pdf -o scan-report.pdf
+
+# Rapport de conformité Cyber Resilience Act (UE 2024/2847) — périmètre
+# vérifiable automatiquement : complétude du SBOM (BSI TR-03183-2, éléments
+# minimaux NTIA), vulnérabilités connues et correctifs, CVE activement
+# exploitées (déclencheur notification ENISA sous 24 h, art. 14)
+sbom_generator cra --sbom sbom.cdx.json --config cra.yaml -o rapport-cra.pdf
+sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si non conforme
 ```
 
 ### Exemples
@@ -383,6 +391,7 @@ sbom_generator/
 │   ├── sbom_reader.dart         # Relecture d'un SBOM existant (sous-commande convert)
 │   ├── scan_report_generator.dart # Rapport de synthèse inter-scanners (scan -f md/adoc/pdf)
 │   ├── vuln_enrichment.dart     # Enrichissement CVE : CISA KEV, EPSS, PoC, exploitabilité CVSS
+│   ├── cra_report.dart          # Rapport de conformité Cyber Resilience Act (sous-commande cra)
 │   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
 │   ├── cyclonedx_generator.dart # Format CycloneDX 1.6/1.7 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
