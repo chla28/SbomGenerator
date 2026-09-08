@@ -184,19 +184,23 @@ class SortHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final color =
         active ? Theme.of(context).colorScheme.primary : Colors.grey[600]!;
+    final labelText = Text(label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+            fontSize: 10, fontWeight: FontWeight.bold, color: color));
+    final bounded = width != null;
     Widget cell = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          // Sous contrainte de largeur, la Row remplit la cellule et le
+          // libellé (Flexible) cède la place à la flèche par ellipse.
+          mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
           children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: color)),
+            bounded ? Flexible(child: labelText) : labelText,
             if (active) ...[
               const SizedBox(width: 2),
               Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward,
@@ -206,7 +210,7 @@ class SortHeader extends StatelessWidget {
         ),
       ),
     );
-    return width != null ? SizedBox(width: width, child: cell) : cell;
+    return bounded ? SizedBox(width: width, child: cell) : cell;
   }
 }
 

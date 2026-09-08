@@ -8,11 +8,11 @@ import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
 import 'trivy_panel.dart';
-import 'vuln_shared.dart' show adocEscape;
+import 'vuln_shared.dart' show adocEscape, SortHeader;
 
 // ─── Tableau de bord de synthèse ─────────────────────────────────────────────
 
-class DashboardPanel extends StatelessWidget {
+class DashboardPanel extends StatefulWidget {
   final List<GrypeVuln>? grypeVulns;
   final List<OsvVuln>? osvVulns;
   final List<TrivyVuln>? trivyVulns;
@@ -41,10 +41,39 @@ class DashboardPanel extends StatelessWidget {
   }
 
   @override
+  State<DashboardPanel> createState() => _DashboardPanelState();
+}
+
+class _DashboardPanelState extends State<DashboardPanel> {
+  // Tri du tableau « Comparaison inter-scanners ». `null` = tri par défaut :
+  // priorisation par risque (KEV → EPSS → sévérité) si l'enrichissement a
+  // tourné, sinon sévérité décroissante.
+  _CrossSort? _crossSort;
+  bool _crossSortAsc = true;
+
+  _CrossSort get _effectiveCrossSort =>
+      _crossSort ??
+      (widget.exploitById.isNotEmpty
+          ? _CrossSort.kev
+          : _CrossSort.severity);
+
+  bool get _effectiveCrossAsc => _crossSort == null ? true : _crossSortAsc;
+
+  void _onCrossSort(_CrossSort col) => setState(() {
+        if (_crossSort == col) {
+          _crossSortAsc = !_crossSortAsc;
+        } else {
+          _crossSort = col;
+          // EPSS : décroissant au premier clic (score le plus élevé en tête).
+          _crossSortAsc = col != _CrossSort.epss;
+        }
+      });
+
+  @override
   Widget build(BuildContext context) {
-    final grype = grypeVulns;
-    final osv = osvVulns;
-    final trivy = trivyVulns;
+    final grype = widget.grypeVulns;
+    final osv = widget.osvVulns;
+    final trivy = widget.trivyVulns;
 
     // CVE IDs uniques sur l'ensemble des scanners (normalisés — voir
     // _normalizeVulnId)
@@ -77,7 +106,9 @@ class DashboardPanel extends StatelessWidget {
                       osv: osv,
                       trivy: trivy,
                       crossRows: _crossScannerRows(grype, osv, trivy),
-                      exploitById: exploitById,
+                      exploitById: widget.exploitById,
+                      crossSortCol: _effectiveCrossSort,
+                      crossSortAsc: _effectiveCrossAsc,
                     ),
           ),
 
@@ -135,7 +166,10 @@ class DashboardPanel extends StatelessWidget {
               osvVulns: osv,
               trivyVulns: trivy,
               scansRun: scansRun,
-              exploitById: exploitById,
+              exploitById: widget.exploitById,
+              sortCol: _effectiveCrossSort,
+              sortAsc: _effectiveCrossAsc,
+              onSort: _onCrossSort,
             ),
           ],
         ],
@@ -228,6 +262,65 @@ List<_CrossRowData> _crossScannerRows(
   ];
 }
 
+/// Colonne de tri du tableau « Comparaison inter-scanners ».
+enum _CrossSort { severity, cveId, grype, osv, trivy, kev, epss }
+
+int _crossSevOrd(String s) => switch (s.toLowerCase()) {
+      'critical' => 0,
+      'high' => 1,
+      'medium' => 2,
+      'low' => 3,
+      _ => 4,
+    };
+
+/// Trie les lignes de la comparaison inter-scanners selon la colonne active.
+/// Partagé entre l'affichage (`_CrossScannerSection`) et l'export
+/// (`_exportDashboard`) pour que le rapport reflète exactement l'ordre affiché.
+///
+/// * `severity` : sévérité décroissante (Critical en tête) en ascendant.
+/// * `cveId` : ordre alphabétique.
+/// * `grype` / `osv` / `trivy` : CVE vues par ce scanner d'abord (✓ avant —).
+/// * `kev` : « priorisation risque » — CISA KEV, puis EPSS décroissant, puis
+///   sévérité (c'est le tri par défaut quand l'enrichissement a tourné).
+/// * `epss` : score EPSS (ascendant ; l'appelant démarre en décroissant).
+List<_CrossRowData> _sortCrossRows(
+  List<_CrossRowData> rows,
+  _CrossSort col,
+  bool asc,
+  Map<String, ExploitInfo> exploitById,
+) {
+  ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
+
+  int base(_CrossRowData a, _CrossRowData b) {
+    switch (col) {
+      case _CrossSort.severity:
+        return _crossSevOrd(a.severity).compareTo(_crossSevOrd(b.severity));
+      case _CrossSort.cveId:
+        return a.id.compareTo(b.id);
+      case _CrossSort.grype:
+        return (a.inGrype ? 0 : 1).compareTo(b.inGrype ? 0 : 1);
+      case _CrossSort.osv:
+        return (a.inOsv ? 0 : 1).compareTo(b.inOsv ? 0 : 1);
+      case _CrossSort.trivy:
+        return (a.inTrivy ? 0 : 1).compareTo(b.inTrivy ? 0 : 1);
+      case _CrossSort.kev:
+        final ea = ex(a.id), eb = ex(b.id);
+        if (ea.inKev != eb.inKev) return ea.inKev ? -1 : 1;
+        final e = (eb.epssScore ?? -1).compareTo(ea.epssScore ?? -1);
+        if (e != 0) return e;
+        return _crossSevOrd(a.severity).compareTo(_crossSevOrd(b.severity));
+      case _CrossSort.epss:
+        return (ex(a.id).epssScore ?? -1).compareTo(ex(b.id).epssScore ?? -1);
+    }
+  }
+
+  return [...rows]..sort((a, b) {
+    final c = base(a, b);
+    final v = c != 0 ? c : a.id.compareTo(b.id); // départage déterministe
+    return asc ? v : -v;
+  });
+}
+
 // ─── Export AsciiDoc + PDF ────────────────────────────────────────────────
 //
 // Contrairement à VulnTableView (grype/osv/trivy_panel.dart), le tableau de
@@ -244,6 +337,8 @@ Future<void> _exportDashboard(
   required List<TrivyVuln>? trivy,
   required List<_CrossRowData> crossRows,
   Map<String, ExploitInfo> exploitById = const {},
+  _CrossSort crossSortCol = _CrossSort.severity,
+  bool crossSortAsc = true,
 }) async {
   final path = await FilePicker.saveFile(
     dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
@@ -340,13 +435,9 @@ Future<void> _exportDashboard(
   if (crossRows.isEmpty) {
     buf.writeln('_Aucune CVE détectée par les scanners exécutés._');
   } else {
-    final rows = withExploit
-        ? ([...crossRows]..sort((a, b) {
-            final ea = ex(a.id), eb = ex(b.id);
-            if (ea.inKev != eb.inKev) return ea.inKev ? -1 : 1;
-            return -((ea.epssScore ?? -1).compareTo(eb.epssScore ?? -1));
-          }))
-        : crossRows;
+    // Même ordre qu'à l'écran (colonne de tri active du tableau de bord).
+    final rows =
+        _sortCrossRows(crossRows, crossSortCol, crossSortAsc, exploitById);
     if (withExploit) {
       buf.writeln('[cols="<1,<3,^1,<1,^1,^1,^1",options="header"]');
       buf.writeln('|===');
@@ -801,46 +892,39 @@ class _CrossScannerSection extends StatelessWidget {
   final List<TrivyVuln>? trivyVulns;
   final int scansRun;
   final Map<String, ExploitInfo> exploitById;
+  final _CrossSort sortCol;
+  final bool sortAsc;
+  final ValueChanged<_CrossSort> onSort;
 
   const _CrossScannerSection({
     required this.grypeVulns,
     required this.osvVulns,
     required this.trivyVulns,
     required this.scansRun,
+    required this.sortCol,
+    required this.sortAsc,
+    required this.onSort,
     this.exploitById = const {},
   });
 
   @override
   Widget build(BuildContext context) {
-    // Union complète : toutes les CVE vues par au moins un scanner, triées
-    // par sévérité max — voir _crossScannerRows (partagé avec l'export
-    // AsciiDoc + PDF pour que le rapport reflète exactement ce tableau).
-    var rows = _crossScannerRows(grypeVulns, osvVulns, trivyVulns);
-
-    if (rows.isEmpty) return const SizedBox.shrink();
+    // Union complète : toutes les CVE vues par au moins un scanner — voir
+    // _crossScannerRows. Le tri est appliqué par _sortCrossRows (partagé avec
+    // l'export AsciiDoc + PDF pour que le rapport reflète exactement l'ordre
+    // affiché).
+    final baseRows = _crossScannerRows(grypeVulns, osvVulns, trivyVulns);
+    if (baseRows.isEmpty) return const SizedBox.shrink();
 
     final hasExploit = exploitById.isNotEmpty;
     ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
-    if (hasExploit) {
-      int sevOrd(String s) => switch (s.toLowerCase()) {
-            'critical' => 0,
-            'high' => 1,
-            'medium' => 2,
-            'low' => 3,
-            _ => 4,
-          };
-      // Priorisation : KEV d'abord, puis EPSS décroissant, puis sévérité.
-      rows = [...rows]..sort((a, b) {
-          final ea = ex(a.id), eb = ex(b.id);
-          if (ea.inKev != eb.inKev) return ea.inKev ? -1 : 1;
-          final e = -((ea.epssScore ?? -1).compareTo(eb.epssScore ?? -1));
-          if (e != 0) return e;
-          return sevOrd(a.severity).compareTo(sevOrd(b.severity));
-        });
-    }
-    final kevCount = hasExploit
-        ? rows.where((r) => ex(r.id).inKev).length
-        : 0;
+    final rows = _sortCrossRows(baseRows, sortCol, sortAsc, exploitById);
+    final kevCount =
+        hasExploit ? rows.where((r) => ex(r.id).inKev).length : 0;
+
+    Widget header(String label, _CrossSort col, {double? width}) => SortHeader(
+        label, sortCol == col, sortAsc, () => onSort(col),
+        width: width);
 
     return Card(
       child: Padding(
@@ -852,46 +936,32 @@ class _CrossScannerSection extends StatelessWidget {
               children: [
                 const Icon(Icons.join_inner, size: 18, color: Colors.deepOrange),
                 const SizedBox(width: 8),
-                Text(
-                  'Comparaison inter-scanners (${rows.length} CVE'
-                  '${kevCount > 0 ? ', dont $kevCount CISA KEV' : ''})',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13),
+                Expanded(
+                  child: Text(
+                    'Comparaison inter-scanners (${rows.length} CVE'
+                    '${kevCount > 0 ? ', dont $kevCount CISA KEV' : ''})',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            // En-têtes
+            // En-têtes de tri
             Container(
               color: Theme.of(context).colorScheme.surfaceContainerHigh,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Row(
                 children: [
-                  const SizedBox(
-                    width: 80,
-                    child: Text('SÉVÉRITÉ',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey)),
-                  ),
-                  const Expanded(
-                    child: Text('CVE / ID',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey)),
-                  ),
-                  for (final s in ['Grype', 'OSV', 'Trivy'])
-                    SizedBox(
-                      width: 52,
-                      child: Text(s,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey)),
-                    ),
+                  header('SÉV.', _CrossSort.severity, width: 80),
+                  Expanded(child: header('CVE / ID', _CrossSort.cveId)),
+                  if (hasExploit) ...[
+                    header('KEV', _CrossSort.kev, width: 44),
+                    header('EPSS', _CrossSort.epss, width: 56),
+                  ],
+                  header('Grype', _CrossSort.grype, width: 58),
+                  header('OSV', _CrossSort.osv, width: 58),
+                  header('Trivy', _CrossSort.trivy, width: 58),
                 ],
               ),
             ),
@@ -904,6 +974,7 @@ class _CrossScannerSection extends StatelessWidget {
                 inTrivy: row.inTrivy,
                 severity: row.severity,
                 scansRun: scansRun,
+                hasExploit: hasExploit,
                 exploit: hasExploit ? ex(row.id) : null,
               ),
           ],
@@ -920,6 +991,7 @@ class _CrossRow extends StatelessWidget {
   final bool inTrivy;
   final String severity;
   final int scansRun;
+  final bool hasExploit;
   final ExploitInfo? exploit;
 
   const _CrossRow({
@@ -929,6 +1001,7 @@ class _CrossRow extends StatelessWidget {
     required this.inTrivy,
     required this.severity,
     required this.scansRun,
+    this.hasExploit = false,
     this.exploit,
   });
 
@@ -1011,29 +1084,7 @@ class _CrossRow extends StatelessWidget {
                       fontWeight: FontWeight.w500),
                 ),
               ),
-              if (exploit?.inKev ?? false) ...[
-                const SizedBox(width: 6),
-                Tooltip(
-                  message: 'CISA KEV — exploitée activement dans la nature'
-                      '${(exploit?.kevRansomware ?? false) ? ' · rançongiciel' : ''}',
-                  child: const Icon(Icons.local_fire_department,
-                      size: 13, color: Colors.red),
-                ),
-              ],
-              if ((exploit?.epssScore ?? 0) >= 0.10) ...[
-                const SizedBox(width: 6),
-                Tooltip(
-                  message: 'EPSS ${exploit!.epssScore!.toStringAsFixed(2)} — '
-                      'probabilité d\'exploitation élevée',
-                  child: Text(
-                    'EPSS ${exploit!.epssScore!.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepOrange),
-                  ),
-                ),
-              ] else if (exploit?.pocKnown ?? false) ...[
+              if (exploit?.pocKnown ?? false) ...[
                 const SizedBox(width: 6),
                 const Tooltip(
                   message: 'Exploit / PoC public recensé',
@@ -1042,6 +1093,10 @@ class _CrossRow extends StatelessWidget {
               ],
             ]),
           ),
+          if (hasExploit) ...[
+            SizedBox(width: 44, child: _kevCell()),
+            SizedBox(width: 56, child: _epssCell()),
+          ],
           for (final present in [inGrype, inOsv, inTrivy])
             SizedBox(
               width: 52,
@@ -1052,6 +1107,41 @@ class _CrossRow extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _kevCell() {
+    final e = exploit;
+    if (e == null || !e.inKev) {
+      return const Text('—',
+          style: TextStyle(fontSize: 10, color: Colors.grey));
+    }
+    return Tooltip(
+      message: 'CISA KEV — exploitée activement dans la nature'
+          '${e.kevRansomware ? ' · usage par rançongiciel' : ''}',
+      child: Icon(Icons.local_fire_department,
+          size: 14, color: Colors.red[700]),
+    );
+  }
+
+  Widget _epssCell() {
+    final s = exploit?.epssScore;
+    if (s == null) {
+      return const Text('—',
+          style: TextStyle(fontSize: 10, color: Colors.grey));
+    }
+    final pct = ((exploit!.epssPercentile ?? 0) * 100).round();
+    return Tooltip(
+      message: 'EPSS ${s.toStringAsFixed(2)} — probabilité d\'exploitation '
+          'à 30 jours (percentile $pct)',
+      child: Text(
+        s.toStringAsFixed(2),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: s >= 0.10 ? Colors.deepOrange : Colors.blueGrey,
+        ),
       ),
     );
   }

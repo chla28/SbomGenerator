@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **GUI**, tableau de bord : le tableau « Comparaison inter-scanners » est
+  maintenant triable par colonne — sévérité, CVE / ID, présence par scanner
+  (Grype / OSV / Trivy, ✓ avant —), et CISA KEV / score EPSS quand
+  l'enrichissement a tourné. En-têtes cliquables (clic = trier, re-clic =
+  inverser). Le tri par défaut est inchangé (priorisation par risque :
+  KEV → EPSS → sévérité si enrichissement, sinon sévérité). L'export
+  AsciiDoc / PDF suit désormais l'ordre affiché.
+
 ## [1.5.1] - 2026-09-08
 
 ### Added

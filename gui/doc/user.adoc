@@ -1670,9 +1670,24 @@ un* scanner — pas seulement celles communes à plusieurs : c'est justement en
 gardant les CVE isolées (vues par un seul scanner alors que plusieurs ont
 tourné) qu'on repère les écarts de détection entre outils. Ces lignes
 isolées portent une bordure ambre, une icône ⚠ et un tooltip « Vu par un
-seul scanner sur N » pour les distinguer d'un coup d'œil. Les lignes sont
-triées par sévérité décroissante ; une coche ✓ / — indique la présence ou
-l'absence dans chaque scanner.
+seul scanner sur N » pour les distinguer d'un coup d'œil. Une coche ✓ / —
+indique la présence ou l'absence dans chaque scanner.
+
+*Tri* : cliquez sur un en-tête de colonne pour trier, cliquez à nouveau pour
+inverser (la flèche ↑ / ↓ indique la colonne et le sens actifs) :
+
+* *SÉV.* — sévérité (Critical en tête) ;
+* *CVE / ID* — ordre alphabétique ;
+* *Grype* / *OSV* / *Trivy* — CVE vues par ce scanner d'abord (✓ avant —),
+  pour isoler d'un clic ce que chaque outil détecte seul ;
+* *KEV* et *EPSS* (colonnes présentes uniquement si l'enrichissement a
+  tourné, cf. <<sec-exploitabilite>>) — CVE du catalogue CISA en tête, ou
+  score EPSS décroissant.
+
+Par défaut, les lignes sont ordonnées par *priorisation du risque* — CISA
+KEV, puis EPSS décroissant, puis sévérité — quand l'enrichissement a produit
+des résultats ; par sévérité seule sinon. L'export AsciiDoc / PDF reprend
+exactement l'ordre affiché.
 
 Si la liste dépasse la hauteur disponible, l'ascenseur vertical de l'onglet
 permet de tout parcourir — faites défiler vers le bas à l'intérieur de l'onglet
@@ -1808,11 +1823,13 @@ rapport reprenant l'intégralité de la vue affichée :
 * pour chaque scanner : sa répartition par sévérité avec barre colorée (ou
   « Non exécuté » / « Aucune vulnérabilité détectée » selon le cas) ;
 * le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
-  présence par outil), avec les CVE préfixés distro déjà normalisés (voir
-  <<sec-pourquoi-ecarts-scanners>>).
+  présence par outil, et colonnes KEV / EPSS si l'enrichissement a tourné),
+  dans le *même ordre que celui affiché à l'écran*, avec les CVE préfixés
+  distro déjà normalisés (voir <<sec-pourquoi-ecarts-scanners>>).
 
 Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n'y a ici qu'une seule
-vue de synthèse — pas de lignes filtrées/triées individuellement à exporter.
+vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
+la colonne de tri active du tableau inter-scanners est respectée.
 
 Le bouton reste désactivé tant qu'aucun scanner n'a été exécuté. Une fois le
 fichier `.adoc` écrit (emplacement choisi via une boîte de dialogue), la

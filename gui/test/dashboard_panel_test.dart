@@ -1,9 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sbom_generator_gui/services/scan_enrichment.dart';
 import 'package:sbom_generator_gui/widgets/dashboard_panel.dart';
 import 'package:sbom_generator_gui/widgets/grype_panel.dart';
 import 'package:sbom_generator_gui/widgets/osv_panel.dart';
 import 'package:sbom_generator_gui/widgets/trivy_panel.dart';
+import 'package:sbom_generator_gui/widgets/vuln_shared.dart';
+
+GrypeVuln _g(String id, String sev) => GrypeVuln(
+      id: id,
+      severity: sev,
+      packageName: 'pkg',
+      installedVersion: '1.0',
+      fixedVersion: '1.1',
+      packageType: 'rpm',
+    );
+OsvVuln _o(String id, String sev) => OsvVuln(
+      id: id,
+      severity: sev,
+      packageName: 'pkg',
+      installedVersion: '1.0',
+      fixedVersion: '1.1',
+      ecosystem: 'RPM',
+    );
+TrivyVuln _t(String id, String sev) => TrivyVuln(
+      id: id,
+      severity: sev,
+      packageName: 'pkg',
+      installedVersion: '1.0',
+      fixedVersion: '1.1',
+      title: 't',
+    );
 
 void main() {
   testWidgets(
@@ -205,5 +232,96 @@ void main() {
     final button = tester.widget<IconButton>(
         find.widgetWithIcon(IconButton, Icons.picture_as_pdf_outlined));
     expect(button.onPressed, isNotNull);
+  });
+
+  group('tri de la comparaison inter-scanners', () {
+    // AAA : Medium, Grype seul, EPSS 0.80
+    // BBB : Low, les 3 scanners, EPSS 0.05, CISA KEV
+    // CCC : Critical, Trivy seul, EPSS 0.30
+    final grype = [_g('CVE-AAA', 'Medium'), _g('CVE-BBB', 'Low')];
+    final osv = [_o('CVE-BBB', 'Low')];
+    final trivy = [_t('CVE-BBB', 'Low'), _t('CVE-CCC', 'Critical')];
+    final exploit = {
+      'CVE-AAA': const ExploitInfo(epssScore: 0.80, epssPercentile: 0.97),
+      'CVE-BBB': const ExploitInfo(inKev: true, epssScore: 0.05),
+      'CVE-CCC': const ExploitInfo(epssScore: 0.30),
+    };
+
+    Future<void> pump(WidgetTester tester,
+        {Map<String, ExploitInfo> ex = const {}}) async {
+      tester.view.physicalSize = const Size(1400, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: DashboardPanel(
+            grypeVulns: grype,
+            osvVulns: osv,
+            trivyVulns: trivy,
+            exploitById: ex,
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    List<String> order(WidgetTester tester) {
+      final ids = ['CVE-AAA', 'CVE-BBB', 'CVE-CCC'];
+      ids.sort((a, b) => tester
+          .getTopLeft(find.text(a))
+          .dy
+          .compareTo(tester.getTopLeft(find.text(b)).dy));
+      return ids;
+    }
+
+    testWidgets('défaut sans enrichissement : sévérité décroissante',
+        (tester) async {
+      await pump(tester);
+      expect(order(tester), ['CVE-CCC', 'CVE-AAA', 'CVE-BBB']);
+    });
+
+    testWidgets('défaut avec enrichissement : KEV puis EPSS décroissant',
+        (tester) async {
+      await pump(tester, ex: exploit);
+      expect(order(tester), ['CVE-BBB', 'CVE-AAA', 'CVE-CCC']);
+    });
+
+    testWidgets('clic sur « CVE / ID » : ordre alphabétique, puis inversé',
+        (tester) async {
+      await pump(tester, ex: exploit);
+      await tester.tap(find.widgetWithText(SortHeader, 'CVE / ID'));
+      await tester.pumpAndSettle();
+      expect(order(tester), ['CVE-AAA', 'CVE-BBB', 'CVE-CCC']);
+      await tester.tap(find.widgetWithText(SortHeader, 'CVE / ID'));
+      await tester.pumpAndSettle();
+      expect(order(tester), ['CVE-CCC', 'CVE-BBB', 'CVE-AAA']);
+    });
+
+    testWidgets('clic sur « EPSS » : score décroissant, puis croissant',
+        (tester) async {
+      await pump(tester, ex: exploit);
+      await tester.tap(find.widgetWithText(SortHeader, 'EPSS'));
+      await tester.pumpAndSettle();
+      expect(order(tester), ['CVE-AAA', 'CVE-CCC', 'CVE-BBB']);
+      await tester.tap(find.widgetWithText(SortHeader, 'EPSS'));
+      await tester.pumpAndSettle();
+      expect(order(tester), ['CVE-BBB', 'CVE-CCC', 'CVE-AAA']);
+    });
+
+    testWidgets('clic sur « Trivy » : CVE vues par Trivy en tête',
+        (tester) async {
+      await pump(tester, ex: exploit);
+      await tester.tap(find.widgetWithText(SortHeader, 'Trivy'));
+      await tester.pumpAndSettle();
+      // BBB et CCC (vus par Trivy) avant AAA ; départage par id.
+      expect(order(tester), ['CVE-BBB', 'CVE-CCC', 'CVE-AAA']);
+    });
+
+    testWidgets('pas de colonnes KEV / EPSS sans enrichissement',
+        (tester) async {
+      await pump(tester);
+      expect(find.widgetWithText(SortHeader, 'EPSS'), findsNothing);
+      expect(find.widgetWithText(SortHeader, 'KEV'), findsNothing);
+    });
   });
 }
