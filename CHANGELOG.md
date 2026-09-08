@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-08
+
 ### Added
 - **GUI** — clic sur un numéro de CVE (tableau de bord *et* onglets Grype /
   OSV-Scanner / Trivy) : la ligne se déplie et affiche le détail complet de
