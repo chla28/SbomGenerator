@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-09-09
+
 ### Added
 - **Rapport de conformité Cyber Resilience Act** — nouvelle sous-commande
   CLI `sbom_generator cra --sbom <fichier>` et nouvel onglet *Conformité CRA*

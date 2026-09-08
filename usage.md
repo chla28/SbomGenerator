@@ -22,9 +22,9 @@ Prend en charge les formats de sortie **CycloneDX 1.6/1.7**, **SPDX 2.3**, **SPD
 | `syft` | — | `--image` avec `--oci-tool syft` (défaut) | Analyse d'images OCI — tous types de paquets |
 | `trivy` | — | `--image` avec `--oci-tool trivy` | Analyse d'images OCI — tous types de paquets |
 | `skopeo` + `tar` | — | `--image` avec `--oci-tool skopeo` | Analyse d'images OCI — dpkg, RPM, APK, Maven JARs, Python, npm |
-| `grype` / `osv-scanner` / `trivy` | — | sous-commande `scan` | Recherche de vulnérabilités connues sur un SBOM déjà généré |
-| accès réseau | — | enrichissement CVE de `scan` | CISA KEV, EPSS, poc-in-github (optionnel : `--no-enrich`, cache 24 h) |
-| `asciidoctor-pdf` | — | `scan --format pdf` | Conversion du rapport de synthèse en PDF (sinon le `.adoc` est conservé) |
+| `grype` / `osv-scanner` / `trivy` | — | sous-commandes `scan` et `cra` | Recherche de vulnérabilités connues sur un SBOM déjà généré |
+| accès réseau | — | enrichissement CVE de `scan` / `cra` | CISA KEV, EPSS, poc-in-github (optionnel : `--no-enrich`, cache 24 h) |
+| `asciidoctor-pdf` | — | `scan` / `cra` `--format pdf` | Conversion du rapport en PDF (sinon le `.adoc` est conservé) |
 | `sbomqs` | — | `--min-quality-score` | Score de qualité du SBOM généré |
 | `cosign` | — | `--sign` | Signature cryptographique du SBOM généré |
 
@@ -627,7 +627,7 @@ cvd_policy_url: "https://acme.example/security/policy"
 | Champ | Contenu |
 |-------|---------|
 | Timestamp | Date/heure de génération (UTC ISO 8601) |
-| Outil | `sbom_generator 1.5.4` |
+| Outil | `sbom_generator 1.5.5` |
 | Auteur | Fixé à `sbom_generator` (non configurable) |
 | Supplier | Fixé à `local` (non configurable) |
 | Nom du composant racine | Configurable via `--name` (défaut : `Package Set`) |
