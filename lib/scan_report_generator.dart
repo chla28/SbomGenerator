@@ -487,32 +487,39 @@ class ScanReportGenerator {
   String toAsciiDoc() {
     final b = StringBuffer();
     final run = _scannersRun.toList();
-    b.writeln('= Rapport de synthèse — vulnérabilités du SBOM');
+    final sbomName = sbomPath.split(RegExp(r'[/\\]')).last;
+    b.writeln('= Rapport de vulnérabilités: Synthèse inter-scanners');
+    b.writeln('sbom-generator');
     b.writeln(':doctype: article');
+    b.writeln(':title-page:');
     b.writeln(':toc:');
     b.writeln(':toc-title: Sommaire');
-    b.writeln(':toclevels: 1');
+    b.writeln(':toclevels: 2');
+    b.writeln(':revdate: ${_frenchDate()}');
     b.writeln(':icons: font');
     b.writeln();
-    b.writeln('SBOM analysé : `${_adocEsc(sbomPath)}` +');
-    b.writeln('Généré le : ${_timestamp()}');
-    b.writeln();
 
-    b.writeln('== Résumé global');
+    b.writeln('== Résumé exécutif');
     b.writeln();
-    b.writeln('[cols="<3,<1",options="header"]');
+    b.writeln('*SBOM analysé* : `${_adocEsc(sbomName)}` +');
+    b.writeln('*Scanners exécutés* : ${run.length} / 3'
+        '${run.isEmpty ? '' : ' (${run.map((s) => _scannerLabels[s]).join(', ')})'}'
+        ' — *$_uniqueCveCount* CVE uniques');
+    b.writeln();
+    final crit = _crossSevCount('critical');
+    final high = _crossSevCount('high');
+    b.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
     b.writeln('|===');
-    b.writeln('| Indicateur | Valeur');
-    b.writeln('| Scanners exécutés | ${run.length} / 3');
-    b.writeln('| CVE uniques (tous scanners confondus) | $_uniqueCveCount');
-    b.writeln('| Résultats bruts cumulés | $_totalFindings');
-    if (hasExploitData) {
-      b.writeln('| CVE activement exploitées (CISA KEV) | $_kevCount');
-      b.writeln('| CVE avec EPSS >= '
-          '${(epssWatchThreshold * 100).round()} % | $_epssWatchCount');
-      b.writeln('| CVE avec PoC / exploit public | $_pocCount');
-    }
+    b.writeln('h| Critiques h| Élevées h| CISA KEV h| EPSS >= '
+        '${(epssWatchThreshold * 100).round()} %');
+    b.writeln('| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
+        '| [.h1-num]*$high* '
+        '| [.${_kevCount > 0 ? 'h1-num-alert' : 'h1-num'}]*$_kevCount* '
+        '| [.h1-num]*$_epssWatchCount*');
     b.writeln('|===');
+    b.writeln();
+    final (verdictRole, verdictText) = _verdict();
+    b.writeln('[.$verdictRole]*$verdictText*');
     b.writeln();
 
     if (toolVersions.isNotEmpty) {
@@ -560,9 +567,9 @@ class ScanReportGenerator {
       if (rows.isEmpty) {
         b.writeln('_Aucune CVE détectée par les scanners exécutés._');
       } else {
-        b.writeln('[cols="<1,<3,^1,^1,^1",options="header"]');
+        b.writeln('[cols="2,5,1,1,1",options="header"]');
         b.writeln('|===');
-        b.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy');
+        b.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy');
         for (final r in rows) {
           b.writeln('| ${_sevBadge(r.severity)} '
               '| ${_adocEsc(r.id)} '
@@ -614,7 +621,7 @@ class ScanReportGenerator {
       if (kevRows.isNotEmpty) {
         b.writeln('=== CVE activement exploitées (CISA KEV)');
         b.writeln();
-        b.writeln('[cols="<2,<2,<1,<1,^1",options="header"]');
+        b.writeln('[cols="3,3,2,2,2",options="header"]');
         b.writeln('|===');
         b.writeln('| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel');
         for (final r in kevRows) {
@@ -641,10 +648,10 @@ class ScanReportGenerator {
         b.writeln('CVE avec un signal d\'exploitation notable, ordonnées par : '
             'KEV, puis probabilité EPSS, puis sévérité.');
         b.writeln();
-        b.writeln('[cols="<2,<1,<2,^1,<1,<2,<1",options="header"]');
+        b.writeln('[cols="3,2,4,2,2,3,1",options="header"]');
         b.writeln('|===');
         b.writeln('| CVE / ID | Sévérité | Paquet | KEV | EPSS '
-            '| Exploitabilité CVSS | PoC public');
+            '| Exploit. CVSS | PoC');
         for (final r in riskRows) {
           final e = _exploitFor(r.id);
           b.writeln('| ${_adocEsc(r.id)} '
@@ -688,19 +695,77 @@ class ScanReportGenerator {
     return '${d.year}-${p(d.month)}-${p(d.day)} ${p(d.hour)}:${p(d.minute)} UTC';
   }
 
+  /// Date longue en français (« 8 septembre 2026 ») pour l'en-tête du rapport.
+  String _frenchDate() {
+    const months = [
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
+      'septembre', 'octobre', 'novembre', 'décembre'
+    ];
+    final d = generatedAt;
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   static String _mdEsc(String s) => s.replaceAll('|', r'\|');
   static String _adocEsc(String s) => s.replaceAll('|', r'\|');
 
-  static String _sevBadge(String severity) {
-    final role = switch (severity.toLowerCase()) {
-      'critical' => 'sev-critical',
-      'high' => 'sev-high',
-      'medium' => 'sev-medium',
-      'low' => 'sev-low',
-      _ => 'sev-other',
-    };
-    final label = severity.isEmpty ? '?' : severity.toUpperCase();
-    return '[.$role]#$label#';
+  /// Libellé français d'une sévérité (les scanners rapportent l'anglais).
+  static String frSeverity(String severity) => switch (severity.toLowerCase()) {
+        'critical' => 'CRITIQUE',
+        'high' => 'ÉLEVÉE',
+        'medium' => 'MOYENNE',
+        'low' => 'FAIBLE',
+        'negligible' => 'NÉGLIGEABLE',
+        '' => '?',
+        _ => severity.toUpperCase(),
+      };
+
+  static String _sevRole(String severity) => switch (severity.toLowerCase()) {
+        'critical' => 'sev-critical',
+        'high' => 'sev-high',
+        'medium' => 'sev-medium',
+        'low' => 'sev-low',
+        _ => 'sev-other',
+      };
+
+  static String _sevBadge(String severity) =>
+      '[.${_sevRole(severity)}]#${frSeverity(severity)}#';
+
+  /// Nombre de CVE uniques dont la pire sévérité (tous scanners) vaut [level].
+  int _crossSevCount(String level) => _crossRows()
+      .where((r) => r.severity.toLowerCase() == level)
+      .length;
+
+  /// Verdict de la page de garde : (rôle de thème, phrase).
+  (String, String) _verdict() {
+    final crit = _crossSevCount('critical');
+    final high = _crossSevCount('high');
+    final kev = _kevCount;
+    if (kev > 0) {
+      return (
+        'verdict-urgent',
+        'Action immédiate requise. $kev CVE du catalogue CISA KEV '
+            '${kev > 1 ? 'sont exploitées' : 'est exploitée'} activement dans la '
+            'nature — appliquer les correctifs sans délai.'
+      );
+    }
+    if (crit > 0) {
+      return (
+        'verdict-urgent',
+        'Action prioritaire. $crit vulnérabilité(s) critique(s) à corriger '
+            'en priorité.'
+      );
+    }
+    if (high > 0) {
+      return (
+        'verdict-watch',
+        'À traiter. $high vulnérabilité(s) de sévérité élevée identifiée(s).'
+      );
+    }
+    return (
+      'verdict-ok',
+      'Aucune vulnérabilité critique ni élevée détectée par les scanners '
+          'exécutés.'
+    );
   }
 }
 
@@ -732,54 +797,139 @@ class ScanAlert {
 
 // ── AsciiDoc → PDF ─────────────────────────────────────────────────────────
 
+// IMPORTANT : copie synchronisée de `_kPdfThemeYaml` de
+// `gui/lib/widgets/pdf_report.dart` — garder les deux identiques.
+// `extends: default-sans` : thème sans-serif fourni par asciidoctor-pdf
+// (aucun fichier de police supplémentaire à embarquer).
 const String _kPdfThemeYaml = '''
-extends: default
+extends: default-sans
 page:
-  margin: [2cm, 1.8cm, 2cm, 1.8cm]
+  size: A4
+  margin: [1.7cm, 1.7cm, 2.4cm, 1.7cm]
 base:
-  font_color: 263238
-  font_size: 10.5
-  line_height: 1.35
+  font_size: 9.8
+  font_color: 222E39
+  line_height: 1.42
+link:
+  font_color: 1A4C8B
 heading:
-  font_color: 0D47A1
+  font_color: 1B3A5C
   font_style: bold
+  line_height: 1.15
+  margin_top: 14
+  margin_bottom: 5
   h1:
     font_size: 20
-    border_bottom_width: 0.75
-    border_bottom_color: 1565C0
+    font_color: 15314F
   h2:
-    font_size: 15
-    font_color: 1565C0
+    font_size: 14
+    font_color: 1B3A5C
     margin_top: 18
-    border_bottom_width: 0.5
-    border_bottom_color: CFD8DC
+    border_bottom_width: 0.75
+    border_bottom_color: D3DCE3
   h3:
-    font_size: 12
-    font_color: 00695C
+    font_size: 11.5
+    font_color: 2C4A63
+    margin_top: 12
+  h4:
+    font_size: 10
+    font_color: 46586A
+title_page:
+  text_align: left
+  title:
+    top: 34%
+    font_size: 28
+    font_color: 15314F
+    line_height: 1.05
+  subtitle:
+    font_size: 13
+    font_style: normal
+    font_color: 566878
+  authors:
+    margin_top: 24
+    font_size: 10.5
+    font_color: 46586A
+  revision:
+    margin_top: 6
+    font_size: 9.5
+    font_color: 6B7A88
 toc:
-  font_color: 37474F
+  font_color: 30455A
   dot_leader:
-    font_color: CFD8DC
+    font_color: C7D0D9
 table:
-  border_color: CFD8DC
+  border_color: D3DCE3
   border_width: 0.5
+  grid_width: 0.5
+  cell_padding: [4, 6, 4, 6]
   head:
-    background_color: 1565C0
+    background_color: 2C4A63
     font_color: FFFFFF
     font_style: bold
-  even_row:
-    background_color: F5F7FA
+  body:
+    stripe_background_color: F3F6F9
+  foot:
+    background_color: EEF2F5
+admonition:
+  border_color: D3DCE3
+  border_width: 0.5
+  background_color: F7F9FB
+  padding: [8, 10, 8, 10]
+  label:
+    font_color: 46586A
+code:
+  background_color: F3F5F7
+  border_color: E4E9ED
+  border_width: 0.5
+  font_size: 8.5
+footer:
+  font_size: 8
+  font_color: 7A8894
+  border_width: 0.5
+  border_color: D3DCE3
+  height: 26
+  padding: [7, 2, 0, 2]
+  vertical_align: top
+  recto:
+    left:
+      content: '{document-title}'
+    right:
+      content: 'Page {page-number} / {page-count}'
+  verso:
+    left:
+      content: '{document-title}'
+    right:
+      content: 'Page {page-number} / {page-count}'
 role:
+  h1-num:
+    font_size: 19
+    font_color: 15314F
+    font_style: bold
+  h1-num-alert:
+    font_size: 19
+    font_color: B3261E
+    font_style: bold
+  verdict-urgent:
+    font_color: B3261E
+    font_style: bold
+  verdict-watch:
+    font_color: 8A5000
+    font_style: bold
+  verdict-ok:
+    font_color: 1B5E20
+    font_style: bold
+  muted:
+    font_color: 6B7A88
   sev-critical:
-    background_color: B71C1C
+    background_color: B3261E
     font_color: FFFFFF
     font_style: bold
   sev-high:
-    background_color: BF360C
+    background_color: C4531A
     font_color: FFFFFF
     font_style: bold
   sev-medium:
-    background_color: E65100
+    background_color: B9770E
     font_color: FFFFFF
     font_style: bold
   sev-low:
@@ -787,7 +937,7 @@ role:
     font_color: FFFFFF
     font_style: bold
   sev-other:
-    background_color: 607D8B
+    background_color: 5B6B7A
     font_color: FFFFFF
     font_style: bold
 ''';

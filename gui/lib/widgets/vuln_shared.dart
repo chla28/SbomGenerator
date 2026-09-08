@@ -708,6 +708,10 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
   /// Vrai tant que l'enrichissement en ligne est en cours (bandeau d'attente).
   final bool enrichPending;
 
+  /// Cible analysée (« SBOM x.cdx.json », « image nginx:latest ») — affichée
+  /// dans l'en-tête du rapport exporté. `null` = non renseignée.
+  final String? scanTarget;
+
   /// État du basculement « enrichir en ligne » (CISA KEV / EPSS / poc-in-github).
   final bool enrichOnline;
 
@@ -733,6 +737,7 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
     this.onDateFilterChanged,
     this.onPropagate,
     this.exploitById = const {},
+    this.scanTarget,
     this.enrichPending = false,
     this.enrichOnline = true,
     this.onEnrichOnlineChanged,
@@ -976,36 +981,58 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
         ? rows.where((v) => _ex(v).inKev).length
         : 0;
 
+    int cnt(String key) => widget.severityOrder
+        .where((s) => s.toLowerCase() == key)
+        .fold(0, (n, s) => n + (counts[s] ?? 0));
+    final crit = cnt('critical');
+    final high = cnt('high');
+
     final buf = StringBuffer();
-    buf.writeln('= Rapport de vulnérabilités — ${widget.toolName}');
+    buf.writeln('= Rapport de vulnérabilités: ${widget.toolName}');
+    buf.writeln('SBOM Generator $kGuiVersion');
     buf.writeln(':doctype: article');
+    buf.writeln(':title-page:');
     buf.writeln(':toc:');
     buf.writeln(':toc-title: Sommaire');
-    buf.writeln(':toclevels: 1');
+    buf.writeln(':toclevels: 2');
+    buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now())}');
     buf.writeln(':icons: font');
     buf.writeln();
-    buf.writeln('== Résumé');
+    buf.writeln('== Résumé exécutif');
+    buf.writeln();
+    if (widget.scanTarget != null) {
+      buf.writeln('*Cible analysée* : ${adocEscape(widget.scanTarget!)} +');
+    }
+    buf.writeln('*Scanner* : ${widget.toolName} — *${rows.length}* '
+        'vulnérabilité(s)'
+        '${widget.dateFilter.hasConstraints ? ' après filtre de date' : ''}');
     buf.writeln();
     final svg = buildSeverityBarSvg(counts);
     if (svg != null) {
       buf.writeln(svgImageMacro(svg));
       buf.writeln();
     }
-    buf.writeln('[cols="<3,<1",options="header"]');
+    buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
     buf.writeln('|===');
-    buf.writeln('| Indicateur | Valeur');
-    buf.writeln('| Vulnérabilités affichées | ${rows.length}');
+    buf.writeln('h| Critiques h| Élevées h| CISA KEV h| Total');
+    buf.writeln('| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
+        '| [.h1-num]*$high* '
+        '| [.${kevCount > 0 ? 'h1-num-alert' : 'h1-num'}]*$kevCount* '
+        '| [.h1-num]*${rows.length}*');
+    buf.writeln('|===');
+    buf.writeln();
+    if (widget.dateFilter.hasConstraints) {
+      buf.writeln('NOTE: Filtre de date appliqué — '
+          '${_dateFilterSummary(widget.dateFilter)}.');
+      buf.writeln();
+    }
+    buf.writeln('[cols="<2,>1",options="header"]');
+    buf.writeln('|===');
+    buf.writeln('| Sévérité | Nombre');
     for (final s in widget.severityOrder) {
       if (counts.containsKey(s)) {
         buf.writeln('| ${pdfSeverityBadge(s)} | ${counts[s]}');
       }
-    }
-    if (widget.dateFilter.hasConstraints) {
-      buf.writeln(
-          '| Filtre de date appliqué | ${_dateFilterSummary(widget.dateFilter)}');
-    }
-    if (_hasExploit) {
-      buf.writeln('| CVE activement exploitées (CISA KEV) | $kevCount');
     }
     buf.writeln('|===');
     buf.writeln();
@@ -1043,8 +1070,6 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     }
     buf.writeln('|===');
     buf.writeln();
-    buf.writeln(
-        '_Généré par sbom_generator_gui — ${rows.length} vulnérabilité(s)._');
 
     await File(path).writeAsString(buf.toString());
     if (!context.mounted) return;

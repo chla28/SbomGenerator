@@ -1074,21 +1074,22 @@ Emplacements (nombre d'occurrences fusionnées, `1` si le composant n'est
 présent qu'à un seul endroit).
 
 *Export AsciiDoc + PDF* : le bouton ⬥ (à côté de l'export CSV) exporte la
-même liste filtrée dans un rapport AsciiDoc — résumé chiffré (nombre de
-vulnérabilités affichées, décompte par sévérité avec barre de répartition,
-filtre de date appliqué le cas échéant), section *Outils* indiquant la
-version de sbom_generator_gui et celle du scanner (détectées via
-`<outil> --version` au moment de l'export, donc toujours à jour même si
-l'outil a été mis à jour depuis le dernier scan), puis le tableau détaillé —
-avant de tenter automatiquement sa conversion en PDF via `asciidoctor-pdf`.
-Si l'outil n'est pas installé, le fichier `.adoc` reste produit et un
-message l'indique. L'emplacement de sortie est choisi via une boîte de
-dialogue.
+liste filtrée dans un rapport soigné : *page de garde* (titre, date, cible
+analysée, version), *résumé exécutif* — un encart chiffré « Critiques /
+Élevées / CISA KEV / Total » et un verdict d'une phrase (« Action immédiate
+requise » si des CVE KEV sont présentes, etc.) — barre de répartition par
+sévérité, section *Outils* (versions détectées via `<outil> --version` au
+moment de l'export, donc toujours à jour), puis le tableau détaillé. Le
+fichier `.adoc` est ensuite converti en PDF via `asciidoctor-pdf` ; si
+l'outil est absent, le `.adoc` reste produit et un message l'indique.
+L'emplacement de sortie est choisi via une boîte de dialogue.
 
-Le PDF généré reprend les couleurs de l'appli : badges de sévérité (mêmes
-teintes que les badges à l'écran), en-têtes de tableau bleus, barre de
-répartition par sévérité — au lieu du rendu noir et blanc par défaut
-d'`asciidoctor-pdf`.
+Le PDF utilise une mise en forme sobre : police sans-serif, palette
+bleu-ardoise, en-têtes de tableau foncés, badges de sévérité colorés
+(libellés français : CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE), pied de page
+avec titre du rapport et pagination « Page X / Y ». Le rapport du *tableau
+de bord* (bouton d'export de sa carte de synthèse) suit la même charte et
+ajoute une section *« Détail des CVE prioritaires »*.
 
 *Filtres par sévérité* : cliquez sur un ou plusieurs badges pour n'afficher que
 les vulnérabilités du niveau correspondant. Le bouton *Tout voir* efface les

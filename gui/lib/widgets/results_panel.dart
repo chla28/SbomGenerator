@@ -74,6 +74,18 @@ class _ResultsPanelState extends State<ResultsPanel>
   Map<String, ExploitInfo> _osvExploit = const {};
   Map<String, ExploitInfo> _trivyExploit = const {};
 
+  // Cible analysée par chaque scanner (généralement identique) — pour
+  // l'en-tête du rapport exporté du tableau de bord.
+  String? _grypeTarget;
+  String? _osvTarget;
+  String? _trivyTarget;
+
+  List<String> get _scanTargets => <String?>[
+        _grypeTarget,
+        _osvTarget,
+        _trivyTarget
+      ].whereType<String>().toSet().toList();
+
   Map<String, ExploitInfo> get _mergedExploit {
     final out = <String, ExploitInfo>{};
     for (final m in [_grypeExploit, _osvExploit, _trivyExploit]) {
@@ -425,6 +437,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 osvVulns: _osvVulns,
                 trivyVulns: _trivyVulns,
                 exploitById: _mergedExploit,
+                scanTargets: _scanTargets,
               ),
 
               // Tab 3 : Grype
@@ -432,6 +445,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _grypeVulns = v),
                 onExploitChanged: (m) => setState(() => _grypeExploit = m),
+                onScanTargetChanged: (t) => setState(() => _grypeTarget = t),
                 dateFilter: _grypeFilter,
                 onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
                 onPropagate: (f) => setState(() {
@@ -445,6 +459,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _osvVulns = v),
                 onExploitChanged: (m) => setState(() => _osvExploit = m),
+                onScanTargetChanged: (t) => setState(() => _osvTarget = t),
                 dateFilter: _osvFilter,
                 onDateFilterChanged: (f) => setState(() => _osvFilter = f),
                 onPropagate: (f) => setState(() {
@@ -458,6 +473,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) => setState(() => _trivyVulns = v),
                 onExploitChanged: (m) => setState(() => _trivyExploit = m),
+                onScanTargetChanged: (t) => setState(() => _trivyTarget = t),
                 dateFilter: _trivyFilter,
                 onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
                 onPropagate: (f) => setState(() {

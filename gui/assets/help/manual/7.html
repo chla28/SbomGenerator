@@ -383,22 +383,23 @@ présent qu’à un seul endroit).</p>
 </div>
 <div class="paragraph">
 <p><strong>Export AsciiDoc + PDF</strong> : le bouton ⬥ (à côté de l’export CSV) exporte la
-même liste filtrée dans un rapport AsciiDoc — résumé chiffré (nombre de
-vulnérabilités affichées, décompte par sévérité avec barre de répartition,
-filtre de date appliqué le cas échéant), section <strong>Outils</strong> indiquant la
-version de sbom_generator_gui et celle du scanner (détectées via
-<code>&lt;outil&gt; --version</code> au moment de l’export, donc toujours à jour même si
-l’outil a été mis à jour depuis le dernier scan), puis le tableau détaillé —
-avant de tenter automatiquement sa conversion en PDF via <code>asciidoctor-pdf</code>.
-Si l’outil n’est pas installé, le fichier <code>.adoc</code> reste produit et un
-message l’indique. L’emplacement de sortie est choisi via une boîte de
-dialogue.</p>
+liste filtrée dans un rapport soigné : <strong>page de garde</strong> (titre, date, cible
+analysée, version), <strong>résumé exécutif</strong> — un encart chiffré « Critiques /
+Élevées / CISA KEV / Total » et un verdict d’une phrase (« Action immédiate
+requise » si des CVE KEV sont présentes, etc.) — barre de répartition par
+sévérité, section <strong>Outils</strong> (versions détectées via <code>&lt;outil&gt; --version</code> au
+moment de l’export, donc toujours à jour), puis le tableau détaillé. Le
+fichier <code>.adoc</code> est ensuite converti en PDF via <code>asciidoctor-pdf</code> ; si
+l’outil est absent, le <code>.adoc</code> reste produit et un message l’indique.
+L’emplacement de sortie est choisi via une boîte de dialogue.</p>
 </div>
 <div class="paragraph">
-<p>Le PDF généré reprend les couleurs de l’appli : badges de sévérité (mêmes
-teintes que les badges à l’écran), en-têtes de tableau bleus, barre de
-répartition par sévérité — au lieu du rendu noir et blanc par défaut
-d'`asciidoctor-pdf`.</p>
+<p>Le PDF utilise une mise en forme sobre : police sans-serif, palette
+bleu-ardoise, en-têtes de tableau foncés, badges de sévérité colorés
+(libellés français : CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE), pied de page
+avec titre du rapport et pagination « Page X / Y ». Le rapport du <strong>tableau
+de bord</strong> (bouton d’export de sa carte de synthèse) suit la même charte et
+ajoute une section <strong>« Détail des CVE prioritaires »</strong>.</p>
 </div>
 <div class="paragraph">
 <p><strong>Filtres par sévérité</strong> : cliquez sur un ou plusieurs badges pour n’afficher que

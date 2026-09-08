@@ -21,56 +21,140 @@ const String kGuiVersion = '1.5.3';
 // disque (pas de data URI) : writePdfTheme() l'écrit dans le dossier temp
 // système avant chaque conversion, et runAsciidoctorPdf() le référence via
 // l'attribut CLI `pdf-theme` (pas besoin de `pdf-themesdir`, chemin absolu).
+//
+// IMPORTANT : ce thème est une copie synchronisée de `_kPdfThemeYaml` de
+// `lib/scan_report_generator.dart` (paquet CLI) — garder les deux identiques.
+// `extends: default-sans` : thème sans-serif fourni par asciidoctor-pdf
+// (aucun fichier de police supplémentaire à embarquer).
 const String _kPdfThemeYaml = '''
-extends: default
+extends: default-sans
 page:
-  margin: [2cm, 1.8cm, 2cm, 1.8cm]
+  size: A4
+  margin: [1.7cm, 1.7cm, 2.4cm, 1.7cm]
 base:
-  font_color: 263238
-  font_size: 10.5
-  line_height: 1.35
+  font_size: 9.8
+  font_color: 222E39
+  line_height: 1.42
+link:
+  font_color: 1A4C8B
 heading:
-  font_color: 0D47A1
+  font_color: 1B3A5C
   font_style: bold
+  line_height: 1.15
+  margin_top: 14
+  margin_bottom: 5
   h1:
     font_size: 20
-    border_bottom_width: 0.75
-    border_bottom_color: 1565C0
+    font_color: 15314F
   h2:
-    font_size: 15
-    font_color: 1565C0
+    font_size: 14
+    font_color: 1B3A5C
     margin_top: 18
-    border_bottom_width: 0.5
-    border_bottom_color: CFD8DC
+    border_bottom_width: 0.75
+    border_bottom_color: D3DCE3
   h3:
-    font_size: 12
-    font_color: 00695C
+    font_size: 11.5
+    font_color: 2C4A63
+    margin_top: 12
+  h4:
+    font_size: 10
+    font_color: 46586A
+title_page:
+  text_align: left
+  title:
+    top: 34%
+    font_size: 28
+    font_color: 15314F
+    line_height: 1.05
+  subtitle:
+    font_size: 13
+    font_style: normal
+    font_color: 566878
+  authors:
+    margin_top: 24
+    font_size: 10.5
+    font_color: 46586A
+  revision:
+    margin_top: 6
+    font_size: 9.5
+    font_color: 6B7A88
 toc:
-  font_color: 37474F
+  font_color: 30455A
   dot_leader:
-    font_color: CFD8DC
+    font_color: C7D0D9
 table:
-  border_color: CFD8DC
+  border_color: D3DCE3
   border_width: 0.5
+  grid_width: 0.5
+  cell_padding: [4, 6, 4, 6]
   head:
-    background_color: 1565C0
+    background_color: 2C4A63
     font_color: FFFFFF
     font_style: bold
   body:
-    background_color: FFFFFF
-  even_row:
-    background_color: F5F7FA
+    stripe_background_color: F3F6F9
+  foot:
+    background_color: EEF2F5
+admonition:
+  border_color: D3DCE3
+  border_width: 0.5
+  background_color: F7F9FB
+  padding: [8, 10, 8, 10]
+  label:
+    font_color: 46586A
+code:
+  background_color: F3F5F7
+  border_color: E4E9ED
+  border_width: 0.5
+  font_size: 8.5
+footer:
+  font_size: 8
+  font_color: 7A8894
+  border_width: 0.5
+  border_color: D3DCE3
+  height: 26
+  padding: [7, 2, 0, 2]
+  vertical_align: top
+  recto:
+    left:
+      content: '{document-title}'
+    right:
+      content: 'Page {page-number} / {page-count}'
+  verso:
+    left:
+      content: '{document-title}'
+    right:
+      content: 'Page {page-number} / {page-count}'
 role:
+  h1-num:
+    font_size: 19
+    font_color: 15314F
+    font_style: bold
+  h1-num-alert:
+    font_size: 19
+    font_color: B3261E
+    font_style: bold
+  verdict-urgent:
+    font_color: B3261E
+    font_style: bold
+  verdict-watch:
+    font_color: 8A5000
+    font_style: bold
+  verdict-ok:
+    font_color: 1B5E20
+    font_style: bold
+  muted:
+    font_color: 6B7A88
   sev-critical:
-    background_color: B71C1C
+    background_color: B3261E
     font_color: FFFFFF
     font_style: bold
   sev-high:
-    background_color: BF360C
+    background_color: C4531A
     font_color: FFFFFF
     font_style: bold
   sev-medium:
-    background_color: E65100
+    background_color: B9770E
     font_color: FFFFFF
     font_style: bold
   sev-low:
@@ -78,7 +162,7 @@ role:
     font_color: FFFFFF
     font_style: bold
   sev-other:
-    background_color: 607D8B
+    background_color: 5B6B7A
     font_color: FFFFFF
     font_style: bold
 ''';
@@ -114,11 +198,31 @@ String _severityRole(String severity) => switch (severity.toLowerCase()) {
       _ => 'sev-other',
     };
 
-/// Rend une sévérité en badge coloré AsciiDoc (`[.sev-xxx]#LABEL#`), à
-/// utiliser directement comme contenu d'une cellule de tableau.
-String pdfSeverityBadge(String severity) {
-  final label = severity.isEmpty ? '?' : severity.toUpperCase();
-  return '[.${_severityRole(severity)}]#$label#';
+/// Libellé français d'une sévérité (les scanners rapportent l'anglais, parfois
+/// en casses différentes). Utilisé pour un rendu homogène dans les rapports.
+String frenchSeverityLabel(String severity) => switch (severity.toLowerCase()) {
+      'critical' => 'CRITIQUE',
+      'high' => 'ÉLEVÉE',
+      'medium' => 'MOYENNE',
+      'low' => 'FAIBLE',
+      'negligible' => 'NÉGLIGEABLE',
+      '' => '?',
+      _ => severity.toUpperCase(),
+    };
+
+/// Rend une sévérité en badge coloré AsciiDoc (`[.sev-xxx]#LIBELLÉ#`), libellé
+/// francisé, à utiliser directement comme contenu d'une cellule de tableau.
+String pdfSeverityBadge(String severity) =>
+    '[.${_severityRole(severity)}]#${frenchSeverityLabel(severity)}#';
+
+/// Date longue en français, ex. « 8 septembre 2026 » — pour l'en-tête des
+/// rapports (évite une dépendance `intl`).
+String pdfFrenchDate(DateTime d) {
+  const months = [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
+    'septembre', 'octobre', 'novembre', 'décembre'
+  ];
+  return '${d.day} ${months[d.month - 1]} ${d.year}';
 }
 
 // ─── Barre de répartition par sévérité ───────────────────────────────────────
@@ -147,11 +251,11 @@ String? buildSeverityBarSvg(
   final other = total - critical - high - medium - low;
 
   final segments = <(int, String)>[
-    (critical, 'B71C1C'),
-    (high, 'BF360C'),
-    (medium, 'E65100'),
+    (critical, 'B3261E'),
+    (high, 'C4531A'),
+    (medium, 'B9770E'),
     (low, '2E7D32'),
-    (other > 0 ? other : 0, '9E9E9E'),
+    (other > 0 ? other : 0, '5B6B7A'),
   ].where((s) => s.$1 > 0).toList();
 
   final radius = height / 2;

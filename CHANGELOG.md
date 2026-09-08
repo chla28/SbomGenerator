@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Rapports PDF** (GUI : tableau de bord et onglets Grype / OSV / Trivy ;
+  CLI : `scan --format pdf|asciidoc`) — refonte visuelle :
+  - page de garde (titre, sous-titre, date en toutes lettres, cible analysée) ;
+  - *résumé exécutif* : encart chiffré « Critiques / Élevées / CISA KEV /
+    EPSS ≥ 10 % » et un verdict d'une phrase (action immédiate requise si des
+    CVE KEV sont présentes, action prioritaire si des critiques, etc.) ;
+  - thème sobre : police sans-serif (`default-sans` d'asciidoctor-pdf, sans
+    police embarquée), palette bleu-ardoise, en-têtes de tableau foncés,
+    pied de page « titre du rapport … Page X / Y » avec filet ;
+  - libellés de sévérité en français (CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE).
+  - GUI : la *cible analysée* (chemin du SBOM ou référence d'image) est
+    remontée depuis les onglets de scan jusqu'à l'en-tête du rapport.
+
 ## [1.5.3] - 2026-09-08
 
 ### Fixed

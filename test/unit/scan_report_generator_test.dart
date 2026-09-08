@@ -51,7 +51,7 @@ void main() {
       );
       final adoc = gen.toAsciiDoc();
       // pire sévérité = High (pas Unknown de grype)
-      expect(adoc, contains('| [.sev-high]#HIGH# | CVE-2026-9 | ✓ | — | ✓'));
+      expect(adoc, contains('| [.sev-high]#ÉLEVÉE# | CVE-2026-9 | ✓ | — | ✓'));
     });
 
     test('note par CVE : Grype won\'t fix + version corrigée annoncée ailleurs',
@@ -159,9 +159,28 @@ void main() {
         },
       );
       final adoc = gen.toAsciiDoc();
-      expect(adoc, startsWith('= Rapport de synthèse'));
+      expect(adoc, startsWith('= Rapport de vulnérabilités'));
       expect(adoc, contains(':doctype: article'));
-      expect(adoc, contains('[.sev-critical]#CRITICAL#'));
+      expect(adoc, contains(':title-page:'));
+      expect(adoc, contains('[.sev-critical]#CRITIQUE#'));
+    });
+
+    test('AsciiDoc : résumé exécutif — encart chiffré + verdict', () {
+      final gen = ScanReportGenerator(
+        sbomPath: '/tmp/x/mon-sbom.cdx.json',
+        resultsByScanner: {
+          'grype': [_v('CVE-2026-1', 'Critical'), _v('CVE-2026-2', 'High')],
+        },
+        exploitById: {
+          'CVE-2026-1': const ExploitInfo(inKev: true),
+        },
+      );
+      final adoc = gen.toAsciiDoc();
+      expect(adoc, contains('== Résumé exécutif'));
+      expect(adoc, contains('`mon-sbom.cdx.json`')); // basename, pas le chemin
+      expect(adoc, contains('h| Critiques h| Élevées h| CISA KEV'));
+      expect(adoc, contains('[.h1-num-alert]*1*')); // 1 critique → rouge
+      expect(adoc, contains('[.verdict-urgent]*Action immédiate requise.'));
     });
 
     test('alerts() : CVE uniques Critical + High, pire sévérité, scanners', () {

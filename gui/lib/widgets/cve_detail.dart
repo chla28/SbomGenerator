@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/scan_enrichment.dart';
+import 'pdf_report.dart' show frenchSeverityLabel;
 
 /// Ce qu'un scanner donné rapporte sur une CVE. Les scanners divergent souvent
 /// sur la sévérité, les versions corrigées et les dates — on les garde donc
@@ -103,7 +104,7 @@ class CveDetail {
           '$fixed')}`');
     }
     final reported = views
-        .map((v) => '${v.scanner} (${v.severity.isEmpty ? '?' : v.severity})')
+        .map((v) => '${v.scanner} (${frenchSeverityLabel(v.severity)})')
         .join(', ');
     if (reported.isNotEmpty) b.writeln('| Rapporté par | ${esc(reported)}');
     final dates = views

@@ -148,6 +148,7 @@ gui/
 │   ├── config_panel_input_test.dart
 │   ├── dashboard_panel_test.dart
 │   ├── cve_detail_test.dart
+│   ├── pdf_report_test.dart
 │   ├── sbom_merge_panel_test.dart
 │   ├── sbom_licenses_panel_test.dart
 │   ├── vuln_shared_test.dart
@@ -1732,16 +1733,23 @@ chacun un PDF noir et blanc par défaut :
   jour côté GUI lors d'un bump (avec `gui/pubspec.yaml`) ; `home_screen.dart`
   (dialogue « À propos ») s'y réfère aussi, au lieu d'un littéral dupliqué.
 * `runAsciidoctorPdf(adocPath, pdfPath)` — écrit le thème YAML
-  (`_kPdfThemeYaml`, `extends: default`, couleurs calquées sur l'appli,
-  rôles `sev-critical`/`sev-high`/`sev-medium`/`sev-low`/`sev-other`) dans
-  le dossier temp système à chaque appel (contenu statique, coût
-  négligeable — évite tout problème de cache si le thème change d'une
-  version à l'autre), puis lance `asciidoctor-pdf` avec
-  `-a pdf-theme=<chemin absolu>`. Pas de `pdf-themesdir` nécessaire (chemin
-  déjà absolu) ; le thème n'est jamais déclaré dans le `.adoc` lui-même.
-* `pdfSeverityBadge(severity)` — rend `[.sev-xxx]#LABEL#` (rôle du thème
-  ci-dessus), utilisable directement comme contenu de cellule de tableau.
+  (`_kPdfThemeYaml`) dans le dossier temp système à chaque appel (contenu
+  statique, coût négligeable), puis lance `asciidoctor-pdf` avec
+  `-a pdf-theme=<chemin absolu>`. Le thème `extends: default-sans` (variante
+  sans-serif fournie par asciidoctor-pdf — aucune police à embarquer) :
+  palette bleu-ardoise, en-têtes de tableau foncés, page de garde
+  (`:title-page:`), pied de page « `{document-title}` … Page {page-number}
+  / {page-count} » avec filet, rôles `sev-*` (badges de sévérité),
+  `h1-num` / `h1-num-alert` (chiffres du résumé exécutif),
+  `verdict-urgent` / `verdict-watch` / `verdict-ok`.
+  *Copie synchronisée* de `_kPdfThemeYaml` de
+  `lib/scan_report_generator.dart` (paquet CLI) — garder les deux
+  identiques.
+* `pdfSeverityBadge(severity)` — rend `[.sev-xxx]#LIBELLÉ#` avec le libellé
+  *francisé* via `frenchSeverityLabel` (CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE).
   Seuils identiques à `severityFg`/`severityBg` (ce fichier, plus haut).
+* `pdfFrenchDate(DateTime)` — date longue en français (« 8 septembre 2026 »)
+  pour l'attribut `:revdate:` de l'en-tête, sans dépendance `intl`.
 * `buildSeverityBarSvg(countsBySeverity)` / `svgImageMacro(svg)` —
   reproduisent `_SeverityBar` (`dashboard_panel.dart`) : segments
   proportionnels Critical/High/Medium/Low/Autre, mêmes couleurs, mêmes

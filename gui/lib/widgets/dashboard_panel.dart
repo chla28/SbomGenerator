@@ -22,12 +22,17 @@ class DashboardPanel extends StatefulWidget {
   /// trois onglets. Vide = enrichissement non exécuté.
   final Map<String, ExploitInfo> exploitById;
 
+  /// Cible(s) analysée(s) rapportée(s) par les onglets de scan — pour l'en-tête
+  /// du rapport exporté. Généralement une seule entrée.
+  final List<String> scanTargets;
+
   const DashboardPanel({
     super.key,
     required this.grypeVulns,
     required this.osvVulns,
     required this.trivyVulns,
     this.exploitById = const {},
+    this.scanTargets = const [],
   });
 
   // Normalise les sévérités en clé minuscule commune
@@ -110,6 +115,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
                       exploitById: widget.exploitById,
                       crossSortCol: _effectiveCrossSort,
                       crossSortAsc: _effectiveCrossAsc,
+                      scanTargets: widget.scanTargets,
                     ),
           ),
 
@@ -322,6 +328,35 @@ List<_CrossRowData> _sortCrossRows(
   });
 }
 
+/// Verdict d'une page de garde de rapport : (rôle de thème, phrase).
+(String, String) _verdict(int critical, int high, int kev) {
+  if (kev > 0) {
+    return (
+      'verdict-urgent',
+      'Action immédiate requise. '
+          '$kev CVE du catalogue CISA KEV ${kev > 1 ? 'sont exploitées' : 'est exploitée'} '
+          'activement dans la nature — appliquer les correctifs sans délai.'
+    );
+  }
+  if (critical > 0) {
+    return (
+      'verdict-urgent',
+      'Action prioritaire. $critical vulnérabilité(s) critique(s) '
+          'à corriger en priorité.'
+    );
+  }
+  if (high > 0) {
+    return (
+      'verdict-watch',
+      'À traiter. $high vulnérabilité(s) de sévérité élevée identifiée(s).'
+    );
+  }
+  return (
+    'verdict-ok',
+    'Aucune vulnérabilité critique ni élevée détectée par les scanners exécutés.'
+  );
+}
+
 // ─── Export AsciiDoc + PDF ────────────────────────────────────────────────
 //
 // Contrairement à VulnTableView (grype/osv/trivy_panel.dart), le tableau de
@@ -340,32 +375,64 @@ Future<void> _exportDashboard(
   Map<String, ExploitInfo> exploitById = const {},
   _CrossSort crossSortCol = _CrossSort.severity,
   bool crossSortAsc = true,
+  List<String> scanTargets = const [],
 }) async {
   final path = await FilePicker.saveFile(
     dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
-    fileName: 'dashboard_synthese.adoc',
+    fileName: 'rapport-vulnerabilites.adoc',
     type: FileType.custom,
     allowedExtensions: ['adoc'],
   );
   if (path == null || !context.mounted) return;
 
+  ExploitInfo exSum(String id) => exploitById[id] ?? ExploitInfo.empty;
+  int sevCount(String s) => crossRows
+      .where((r) => r.severity.toLowerCase() == s)
+      .length;
+  final crit = sevCount('critical');
+  final high = sevCount('high');
+  final kev = crossRows.where((r) => exSum(r.id).inKev).length;
+  final epssHi =
+      crossRows.where((r) => (exSum(r.id).epssScore ?? 0) >= 0.10).length;
+
   final buf = StringBuffer();
-  buf.writeln('= Rapport de synthèse — Tableau de bord des vulnérabilités');
+  buf.writeln('= Rapport de vulnérabilités: Synthèse inter-scanners');
+  buf.writeln('SBOM Generator $kGuiVersion');
   buf.writeln(':doctype: article');
+  buf.writeln(':title-page:');
   buf.writeln(':toc:');
   buf.writeln(':toc-title: Sommaire');
-  buf.writeln(':toclevels: 1');
+  buf.writeln(':toclevels: 2');
+  buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now())}');
   buf.writeln(':icons: font');
   buf.writeln();
 
-  buf.writeln('== Résumé global');
+  buf.writeln('== Résumé exécutif');
   buf.writeln();
-  buf.writeln('[cols="<3,<1",options="header"]');
+  if (scanTargets.length == 1) {
+    buf.writeln('*Cible analysée* : ${adocEscape(scanTargets.single)} +');
+  } else if (scanTargets.length > 1) {
+    buf.writeln('*Cibles analysées* : '
+        '${scanTargets.map((t) => '`${adocEscape(t)}`').join(', ')} +');
+  }
+  buf.writeln('*Scanners exécutés* : $scansRun / 3'
+      '${scansRun == 0 ? '' : ' (${[
+          if (grype != null) 'Grype',
+          if (osv != null) 'OSV-Scanner',
+          if (trivy != null) 'Trivy',
+        ].join(', ')})'} — *$uniqueIds* CVE uniques');
+  buf.writeln();
+  buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
   buf.writeln('|===');
-  buf.writeln('| Indicateur | Valeur');
-  buf.writeln('| Scanners exécutés | $scansRun / 3');
-  buf.writeln('| CVE uniques (tous scanners confondus) | $uniqueIds');
+  buf.writeln('h| Critiques h| Élevées h| CISA KEV h| EPSS ≥ 10 %');
+  buf.writeln('| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
+      '| [.h1-num]*$high* '
+      '| [.${kev > 0 ? 'h1-num-alert' : 'h1-num'}]*$kev* '
+      '| [.h1-num]*$epssHi*');
   buf.writeln('|===');
+  buf.writeln();
+  final (verdictRole, verdictText) = _verdict(crit, high, kev);
+  buf.writeln('[.$verdictRole]*$verdictText*');
   buf.writeln();
 
   // Versions détectées au moment de l'export (pas au moment du scan) —
@@ -440,9 +507,9 @@ Future<void> _exportDashboard(
     buf.writeln('_Aucune CVE détectée par les scanners exécutés._');
   } else {
     if (withExploit) {
-      buf.writeln('[cols="<1,<3,^1,<1,^1,^1,^1",options="header"]');
+      buf.writeln('[cols="2,5,1,1,1,1,1",options="header"]');
       buf.writeln('|===');
-      buf.writeln('| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV-Scanner '
+      buf.writeln('| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV '
           '| Trivy');
       for (final row in rows) {
         final e = ex(row.id);
@@ -456,9 +523,9 @@ Future<void> _exportDashboard(
       }
       buf.writeln('|===');
     } else {
-      buf.writeln('[cols="<1,<3,^1,^1,^1",options="header"]');
+      buf.writeln('[cols="2,5,1,1,1",options="header"]');
       buf.writeln('|===');
-      buf.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy');
+      buf.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy');
       for (final row in rows) {
         buf.writeln('| ${pdfSeverityBadge(row.severity)} '
             '| ${adocEscape(row.id)} '
@@ -513,15 +580,13 @@ Future<void> _exportDashboard(
       final d = _crossCveDetail(r.id, grype, osv, trivy, exploitById);
       buf.writeln('=== ${adocEscape(r.id)}');
       buf.writeln();
-      buf.writeln('[cols="<1,<3"]');
+      buf.writeln('[cols="<1h,<3a"]');
       buf.writeln('|===');
       buf.write(d.toAdocRows(adocEscape));
       buf.writeln('|===');
       buf.writeln();
     }
   }
-
-  buf.writeln('_Généré par sbom_generator_gui._');
 
   await File(path).writeAsString(buf.toString());
   if (!context.mounted) return;

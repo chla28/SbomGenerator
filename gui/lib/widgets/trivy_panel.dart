@@ -109,6 +109,9 @@ class TrivyPanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
   final void Function(List<TrivyVuln>)? onVulnsChanged;
   final void Function(Map<String, ExploitInfo>)? onExploitChanged;
+
+  /// Cible réellement analysée — pour l'en-tête des rapports exportés.
+  final void Function(String target)? onScanTargetChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -118,6 +121,7 @@ class TrivyPanel extends StatefulWidget {
     required this.outputFiles,
     this.onVulnsChanged,
     this.onExploitChanged,
+    this.onScanTargetChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -157,6 +161,7 @@ class _TrivyPanelState extends State<TrivyPanel>
   bool _enrichPending = false;
   bool _enrichOnline = true;
   int _enrichRun = 0;
+  String? _scannedTarget;
 
   ToolVersionInfo? _versionInfo;
 
@@ -285,6 +290,11 @@ class _TrivyPanelState extends State<TrivyPanel>
       return;
     }
 
+    final targetLabel = useImage
+        ? 'image « $target »'
+        : 'SBOM ${target.split(RegExp(r'[/\\]')).last}';
+    widget.onScanTargetChanged?.call(targetLabel);
+
     setState(() {
       _isRunning = true;
       _vulns = [];
@@ -292,6 +302,7 @@ class _TrivyPanelState extends State<TrivyPanel>
       _error = null;
       _parseFailed = false;
       _exitCode = null;
+      _scannedTarget = targetLabel;
     });
 
     _runner
@@ -463,6 +474,7 @@ class _TrivyPanelState extends State<TrivyPanel>
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
                   exploitById: _exploitById,
+                  scanTarget: _scannedTarget,
                   enrichPending: _enrichPending,
                   enrichOnline: _enrichOnline,
                   onEnrichOnlineChanged: (v) {

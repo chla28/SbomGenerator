@@ -2326,7 +2326,10 @@ Chaque `result` et `rule` porte les propriétés `kev` / `epss` /
 |`--format markdown` / `asciidoc` / `pdf` : reçoit le `ScanReportGenerator`
 (`lib/scan_report_generator.dart`) et écrit le fichier. Pour `pdf`, écrit
 d'abord un `.adoc` à côté puis appelle `renderAsciiDocToPdf()` (shell-out
-`asciidoctor-pdf` + thème partagé) ; `ProcessException` ou code ≠ 0 →
+`asciidoctor-pdf` avec `_kPdfThemeYaml`, `extends: default-sans` — page de
+garde, résumé exécutif chiffré + verdict, pied de page paginé, badges de
+sévérité francisés ; copie synchronisée du thème de
+`gui/lib/widgets/pdf_report.dart`) ; `ProcessException` ou code ≠ 0 →
 conserve le `.adoc`, avertit, mais ne fait pas échouer la commande
 
 |`_printSeverityAlerts()`

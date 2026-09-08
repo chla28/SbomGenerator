@@ -66,7 +66,8 @@ void main() {
     test('toAdocRows : reprend paquet, KEV, EPSS, CVSS, PoC, liens', () {
       final adoc = detail.toAdocRows((s) => s);
       expect(adoc, contains('| Paquet | `log4j-core 2.14.1 → 2.15.0`'));
-      expect(adoc, contains('| Rapporté par | Grype (Critical), Trivy (CRITICAL)'));
+      expect(adoc,
+          contains('| Rapporté par | Grype (CRITIQUE), Trivy (CRITIQUE)'));
       expect(adoc, contains('| CISA KEV | Oui'));
       expect(adoc, contains('échéance 2021-12-24'));
       expect(adoc, contains('rançongiciel'));
