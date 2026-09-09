@@ -31,13 +31,17 @@ class NpmParser {
 
   List<WheelPackage> _parsePackagesField(
       Map<String, dynamic> packages, String path) {
+    final nmRoot = File(path).parent.path;
     final result = <WheelPackage>[];
     for (final entry in packages.entries) {
       if (entry.key.isEmpty) continue; // root project entry
       final data = entry.value as Map<String, dynamic>;
       final name = _stripNodeModulesPrefix(entry.key);
       final version = (data['version'] as String?) ?? '';
-      result.add(_make(name, version, data, path));
+      // `entry.key` est le chemin d'installation réel (`node_modules/…`) :
+      // le `package.json` correspondant porte l'auteur (absent du lockfile).
+      result.add(_make(name, version, data, path,
+          vendor: _authorFromPackageJson('$nmRoot/${entry.key}')));
     }
     return result;
   }
@@ -55,7 +59,8 @@ class NpmParser {
   }
 
   WheelPackage _make(
-      String name, String version, Map<String, dynamic> data, String path) {
+      String name, String version, Map<String, dynamic> data, String path,
+      {String vendor = ''}) {
     final license = _extractLicense(data);
     final resolved = (data['resolved'] as String?) ?? '';
     final integrity = packageHashFromSri(data['integrity'] as String?);
@@ -65,7 +70,7 @@ class NpmParser {
       license: license,
       url: resolved,
       summary: '',
-      vendor: '',
+      vendor: vendor,
       arch: 'any',
       sourceRef: path,
       hashes: [if (integrity != null) integrity],
@@ -75,9 +80,47 @@ class NpmParser {
     );
   }
 
+  /// Lit le nom d'auteur/éditeur depuis `<dir>/package.json` (`author`,
+  /// sinon premier `contributors[]`, sinon `maintainers[]`). Le lockfile npm
+  /// ne contient pas cette information ; l'arbre `node_modules` peut être
+  /// absent (lockfile committé sans `npm install`) → chaîne vide, sans erreur.
+  String _authorFromPackageJson(String dir) {
+    try {
+      final f = File('$dir/package.json');
+      if (!f.existsSync()) return '';
+      final j = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      final fromAuthor = _personName(j['author']);
+      if (fromAuthor.isNotEmpty) return fromAuthor;
+      for (final key in const ['contributors', 'maintainers']) {
+        final list = j[key];
+        if (list is List) {
+          for (final p in list) {
+            final n = _personName(p);
+            if (n.isNotEmpty) return n;
+          }
+        }
+      }
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Normalise un champ « person » npm : objet `{name,…}` ou chaîne
+  /// `"Nom <email> (url)"` → `"Nom"`.
+  String _personName(Object? person) {
+    if (person is Map) return (person['name'] as String?)?.trim() ?? '';
+    if (person is String) {
+      final m = RegExp(r'^\s*([^<(]+?)\s*(?:[<(]|$)').firstMatch(person);
+      return m != null ? m.group(1)!.trim() : person.trim();
+    }
+    return '';
+  }
+
   String _stripNodeModulesPrefix(String key) {
     const prefix = 'node_modules/';
-    return key.startsWith(prefix) ? key.substring(prefix.length) : key;
+    final i = key.lastIndexOf(prefix);
+    return i >= 0 ? key.substring(i + prefix.length) : key;
   }
 
   String _extractLicense(Map<String, dynamic> data) {

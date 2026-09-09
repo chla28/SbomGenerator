@@ -88,6 +88,7 @@ sbom_generator cra --sbom <fichier> [options]
 | `--output <fichier>` | `-o` | `sbom.json` | Fichier SBOM de sortie (chemin de base si multi-format) |
 | `--format <fmt>` | `-f` | `cyclonedx` | Format(s) de sortie, virgule-séparés (voir tableau ci-dessous) |
 | `--name <nom>` | `-n` | `Package Set` | Nom du composant racine dans le SBOM |
+| `--supplier <nom>` | — | — | Fournisseur par défaut des composants dont la source ne porte aucun éditeur (lockfiles npm/yarn/Go/pip/pub). N'écrase jamais un fournisseur détecté |
 | `--rpm-dir <dossier>` | `-d` | — | Dossier de recherche récursive de fichiers `.rpm` ; résout les noms nus sans interroger la base installée |
 | `--concurrency <N>` | `-c` | `4` | Nombre de paquets traités simultanément (`0` = illimité) |
 | `--license-map <fichier>` | `-l` | — | Fichier de substitution de licences (`nom: SPDX-expression` par ligne) |
@@ -643,7 +644,7 @@ cvd_policy_url: "https://acme.example/security/policy"
 | CPE 2.3 | Calculé uniquement pour les paquets RPM |
 | Empreinte(s) | Condensat de l'artefact quand il est connu sans requête réseau : `integrity` des lockfiles npm/yarn, `sha256` de `pubspec.lock`, `Digest` Trivy / digests Syft (images OCI), ou SHA-256+SHA-512 calculés pour un fichier `.rpm`/`.deb`/`.jar`/`.whl` passé en entrée. Émise en `hashes` (CycloneDX), `checksums` (SPDX 2.3), `verifiedUsing` (SPDX 3.0). Le hash de l'en-tête RPM est exposé à part (`rpm:header-sha256`). Souvent absente pour les paquets système d'une image (rien à hacher). |
 | Licence | Normalisée vers SPDX (expression ou identifiant) |
-| Supplier | Fournisseur du paquet, quand l'information est disponible |
+| Supplier | Repris de la source : `%{VENDOR}` (RPM), `Maintainer` (Debian), `maintainer`/`Vendor` (OCI), `Author-email` (wheel), `groupId` (Maven), `author` du `package.json` (npm). Absent des lockfiles Go/pip/pub/yarn → `--supplier "<nom>"` sert de repli (n'écrase jamais une valeur détectée). Inconnu ⇒ `NOASSERTION` en SPDX 2.3, clé omise en CycloneDX |
 | Description | Résumé court, quand disponible |
 | Propriétés additionnelles | Spécifiques à l'écosystème (`rpm:*`, `deb:*`, `pypi:*`…) |
 

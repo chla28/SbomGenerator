@@ -182,6 +182,11 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |`Package Set`
 |Nom du composant racine dans le SBOM
 
+|`--supplier <nom>`
+|—
+|—
+|Fournisseur par défaut des composants dont la source ne porte aucun éditeur (lockfiles npm/yarn/Go/pip/pub, `requirements.txt`). N'écrase jamais un fournisseur détecté
+
 |`--rpm-dir <dossier>`
 |`-d`
 |—
@@ -1259,6 +1264,39 @@ L'empreinte est écrite dans `hashes` (CycloneDX), `checksums` (SPDX 2.3) et
 `verifiedUsing` (SPDX 3.0). *Pour un SBOM issu d'une image, la plupart des
 paquets système restent sans empreinte* : ils sont installés dans l'image,
 pas présents sous forme d'artefact à hacher.
+
+=== Fournisseur (`supplier`) des composants
+
+Le champ fournisseur est repris de la source quand elle le porte :
+
+[cols="2,3", options="header"]
+|===
+|Source |Champ
+
+|RPM |`%{VENDOR}`
+|Debian `.deb` |`Maintainer:`
+|Image OCI |`Vendor` (rpm) / `maintainer` (dpkg, apk) / `author` (selon le backend)
+|Wheel Python |`Author-email`, sinon `Author` / `Maintainer` du `METADATA` (souvent absent)
+|Maven (`pom.xml`, `.jar`) |`groupId` (namespace, à défaut d'éditeur explicite)
+|npm (`package-lock.json`) |champ `author` du `package.json` de chaque paquet dans `node_modules` — **le lockfile ne le contient pas** ; l'arbre `node_modules` doit être présent
+|`go.sum`/`go.mod`, `requirements.txt`, `yarn.lock`, `pubspec.lock` |_(aucun — ces formats ne portent pas d'éditeur)_
+|===
+
+Quand la source ne fournit rien, `--supplier "<nom>"` donne une valeur de
+repli (elle n'écrase **jamais** un fournisseur détecté). Utile quand tu
+génères le SBOM d'un produit dont tu es l'éditeur.
+
+En SPDX 2.3, un fournisseur inconnu est écrit `NOASSERTION` (valeur explicite
+demandée par la spéc, prise en compte par les éléments minimaux NTIA et
+`sbomqs`) plutôt qu'omis. En CycloneDX, les clés `supplier` / `publisher`
+sont simplement absentes. Le champ `supplier` est *obligatoire* dans
+BSI TR-03183-2 (rapport `cra`).
+
+[source,bash]
+----
+# SBOM d'une app Node dont l'éditeur est « ACME Corp »
+./sbom_generator -i package-lock.json --supplier "ACME Corp" -f spdx -o sbom.spdx.json
+----
 
 === Dépendances
 

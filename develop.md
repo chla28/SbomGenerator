@@ -709,8 +709,18 @@ return _parsePackagesField(json);   // v2 et v3
 ```
 
 **`_parsePackagesField` (v2/v3)** : clé `packages` → map `{ "node_modules/pkg":
-{ version, license, … } }`. Ignore la clé vide `""` (racine du projet), retire
-le préfixe `node_modules/`, `_extractLicense` gère `String | List`.
+{ version, license, integrity, … } }`. Ignore la clé vide `""` (racine du
+projet), `_stripNodeModulesPrefix` prend le segment après le dernier
+`node_modules/` (gère les chemins imbriqués), `_extractLicense` gère
+`String | List`, `integrity` (SRI) → `hashes` via `packageHashFromSri`.
+
+**Fournisseur** : le lockfile npm ne porte aucun auteur.
+`_authorFromPackageJson('<dir-lock>/<clé node_modules>')` lit le
+`package.json` réellement installé (`author`, sinon 1er `contributors[]` /
+`maintainers[]`) et `_personName` normalise `{name}` ou `"Nom <email> (url)"`
+→ `"Nom"`. Best-effort : arbre `node_modules` absent (lockfile committé sans
+`npm install`) → chaîne vide, sans erreur. Non appliqué au chemin v1
+(`_parseDependenciesField`, pas de chemin d'installation fiable).
 
 **`_parseDependenciesField` (v1)** : clé `dependencies` → map récursive
 (dépendances imbriquées de npm v1, traitées récursivement).
@@ -1083,9 +1093,20 @@ qu'un fichier est écrit.
 Fichier de substitution de licences : une ligne `nom_paquet:
 SPDX-expression` par entrée, commentaires `#`. Parsé par
 `_parseLicenseMap()` → `Map<String, String>`. Appliqué après la
-déduplication via `_applyLicenseOverrides()` qui reconstruit les objets
-package immuables (`RpmPackage`, `WheelPackage`, `DebPackage`, `OciPackage`)
-avec la licence substituée.
+déduplication via `_applyLicenseOverrides()`, qui utilise
+`Package.copyWith({license, vendor})` (défini sur l'interface abstraite,
+retour covariant par type concret) pour reconstruire les objets package
+immuables.
+
+### Option `--supplier`
+
+Valeur de repli pour le champ fournisseur des composants dont la source ne
+porte aucun éditeur (lockfiles Go/npm/yarn/pip/pub, `requirements.txt`).
+`_applySupplierFallback()` applique `copyWith(vendor: …)` uniquement aux
+paquets dont `vendor` est vide — **n'écrase jamais** un fournisseur détecté
+(`%{VENDOR}` RPM, `Maintainer` Debian, `groupId` Maven, `Author-email`
+wheel, `author` du `package.json` npm). Appliqué après `--license-map` sur le
+chemin de génération, et après `reader.read()` sur `convert`.
 
 ### Rapport d'erreurs structuré
 
@@ -1270,8 +1291,14 @@ toute génération sans `--image` (ou avec le backend skopeo).
 
 Signature : `List<Package>`, plus `osInfo` (`OsInfo?`, optionnel). Normalisation via
 `LicenseNormalizer.toSpdxExpression()`. Annotation type-aware selon le type
-concret de `Package` (RPM : `arch`/`epoch`/`release` ; Python/source :
-`platform` ; Debian : `arch`).
+concret de `Package` (RPM : `arch`/`epoch`/`release`/`rpm:header-sha256` ;
+Python/source : `platform` ; Debian : `arch`).
+
+`package.supplier` est **toujours émis** : `Organization: <vendor>` si connu,
+sinon `NOASSERTION` (la spéc SPDX 2.3 demande la valeur explicite quand le
+fournisseur est inconnu ; c'est aussi ce que notent NTIA / sbomqs). Idem
+pour le paquet OS (`_osToSpdx`). `checksums` émis depuis `pkg.hashes`
+(`spdx2Alg` convertit `SHA-256` → `SHA256`).
 
 Quand `osInfo` est fourni, `_osToSpdx()` ajoute un paquet
 `primaryPackagePurpose: "OPERATING-SYSTEM"` (SPDXID préfixé
@@ -1537,7 +1564,7 @@ retourne une structure testable sans I/O). `MarkdownGenerator`,
 | `pkg.fullVersion` | `version` | `versionInfo` | `software:packageVersion` |
 | `pkg.purl` | `purl` | `externalRefs[purl]` | `externalIdentifier[purl]` |
 | `pkg.license` | `licenses[id/expression/name]` | `licenseConcluded/Declared` | `concludedLicense/declaredLicense` |
-| `pkg.vendor` | `supplier.name` + `publisher` | `supplier: "Organization: …"` | `suppliedBy` (URI org) |
+| `pkg.vendor` | `supplier.name` + `publisher` (omis si vide) | `supplier: "Organization: …"` ou `"NOASSERTION"` | `suppliedBy` (URI org, omis si vide) |
 | `pkg.url` | `externalReferences[website]` | `downloadLocation` | `software:downloadLocation` |
 | `pkg.summary` | `description` | `summary` | `summary` |
 | `pkg.hashes` (`PackageHash`) | `hashes[alg/content]` | `checksums[algorithm/checksumValue]` | `verifiedUsing[Hash]` |
@@ -1599,10 +1626,11 @@ dart test test/unit/                 # tests unitaires seuls
 dart test test/integration/          # tests d'intégration seuls
 ```
 
-Au moment de la rédaction : **244 tests** au total (225 unitaires + 19
-d'intégration, dont 6 sautées automatiquement dans un environnement sans
-`rpm` installé ou sans les archives OCI de test — `keycloak_26.tar` n'est
-pas versionné). Comptage vérifié via `dart test -r compact`.
+Au moment de la rédaction : **~375 tests** au total (unitaires +
+intégration), dont ~6 sautées automatiquement dans un environnement sans
+`rpm`/`grype`/… installé ou sans les archives OCI de test
+(`keycloak_26.tar` n'est pas versionné). Comptage vérifié via
+`dart test -r compact`.
 
 Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 --fatal-infos` puis `dart test`) sur chaque push/pull request vers `main`.
@@ -1616,14 +1644,15 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `rpm_parser_test.dart` | `buildDependencies` sans subprocess |
 | `requirements_parser_test.dart` | parsing RFC, PEP 503, extras, marqueurs, directives |
 | `go_parser_test.dart` | `parseGoSum`, `parseGoMod`, dédoublonnage, erreurs |
-| `npm_parser_test.dart` | lockfileVersion 1/2/3, licences liste/chaîne, PURLs |
+| `npm_parser_test.dart` | lockfileVersion 1/2/3, licences liste/chaîne, PURLs, `integrity`→hash, fournisseur depuis `node_modules/<pkg>/package.json` |
+| `models_test.dart` | `Package.copyWith({license, vendor})` — type concret conservé, autres champs intacts |
 | `yarn_parser_test.dart` | yarn v1 classique, yarn v2+ Berry, PURLs |
 | `maven_parser_test.dart` | extraction, scope test/system, dependencyManagement, PURL |
 | `jar_parser_test.dart` | identité propre, dépendances relocalisées (uber-jar), overrides Spring |
 | `oci_parser_test.dart` | `OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`), reconstruction version/PURL upstream (backend trivy), extraction OS de base + traduction de famille (`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`) |
 | `csv_generator_test.dart` | en-têtes, tri, échappement RFC 4180 |
 | `cyclonedx_generator_test.dart` | spec 1.6/1.7, TLP, citations, brevets, composant OS de base (`osInfo`) |
-| `spdx_generator_test.dart` | enveloppe SPDX-2.3, paquets, licences, relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`) |
+| `spdx_generator_test.dart` | enveloppe SPDX-2.3, paquets, licences, `supplier` (`Organization:` / `NOASSERTION`), `checksums`, relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`) |
 | `spdx3_generator_test.dart` | enveloppe JSON-LD, paquets, Organization partagée, relations describes/dependsOn, élément OS de base (`osInfo`) |
 | `policy_checker_test.dart` | correspondance de licences interdites |
 | `sbom_reader_test.dart` | détection de format, relecture CycloneDX |
@@ -1639,6 +1668,7 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `oci_skopeo_test.dart` | Backend skopeo (détection RPM db, extraction Java) — nécessite `rpm`/`skopeo` |
 | `policy_checker_sbomqs_test.dart` | `PolicyChecker.runSbomqs` sur un SBOM réel — nécessite `sbomqs` |
 | `input_directory_test.dart` | `--input <dossier>` : scan récursif, filtrage par type |
+| `pubspec_input_test.dart` | `--input pubspec.lock`, dossier lock+yaml, `supplier` SPDX `NOASSERTION`, repli `--supplier` |
 
 Les tests d'intégration nécessitant un outil ou un fichier absent se
 sautent automatiquement plutôt que d'échouer (voir `dart test` ci-dessus).

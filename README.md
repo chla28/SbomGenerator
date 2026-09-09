@@ -69,6 +69,16 @@ passé en entrée. Émise en `hashes` (CycloneDX), `checksums` (SPDX 2.3),
 `verifiedUsing` (SPDX 3.0). Le hash de l'en-tête RPM est exposé à part
 (`rpm:header-sha256`). Souvent absente pour les paquets système d'une image.
 
+**Fournisseur (`supplier`) des composants :** repris de la source quand elle
+le porte — `%{VENDOR}` (RPM), `Maintainer:` (Debian), `maintainer`/`Vendor`
+(images OCI), `Author-email` (wheels Python), `groupId` (Maven), et, pour
+npm, le champ `author` du `package.json` de chaque paquet dans `node_modules`
+(absent du lockfile). Les lockfiles Go/pip/pub et `requirements.txt` ne
+portent aucun éditeur : `--supplier "<nom>"` fournit une valeur de repli
+(sans jamais écraser un fournisseur détecté). En SPDX 2.3, un fournisseur
+inconnu est écrit `NOASSERTION` (conforme spéc / NTIA / sbomqs) plutôt
+qu'omis.
+
 **Formats de sortie :**
 
 | `-f` | Standard | Contenu |
@@ -133,6 +143,8 @@ Options :
                              cyclonedx | spdx | spdx3 | json | markdown | asciidoc | html | csv
                            Exemple : -f cyclonedx,spdx,html
   -n, --name               Nom du document SBOM / composant racine
+      --supplier           Fournisseur par défaut des composants dont la source
+                           ne porte aucun éditeur (n'écrase jamais un fournisseur détecté)
   -d, --rpm-dir            Dossier racine où chercher les fichiers .rpm
                            (résout les noms RPM nus ; ne s'applique pas aux .whl/.tar)
   -c, --concurrency        Nombre de tâches traitées en parallèle (0 = illimité, défaut : 4)

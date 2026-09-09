@@ -84,6 +84,7 @@ class SpdxGenerator {
       'name': os.id,
       'versionInfo': os.version,
       'downloadLocation': 'NOASSERTION',
+      'supplier': 'NOASSERTION',
       'filesAnalyzed': false,
       'primaryPackagePurpose': 'OPERATING-SYSTEM',
       'licenseConcluded': 'NOASSERTION',
@@ -165,9 +166,11 @@ class SpdxGenerator {
       ];
     }
 
-    if (_hasValue(pkg.vendor)) {
-      spdxPkg['supplier'] = 'Organization: ${pkg.vendor}';
-    }
+    // SPDX 2.3 : `supplier` a une cardinalité 0..1 mais la spéc demande
+    // `NOASSERTION` explicite quand le fournisseur est inconnu (plutôt que
+    // d'omettre le champ) — c'est aussi ce qu'attendent NTIA / sbomqs.
+    spdxPkg['supplier'] =
+        _hasValue(pkg.vendor) ? 'Organization: ${pkg.vendor}' : 'NOASSERTION';
 
     // Package-type specific metadata as annotation comment
     final comment = _annotationComment(pkg);

@@ -159,6 +159,14 @@ Future<void> main(List<String> arguments) async {
       help: 'Name for the SBOM document / root component.',
     )
     ..addOption(
+      'supplier',
+      help: 'Fournisseur par défaut des composants dont la source ne porte\n'
+          'aucune information d\'éditeur (lockfiles npm/yarn/Go/pip/pub,\n'
+          'requirements.txt…). N\'écrase jamais un fournisseur déjà détecté\n'
+          '(RPM %{VENDOR}, Maintainer Debian, groupId Maven…).\n'
+          'Champ obligatoire de BSI TR-03183-2 / éléments minimaux NTIA.',
+    )
+    ..addOption(
       'rpm-dir',
       abbr: 'd',
       help: 'Directory to search recursively for .rpm files.\n'
@@ -716,6 +724,17 @@ Future<void> main(List<String> arguments) async {
     if (verbose) {
       final n = uniquePackages.where((p) => licenseOverrides.containsKey(p.name)).length;
       print('License overrides applied to $n package(s).');
+    }
+  }
+
+  // --- Apply supplier fallback ---
+  final supplierFallback = (args['supplier'] as String?)?.trim() ?? '';
+  if (supplierFallback.isNotEmpty) {
+    final before = uniquePackages.where((p) => p.vendor.trim().isEmpty).length;
+    uniquePackages = _applySupplierFallback(uniquePackages, supplierFallback);
+    if (verbose) {
+      print('Supplier fallback "$supplierFallback" applied to $before '
+          'package(s) without a detected supplier.');
     }
   }
 
@@ -2132,83 +2151,28 @@ String _scannerUrl(String scanner) => switch (scanner) {
     };
 
 /// Returns a new list with license overrides applied by package name.
+/// Applique les overrides de licence par nom de paquet (`--license-map`).
 List<Package> _applyLicenseOverrides(
     List<Package> packages, Map<String, String> overrides) {
   if (overrides.isEmpty) return packages;
-  return packages.map((pkg) {
-    final lic = overrides[pkg.name];
-    if (lic == null) return pkg;
-    if (pkg is RpmPackage) {
-      return RpmPackage(
-        name: pkg.name,
-        version: pkg.version,
-        release: pkg.release,
-        arch: pkg.arch,
-        epoch: pkg.epoch,
-        license: lic,
-        vendor: pkg.vendor,
-        url: pkg.url,
-        buildTime: pkg.buildTime,
-        summary: pkg.summary,
-        requires: pkg.requires,
-        provides: pkg.provides,
-        hashes: pkg.hashes,
-        headerSha256: pkg.headerSha256,
-        sourceRpm: pkg.sourceRpm,
-        sourceRef: pkg.sourceRef,
-      );
-    }
-    if (pkg is WheelPackage) {
-      return WheelPackage(
-        name: pkg.name,
-        version: pkg.version,
-        license: lic,
-        url: pkg.url,
-        summary: pkg.summary,
-        vendor: pkg.vendor,
-        arch: pkg.arch,
-        sourceRef: pkg.sourceRef,
-        hashes: pkg.hashes,
-        requires: pkg.requires,
-        provides: pkg.provides,
-        packageType: pkg.packageType,
-      );
-    }
-    if (pkg is DebPackage) {
-      return DebPackage(
-        name: pkg.name,
-        version: pkg.version,
-        arch: pkg.arch,
-        license: lic,
-        vendor: pkg.vendor,
-        url: pkg.url,
-        summary: pkg.summary,
-        sourceRef: pkg.sourceRef,
-        hashes: pkg.hashes,
-        requires: pkg.requires,
-        provides: pkg.provides,
-      );
-    }
-    if (pkg is OciPackage) {
-      return OciPackage(
-        name: pkg.name,
-        version: pkg.version,
-        license: lic,
-        vendor: pkg.vendor,
-        url: pkg.url,
-        summary: pkg.summary,
-        arch: pkg.arch,
-        sourceRef: pkg.sourceRef,
-        imageRef: pkg.imageRef,
-        hashes: pkg.hashes,
-        requires: pkg.requires,
-        provides: pkg.provides,
-        packageType: pkg.packageType,
-        purlOverride: pkg.purlOverride,
-      );
-    }
-    return pkg;
-  }).toList();
+  return [
+    for (final pkg in packages)
+      if (overrides[pkg.name] case final lic?)
+        pkg.copyWith(license: lic)
+      else
+        pkg,
+  ];
+}
+
+/// Renseigne le fournisseur des paquets qui n'en ont pas avec la valeur de
+/// repli `--supplier` (utile quand la source — lockfile npm/Go/pip… — ne porte
+/// aucune information d'éditeur).
+List<Package> _applySupplierFallback(List<Package> packages, String supplier) {
+  if (supplier.isEmpty) return packages;
+  return [
+    for (final pkg in packages)
+      pkg.vendor.trim().isEmpty ? pkg.copyWith(vendor: supplier) : pkg,
+  ];
 }
 
 // ── Sous-commande convert ─────────────────────────────────────────────────────
@@ -2224,6 +2188,9 @@ Future<void> _runConvert(List<String> arguments) async {
             '  cyclonedx  spdx  spdx3  json  markdown  asciidoc  html  csv')
     ..addOption('name', abbr: 'n',
         help: 'Nom du document SBOM de sortie (remplace celui du fichier source).')
+    ..addOption('supplier',
+        help: 'Fournisseur par défaut des composants sans éditeur dans le SBOM\n'
+            'source. N\'écrase jamais un fournisseur déjà présent.')
     ..addOption(
       'cyclonedx-version',
       defaultsTo: '1.6',
@@ -2280,12 +2247,17 @@ Future<void> _runConvert(List<String> arguments) async {
     exit(1);
   }
 
-  final List<Package> packages;
+  List<Package> packages;
   try {
     packages = reader.read(json);
   } catch (e) {
     stderr.writeln('convert: erreur de lecture : $e');
     exit(1);
+  }
+
+  final supplierFallback = (args['supplier'] as String?)?.trim() ?? '';
+  if (supplierFallback.isNotEmpty) {
+    packages = _applySupplierFallback(packages, supplierFallback);
   }
 
   final name = docName ?? reader.documentName(json);

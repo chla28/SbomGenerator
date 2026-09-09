@@ -93,6 +93,10 @@ abstract class Package {
 
   /// 'rpm' or 'pypi'
   String get packageType;
+
+  /// Copie du paquet avec les champs indiqués remplacés (les autres inchangés).
+  /// Utilisé pour appliquer les overrides de licence et le repli fournisseur.
+  Package copyWith({String? license, String? vendor});
 }
 
 // ── RPM package ──────────────────────────────────────────────────────────────
@@ -173,6 +177,26 @@ class RpmPackage extends Package {
   @override
   String get spdxId =>
       'SPDXRef-${_safeId(name)}-${_safeId(version)}-${_safeId(release)}';
+
+  @override
+  RpmPackage copyWith({String? license, String? vendor}) => RpmPackage(
+        name: name,
+        version: version,
+        release: release,
+        arch: arch,
+        epoch: epoch,
+        license: license ?? this.license,
+        vendor: vendor ?? this.vendor,
+        url: url,
+        buildTime: buildTime,
+        summary: summary,
+        requires: requires,
+        provides: provides,
+        hashes: hashes,
+        headerSha256: headerSha256,
+        sourceRpm: sourceRpm,
+        sourceRef: sourceRef,
+      );
 
   @override
   String toString() => '$name-$fullVersion.$arch';
@@ -294,6 +318,22 @@ class WheelPackage extends Package {
   }
 
   @override
+  WheelPackage copyWith({String? license, String? vendor}) => WheelPackage(
+        name: name,
+        version: version,
+        license: license ?? this.license,
+        url: url,
+        summary: summary,
+        vendor: vendor ?? this.vendor,
+        arch: arch,
+        sourceRef: sourceRef,
+        hashes: hashes,
+        requires: requires,
+        provides: provides,
+        packageType: _packageType,
+      );
+
+  @override
   String toString() => '$name-$version ($arch)';
 }
 
@@ -358,6 +398,21 @@ class DebPackage extends Package {
 
   @override
   String get spdxId => 'SPDXRef-deb-${_safeId(name)}-${_safeId(version)}';
+
+  @override
+  DebPackage copyWith({String? license, String? vendor}) => DebPackage(
+        name: name,
+        version: version,
+        arch: arch,
+        license: license ?? this.license,
+        vendor: vendor ?? this.vendor,
+        url: url,
+        summary: summary,
+        sourceRef: sourceRef,
+        hashes: hashes,
+        requires: requires,
+        provides: provides,
+      );
 
   @override
   String toString() => '$name $version ($arch)';
@@ -452,6 +507,24 @@ class OciPackage extends Package {
   @override
   String get spdxId =>
       'SPDXRef-oci-${_safeId(name)}-${_safeId(version)}';
+
+  @override
+  OciPackage copyWith({String? license, String? vendor}) => OciPackage(
+        name: name,
+        version: version,
+        license: license ?? this.license,
+        vendor: vendor ?? this.vendor,
+        url: url,
+        summary: summary,
+        arch: arch,
+        sourceRef: sourceRef,
+        imageRef: imageRef,
+        hashes: hashes,
+        requires: requires,
+        provides: provides,
+        packageType: _packageType,
+        purlOverride: purlOverride,
+      );
 
   @override
   String toString() => '$name $version ($arch) [$_packageType]';

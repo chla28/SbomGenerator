@@ -162,4 +162,18 @@ void main() {
       ]);
     });
   });
+
+  group('SbomReader — fournisseur', () {
+    test('SPDX 2.3 : supplier "NOASSERTION" relu comme vendor vide', () {
+      final bare = WheelPackage(
+        name: 'x', version: '1', license: '', url: '', summary: '',
+        vendor: '', arch: 'any', sourceRef: '',
+        requires: const [], provides: const ['x'], packageType: 'npm',
+      );
+      final spdx = SpdxGenerator().generate([bare], []);
+      // Le générateur écrit "NOASSERTION" ; la relecture ne doit pas en faire
+      // un nom de fournisseur.
+      expect(SbomReader().read(spdx).single.vendor, '');
+    });
+  });
 }

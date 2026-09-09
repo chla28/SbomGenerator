@@ -139,4 +139,44 @@ void main() {
       expect(parser.parsePackageLock(f.path), isEmpty);
     });
   });
+
+  group('NpmParser - fournisseur depuis node_modules/<pkg>/package.json', () {
+    final parser = NpmParser();
+
+    void writePkgJson(String relDir, Object author) {
+      final d = Directory('${tmp.path}/$relDir')..createSync(recursive: true);
+      File('${d.path}/package.json')
+          .writeAsStringSync(jsonEncode({'name': 'x', 'author': author}));
+    }
+
+    test('author objet {name} et chaîne "Nom <email>" → nom seul', () {
+      writePkgJson('node_modules/lodash', 'John-David Dalton <j@d.com> (d.com)');
+      writePkgJson('node_modules/@babel/core', {'name': 'The Babel Team'});
+      final f = _write('package-lock.json', {
+        'lockfileVersion': 3,
+        'packages': {
+          '': {},
+          'node_modules/lodash': {'version': '4.17.21', 'license': 'MIT'},
+          'node_modules/@babel/core': {'version': '7.22.0'},
+          'node_modules/no-meta': {'version': '1.0.0'},
+        },
+      });
+      final pkgs = {for (final p in parser.parsePackageLock(f.path)) p.name: p};
+      expect(pkgs['lodash']!.vendor, 'John-David Dalton');
+      expect(pkgs['@babel/core']!.vendor, 'The Babel Team');
+      // package.json absent → pas d'éditeur, pas d'erreur
+      expect(pkgs['no-meta']!.vendor, '');
+    });
+
+    test('arbre node_modules absent → vendor vide, aucune erreur', () {
+      final f = _write('package-lock.json', {
+        'lockfileVersion': 3,
+        'packages': {
+          '': {},
+          'node_modules/solo': {'version': '1.0.0', 'license': 'MIT'},
+        },
+      });
+      expect(parser.parsePackageLock(f.path).single.vendor, '');
+    });
+  });
 }

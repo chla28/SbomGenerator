@@ -84,4 +84,42 @@ dependencies:
     expect(purls.where((p) => p.startsWith('pkg:pub/args')).toList(),
         ['pkg:pub/args@2.7.0']);
   }, timeout: const Timeout(Duration(seconds: 60)));
+
+  Future<Map<String, dynamic>> _gen(String fmt, List<String> extra) async {
+    final ext = {'cyclonedx': 'cdx.json', 'spdx': 'spdx.json'}[fmt]!;
+    final outPath = '${tmp.path}/out.$ext';
+    final r = await Process.run(
+      'dart',
+      ['run', 'bin/sbom_generator.dart', '-f', fmt, ...extra, '-o', outPath],
+      workingDirectory: Directory.current.path,
+    );
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+    return jsonDecode(await File(outPath).readAsString())
+        as Map<String, dynamic>;
+  }
+
+  test('SPDX : supplier des composants = NOASSERTION quand inconnu', () async {
+    final f = File('${tmp.path}/pubspec.lock')..writeAsStringSync(lock);
+    final doc = await _gen('spdx', ['--input', f.path]);
+    final pkgs = (doc['packages'] as List).cast<Map<String, dynamic>>();
+    expect(pkgs, isNotEmpty);
+    expect(pkgs.every((p) => p['supplier'] == 'NOASSERTION'), isTrue);
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('--supplier : repli appliqué aux composants sans éditeur', () async {
+    final f = File('${tmp.path}/pubspec.lock')..writeAsStringSync(lock);
+
+    final cdx = await _gen(
+        'cyclonedx', ['--input', f.path, '--supplier', 'ACME Corp']);
+    for (final c in (cdx['components'] as List).cast<Map<String, dynamic>>()) {
+      expect((c['supplier'] as Map)['name'], 'ACME Corp');
+      expect(c['publisher'], 'ACME Corp');
+    }
+
+    final spdx =
+        await _gen('spdx', ['--input', f.path, '--supplier', 'ACME Corp']);
+    for (final p in (spdx['packages'] as List).cast<Map<String, dynamic>>()) {
+      expect(p['supplier'], 'Organization: ACME Corp');
+    }
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

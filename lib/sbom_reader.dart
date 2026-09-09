@@ -164,6 +164,7 @@ class SbomReader {
     final url = (p['homepage'] as String?) ?? '';
     final summary = (p['summary'] as String?) ?? '';
     var vendor = (p['supplier'] as String?) ?? '';
+    if (vendor == 'NOASSERTION' || vendor == 'NONE') vendor = '';
     vendor = vendor.replaceAll(RegExp(r'^(Organization|Tool|Person):\s*'), '');
 
     final purl = _spdx2Purl(p) ?? '';

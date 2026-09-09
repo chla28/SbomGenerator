@@ -1633,12 +1633,24 @@ return _parsePackagesField(json);   // v2 et v3
 
 === `_parsePackagesField` (v2/v3)
 
-Clé `packages` → map `{ "node_modules/pkg": { version, license, … } }`.
+Clé `packages` → map `{ "node_modules/pkg": { version, license, integrity, … } }`.
 
 . Ignore la clé vide `""` (racine du projet)
-. Retire le préfixe `node_modules/` du nom
+. `_stripNodeModulesPrefix` : segment après le *dernier* `node_modules/`
+  (gère les chemins imbriqués `node_modules/a/node_modules/b`)
 . `_extractLicense(raw)` : gère `String | List` (certains packages déclarent
   plusieurs licences sous forme de tableau `[{ "type": "MIT" }]`)
+. `integrity` (SRI `sha512-<base64>`) → `hashes` via `packageHashFromSri`
+
+==== Fournisseur (`_authorFromPackageJson`)
+
+Le lockfile npm ne porte **aucun auteur**. `_parsePackagesField` résout
+`<dossier du lockfile>/<clé node_modules>/package.json` et lit `author`
+(sinon 1^er^ `contributors[]` / `maintainers[]`) ; `_personName` normalise
+un objet `{name}` ou une chaîne `"Nom <email> (url)"` → `"Nom"`.
+Best-effort : arbre `node_modules` absent (lockfile committé sans
+`npm install`) → chaîne vide, sans erreur. Non appliqué au chemin v1
+(pas de chemin d'installation fiable).
 
 === `_parseDependenciesField` (v1)
 
@@ -2592,10 +2604,10 @@ Fichier de substitution de licences : une ligne `nom_paquet: SPDX-expression`
 par entrée, commentaires `#`.
 
 Parsé par `_parseLicenseMap(String path)` → `Map<String, String>`.
-Appliqué après la déduplication via `_applyLicenseOverrides(packages, overrides)`
-qui reconstruit les objets package immuables (`RpmPackage`, `WheelPackage`,
-`DebPackage`) avec la licence substituée. Les paquets sans correspondance sont
-retournés inchangés.
+Appliqué après la déduplication via `_applyLicenseOverrides(packages, overrides)`,
+qui utilise `Package.copyWith({license, vendor})` — méthode de l'interface
+abstraite `Package`, à retour covariant (chaque type concret renvoie le sien).
+Les paquets sans correspondance sont retournés inchangés.
 
 [source,text]
 ----
@@ -2603,6 +2615,16 @@ retournés inchangés.
 libssl3: Apache-2.0
 mongodb: SSPL-1.0
 ----
+
+=== Option `--supplier` _(nouveau)_
+
+Valeur de repli pour le fournisseur des composants dont la source ne porte
+aucun éditeur (lockfiles Go/npm/yarn/pip/pub, `requirements.txt`).
+`_applySupplierFallback(packages, supplier)` applique `copyWith(vendor: …)`
+**uniquement** aux paquets dont `vendor` est vide — n'écrase jamais un
+fournisseur détecté (`%{VENDOR}` RPM, `Maintainer` Debian, `groupId` Maven,
+`Author-email` wheel, `author` du `package.json` npm). Appliqué après
+`--license-map` sur la génération, et après `reader.read()` sur `convert`.
 
 === Rapport d'erreurs structuré _(nouveau)_
 
@@ -2859,6 +2881,12 @@ depuis `SPDXRef-DOCUMENT`. Le `SPDXID` de ce paquet est préfixé
 c'est ce préfixe précis que Trivy reconnaît pour la classe "os-pkgs" en
 mode `trivy sbom` ; `primaryPackagePurpose` seul ne suffit pas (vérifié
 empiriquement, voir <<sec-osinfo-oci-parser>>).
+
+`package.supplier` est **toujours émis** : `Organization: <vendor>` si connu,
+sinon `NOASSERTION` — la spéc SPDX 2.3 demande la valeur explicite quand le
+fournisseur est inconnu (plutôt que d'omettre le champ), et c'est ce
+qu'attendent les éléments minimaux NTIA et `sbomqs`. Idem pour le paquet OS.
+`checksums` est émis depuis `pkg.hashes` (`spdx2Alg` : `SHA-256` → `SHA256`).
 
 == `lib/spdx3_generator.dart` — Générateur SPDX 3.0 JSON-LD
 
@@ -3198,9 +3226,9 @@ Les générateurs JSON exposent les deux méthodes (sauf `MarkdownGenerator` et
 |`concludedLicense/declaredLicense`
 
 |`pkg.vendor`
-|`supplier.name` + `publisher`
-|`supplier: "Organization: …"`
-|`suppliedBy` (URI org)
+|`supplier.name` + `publisher` (omis si vide)
+|`supplier: "Organization: …"` sinon `"NOASSERTION"`
+|`suppliedBy` (URI org, omis si vide)
 
 |`pkg.url`
 |`externalReferences[website]`
@@ -3482,8 +3510,14 @@ des types syft/trivy, construction PURL par écosystème, extraction OS de base
 |`parseGoSum`, `parseGoMod`, dédoublonnage, versions préfixées `v`, erreurs
 
 |`test/unit/npm_parser_test.dart`
-|9
-|lockfileVersion 1/2/3, licences liste/chaîne, PURLs, erreurs
+|13
+|lockfileVersion 1/2/3, licences liste/chaîne, PURLs, `integrity`→hash,
+fournisseur depuis `node_modules/<pkg>/package.json`, erreurs
+
+|`test/unit/models_test.dart`
+|4
+|`Package.copyWith({license, vendor})` — type concret conservé, autres champs
+intacts (RPM/Wheel/Deb/Oci)
 
 |`test/unit/yarn_parser_test.dart`
 |10
@@ -3510,10 +3544,11 @@ registre privé), `pubspec.yaml` (hors `dev_dependencies:`), PURL, erreurs
 validation, composant OS de base (`osInfo`)
 
 |`test/unit/spdx_generator_test.dart`
-|15
-|enveloppe SPDX-2.3, paquets (purl, licence, downloadLocation, supplier),
-relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`, SPDXID
-`SPDXRef-OperatingSystem-`)
+|18
+|enveloppe SPDX-2.3, paquets (purl, licence, downloadLocation), `supplier`
+(`Organization:` / `NOASSERTION`), `checksums`, `rpm:header-sha256` en
+annotation, relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`,
+SPDXID `SPDXRef-OperatingSystem-`)
 
 |`test/unit/spdx3_generator_test.dart`
 |15

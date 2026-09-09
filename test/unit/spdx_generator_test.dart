@@ -101,7 +101,7 @@ void main() {
       expect(pkg['downloadLocation'], 'https://example.org/foo');
     });
 
-    test('supplier renseigné uniquement si vendor présent', () {
+    test('supplier: "Organization: <vendor>" si présent, sinon NOASSERTION', () {
       final withVendor = generator
           .generate([_pkg(name: 'foo', vendor: 'ACME')], []);
       final pkgWith =
@@ -111,7 +111,7 @@ void main() {
       final withoutVendor = generator.generate([_pkg(name: 'foo')], []);
       final pkgWithout =
           (withoutVendor['packages'] as List).single as Map<String, dynamic>;
-      expect(pkgWithout.containsKey('supplier'), isFalse);
+      expect(pkgWithout['supplier'], 'NOASSERTION');
     });
 
     test('checksums émis depuis Package.hashes, libellés SPDX', () {

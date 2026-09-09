@@ -24,6 +24,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   exposé comme propriété/annotation dédiée `rpm:header-sha256` (ce n'est pas
   le hash du fichier `.rpm`).
 - Nouvelle dépendance : `package:crypto` (calcul des empreintes de fichiers).
+- **Fournisseur des composants npm** : le champ `author` de chaque
+  `package.json` installé dans `node_modules` est lu (le `package-lock.json`
+  ne le contient pas). Sans arbre `node_modules`, comportement inchangé.
+- **`--supplier "<nom>"`** (génération et `convert`) : valeur de repli pour
+  le fournisseur des composants dont la source ne porte aucun éditeur
+  (lockfiles Go / npm / yarn / pip / pub, `requirements.txt`). N'écrase
+  jamais un fournisseur détecté (`%{VENDOR}` RPM, `Maintainer` Debian,
+  `groupId` Maven…). Le champ `supplier` est obligatoire dans BSI
+  TR-03183-2 (rapport `cra`).
+
+### Changed
+- **SPDX 2.3** : le champ `supplier` d'un composant est désormais **toujours
+  présent** — `Organization: <fournisseur>` si connu, sinon `NOASSERTION`
+  (valeur explicite demandée par la spéc, prise en compte par les éléments
+  minimaux NTIA et `sbomqs`) au lieu d'être omis. Idem pour le paquet OS.
+- `Package` expose `copyWith({license, vendor})` ; `_applyLicenseOverrides`
+  s'appuie dessus (plus de reconstruction manuelle par type).
+- `convert` : un `supplier` valant `NOASSERTION` dans un SBOM SPDX 2.3 source
+  est relu comme « inconnu » (chaîne vide) au lieu d'être recopié tel quel
+  comme nom de fournisseur.
 
 ### Fixed
 - Lecteur SPDX 3.0 (`convert -i <fichier>.spdx3.jsonld`) : le filtre de type
