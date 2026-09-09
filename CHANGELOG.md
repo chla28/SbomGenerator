@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-09-09
+
 ### Added
 - **Empreintes cryptographiques des composants** (`Package.hashes`) émises
   dans les trois formats : CycloneDX (`hashes`), SPDX 2.3 (`checksums`),
