@@ -1217,9 +1217,13 @@ précisément à obtenir l'union des trois plutôt que de se fier à un seul.
 `rpm:header-sha256`, jamais comme empreinte d'artefact
 
 |Empreinte artefact
-|calculée / relayée
-|SHA-256 + SHA-512 du fichier si un `.rpm` est passé directement en entrée ;
-sinon vide. Émise en `hashes` / `checksums` / `verifiedUsing`
+|fichier `.rpm` : SHA-256 + SHA-512 calculés ; +
+paquet installé : `%{SIGMD5}` (MD5)
+|Un `.rpm` passé en chemin (ou résolu via `--rpm-dir`) est haché
+(SHA-256 + SHA-512). Un paquet *installé* n'a pas de fichier : on utilise le
+« pkgid » `%{SIGMD5}` (MD5 de l'en-tête + payload — identité de contenu
+native RPM, aussi employée par Trivy). Émise en `hashes` / `checksums` /
+`verifiedUsing`
 
 |Licence
 |`%{LICENSE}`
@@ -1253,17 +1257,21 @@ réseau**, quand la source la fournit :
   lors de l'analyse d'une image OCI (`--image`) ;
 * empreintes des composants produits par cdxgen ;
 * SHA-256 + SHA-512 calculés localement pour un fichier `.rpm` / `.deb` /
-  `.jar` / `.whl` passé directement en entrée.
+  `.jar` / `.whl` passé directement en entrée ;
+* `%{SIGMD5}` (empreinte `MD5`) pour un paquet RPM *installé* interrogé par
+  nom — le « pkgid » RPM (MD5 de l'en-tête + payload), seule identité de
+  contenu disponible quand il n'y a pas de fichier.
 
-Seuls les condensats hexadécimaux d'un artefact réel sont retenus (les
-formats dérivés — dirhash Go `h1:`, checksum APK `Q1…` — sont écartés). Le
-condensat de l'en-tête RPM (`%{SHA256HEADER}`) est exposé comme propriété
-`rpm:header-sha256` et non comme empreinte d'artefact.
+Seuls les condensats hexadécimaux d'un artefact/paquet réel sont retenus
+(les formats dérivés — dirhash Go `h1:`, checksum APK `Q1…` — sont écartés).
+Le condensat de l'*en-tête* RPM (`%{SHA256HEADER}`) est exposé comme
+propriété `rpm:header-sha256` et non comme empreinte d'artefact.
 
 L'empreinte est écrite dans `hashes` (CycloneDX), `checksums` (SPDX 2.3) et
-`verifiedUsing` (SPDX 3.0). *Pour un SBOM issu d'une image, la plupart des
-paquets système restent sans empreinte* : ils sont installés dans l'image,
-pas présents sous forme d'artefact à hacher.
+`verifiedUsing` (SPDX 3.0). *Pour un SBOM issu d'une image OCI, la plupart
+des paquets système restent sans empreinte* : ni Syft ni Trivy ne
+reconstruisent systématiquement leur `Digest` (contrairement au chemin
+« liste de RPM » qui interroge `%{SIGMD5}` directement).
 
 === Fournisseur (`supplier`) des composants
 

@@ -9,11 +9,11 @@ import 'models.dart';
 class RpmParser {
   /// RPM query format string.
   /// Fields (0-based): NAME|VERSION|RELEASE|ARCH|EPOCH|LICENSE|VENDOR|URL|
-  ///                   BUILDTIME|SHA256HEADER|SOURCERPM|SUMMARY
+  ///                   BUILDTIME|SHA256HEADER|SOURCERPM|SIGMD5|SUMMARY
   /// SUMMARY is intentionally last so that embedded '|' characters are
-  /// handled by rejoining any extra segments at index ≥ 11.
+  /// handled by rejoining any extra segments at index ≥ 12.
   static const _queryFormat =
-      r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SUMMARY}\n';
+      r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SIGMD5}|%{SUMMARY}\n';
 
   /// Parse a single RPM reference (package name/NEVRA or path to .rpm file).
   /// Returns null and emits a warning if the package cannot be queried.
@@ -45,31 +45,39 @@ class RpmParser {
     // Take only the first line (handles multiple installed versions)
     final line = rawOutput.split('\n').first;
     final allParts = line.split('|');
-    if (allParts.length < 12) {
+    if (allParts.length < 13) {
       stderr
           .writeln('Warning: unexpected query output for "$packageRef": $line');
       return null;
     }
 
-    // Rejoin summary fragments if it contained '|' (summary is at index 11+)
-    final parts = allParts.length > 12
-        ? [...allParts.sublist(0, 11), allParts.sublist(11).join('|')]
+    // Rejoin summary fragments if it contained '|' (summary is at index 12+)
+    final parts = allParts.length > 13
+        ? [...allParts.sublist(0, 12), allParts.sublist(12).join('|')]
         : allParts;
 
     final requires = _parseCapabilities(results[1]);
     final provides = _parseCapabilities(results[2]);
 
-    // Sanitise checksum: rpm returns "(none)" when unavailable
-    final sha256Raw = parts[9].trim();
-    final headerSha256 =
-        (sha256Raw == '(none)' || sha256Raw.isEmpty) ? '' : sha256Raw;
+    String clean(String s) =>
+        (s.trim() == '(none)' || s.trim() == '(not a blob)') ? '' : s.trim();
 
-    // Hash de l'artefact : seulement si la référence est un fichier .rpm réel.
-    final fileHashes = isFile ? hashLocalFile(packageRef) : const <PackageHash>[];
+    // Condensat SHA-256 de l'en-tête RPM (métadonnées signées, pas le fichier).
+    final headerSha256 = clean(parts[9]);
 
-    final sourceRpmRaw = parts[10].trim();
-    final sourceRpm =
-        (sourceRpmRaw == '(none)' || sourceRpmRaw.isEmpty) ? '' : sourceRpmRaw;
+    // Empreinte du composant :
+    //  - référence = fichier .rpm réel → SHA-256 + SHA-512 du fichier ;
+    //  - paquet installé → `%{SIGMD5}` (« pkgid » : MD5 de l'en-tête + payload,
+    //    identité de contenu native RPM — c'est aussi ce que Trivy expose).
+    final List<PackageHash> hashes;
+    if (isFile) {
+      hashes = hashLocalFile(packageRef);
+    } else {
+      final md5 = packageHash('MD5', clean(parts[11]));
+      hashes = md5 != null ? [md5] : const [];
+    }
+
+    final sourceRpm = clean(parts[10]);
 
     return RpmPackage(
       name: parts[0].trim(),
@@ -81,10 +89,10 @@ class RpmParser {
       vendor: parts[6].trim(),
       url: parts[7].trim(),
       buildTime: parts[8].trim(),
-      hashes: fileHashes,
+      hashes: hashes,
       headerSha256: headerSha256,
       sourceRpm: sourceRpm,
-      summary: parts[11].trim(),
+      summary: parts[12].trim(),
       requires: requires,
       provides: provides,
       sourceRef: packageRef,

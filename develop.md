@@ -137,6 +137,7 @@ Collecte (opportuniste, sans réseau — voir `lib/hash_utils.dart`) :
 | images OCI (Syft) | `metadata.archiveDigests` / `metadata.digest` (ex. SHA-1 des JAR) |
 | images OCI (cdxgen) | tableau `hashes` du composant CycloneDX |
 | fichiers `.rpm` / `.deb` / `.jar` / `.whl` en entrée directe | SHA-256 + SHA-512 calculés (`package:crypto`) |
+| paquet RPM installé (interrogé par nom) | `%{SIGMD5}` → empreinte `MD5` (« pkgid » : MD5 en-tête + payload) |
 
 Émission : CycloneDX `component.hashes`, SPDX 2.3 `package.checksums`
 (libellés via `spdx2Alg`), SPDX 3.0 `element.verifiedUsing` (`Hash`,
@@ -282,11 +283,21 @@ dans tous les générateurs pour `serialNumber` / `documentNamespace`.
 
 ```dart
 static const _queryFormat =
-    r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SUMMARY}\n';
+    r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SIGMD5}|%{SUMMARY}\n';
 ```
 
 `SUMMARY` est en dernier car il peut contenir des `|`. Le parser rejoint tous
-les fragments ≥ index 11 en cas de split excédentaire.
+les fragments ≥ index 12 en cas de split excédentaire.
+
+Empreintes :
+
+- `%{SHA256HEADER}` (index 9) → `RpmPackage.headerSha256`, émis en propriété
+  `rpm:header-sha256` (hash de l'*en-tête*, pas du fichier) ;
+- si `packageRef` est un fichier `.rpm` → `hashLocalFile` calcule
+  SHA-256 + SHA-512 du fichier ;
+- sinon (paquet installé) → `%{SIGMD5}` (index 11), le « pkgid » RPM (MD5 de
+  l'en-tête + payload), validé par `packageHash('MD5', …)` → empreinte `MD5`
+  du composant.
 
 ### `parsePackage(String packageRef)`
 
@@ -300,7 +311,7 @@ final results = await Future.wait([
 ]);
 ```
 
-1. `rpm -q[p] --queryformat ...` → 12 champs de métadonnées
+1. `rpm -q[p] --queryformat ...` → 13 champs de métadonnées
 2. `rpm -q[p] --requires` → liste des capabilities requises (parsée par `_parseCapabilities`)
 3. `rpm -q[p] --provides` → liste des capabilities fournies (parsée par `_parseCapabilities`)
 
@@ -1488,7 +1499,7 @@ class MonFormatGenerator {
 ## Pièges et décisions de conception
 
 1. **Séparateur `|` dans SUMMARY (RPM)** — `SUMMARY` peut contenir des `|`.
-   Il est placé en dernier dans `_queryFormat` et les fragments ≥ index 11
+   Il est placé en dernier dans `_queryFormat` et les fragments ≥ index 12
    sont rejoints.
 2. **Doublons de bomRef (RPM)** — même NEVRA dans plusieurs dépôts → même
    `bomRef` → interdit par CycloneDX. La déduplication dans `main()`
@@ -1669,6 +1680,7 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `policy_checker_sbomqs_test.dart` | `PolicyChecker.runSbomqs` sur un SBOM réel — nécessite `sbomqs` |
 | `input_directory_test.dart` | `--input <dossier>` : scan récursif, filtrage par type |
 | `pubspec_input_test.dart` | `--input pubspec.lock`, dossier lock+yaml, `supplier` SPDX `NOASSERTION`, repli `--supplier` |
+| `rpm_parser_integration_test.dart` | `RpmParser.parsePackage` sur la base RPM réelle : `%{SIGMD5}` → empreinte `MD5`, `%{SHA256HEADER}` → `headerSha256` — nécessite `rpm` |
 
 Les tests d'intégration nécessitant un outil ou un fichier absent se
 sautent automatiquement plutôt que d'échouer (voir `dart test` ci-dessus).

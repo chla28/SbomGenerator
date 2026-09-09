@@ -138,19 +138,20 @@ hexadécimal d'un artefact réel** (bonne longueur pour l'algorithme) :
   `sha256` / `sha3_256`.
 
 Populé par : `npm_parser`, `yarn_parser` (v1), `pubspec_parser`,
-`rpm_parser` / `deb_parser` / `jar_parser` / `wheel_parser` (entrée fichier
-directe), `oci_parser` (chemins Syft, Trivy, cdxgen). `RpmPackage` porte en
+`deb_parser` / `jar_parser` / `wheel_parser` (entrée fichier directe),
+`rpm_parser` (fichier `.rpm` → SHA-256/512 ; paquet installé → `%{SIGMD5}`
+en `MD5`), `oci_parser` (chemins Syft, Trivy, cdxgen). `RpmPackage` porte en
 plus `headerSha256` (`%{SHA256HEADER}` — hash de l'*en-tête* RPM, pas du
 fichier `.rpm`), émis en propriété/annotation `rpm:header-sha256`.
 
 Émis par les trois générateurs (CycloneDX `hashes`, SPDX 2.3 `checksums`,
 SPDX 3.0 `verifiedUsing`) et relu par `sbom_reader` lors d'un `convert`.
 
-NOTE: Pour un SBOM issu d'une image OCI, la plupart des paquets système
+NOTE: Pour un SBOM issu d'une *image OCI*, la plupart des paquets système
 restent sans empreinte (installés dans l'image, pas d'artefact à hacher ;
-ni Syft ni Trivy ne reconstruisent le condensat). La couverture progresse
-surtout sur les paquets applicatifs et, via le champ `Digest` de Trivy, une
-partie des RPM.
+ni Syft ni Trivy ne reconstruisent systématiquement le `Digest`). Le chemin
+« liste de RPM » interroge `%{SIGMD5}` directement et couvre donc tous les
+paquets installés.
 
 === Classe `OsInfo` (hors hiérarchie `Package`)
 
@@ -431,11 +432,20 @@ Utilisée dans tous les générateurs pour `serialNumber` / `documentNamespace`.
 [source,dart]
 ----
 static const _queryFormat =
-    r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SUMMARY}\n';
+    r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SIGMD5}|%{SUMMARY}\n';
 ----
 
 `SUMMARY` est en dernier car il peut contenir des `|`. Le parser rejoint tous
-les fragments ≥ index 11 en cas de split excédentaire.
+les fragments ≥ index 12 en cas de split excédentaire.
+
+Empreintes :
+
+* `%{SHA256HEADER}` → `RpmPackage.headerSha256`, émis en propriété
+  `rpm:header-sha256` (hash de l'*en-tête*, pas du fichier) ;
+* `packageRef` = fichier `.rpm` → `hashLocalFile` : SHA-256 + SHA-512 du
+  fichier ;
+* sinon (paquet installé) → `%{SIGMD5}` (« pkgid » RPM : MD5 en-tête +
+  payload), validé par `packageHash('MD5', …)` → empreinte `MD5`.
 
 === `parsePackage(String packageRef)`
 
@@ -450,7 +460,7 @@ final results = await Future.wait([
 ]);
 ----
 
-. `rpm -q[p] --queryformat ...` → 12 champs de métadonnées
+. `rpm -q[p] --queryformat ...` → 13 champs de métadonnées
 . `rpm -q[p] --requires` → liste des capabilities requises (parsée par `_parseCapabilities`)
 . `rpm -q[p] --provides` → liste des capabilities fournies (parsée par `_parseCapabilities`)
 
@@ -3104,7 +3114,7 @@ case 'mon-format':
 === 1. Séparateur `|` dans SUMMARY (RPM)
 
 `SUMMARY` peut contenir des `|`. Il est placé en dernier dans `_queryFormat`
-et les fragments ≥ index 11 sont rejoints.
+et les fragments ≥ index 12 sont rejoints.
 
 === 2. Doublons de bomRef (RPM)
 
@@ -3606,6 +3616,16 @@ nécessitent une archive `keycloak_26.tar` non versionnée
 |`test/integration/input_directory_test.dart`
 |1
 |`--input <dossier>` : scan récursif, filtrage par type de fichier reconnu
+
+|`test/integration/pubspec_input_test.dart`
+|4
+|`--input pubspec.lock`, dossier lock+yaml, `supplier` SPDX `NOASSERTION`,
+repli `--supplier`
+
+|`test/integration/rpm_parser_integration_test.dart`
+|1
+|`RpmParser.parsePackage` sur la base RPM réelle : `%{SIGMD5}` → empreinte
+`MD5`, `%{SHA256HEADER}` → `headerSha256` — nécessite `rpm`
 |===
 
 Les tests d'intégration sont marqués `@TestOn('posix')` et se sautent

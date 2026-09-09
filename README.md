@@ -64,10 +64,11 @@ Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes)
 **Empreintes cryptographiques :** l'empreinte d'un composant est renseignée
 sans requête réseau quand la source la fournit — `integrity` des lockfiles
 npm/yarn, `sha256` de `pubspec.lock`, `Digest` Trivy / digests Syft (images
-OCI), ou SHA-256+SHA-512 calculés pour un fichier `.rpm`/`.deb`/`.jar`/`.whl`
-passé en entrée. Émise en `hashes` (CycloneDX), `checksums` (SPDX 2.3),
-`verifiedUsing` (SPDX 3.0). Le hash de l'en-tête RPM est exposé à part
-(`rpm:header-sha256`). Souvent absente pour les paquets système d'une image.
+OCI), SHA-256+SHA-512 calculés pour un fichier `.rpm`/`.deb`/`.jar`/`.whl`
+passé en entrée, `%{SIGMD5}` (MD5) pour un paquet RPM installé interrogé par
+nom. Émise en `hashes` (CycloneDX), `checksums` (SPDX 2.3), `verifiedUsing`
+(SPDX 3.0). Le hash de l'en-tête RPM est exposé à part (`rpm:header-sha256`).
+Souvent absente pour les paquets système d'une image.
 
 **Fournisseur (`supplier`) des composants :** repris de la source quand elle
 le porte — `%{VENDOR}` (RPM), `Maintainer:` (Debian), `maintainer`/`Vendor`

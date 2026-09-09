@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Empreinte des paquets RPM installés** : `%{SIGMD5}` (le « pkgid » RPM —
+  MD5 de l'en-tête + payload, identité de contenu native, aussi utilisée par
+  Trivy) est émis comme empreinte `MD5` du composant. Auparavant un SBOM
+  généré depuis une liste de noms RPM installés ne portait aucune empreinte
+  (seul un fichier `.rpm` passé en chemin donnait un SHA-256 / SHA-512).
+  Le `%{SHA256HEADER}` reste exposé à part (`rpm:header-sha256`).
+
 ## [1.5.6] - 2026-09-09
 
 ### Added
