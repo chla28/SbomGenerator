@@ -211,16 +211,32 @@ class SbomReader {
     final graph = (json['@graph'] as List?) ?? [];
     return [
       for (final node in graph.whereType<Map<String, dynamic>>())
-        if ((node['type'] as String?) == 'software_Package')
-          _spdx3Package(node),
+        if (_isSpdx3Package(node['type'])) _spdx3Package(node),
     ];
   }
 
+  /// `type` d'un élément paquet SPDX 3.0. Le générateur émet `software:Package`
+  /// (forme préfixée du contexte JSON-LD) ; on tolère aussi la forme aplatie
+  /// `software_Package` et une valeur `type` sous forme de liste.
+  bool _isSpdx3Package(Object? type) {
+    bool match(Object? t) => t == 'software:Package' || t == 'software_Package';
+    return type is List ? type.any(match) : match(type);
+  }
+
   Package _spdx3Package(Map<String, dynamic> node) {
+    // Le générateur émet les champs `software:` préfixés (forme du contexte
+    // JSON-LD) ; on tolère aussi la forme aplatie `software_` et sans préfixe.
+    String prop(String local) =>
+        (node['software:$local'] ??
+                node['software_$local'] ??
+                node[local]) as String? ??
+            '';
     final name = (node['name'] as String?) ?? '';
-    final version = (node['packageVersion'] as String?) ?? '';
-    final license = (node['concludedLicense'] as String?) ?? '';
-    final url = (node['homePage'] as String?) ?? '';
+    final version = prop('packageVersion');
+    final license = _spdxLicense((node['concludedLicense'] as String?) ??
+        (node['declaredLicense'] as String?) ??
+        '');
+    final url = prop('downloadLocation');
     final summary = (node['summary'] as String?) ?? '';
     final purl = _spdx3Purl(node) ?? '';
     return WheelPackage(

@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   le hash du fichier `.rpm`).
 - Nouvelle dépendance : `package:crypto` (calcul des empreintes de fichiers).
 
+### Fixed
+- Lecteur SPDX 3.0 (`convert -i <fichier>.spdx3.jsonld`) : le filtre de type
+  attendait `software_Package` alors que le générateur (et `diff`) émettent
+  `software:Package`, et les champs `software:packageVersion` /
+  `software:downloadLocation` n'étaient pas lus — `convert` depuis un SBOM
+  SPDX 3.0 renvoyait un document **vide**. Types et champs alignés (les deux
+  formes de préfixe sont tolérées), licence `NOASSERTION` désormais relue
+  comme vide, empreintes `verifiedUsing` relues.
+
 ### Notes
 - Pour un SBOM issu d'une image OCI, la plupart des paquets système restent
   sans empreinte : ils sont installés dans l'image, pas présents sous forme

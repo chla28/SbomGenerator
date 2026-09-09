@@ -1896,10 +1896,14 @@ Dispatche selon le format :
 
 * *CycloneDX* : lit `json['components']` → `List<Map>` → `_cdxComponent(c)` pour chaque élément
 * *SPDX 2.3* : lit `json['packages']` → `_spdx2Package(p)` pour chaque élément
-* *SPDX 3.0* : lit `json['@graph']` → filtre les nodes de type `software_Package` → `_spdx3Package(node)`
+* *SPDX 3.0* : lit `json['@graph']` → filtre les nodes de type `software:Package`
+  (`_isSpdx3Package` tolère aussi `software_Package`) → `_spdx3Package(node)`,
+  qui lit les champs `software:`-préfixés (`software:packageVersion`,
+  `software:downloadLocation`)
 
 Chaque extracteur renseigne : `name`, `version`, `purl`, `license`, `vendor`,
-`url`, `sha256` (si présent), et infère le `packageType` via `_purlToType(purl)`.
+`url`, `hashes` (`hashes` / `checksums` / `verifiedUsing` selon le format), et
+infère le `packageType` via `_purlToType(purl)`.
 
 === `_purlToType(String purl)`
 
@@ -2226,7 +2230,7 @@ Champs vérifiés :
 
 |SPDX 3.0
 |`@context`, `@graph`
-|au moins un node de type `software_Package` dans `@graph`
+|nodes de type `software:Package` dans `@graph`
 |===
 
 === Sous-commande `scan` — analyse de vulnérabilités _(nouveau)_

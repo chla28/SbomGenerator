@@ -772,7 +772,7 @@ class SbomDiffResult {
 **Algorithme** : `_indexComponents()` dispatche vers `_indexCycloneDxComponents`
 (clé `components[]`), `_indexSpdxComponents` (`spdxVersion` présent, clé
 `packages[]`) ou `_indexSpdx3Components` (`@graph` présent, nodes de type
-`software_Package`), puis indexe chaque composant par `_componentKey()` =
+`software:Package`), puis indexe chaque composant par `_componentKey()` =
 `purl` sans le segment `@version` si présent, sinon `name:type`. Comparaison
 des deux index : absent de A = ajout, absent de B = suppression, présent des
 deux côtés avec version différente = mise à jour. Résultat trié par nom. Les
@@ -833,10 +833,13 @@ static SbomFormat detectFormat(Map<String, dynamic> json) {
 
 `read(json)` dispatche selon le format : CycloneDX lit `components[]`, SPDX
 2.3 lit `packages[]`, SPDX 3.0 filtre les nodes `@graph` de type
-`software_Package`. Chaque extracteur renseigne `name`, `version`, `purl`,
-`license`, `vendor`, `url`, `sha256` (si présent), et infère `packageType`
-via `_purlToType(purl)` (préfixe `pkg:rpm/`, `pkg:golang/`, `pkg:npm/`,
-`pkg:maven/`, `pkg:pypi/`, `pkg:cargo/`, `pkg:apk/`, `pkg:deb/`, sinon `'source'`).
+`software:Package` (`_isSpdx3Package` tolère aussi la forme aplatie
+`software_Package`) et lit les champs `software:`-préfixés. Chaque extracteur
+renseigne `name`, `version`, `purl`, `license`, `vendor`, `url`, `hashes`
+(`hashes` CycloneDX / `checksums` SPDX 2.3 / `verifiedUsing` SPDX 3.0), et
+infère `packageType` via `_purlToType(purl)` (préfixe `pkg:rpm/`,
+`pkg:golang/`, `pkg:npm/`, `pkg:maven/`, `pkg:pypi/`, `pkg:cargo/`,
+`pkg:apk/`, `pkg:deb/`, sinon `'generic'`).
 
 ---
 
