@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-09-09
+
 ### Added
 - **Empreinte des paquets RPM installés** : `%{SIGMD5}` (le « pkgid » RPM —
   MD5 de l'en-tête + payload, identité de contenu native, aussi utilisée par
