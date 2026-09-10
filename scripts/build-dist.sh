@@ -18,7 +18,9 @@
 # sur la machine de build, et garantit que la version décrite dans le SBOM
 # est bien celle en cours de packaging).
 #
-# Usage : ./scripts/build-dist.sh [VERSION] [--rpm]
+# Usage : ./scripts/build-dist.sh [VERSION] [--rpm] [--install]
+#   --install : après un build réussi, installe le livrable dans ~/.local
+#               (lance dist/<paquet>/install.sh)
 #   VERSION : numéro de version (défaut : champ `version:` de pubspec.yaml)
 #   --rpm   : génère également les paquets RPM (nécessite rpm-build)
 set -euo pipefail
@@ -32,12 +34,15 @@ VERSION="$(sed -n 's/^version:[[:space:]]*//p' "$PROJECT_DIR/pubspec.yaml" \
   | head -1 | tr -d '[:space:]')"
 : "${VERSION:?impossible de lire la version depuis pubspec.yaml}"
 BUILD_RPM=false
+DO_INSTALL=false
 
 for _arg in "$@"; do
   case "$_arg" in
     --rpm)     BUILD_RPM=true ;;
+    --install) DO_INSTALL=true ;;
     --help|-h)
-      echo "Usage: $0 [VERSION] [--rpm]"
+      echo "Usage: $0 [VERSION] [--rpm] [--install]"
+      echo "  --install  après le build, installe le livrable dans ~/.local (dist/<paquet>/install.sh)"
       echo "  VERSION  numéro de version (défaut : version de pubspec.yaml,"
       echo "           actuellement ${VERSION})"
       echo "  --rpm    génère les RPMs en plus du tar.gz (nécessite rpm-build)"
@@ -289,6 +294,13 @@ if [[ "$BUILD_RPM" == true ]]; then
       "${PROJECT_DIR}/dist/${DIST_NAME}-rpms-scan-report.pdf"
     echo ""
   fi
+fi
+
+# ── Installation locale (--install) ──────────────────────────
+if [[ "$DO_INSTALL" == true ]]; then
+  echo "▶ Installation locale (~/.local)…"
+  bash "${DIST_DIR}/install.sh"
+  echo ""
 fi
 
 # ── Résumé ───────────────────────────────────────────────────────────────────
