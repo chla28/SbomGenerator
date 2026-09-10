@@ -53,6 +53,16 @@ for _arg in "$@"; do
 done
 unset _arg
 
+# ── Version injectee dans le bundle Flutter (lue par MainGUI) ──────────────
+# MainGUI lit data/flutter_assets/version.json, ecrit par `flutter build`
+# depuis --build-name (sinon depuis le champ version: du pubspec, parfois
+# fige). On force --build-name au VERSION calcule ci-dessus pour que la
+# version affichee suive la release. Le build-number reste celui du pubspec.
+FLUTTER_VERSION_ARGS=()
+_vbase="${VERSION#v}"; _vbase="${_vbase%%[-+]*}"
+[[ "$_vbase" =~ ^[0-9]+(\.[0-9]+){1,3}$ ]] && FLUTTER_VERSION_ARGS=(--build-name="$_vbase")
+unset _vbase || true
+
 ARCH="$(uname -m)"
 DIST_NAME="sbom_generator-${VERSION}-linux-${ARCH}"
 DIST_DIR="${PROJECT_DIR}/dist/${DIST_NAME}"
@@ -138,7 +148,7 @@ cd gui
 # absolu du projet et fait échouer le build si l'arborescence a été déplacée
 # ou clonée ailleurs ("CMakeCache.txt directory ... is different").
 flutter clean 2>&1 | sed 's/^/  /'
-flutter build linux --release 2>&1 \
+flutter build linux --release ${FLUTTER_VERSION_ARGS[@]+"${FLUTTER_VERSION_ARGS[@]}"} 2>&1 \
   | grep -E "^\s*(✓|Building|error|warning|▶)" | sed 's/^/  /'
 cp -r build/linux/x64/release/bundle/. "${DIST_DIR}/gui/"
 chmod +x "${DIST_DIR}/gui/sbom_generator_gui"
