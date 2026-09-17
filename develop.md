@@ -559,16 +559,23 @@ Requiert `unzip` dans le `PATH`.
 ### `OciRefType` (enum)
 
 ```dart
-enum OciRefType { registry, tar, ociLayout }
+enum OciRefType { registry, tar, ociLayout, binary }
 ```
 
 Détecté automatiquement par `OciParser.detectRefType(String ref)` :
 
 | Valeur | Condition de détection | Exemple |
 |---|---|---|
-| `registry` | par défaut | `nginx:latest`, `ubuntu@sha256:…` |
 | `tar` | extension `.tar`, `.tar.gz` ou `.tgz` | `/path/ubuntu.tar` |
 | `ociLayout` | répertoire contenant `index.json` | `/path/oci_dir/` |
+| `binary` | fichier local existant (testé après `tar`/`ociLayout`) | `/usr/local/bin/mon-app` |
+| `registry` | par défaut (aucune des conditions ci-dessus) | `nginx:latest`, `ubuntu@sha256:…` |
+
+`binary` a été ajouté pour `--binary <fichier>` : sans lui, un chemin de
+fichier local (ni `.tar`, ni répertoire OCI layout) tombait dans le cas
+`registry` par défaut — ce qui fonctionnait *par accident* avec syft (voir
+ci-dessous) mais produisait un message console trompeur (« image OCI
+(registre) ») et n'était géré nulle part ailleurs comme un cas distinct.
 
 ### `OciParser`
 
@@ -584,12 +591,28 @@ Dispatch vers l'un des trois backends selon `tool` :
 
 **Backend Syft** : la référence est adaptée selon `OciRefType`
 (`docker-archive:<path>` pour `tar`, `oci-dir:<path>` pour `ociLayout`,
-référence telle quelle pour `registry`). Les licences syft sont des objets
-`{spdxExpression, value}` — `spdxExpression` est préféré si non vide.
+référence telle quelle pour `registry` **et** `binary`). Les licences syft
+sont des objets `{spdxExpression, value}` — `spdxExpression` est préféré si
+non vide.
+
+Pour `binary`, `syft <chemin> --output json` fonctionne parce que **syft
+détecte lui-même** qu'un argument correspondant à un fichier local existant
+est une *source fichier* (pas une image à résoudre/pull) et lui applique
+ses catalogueurs de binaires — notamment `go-module-binary-cataloger`, qui
+lit les métadonnées `buildinfo` embarquées dans un exécutable Go (celles de
+`go version -m`) et retrouve la liste complète des modules + versions,
+statique ou non. Pour les autres langages, seul le classifieur générique de
+syft (signatures de chaînes de version d'un catalogue *fixe* : OpenSSL,
+zlib, sqlite, busybox…) peut détecter quelque chose ; une dépendance liée
+statiquement sans signature connue ni métadonnée embarquée n'est pas
+récupérable après coup. Aucun code de `sbom_generator` n'implémente cette
+extraction — c'est entièrement délégué à syft.
 
 **Backend Trivy** : lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et
 le normalise via `_normalizeTrivyType()` vers les écosystèmes de
 `packageType`. Le PURL est lu depuis `Identifier.PURL` (trivy ≥ 0.38).
+`trivy image` (le seul mode utilisé ici) ne supporte pas l'analyse d'un
+binaire autonome — `--binary` n'accepte donc que `--oci-tool syft`.
 
 #### `OsInfo` — OS de base de l'image (`_syftDistroToOsInfo` / `_trivyMetadataToOsInfo`)
 
@@ -1118,6 +1141,26 @@ paquets dont `vendor` est vide — **n'écrase jamais** un fournisseur détecté
 (`%{VENDOR}` RPM, `Maintainer` Debian, `groupId` Maven, `Author-email`
 wheel, `author` du `package.json` npm). Appliqué après `--license-map` sur le
 chemin de génération, et après `reader.read()` sur `convert`.
+
+### Option `--binary` / `-b`
+
+Alias explicite pour `--image <fichier>` quand la cible est un binaire
+autonome (pas une image de conteneur) — voir `lib/oci_parser.dart` ci-dessus
+pour le mécanisme. Validation dans `bin/sbom_generator.dart` :
+
+- `File(binaryPath).existsSync()` — sinon erreur claire et `exit(1)`
+  (message contenant « fichier introuvable », vérifié en test) ;
+- `--oci-tool` explicite ≠ `syft` avec `--binary` → erreur (« ne fonctionne
+  qu'avec --oci-tool syft »), sinon `ociTool` est forcé à `'syft'` ;
+- `--binary` + `--image` simultanés → erreur (« exclusifs ») ;
+- `imageRef = binaryPath ?? args['image']`, réutilisé sans changement dans
+  le reste du pipeline (`OciParser.parseImage`).
+
+Le libellé console (`refTypeLabel`) distingue désormais `OciRefType.binary`
+(« Analyse du binaire via … ») de `registry` (« Analyse de l'image OCI
+(registre) via … ») — avant cet ajout, un fichier local passé à `--image`
+tombait dans le cas `registry` par défaut et affichait ce libellé, trompeur
+puisqu'aucun registre n'est interrogé.
 
 ### Rapport d'erreurs structuré
 
@@ -1660,7 +1703,7 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `yarn_parser_test.dart` | yarn v1 classique, yarn v2+ Berry, PURLs |
 | `maven_parser_test.dart` | extraction, scope test/system, dependencyManagement, PURL |
 | `jar_parser_test.dart` | identité propre, dépendances relocalisées (uber-jar), overrides Spring |
-| `oci_parser_test.dart` | `OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`), reconstruction version/PURL upstream (backend trivy), extraction OS de base + traduction de famille (`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`) |
+| `oci_parser_test.dart` | `OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`, fichier local → `binary`), reconstruction version/PURL upstream (backend trivy), extraction OS de base + traduction de famille (`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`) |
 | `csv_generator_test.dart` | en-têtes, tri, échappement RFC 4180 |
 | `cyclonedx_generator_test.dart` | spec 1.6/1.7, TLP, citations, brevets, composant OS de base (`osInfo`) |
 | `spdx_generator_test.dart` | enveloppe SPDX-2.3, paquets, licences, `supplier` (`Organization:` / `NOASSERTION`), `checksums`, relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`) |
@@ -1680,6 +1723,7 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `policy_checker_sbomqs_test.dart` | `PolicyChecker.runSbomqs` sur un SBOM réel — nécessite `sbomqs` |
 | `input_directory_test.dart` | `--input <dossier>` : scan récursif, filtrage par type |
 | `pubspec_input_test.dart` | `--input pubspec.lock`, dossier lock+yaml, `supplier` SPDX `NOASSERTION`, repli `--supplier` |
+| `binary_input_test.dart` | `--binary <fichier>` bout-en-bout (backend syft forcé) — nécessite `syft` ; validations : fichier introuvable, `--oci-tool` ≠ syft, `--binary`+`--image` |
 | `rpm_parser_integration_test.dart` | `RpmParser.parsePackage` sur la base RPM réelle : `%{SIGMD5}` → empreinte `MD5`, `%{SHA256HEADER}` → `headerSha256` — nécessite `rpm` |
 
 Les tests d'intégration nécessitant un outil ou un fichier absent se

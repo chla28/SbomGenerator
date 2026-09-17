@@ -136,6 +136,7 @@ Le binaire `sbom_generator` est autonome, aucun SDK Dart requis pour l'exécuter
 sbom_generator -i <fichier> [options]
 sbom_generator -I <image-oci> [options]
 sbom_generator -i <fichier> -I <image-oci> [options]
+sbom_generator --binary <fichier> [options]
 sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
@@ -161,6 +162,11 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |`-I`
 |_(requis si pas de --input)_
 |Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/image.tar.gz`, `/path/image.tgz`, `/path/oci_dir/`
+
+|`--binary <fichier>`
+|`-b`
+|—
+|Binaire local à analyser directement (ex. exécutable Go lié statiquement) ; force `--oci-tool syft` — voir <<sec-binaire-statique>>
 
 |`--oci-tool <outil>`
 |—
@@ -652,6 +658,44 @@ pas de composant `operating-system` dédié).
 NOTE: `cdxgen` est distribué via npm (`npm install -g @cyclonedx/cdxgen`) et
 requiert Node.js. Registre distant, archive tar et OCI layout directory sont
 tous acceptés.
+
+[[sec-binaire-statique]]
+=== Analyse d'un binaire lié statiquement (`--binary`)
+
+[source,bash]
+----
+./sbom_generator --binary /usr/local/bin/mon-app -o app.cdx.json
+----
+
+`--binary <fichier>` est une variante explicite d'`--image <fichier>` :
+`--image` accepte n'importe quel chemin, et quand ce n'est ni une archive
+tar ni un répertoire OCI layout, syft détecte lui-même qu'un chemin local
+existant n'est pas une référence d'image et l'analyse directement comme
+fichier — c'est ce mécanisme qui permet de lire les dépendances embarquées
+dans un binaire autonome, sans registre ni conteneur. `--binary` **force
+`--oci-tool syft`** (seul backend supporté ici) et refuse toute combinaison
+avec `--oci-tool trivy|skopeo|cdxgen` ou avec `--image`.
+
+[IMPORTANT]
+====
+Portée réelle, à connaître avant de s'y fier pour un rapport de conformité :
+
+* *Go* (lié statiquement ou non) — la liste complète des modules + versions
+  est lue depuis les métadonnées `buildinfo` embarquées dans le binaire
+  (celles que `go version -m` affiche), via le `go-module-binary-cataloger`
+  de syft. Fonctionne même sur un exécutable strippé, tant que le build n'a
+  pas explicitement supprimé cette section.
+* *Autres binaires* (Rust, C/C++ liés statiquement…) — syft applique un
+  classifieur générique qui reconnaît, par empreinte de chaîne de version,
+  un catalogue *fixe* de bibliothèques open source connues (OpenSSL, zlib,
+  sqlite, busybox…). Ce n'est pas une extraction arbitraire des dépendances
+  liées — seules les bibliothèques du catalogue sont détectées.
+* Une bibliothèque liée statiquement sans signature reconnue ni métadonnée
+  embarquée (C/C++ « fait maison », Rust sans `cargo-auditable`) *ne peut
+  pas* être retrouvée après coup — il faudrait tracer les dépendances au
+  moment du build (ex. embarquer un JSON de dépendances comme le fait
+  `cargo-auditable` pour Rust).
+====
 
 === Combiner image OCI et liste de paquets supplémentaires
 

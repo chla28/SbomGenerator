@@ -14,6 +14,13 @@ enum OciRefType {
 
   /// Répertoire au format OCI Image Layout Specification (contient `index.json`)
   ociLayout,
+
+  /// Fichier local existant, analysé directement comme un binaire (pas une
+  /// image de conteneur) — ex. un exécutable Go lié statiquement, via
+  /// `--binary` ou `--image` pointé sur un chemin de fichier. Seul syft sait
+  /// exploiter ce cas (détection automatique de source fichier + lecture des
+  /// métadonnées `buildinfo` embarquées).
+  binary,
 }
 
 /// Résultat de [OciParser.parseImage] : les paquets détectés, et — si le
@@ -33,6 +40,10 @@ class OciParser {
     if (Directory(ref).existsSync() && File('$ref/index.json').existsSync()) {
       return OciRefType.ociLayout;
     }
+    // Un chemin de fichier local existant n'est pas une référence de
+    // registre à résoudre : c'est un binaire à analyser directement (voir
+    // `OciRefType.binary`).
+    if (File(ref).existsSync()) return OciRefType.binary;
     return OciRefType.registry;
   }
 
@@ -151,7 +162,10 @@ class OciParser {
     final syftRef = switch (refType) {
       OciRefType.tar => 'docker-archive:$imageRef',
       OciRefType.ociLayout => 'oci-dir:$imageRef',
-      OciRefType.registry => imageRef,
+      // Chemin de fichier local : syft détecte lui-même une source `file:`
+      // et applique ses catalogueurs de binaires (buildinfo Go, classifieur
+      // générique…) — c'est ce mécanisme qui rend `--binary` possible.
+      OciRefType.registry || OciRefType.binary => imageRef,
     };
 
     if (verbose) print('syft : analyse de $syftRef…');
@@ -465,7 +479,11 @@ class OciParser {
         args.addAll(['--input', imageRef]);
       case OciRefType.ociLayout:
         args.add('oci-layout://$imageRef');
+      // `trivy image` ne sait pas analyser un binaire autonome (ce n'est pas
+      // une référence d'image) ; passé tel quel, l'échec est signalé par
+      // trivy lui-même. `--binary` restreint le backend à syft en amont.
       case OciRefType.registry:
+      case OciRefType.binary:
         args.add(imageRef);
     }
 
@@ -1332,6 +1350,7 @@ class OciParser {
     final target = switch (refType) {
       OciRefType.tar => File(imageRef).absolute.path,
       OciRefType.ociLayout => Directory(imageRef).absolute.path,
+      OciRefType.binary => File(imageRef).absolute.path,
       OciRefType.registry => imageRef,
     };
 

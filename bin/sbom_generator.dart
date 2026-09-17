@@ -118,7 +118,22 @@ Future<void> main(List<String> arguments) async {
           '  • Registre  : nginx:latest  ubuntu@sha256:…\n'
           '  • Archive   : /path/image.tar  (docker save)\n'
           '  • OCI layout: /path/to/oci_dir/  (index.json present)\n'
-          'Combine with --oci-tool pour choisir le backend.',
+          'Combine with --oci-tool pour choisir le backend.\n'
+          'Un chemin de fichier local (binaire) fonctionne aussi via le\n'
+          'backend syft — voir --binary, plus explicite pour ce cas.',
+    )
+    ..addOption(
+      'binary',
+      abbr: 'b',
+      help: 'Binaire local à analyser directement (ex. exécutable Go lié\n'
+          'statiquement) — alias explicite pour --image <fichier>.\n'
+          'Force --oci-tool syft : seul backend qui sait exploiter les\n'
+          'métadonnées embarquées dans un binaire autonome (buildinfo Go\n'
+          'via `go-module-binary-cataloger`, classifieur générique pour\n'
+          'quelques bibliothèques connues — OpenSSL, zlib, sqlite…).\n'
+          'Ne récupère PAS les dépendances de bibliothèques liées\n'
+          'statiquement sans métadonnée embarquée (C/C++ « fait maison »,\n'
+          'Rust sans cargo-auditable).',
     )
     ..addOption(
       'oci-tool',
@@ -287,15 +302,35 @@ Future<void> main(List<String> arguments) async {
     exit(0);
   }
 
-  if (!args.wasParsed('input') && !args.wasParsed('image')) {
-    _err('Au moins une source est requise : --input ou --image.');
+  if (!args.wasParsed('input') &&
+      !args.wasParsed('image') &&
+      !args.wasParsed('binary')) {
+    _err('Au moins une source est requise : --input, --image ou --binary.');
     _printUsage(parser);
+    exit(1);
+  }
+  if (args.wasParsed('image') && args.wasParsed('binary')) {
+    _err('--image et --binary sont exclusifs (le second est un alias '
+        'explicite du premier pour un fichier local).');
     exit(1);
   }
 
   final inputPath = args['input'] as String?;
-  final imageRef = args['image'] as String?;
-  final ociTool = args['oci-tool'] as String;
+  final binaryPath = args['binary'] as String?;
+  var ociTool = args['oci-tool'] as String;
+  if (binaryPath != null) {
+    if (!File(binaryPath).existsSync()) {
+      _err('--binary : fichier introuvable : $binaryPath');
+      exit(1);
+    }
+    if (args.wasParsed('oci-tool') && ociTool != 'syft') {
+      _err('--binary ne fonctionne qu\'avec --oci-tool syft (seul backend '
+          'capable d\'analyser un binaire autonome).');
+      exit(1);
+    }
+    ociTool = 'syft';
+  }
+  final imageRef = binaryPath ?? (args['image'] as String?);
   final outputPath = args['output'] as String;
   final docName = args['name'] as String?;
   final verbose = args['verbose'] as bool;
@@ -524,7 +559,8 @@ Future<void> main(List<String> arguments) async {
     // Vérifier la disponibilité de l'outil OCI
     final ociCheck = await Process.run(ociTool, ['--version']);
     if (ociCheck.exitCode != 0) {
-      _err('$ociTool introuvable ou non fonctionnel — requis pour --image.');
+      _err('$ociTool introuvable ou non fonctionnel — requis pour '
+          '${binaryPath != null ? '--binary' : '--image'}.');
       exit(1);
     }
     if (verbose) {
@@ -532,12 +568,17 @@ Future<void> main(List<String> arguments) async {
     }
 
     final refType = OciParser.detectRefType(imageRef);
-    final refTypeLabel = switch (refType) {
-      OciRefType.registry => 'registre',
-      OciRefType.tar => 'archive tar',
-      OciRefType.ociLayout => 'OCI layout',
-    };
-    print('Analyse de l\'image OCI ($refTypeLabel) via $ociTool : $imageRef…');
+    if (refType == OciRefType.binary) {
+      print('Analyse du binaire via $ociTool : $imageRef…');
+    } else {
+      final refTypeLabel = switch (refType) {
+        OciRefType.registry => 'registre',
+        OciRefType.tar => 'archive tar',
+        OciRefType.ociLayout => 'OCI layout',
+        OciRefType.binary => 'binaire', // inatteignable (branche ci-dessus)
+      };
+      print('Analyse de l\'image OCI ($refTypeLabel) via $ociTool : $imageRef…');
+    }
 
     try {
       final ociResult =
@@ -2826,6 +2867,7 @@ Usage:
   dart run bin/sbom_generator.dart --input <file> [options]
   dart run bin/sbom_generator.dart --image <ref>  [options]
   dart run bin/sbom_generator.dart --image <ref> --input <file> [options]
+  dart run bin/sbom_generator.dart --binary <fichier> [options]
 
 ${parser.usage}
 
@@ -2868,5 +2910,9 @@ Examples:
 
   # Depuis un fichier de paquets (mode classique)
   dart run bin/sbom_generator.dart -i packages.txt -o sbom.cdx.json
+
+  # Binaire lié statiquement (ex. exécutable Go) — dépendances embarquées
+  # lues via syft (buildinfo Go / classifieur générique), sans dépôt/registre
+  dart run bin/sbom_generator.dart --binary /usr/local/bin/mon-app -o app.cdx.json
 ''');
 }

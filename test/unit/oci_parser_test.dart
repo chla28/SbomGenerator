@@ -25,6 +25,13 @@ void main() {
         OciRefType.registry,
       );
     });
+
+    test('retourne binary pour un fichier local existant (--binary)', () {
+      final f = File(
+          '${Directory.systemTemp.createTempSync('oci_binary_test_').path}/mon-app')
+        ..writeAsBytesSync([0]);
+      expect(OciParser.detectRefType(f.path), OciRefType.binary);
+    });
   });
 
   group('OciParser (backend trivy) — reconstruction version & PURL upstream', () {

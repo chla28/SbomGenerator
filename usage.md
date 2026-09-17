@@ -84,6 +84,7 @@ sbom_generator cra --sbom <fichier> [options]
 |--------|-----------|--------|-------------|
 | `--input <chemin>` | `-i` | *(requis si pas de `--image`)* | Fichier liste (une référence par ligne), archive/paquet unique, ou dossier scanné récursivement |
 | `--image <référence>` | `-I` | *(requis si pas de `--input`)* | Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/image.tar.gz`, `/path/image.tgz`, `/path/oci_dir/` |
+| `--binary <fichier>` | `-b` | — | Binaire local à analyser directement (ex. exécutable Go lié statiquement) ; force `--oci-tool syft` |
 | `--oci-tool <outil>` | — | `syft` | Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo` |
 | `--output <fichier>` | `-o` | `sbom.json` | Fichier SBOM de sortie (chemin de base si multi-format) |
 | `--format <fmt>` | `-f` | `cyclonedx` | Format(s) de sortie, virgule-séparés (voir tableau ci-dessous) |
@@ -326,6 +327,32 @@ Voir `doc/usage.adoc` pour le détail.
 ```bash
 ./sbom_generator -I ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
 ```
+
+### Analyse d'un binaire lié statiquement (`--binary`)
+
+```bash
+./sbom_generator --binary /usr/local/bin/mon-app -o app.cdx.json
+```
+
+`--binary <fichier>` est une variante explicite d'`--image <fichier>` : syft
+détecte qu'un chemin local existant n'est pas une référence d'image et
+l'analyse directement comme fichier. `--binary` **force `--oci-tool syft`**
+(seul backend supporté ici) et refuse toute combinaison avec `--oci-tool
+trivy|skopeo|cdxgen` ou avec `--image`.
+
+Portée réelle :
+- **Go** (lié statiquement ou non) : la liste complète des modules + versions
+  est lue depuis les métadonnées `buildinfo` embarquées dans le binaire
+  (celles que `go version -m` affiche) — fonctionne même sur un exécutable
+  strippé, tant que le build n'a pas explicitement supprimé cette section.
+- **Autres binaires** (Rust, C/C++ statiques…) : syft applique un classifieur
+  générique qui reconnaît, par empreinte de chaîne de version, un catalogue
+  *fixe* de bibliothèques open source connues (OpenSSL, zlib, sqlite,
+  busybox…) — pas une extraction arbitraire des dépendances liées.
+- Une bibliothèque liée statiquement sans signature reconnue ni métadonnée
+  embarquée (C/C++ « fait maison », Rust sans `cargo-auditable`) **ne peut
+  pas** être retrouvée après coup — il faudrait tracer les dépendances au
+  moment du build.
 
 ### Combiner image OCI et liste de paquets supplémentaires
 

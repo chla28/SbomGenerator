@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **`--binary <fichier>` / `-b`** : analyse directe d'un binaire autonome
+  (ex. exécutable Go lié statiquement), sans registre ni conteneur. Alias
+  explicite pour `--image <fichier>` (déjà fonctionnel : syft détecte
+  automatiquement qu'un chemin local existant est une source fichier), qui
+  force `--oci-tool syft` et refuse toute combinaison avec `--oci-tool
+  trivy|skopeo|cdxgen` ou avec `--image`.
+  - **Go** (statique ou non) : liste complète des modules + versions lue
+    depuis les métadonnées `buildinfo` embarquées (`go-module-binary-cataloger`
+    de syft), même sur un exécutable strippé.
+  - **Autres langages** (Rust, C/C++ statiques…) : seul le classifieur
+    générique de syft s'applique — un catalogue *fixe* de bibliothèques
+    open source connues (OpenSSL, zlib, sqlite, busybox…), pas une
+    extraction arbitraire. Une bibliothèque sans signature connue ni
+    métadonnée embarquée n'est pas récupérable après coup.
+- Nouvelle valeur d'enum `OciRefType.binary` (`lib/oci_parser.dart`) :
+  corrige au passage le libellé console trompeur affiché quand `--image`
+  pointait déjà sur un fichier local (« Analyse de l'image OCI (registre) »
+  alors qu'aucun registre n'était interrogé).
+
 ## [1.5.7] - 2026-09-09
 
 ### Added

@@ -1002,7 +1002,7 @@ Requiert `unzip` dans le PATH (vérification dans `bin/sbom_generator.dart`,
 
 [source,dart]
 ----
-enum OciRefType { registry, tar, ociLayout }
+enum OciRefType { registry, tar, ociLayout, binary }
 ----
 
 Détecté automatiquement par `OciParser.detectRefType(String ref)` :
@@ -1011,10 +1011,6 @@ Détecté automatiquement par `OciParser.detectRefType(String ref)` :
 |===
 |Valeur |Condition de détection |Exemple
 
-|`registry`
-|(par défaut)
-|`nginx:latest`, `ubuntu@sha256:…`
-
 |`tar`
 |extension `.tar`, `.tar.gz` ou `.tgz`
 |`/path/ubuntu.tar`, `/path/image.tar.gz`
@@ -1022,7 +1018,21 @@ Détecté automatiquement par `OciParser.detectRefType(String ref)` :
 |`ociLayout`
 |répertoire contenant `index.json`
 |`/path/oci_dir/`
+
+|`binary`
+|fichier local existant (testé après `tar`/`ociLayout`)
+|`/usr/local/bin/mon-app`
+
+|`registry`
+|(par défaut, aucune des conditions ci-dessus)
+|`nginx:latest`, `ubuntu@sha256:…`
 |===
+
+`binary` a été ajouté pour `--binary <fichier>` (voir <<sec-option-binary>>) :
+sans lui, un chemin de fichier local tombait dans le cas `registry` par
+défaut — ce qui fonctionnait déjà *par accident* avec syft, mais affichait
+un libellé console trompeur (« image OCI (registre) ») et n'était géré
+nulle part ailleurs comme un cas distinct.
 
 === `OciParser`
 
@@ -1071,9 +1081,32 @@ La référence est adaptée selon `OciRefType` :
 |`ociLayout`
 |`oci-dir:<path>`
 
-|`registry`
+|`registry` / `binary`
 |référence telle quelle
 |===
+
+[[sec-syft-binary]]
+==== Analyse d'un binaire autonome (`OciRefType.binary`, voir `--binary`)
+
+`syft <chemin> --output json` fonctionne sur un binaire autonome parce que
+*syft détecte lui-même* qu'un argument correspondant à un fichier local
+existant est une source *fichier* (pas une image à résoudre/pull), et lui
+applique ses catalogueurs de binaires :
+
+* *Go* — `go-module-binary-cataloger` lit les métadonnées `buildinfo`
+  embarquées dans l'exécutable (celles de `go version -m`) et retrouve la
+  liste complète des modules + versions, que le binaire soit lié
+  statiquement ou non, même strippé (tant que le build n'a pas
+  explicitement supprimé cette section).
+* *Autres langages* — seul le classifieur générique de syft s'applique : il
+  reconnaît, par empreinte de chaîne de version, un catalogue *fixe* de
+  bibliothèques open source connues (OpenSSL, zlib, sqlite, busybox…).
+
+Aucun code de `sbom_generator` n'implémente cette extraction — c'est
+entièrement délégué à syft ; `_parseSyft` ne fait ici que transmettre le
+chemin tel quel. Une bibliothèque liée statiquement sans signature connue
+ni métadonnée embarquée (C/C++ « fait maison », Rust sans
+`cargo-auditable`) n'est pas récupérable après coup.
 
 Les licences syft sont des objets `{spdxExpression, value}` — `spdxExpression`
 est préféré si non vide, sinon `value`. Plusieurs licences sont jointes par
@@ -1138,6 +1171,12 @@ OSV-Scanner remontait 0 CVE là où Grype en voyait 163 (toutes `wont-fix` /
 Lit `Results[].Type` (ex. `debian`, `centos`, `pip`) et le normalise via
 `_normalizeTrivyType()` vers les écosystèmes de `packageType` (`deb`, `rpm`,
 `pypi`, etc.). Le PURL est lu depuis `Identifier.PURL` (trivy ≥ 0.38).
+
+`trivy image` (le seul mode invoqué ici) ne supporte pas l'analyse d'un
+binaire autonome — passer un `OciRefType.binary` à ce backend transmettrait
+le chemin tel quel (branche `registry`/`binary` du `switch`) et échouerait
+côté trivy. C'est pourquoi `--binary` (voir <<sec-option-binary>>) rejette
+tout `--oci-tool` autre que `syft`.
 
 [[sec-osinfo-oci-parser]]
 === `OsInfo` — OS de base (`_syftDistroToOsInfo` / `_trivyMetadataToOsInfo` / `_cdxgenOsInfo`)
@@ -2039,6 +2078,11 @@ Référence à une image OCI à analyser. Trois formats acceptés :
 |OCI layout
 |Répertoire contenant `index.json`
 |`/path/oci_dir/`
+
+|Fichier local (binaire)
+|N'importe quel chemin de fichier existant, non couvert par les trois cas
+ci-dessus — voir <<sec-option-binary>> (`--binary`, plus explicite pour ce cas)
+|`/usr/local/bin/mon-app`
 |===
 
 *`--input` devient optionnel* lorsque `--image` est fourni. Les deux sources
@@ -2635,6 +2679,36 @@ aucun éditeur (lockfiles Go/npm/yarn/pip/pub, `requirements.txt`).
 fournisseur détecté (`%{VENDOR}` RPM, `Maintainer` Debian, `groupId` Maven,
 `Author-email` wheel, `author` du `package.json` npm). Appliqué après
 `--license-map` sur la génération, et après `reader.read()` sur `convert`.
+
+[[sec-option-binary]]
+=== Option `--binary` / `-b` _(nouveau)_
+
+Alias explicite pour `--image <fichier>` quand la cible est un binaire
+autonome (pas une image de conteneur) — voir <<sec-syft-binary>> pour le
+mécanisme d'extraction. Validation dans `_runMain`/`bin/sbom_generator.dart` :
+
+[cols="2,3", options="header"]
+|===
+|Condition |Comportement
+
+|`!File(binaryPath).existsSync()`
+|Erreur (« fichier introuvable ») + `exit(1)`
+
+|`args.wasParsed('oci-tool')` et valeur ≠ `syft`
+|Erreur (« ne fonctionne qu'avec --oci-tool syft ») + `exit(1)`
+
+|`--binary` et `--image` fournis ensemble
+|Erreur (« exclusifs ») + `exit(1)`
+
+|sinon
+|`ociTool` forcé à `'syft'` ; `imageRef = binaryPath ?? args['image']`, réutilisé sans changement dans le reste du pipeline (`OciParser.parseImage`)
+|===
+
+Le libellé console (`refTypeLabel`) distingue `OciRefType.binary`
+(« Analyse du binaire via … ») de `registry` (« Analyse de l'image OCI
+(registre) via … ») — avant cet ajout, un fichier local passé à `--image`
+tombait dans le cas `registry` par défaut et affichait ce libellé
+console trompeur, aucun registre n'étant réellement interrogé.
 
 === Rapport d'erreurs structuré _(nouveau)_
 
@@ -3510,10 +3584,11 @@ sur chaque push/pull request vers `main`.
 |parsing RFC, PEP 503, extras, marqueurs, directives
 
 |`test/unit/oci_parser_test.dart`
-|15
-|`OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`), normalisation
-des types syft/trivy, construction PURL par écosystème, extraction OS de base
-+ traduction de famille Trivy (`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`)
+|16
+|`OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`, fichier local
+→ `binary`), normalisation des types syft/trivy, construction PURL par
+écosystème, extraction OS de base + traduction de famille Trivy
+(`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`)
 
 |`test/unit/go_parser_test.dart`
 |10
@@ -3626,6 +3701,12 @@ repli `--supplier`
 |1
 |`RpmParser.parsePackage` sur la base RPM réelle : `%{SIGMD5}` → empreinte
 `MD5`, `%{SHA256HEADER}` → `headerSha256` — nécessite `rpm`
+
+|`test/integration/binary_input_test.dart`
+|4
+|`--binary <fichier>` bout-en-bout (backend syft forcé, sur
+`Platform.resolvedExecutable`) — nécessite `syft` ; validations : fichier
+introuvable, `--oci-tool` ≠ syft, `--binary` + `--image`
 |===
 
 Les tests d'intégration sont marqués `@TestOn('posix')` et se sautent

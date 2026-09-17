@@ -43,6 +43,18 @@ Les lignes commençant par `#` sont ignorées. Les types peuvent être mélangé
 
 Backend d'analyse au choix (`--oci-tool`) : `syft` (défaut, tous écosystèmes), `trivy` (tous écosystèmes), `skopeo` (extraction manuelle : dpkg, RPM, APK, Maven JARs, PyPI, npm), ou `cdxgen` (OWASP CycloneDX Generator, tous écosystèmes ; nécessite Node.js).
 
+**Binaire autonome (`--binary <fichier>`)** — variante explicite d'`--image`
+pour un exécutable local (ex. un binaire Go lié statiquement) : force
+`--oci-tool syft`, seul backend qui sait exploiter les métadonnées
+embarquées dans un fichier qui n'est pas une image de conteneur (buildinfo
+Go via `go-module-binary-cataloger`, classifieur générique syft pour
+quelques bibliothèques connues — OpenSSL, zlib, sqlite…). Ne récupère
+**pas** les dépendances liées statiquement sans métadonnée embarquée
+(C/C++ « fait maison », Rust sans `cargo-auditable`). `--image <fichier>`
+fonctionne aussi (même mécanisme, syft détecte lui-même une source fichier
+locale) — `--binary` documente l'intention et refuse un `--oci-tool` autre
+que `syft`.
+
 **Traitement :**
 - RPM : 3 appels `rpm` en parallèle par paquet (`--queryformat`, `--requires`, `--provides`)
 - Wheel : lecture du fichier `METADATA` embarqué dans le ZIP (via `python3`)
@@ -126,6 +138,7 @@ dart compile exe bin/sbom_generator.dart -o sbom_generator
 sbom_generator --input <fichier> [options]
 sbom_generator --image <image-oci> [options]
 sbom_generator --input <fichier> --image <image-oci> [options]
+sbom_generator --binary <fichier> [options]
 sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
@@ -137,6 +150,8 @@ Options :
   -i, --input              Fichier d'entrée (requis si --image absent)
   -I, --image              Image de conteneur à analyser : registre, archive
                            tar (.tar/.tar.gz/.tgz) ou répertoire OCI layout
+  -b, --binary             Binaire local à analyser directement (ex. exécutable
+                           Go lié statiquement) ; force --oci-tool syft
       --oci-tool            Backend d'analyse OCI : syft (défaut) | trivy | skopeo | cdxgen
   -o, --output             Fichier de sortie (défaut : sbom.json)
                            Avec plusieurs formats, utilisé comme base de nom
@@ -246,6 +261,10 @@ sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si no
 
 # Combiner une image OCI et une liste de paquets supplémentaires
 ./sbom_generator -I nginx:latest -i extra_pkgs.txt -o sbom.cdx.json
+
+# Analyser un binaire lié statiquement (ex. exécutable Go) — dépendances
+# embarquées lues via syft, sans registre ni conteneur
+./sbom_generator --binary /usr/local/bin/mon-app -o app.cdx.json
 
 # Résoudre les noms RPM depuis un dossier local (pas de rpm installé requis)
 ./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
