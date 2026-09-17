@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-09-18
+
 ### Added
 - **GUI — champ « Binaire autonome » (`--binary`)** : la GUI n'exposait pas
   ce nouveau flag CLI (v1.5.8). Ajout d'un troisième champ dans la section
