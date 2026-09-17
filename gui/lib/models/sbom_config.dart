@@ -55,6 +55,12 @@ class SbomConfig {
   /// Backend OCI choisi (--oci-tool) : 'syft', 'trivy', 'skopeo' ou 'cdxgen'.
   String ociTool;
 
+  /// Binaire local à analyser directement (--binary). Vide = non utilisé.
+  /// Mutuellement exclusif avec [inputFile] et [imageRef] (voir --binary côté
+  /// CLI) ; force le backend syft, seul capable d'exploiter les métadonnées
+  /// embarquées dans un binaire autonome.
+  String binaryPath;
+
   /// Version CycloneDX générée (--cyclonedx-version) : '1.6' ou '1.7'.
   String cycloneDxVersion;
 
@@ -72,6 +78,7 @@ class SbomConfig {
     this.enableSbomqs = false,
     this.imageRef = '',
     this.ociTool = 'syft',
+    this.binaryPath = '',
     this.cycloneDxVersion = '1.6',
   }) : formats = formats ?? {'cyclonedx'};
 
@@ -87,6 +94,7 @@ class SbomConfig {
     'enableSbomqs': enableSbomqs,
     'imageRef': imageRef,
     'ociTool': ociTool,
+    'binaryPath': binaryPath,
     'cycloneDxVersion': cycloneDxVersion,
   };
 
@@ -102,13 +110,19 @@ class SbomConfig {
     enableSbomqs: j['enableSbomqs'] as bool? ?? false,
     imageRef: j['imageRef'] as String? ?? '',
     ociTool: j['ociTool'] as String? ?? 'syft',
+    binaryPath: j['binaryPath'] as String? ?? '',
     cycloneDxVersion: j['cycloneDxVersion'] as String? ?? '1.6',
   );
 
   List<String> toArgs() {
     final args = <String>[];
     if (inputFile.isNotEmpty) args.addAll(['--input', inputFile]);
-    if (imageRef.isNotEmpty) {
+    if (binaryPath.isNotEmpty) {
+      // --binary est exclusif de --image côté CLI et force --oci-tool syft :
+      // pas de --oci-tool ici, la valeur choisie par l'utilisateur (ociTool)
+      // ne s'applique qu'à --image.
+      args.addAll(['--binary', binaryPath]);
+    } else if (imageRef.isNotEmpty) {
       args.addAll(['--image', imageRef]);
       args.addAll(['--oci-tool', ociTool]);
     }

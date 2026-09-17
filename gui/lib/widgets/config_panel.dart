@@ -35,6 +35,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
   late TextEditingController _licenseMapCtrl;
   late TextEditingController _pdfCtrl;
   late TextEditingController _imageCtrl;
+  late TextEditingController _binaryCtrl;
 
   bool _isDragging = false;
 
@@ -49,13 +50,14 @@ class _ConfigPanelState extends State<ConfigPanel> {
     _licenseMapCtrl = TextEditingController(text: c.licenseMapFile);
     _pdfCtrl = TextEditingController(text: c.pdfOutputPath);
     _imageCtrl = TextEditingController(text: c.imageRef);
+    _binaryCtrl = TextEditingController(text: c.binaryPath);
   }
 
   @override
   void dispose() {
     for (final c in [
       _inputCtrl, _outputCtrl, _nameCtrl, _rpmDirCtrl,
-      _licenseMapCtrl, _pdfCtrl, _imageCtrl,
+      _licenseMapCtrl, _pdfCtrl, _imageCtrl, _binaryCtrl,
     ]) {
       c.dispose();
     }
@@ -76,12 +78,14 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.enableSbomqs = loaded.enableSbomqs;
     c.imageRef = loaded.imageRef;
     c.ociTool = loaded.ociTool;
+    c.binaryPath = loaded.binaryPath;
     _outputCtrl.text = c.outputBase;
     _nameCtrl.text = c.documentName;
     _rpmDirCtrl.text = c.rpmDir;
     _licenseMapCtrl.text = c.licenseMapFile;
     _pdfCtrl.text = c.pdfOutputPath;
     _imageCtrl.text = c.imageRef;
+    _binaryCtrl.text = c.binaryPath;
     widget.onChanged?.call();
     setState(() {});
   }
@@ -106,6 +110,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.licenseMapFile = _licenseMapCtrl.text.trim();
     c.pdfOutputPath = _pdfCtrl.text.trim();
     c.imageRef = _imageCtrl.text.trim();
+    c.binaryPath = _binaryCtrl.text.trim();
     widget.onChanged?.call();
   }
 
@@ -118,7 +123,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
   Future<void> _pickFile(TextEditingController ctrl,
       {String? title,
       List<String>? extensions,
-      TextEditingController? clears}) async {
+      List<TextEditingController>? clears}) async {
     final r = await FilePicker.pickFiles(
       dialogTitle: title,
       type: extensions != null ? FileType.custom : FileType.any,
@@ -126,18 +131,24 @@ class _ConfigPanelState extends State<ConfigPanel> {
     );
     if (r != null && r.files.single.path != null) {
       ctrl.text = r.files.single.path!;
-      clears?.clear();
+      for (final other in clears ?? const <TextEditingController>[]) {
+        other.clear();
+      }
       _sync();
       setState(() {});
     }
   }
 
   Future<void> _pickDir(TextEditingController ctrl,
-      {String? title, VoidCallback? onDone, TextEditingController? clears}) async {
+      {String? title,
+      VoidCallback? onDone,
+      List<TextEditingController>? clears}) async {
     final r = await FilePicker.getDirectoryPath(dialogTitle: title);
     if (r != null) {
       ctrl.text = r;
-      clears?.clear();
+      for (final other in clears ?? const <TextEditingController>[]) {
+        other.clear();
+      }
       onDone?.call();
     }
   }
@@ -215,6 +226,7 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           if (detail.files.isNotEmpty) {
                             _inputCtrl.text = detail.files.first.path;
                             _imageCtrl.clear();
+                            _binaryCtrl.clear();
                             _sync();
                           }
                           setState(() => _isDragging = false);
@@ -244,13 +256,13 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
                               extensions: ['lst', 'txt'],
-                              clears: _imageCtrl,
+                              clears: [_imageCtrl, _binaryCtrl],
                             ),
                             filterLabel: '.lst .txt',
                             onPick: () => _pickFile(
                               _inputCtrl,
                               title: 'Sélectionner le fichier d\'entrée',
-                              clears: _imageCtrl,
+                              clears: [_imageCtrl, _binaryCtrl],
                             ),
                             onPickDir: () => _pickDir(
                               _inputCtrl,
@@ -260,18 +272,22 @@ class _ConfigPanelState extends State<ConfigPanel> {
                                 _sync();
                                 setState(() {});
                               },
-                              clears: _imageCtrl,
+                              clears: [_imageCtrl, _binaryCtrl],
                             ),
                             onChanged: (v) {
-                              if (v.trim().isNotEmpty) _imageCtrl.clear();
+                              if (v.trim().isNotEmpty) {
+                                _imageCtrl.clear();
+                                _binaryCtrl.clear();
+                              }
                               _sync();
                               setState(() {});
                             },
-                            // Requis seulement si aucune image OCI fournie
+                            // Requis seulement si aucune image OCI / binaire fourni
                             validator: (v) =>
                                 (v == null || v.trim().isEmpty) &&
-                                        _imageCtrl.text.trim().isEmpty
-                                    ? 'Requis (ou spécifiez une image OCI)'
+                                        _imageCtrl.text.trim().isEmpty &&
+                                        _binaryCtrl.text.trim().isEmpty
+                                    ? 'Requis (ou spécifiez une image OCI / un binaire)'
                                     : null,
                           ),
                         ),
@@ -326,16 +342,19 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           _imageCtrl,
                           title: 'Sélectionner une archive OCI',
                           extensions: ['tar', 'gz', 'tgz'],
-                          clears: _inputCtrl,
+                          clears: [_inputCtrl, _binaryCtrl],
                         ),
                         onPickDir: () => _pickDir(
                           _imageCtrl,
                           title: 'Sélectionner un répertoire OCI layout',
                           onDone: _sync,
-                          clears: _inputCtrl,
+                          clears: [_inputCtrl, _binaryCtrl],
                         ),
                         onChanged: (v) {
-                          if (v.trim().isNotEmpty) _inputCtrl.clear();
+                          if (v.trim().isNotEmpty) {
+                            _inputCtrl.clear();
+                            _binaryCtrl.clear();
+                          }
                           _sync();
                           setState(() {});
                         },
@@ -350,6 +369,69 @@ class _ConfigPanelState extends State<ConfigPanel> {
                             c.ociTool = tool;
                             widget.onChanged?.call();
                           }),
+                        ),
+                      ],
+
+                      // ── Séparateur OU ──
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                'OU',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.4),
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Binaire autonome ──
+                      _BinaryField(
+                        controller: _binaryCtrl,
+                        onPick: () => _pickFile(
+                          _binaryCtrl,
+                          title: 'Sélectionner un binaire',
+                          clears: [_inputCtrl, _imageCtrl],
+                        ),
+                        onChanged: (v) {
+                          if (v.trim().isNotEmpty) {
+                            _inputCtrl.clear();
+                            _imageCtrl.clear();
+                          }
+                          _sync();
+                          setState(() {});
+                        },
+                      ),
+                      if (c.binaryPath.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Backend : syft (forcé — seul capable d\'analyser un '
+                          'binaire autonome)',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.5),
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ],
 
@@ -1203,6 +1285,52 @@ class _OciImageField extends StatelessWidget {
   }
 }
 
+// ─── Binaire autonome (--binary) ───────────────────────────────────────────────
+
+class _BinaryField extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback onPick;
+  final ValueChanged<String>? onChanged;
+
+  const _BinaryField({
+    required this.controller,
+    required this.onPick,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        label: const HelpLabel(
+          'Binaire autonome (--binary)',
+          'Exécutable local à analyser directement (pas une image de '
+          'conteneur) — ex. un binaire Go lié statiquement.\n'
+          'Force le backend syft : seul capable de lire les métadonnées '
+          'embarquées dans un binaire (buildinfo Go via '
+          'go-module-binary-cataloger ; classifieur générique syft pour '
+          'quelques bibliothèques connues — OpenSSL, zlib, sqlite…).\n'
+          'Ne récupère pas les dépendances liées statiquement sans '
+          'métadonnée embarquée (C/C++ « fait maison », Rust sans '
+          'cargo-auditable).',
+        ),
+        hintText: '/usr/local/bin/mon-app',
+        border: const OutlineInputBorder(),
+        isDense: true,
+        prefixIcon: const Icon(Icons.terminal_outlined, size: 18),
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.folder_open, size: 18),
+          tooltip: 'Parcourir…',
+          onPressed: onPick,
+        ),
+      ),
+      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+      onChanged: onChanged,
+    );
+  }
+}
+
 // ─── Sélecteur d'outil OCI ────────────────────────────────────────────────────
 
 class _OciToolSelector extends StatelessWidget {
@@ -1454,6 +1582,23 @@ class _InputTypeLegend extends StatelessWidget {
                 ],
               ),
             ),
+          const SizedBox(height: 6),
+          const Divider(height: 8),
+          Text(
+            'Binaire autonome (champ --binary) :',
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Exécutable local (ex. binaire Go lié statiquement) — force le '
+            'backend syft. Dépendances Go embarquées lues systématiquement ; '
+            'seul un catalogue fixe de bibliothèques connues (OpenSSL, zlib, '
+            'sqlite…) est détecté pour les autres langages.',
+            style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+          ),
         ],
       ),
     );

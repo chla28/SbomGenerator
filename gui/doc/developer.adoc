@@ -147,6 +147,7 @@ gui/
 ├── test/
 │   ├── widget_test.dart
 │   ├── config_panel_input_test.dart
+│   ├── sbom_config_test.dart
 │   ├── dashboard_panel_test.dart
 │   ├── cra_panel_test.dart
 │   ├── cve_detail_test.dart
@@ -248,16 +249,22 @@ Champs ajoutés pour OCI :
   vide signifie que l'analyse OCI est désactivée.
 * `String ociTool` (défaut : `'syft'`) — backend OCI choisi (`--oci-tool`).
   Valeurs : `'syft'`, `'trivy'`, `'skopeo'`, `'cdxgen'`.
+* `String binaryPath` (défaut : `''`) — binaire local à analyser directement
+  (`--binary`), voir <<sec-binary-field>>.
 
-Ces deux champs sont inclus dans `toJson()` / `fromJson()` (clés `'imageRef'`
-et `'ociTool'`) et donc persistés entre sessions. Ils sont chargés par
-`_loadProfileInto()` dans `_ProfilesDialog`.
+Ces trois champs sont inclus dans `toJson()` / `fromJson()` (clés `'imageRef'`,
+`'ociTool'`, `'binaryPath'`) et donc persistés entre sessions. Ils sont
+chargés par `_loadProfileInto()` dans `_ProfilesDialog`.
 
 Dans `toArgs()` :
 
 [source,dart]
 ----
-if (imageRef.isNotEmpty) {
+if (binaryPath.isNotEmpty) {
+  // --binary est exclusif de --image côté CLI et force --oci-tool syft :
+  // ociTool ne s'applique qu'à --image, jamais émis ici.
+  args.addAll(['--binary', binaryPath]);
+} else if (imageRef.isNotEmpty) {
   args.addAll(['--image', imageRef]);
   args.addAll(['--oci-tool', ociTool]);
 }
@@ -779,38 +786,55 @@ Sortie. Elle comprend deux éléments :
   si `c.imageRef.isNotEmpty`. `SegmentedButton` à quatre segments (`syft`,
   `trivy`, `skopeo`, `cdxgen`) qui met à jour `c.ociTool` via `setState`.
 
+[[sec-binary-field]]
+*Champ Binaire autonome* (`--binary`, sous un second séparateur « OU ») :
+`_BinaryField` (widget privé, calqué sur `_OciImageField` mais avec un
+sélecteur de fichier simple — pas de `PopupMenuButton` tar/dossier, un
+binaire n'a généralement pas d'extension reconnaissable) lié à `_binaryCtrl`
+/ `c.binaryPath`. Contrairement au champ Image OCI, il n'affiche *jamais* le
+sélecteur `_OciToolSelector` : `--binary` force `--oci-tool syft` côté CLI,
+donc `ociTool` n'a pas de sens ici. Un simple texte informatif (« Backend :
+syft (forcé)… ») s'affiche à la place quand `c.binaryPath.isNotEmpty`.
+
 La validation du champ fichier d'entrée (`--input`) est assouplie : l'erreur
-"Requis" ne s'affiche que si `imageRef` est vide :
+"Requis" ne s'affiche que si `imageRef` *et* `binaryPath` sont vides tous
+les deux :
 
 [source,dart]
 ----
 validator: (v) => (v == null || v.trim().isEmpty) &&
-    _imageCtrl.text.trim().isEmpty
-        ? 'Requis (ou spécifiez une image OCI)'
+    _imageCtrl.text.trim().isEmpty &&
+    _binaryCtrl.text.trim().isEmpty
+        ? 'Requis (ou spécifiez une image OCI / un binaire)'
         : null,
 ----
 
-*Exclusivité mutuelle* : `_inputCtrl` et `_imageCtrl` sont mutuellement
-exclusifs dans l'UI — remplir l'un vide l'autre, afin d'éviter toute
-ambiguïté sur la source réellement utilisée (le CLI, lui, sait combiner les
-deux). Chaque point d'entrée qui modifie l'un des deux champs vide l'autre
-avant d'appeler `_sync()` :
+*Exclusivité mutuelle à trois* : `_inputCtrl`, `_imageCtrl` et `_binaryCtrl`
+sont mutuellement exclusifs dans l'UI — remplir l'un vide les deux autres,
+afin d'éviter toute ambiguïté sur la source réellement utilisée (le CLI,
+lui, sait combiner `--input` et `--image`, mais rejette explicitement
+`--binary` combiné à `--image`). Chaque point d'entrée qui modifie un des
+trois champs vide les deux autres avant d'appeler `_sync()` :
 
-* `onChanged` des deux `TextFormField` (saisie manuelle)
+* `onChanged` des trois `TextFormField` (saisie manuelle)
 * `onDragDone` du `DropTarget` (glisser-déposer sur le champ fichier d'entrée)
-* `_pickFile()` / `_pickDir()` — un paramètre optionnel `TextEditingController? clears`
-  a été ajouté à ces deux helpers génériques (également utilisés par
-  `rpm-dir`, `license-map`, etc.) ; seuls les appels pour `_inputCtrl` et
-  `_imageCtrl` le renseignent :
+* `_pickFile()` / `_pickDir()` — le paramètre optionnel, initialement
+  `TextEditingController? clears`, est devenu
+  `List<TextEditingController>? clears` pour pouvoir vider les *deux* autres
+  champs en une seule liste (également utilisés par `rpm-dir`,
+  `license-map`, etc., qui passent toujours une liste vide ou omettent le
+  paramètre) :
 +
 [source,dart]
 ----
 Future<void> _pickFile(TextEditingController ctrl,
     {String? title, List<String>? extensions,
-    TextEditingController? clears}) async {
+    List<TextEditingController>? clears}) async {
   …
   ctrl.text = r.files.single.path!;
-  clears?.clear();
+  for (final other in clears ?? const <TextEditingController>[]) {
+    other.clear();
+  }
   _sync();
   setState(() {});
 }

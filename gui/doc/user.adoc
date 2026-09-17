@@ -438,6 +438,31 @@ filtré aux composants porteurs d'un PURL d'écosystème réel
 |`cdxgen` dans le PATH (requiert Node.js)
 |===
 
+==== Binaire autonome (`--binary`)
+
+Champ séparé, sous un second séparateur « OU » : exécutable local à
+analyser directement (pas une image de conteneur) — par exemple un binaire
+Go lié statiquement. Le bouton 📂 ouvre un sélecteur de fichier simple
+(aucun filtre d'extension, un binaire n'en a souvent pas).
+
+Mutuellement exclusif avec *Paquets à analyser* et *Image OCI* : renseigner
+ce champ vide automatiquement les deux autres, et réciproquement.
+
+Force systématiquement le backend Syft (le sélecteur *Outil OCI* n'est pas
+affiché pour ce champ) — c'est le seul backend qui sache exploiter les
+métadonnées embarquées dans un binaire autonome :
+
+* *Go* (lié statiquement ou non) : la liste complète des modules + versions
+  est lue depuis les métadonnées `buildinfo` embarquées dans l'exécutable,
+  même strippé.
+* *Autres langages* (Rust, C/C++ statiques…) : seul un catalogue *fixe* de
+  bibliothèques open source connues (OpenSSL, zlib, sqlite, busybox…) est
+  détecté par empreinte de chaîne de version — pas une extraction
+  arbitraire des dépendances liées.
+* Une bibliothèque liée statiquement sans signature reconnue ni métadonnée
+  embarquée (C/C++ « fait maison », Rust sans `cargo-auditable`) ne peut
+  pas être retrouvée après coup.
+
 === Section Sortie
 
 ==== Chemin de base (`--output`)

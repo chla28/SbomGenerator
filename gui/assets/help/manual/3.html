@@ -235,6 +235,44 @@ filtré aux composants porteurs d’un PURL d’écosystème réel</p></td>
 </tbody>
 </table>
 </div>
+<div class="sect3">
+<h4 id="_binaire_autonome_binary">4.2.3. Binaire autonome (<code>--binary</code>)</h4>
+<div class="paragraph">
+<p>Champ séparé, sous un second séparateur « OU » : exécutable local à
+analyser directement (pas une image de conteneur) — par exemple un binaire
+Go lié statiquement. Le bouton 📂 ouvre un sélecteur de fichier simple
+(aucun filtre d’extension, un binaire n’en a souvent pas).</p>
+</div>
+<div class="paragraph">
+<p>Mutuellement exclusif avec <strong>Paquets à analyser</strong> et <strong>Image OCI</strong> : renseigner
+ce champ vide automatiquement les deux autres, et réciproquement.</p>
+</div>
+<div class="paragraph">
+<p>Force systématiquement le backend Syft (le sélecteur <strong>Outil OCI</strong> n’est pas
+affiché pour ce champ) — c’est le seul backend qui sache exploiter les
+métadonnées embarquées dans un binaire autonome :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Go</strong> (lié statiquement ou non) : la liste complète des modules + versions
+est lue depuis les métadonnées <code>buildinfo</code> embarquées dans l’exécutable,
+même strippé.</p>
+</li>
+<li>
+<p><strong>Autres langages</strong> (Rust, C/C++ statiques…) : seul un catalogue <strong>fixe</strong> de
+bibliothèques open source connues (OpenSSL, zlib, sqlite, busybox…) est
+détecté par empreinte de chaîne de version — pas une extraction
+arbitraire des dépendances liées.</p>
+</li>
+<li>
+<p>Une bibliothèque liée statiquement sans signature reconnue ni métadonnée
+embarquée (C/C++ « fait maison », Rust sans <code>cargo-auditable</code>) ne peut
+pas être retrouvée après coup.</p>
+</li>
+</ul>
+</div>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_section_sortie">4.3. Section Sortie</h3>

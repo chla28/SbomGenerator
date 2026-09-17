@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI — champ « Binaire autonome » (`--binary`)** : la GUI n'exposait pas
+  ce nouveau flag CLI (v1.5.8). Ajout d'un troisième champ dans la section
+  *Entrée*, sous un second séparateur « OU », mutuellement exclusif avec
+  *Paquets à analyser* et *Image OCI* (les trois se vident l'un l'autre).
+  Ne propose pas le sélecteur *Outil OCI* (`--binary` force `--oci-tool
+  syft` côté CLI) ; affiche à la place un rappel textuel. `SbomConfig`
+  gagne le champ `binaryPath` (persistant, profils inclus).
+
 ## [1.5.8] - 2026-09-17
 
 ### Added

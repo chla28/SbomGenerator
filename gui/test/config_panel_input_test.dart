@@ -55,4 +55,66 @@ void main() {
     expect(find.text('Tous les fichiers'), findsOneWidget);
     expect(find.text('Dossier (scan récursif)'), findsOneWidget);
   });
+
+  testWidgets('--binary : champ dédié, mutuellement exclusif avec --input',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final originalOnError = FlutterError.onError;
+    const ignoredPatterns = [
+      'A RenderFlex overflowed',
+      'ListTile background color or ink splashes may be invisible',
+    ];
+    FlutterError.onError = (details) {
+      final message = details.toString();
+      if (ignoredPatterns.any(message.contains)) return;
+      originalOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = originalOnError);
+
+    final config = SbomConfig();
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ConfigPanel(
+          config: config,
+          isRunning: false,
+          onRun: () {},
+          onStop: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Binaire autonome (--binary)'), findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Paquets à analyser (--input)'),
+        'packages.txt');
+    await tester.pumpAndSettle();
+    expect(config.inputFile, 'packages.txt');
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Binaire autonome (--binary)'),
+        '/usr/local/bin/mon-app');
+    await tester.pumpAndSettle();
+
+    // Saisir --binary efface --input (exclusivité UI).
+    expect(config.binaryPath, '/usr/local/bin/mon-app');
+    expect(config.inputFile, isEmpty);
+    // Le backend est forcé syft — aucun sélecteur --oci-tool affiché.
+    expect(find.text('Backend OCI (--oci-tool)'), findsNothing);
+    expect(find.textContaining('Backend : syft (forcé'), findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Paquets à analyser (--input)'),
+        'packages.txt');
+    await tester.pumpAndSettle();
+
+    // Ré-saisir --input efface --binary.
+    expect(config.inputFile, 'packages.txt');
+    expect(config.binaryPath, isEmpty);
+  });
 }
