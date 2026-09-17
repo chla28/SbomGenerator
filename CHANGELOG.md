@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-09-17
+
 ### Added
 - **`--binary <fichier>` / `-b`** : analyse directe d'un binaire autonome
   (ex. exécutable Go lié statiquement), sans registre ni conteneur. Alias
