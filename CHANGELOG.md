@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.14] - 2026-09-27
+
 ### Added
 - **GUI, Tableau de bord — niveau de sévérité du rapport PDF** : menu
   *Critical* / *≥ High* / *≥ Medium* / *All* (défaut *All*, mémorisé) à

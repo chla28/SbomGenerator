@@ -3,7 +3,7 @@ description: >
   Generates SBOM (Software Bill of Materials) from a list of RPM packages.
   Supports CycloneDX 1.6/1.7, SPDX 2.3, and custom JSON output formats.
   Includes dependency relationships resolved via rpm requires/provides.
-version: 1.5.13
+version: 1.5.14
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
