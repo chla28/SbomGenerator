@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/layer_scan.dart';
 import '../services/scan_enrichment.dart';
+import '../services/settings_service.dart';
 import 'cve_detail.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
@@ -57,6 +58,37 @@ class DashboardPanel extends StatefulWidget {
 }
 
 class _DashboardPanelState extends State<DashboardPanel> {
+  // Seuil de sévérité du rapport PDF (mémorisé entre sessions).
+  ReportSeverityThreshold _threshold = ReportSeverityThreshold.all;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService.loadReportSeverity().then((v) {
+      if (!mounted || v == null) return;
+      setState(() => _threshold = ReportSeverityThreshold.values.firstWhere(
+          (t) => t.name == v,
+          orElse: () => ReportSeverityThreshold.all));
+    });
+  }
+
+  Future<void> _export(BuildContext context) async {
+    final adoc = await _buildDashboardReport(
+      grype: widget.grypeVulns,
+      osv: widget.osvVulns,
+      trivy: widget.trivyVulns,
+      threshold: _threshold,
+      exploitById: widget.exploitById,
+      scanTargets: widget.scanTargets,
+      layerScans: widget.layerScans,
+      crossSortCol: _effectiveCrossSort,
+      crossSortAsc: _effectiveCrossAsc,
+    );
+    if (!context.mounted) return;
+    await _exportDashboard(context, adoc: adoc, threshold: _threshold);
+  }
+
+
   // Tri du tableau « Comparaison inter-scanners ». `null` = tri par défaut :
   // priorisation par risque (KEV → EPSS → sévérité) si l'enrichissement a
   // tourné, sinon sévérité décroissante.
@@ -109,22 +141,12 @@ class _DashboardPanelState extends State<DashboardPanel> {
             grypeCount: grype?.length,
             osvCount: osv?.length,
             trivyCount: trivy?.length,
-            onExport: scansRun == 0
-                ? null
-                : () => _exportDashboard(
-                      context,
-                      scansRun: scansRun,
-                      uniqueIds: allIds.length,
-                      grype: grype,
-                      osv: osv,
-                      trivy: trivy,
-                      crossRows: _crossScannerRows(grype, osv, trivy),
-                      exploitById: widget.exploitById,
-                      crossSortCol: _effectiveCrossSort,
-                      crossSortAsc: _effectiveCrossAsc,
-                      scanTargets: widget.scanTargets,
-                      layers: layers,
-                    ),
+            onExport: scansRun == 0 ? null : () => _export(context),
+            threshold: _threshold,
+            onThresholdChanged: (t) {
+              setState(() => _threshold = t);
+              SettingsService.saveReportSeverity(t.name);
+            },
           ),
 
           const SizedBox(height: 20),
@@ -231,6 +253,66 @@ final RegExp _distroPrefixedCveRe = RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$');
 
 String _normalizeVulnId(String id) =>
     _distroPrefixedCveRe.firstMatch(id)?.group(1) ?? id;
+
+// ─── Seuil de sévérité du rapport PDF ───────────────────────────────────────
+
+/// Niveau de sévérité minimal des CVE reprises dans le rapport PDF du
+/// tableau de bord.
+enum ReportSeverityThreshold {
+  critical('Critical', 0),
+  high('≥ High', 1),
+  medium('≥ Medium', 2),
+  all('All', 99);
+
+  const ReportSeverityThreshold(this.label, this._maxOrd);
+
+  final String label;
+  final int _maxOrd;
+
+  bool accepts(String severity) =>
+      this == all || _crossSevOrd(severity) <= _maxOrd;
+}
+
+/// Vulnérabilités reprises dans le rapport pour [threshold]. Une CVE (id
+/// normalisé) est retenue — avec toutes ses lignes, tous scanners — si sa
+/// pire sévérité, tous scanners confondus, atteint le seuil, ou si elle est
+/// au catalogue CISA KEV (exploitation active, quelle que soit la
+/// sévérité). Filtrer par CVE plutôt que ligne à ligne garde la comparaison
+/// inter-scanners fidèle : une CVE High pour Grype et Medium pour Trivy
+/// reste marquée comme vue par les deux.
+({List<GrypeVuln>? grype, List<OsvVuln>? osv, List<TrivyVuln>? trivy})
+    filterForReport(
+  List<GrypeVuln>? grype,
+  List<OsvVuln>? osv,
+  List<TrivyVuln>? trivy,
+  ReportSeverityThreshold threshold,
+  Map<String, ExploitInfo> exploitById,
+) {
+  if (threshold == ReportSeverityThreshold.all) {
+    return (grype: grype, osv: osv, trivy: trivy);
+  }
+  final worst = <String, String>{};
+  for (final l in <List<VulnRow>?>[grype, osv, trivy]) {
+    for (final v in l ?? const <VulnRow>[]) {
+      final id = _normalizeVulnId(v.id);
+      final prev = worst[id];
+      if (prev == null || _crossSevOrd(v.severity) < _crossSevOrd(prev)) {
+        worst[id] = v.severity;
+      }
+    }
+  }
+  bool keep(VulnRow v) {
+    final id = _normalizeVulnId(v.id);
+    return threshold.accepts(worst[id] ?? v.severity) ||
+        (exploitById[id]?.inKev ?? false);
+  }
+
+  return (
+    grype: grype?.where(keep).toList(),
+    osv: osv?.where(keep).toList(),
+    trivy: trivy?.where(keep).toList(),
+  );
+}
 
 // ─── Synthèse par couche (analyse par couche des onglets de scan) ──────────
 
@@ -453,8 +535,9 @@ List<_CrossRowData> _sortCrossRows(
 // reproduit donc l'ensemble de ce qui est affiché à l'écran — résumé
 // global, répartition par sévérité pour chaque scanner, puis comparaison
 // inter-scanners complète.
-Future<void> _exportDashboard(
-  BuildContext context, {
+/// Contenu AsciiDoc du rapport du tableau de bord, à partir des listes déjà
+/// filtrées par le seuil de sévérité.
+Future<String> _dashboardReportAdoc({
   required int scansRun,
   required int uniqueIds,
   required List<GrypeVuln>? grype,
@@ -466,15 +549,11 @@ Future<void> _exportDashboard(
   bool crossSortAsc = true,
   List<String> scanTargets = const [],
   _LayerSynthesis? layers,
-}) async {
-  final path = await FilePicker.saveFile(
-    dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
-    fileName: 'rapport-vulnerabilites.adoc',
-    type: FileType.custom,
-    allowedExtensions: ['adoc'],
-  );
-  if (path == null || !context.mounted) return;
+  ReportSeverityThreshold threshold = ReportSeverityThreshold.all,
 
+  /// Nombre de CVE uniques avant filtrage par [threshold].
+  int? totalIds,
+}) async {
   ExploitInfo exSum(String id) => exploitById[id] ?? ExploitInfo.empty;
   int sevCount(String s) => crossRows
       .where((r) => r.severity.toLowerCase() == s)
@@ -512,6 +591,16 @@ Future<void> _exportDashboard(
           if (trivy != null) 'Trivy',
         ].join(', ')})'} — *$uniqueIds* CVE uniques');
   buf.writeln();
+  if (threshold != ReportSeverityThreshold.all) {
+    buf.writeln('NOTE: Filtre de sévérité : *${threshold.label}* — '
+        '$uniqueIds CVE retenue(s)'
+        '${totalIds != null ? ' sur $totalIds' : ''}, d\'après la pire '
+        'sévérité rapportée par les scanners. Les CVE au catalogue CISA KEV '
+        'sont incluses quelle que soit leur sévérité. Tout le rapport '
+        '(compteurs, répartition, couches, comparaison, détail) porte sur '
+        'ce sous-ensemble.');
+    buf.writeln();
+  }
   buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
   buf.writeln('|===');
   buf.writeln('h| Critiques h| Élevées h| CISA KEV h| EPSS ≥ 10 %');
@@ -703,7 +792,80 @@ Future<void> _exportDashboard(
     }
   }
 
-  await File(path).writeAsString(buf.toString());
+  return buf.toString();
+}
+
+/// Rapport AsciiDoc du tableau de bord pour [threshold] : filtre les
+/// vulnérabilités ([filterForReport]) puis produit tout le rapport sur ce
+/// sous-ensemble.
+Future<String> _buildDashboardReport({
+  required List<GrypeVuln>? grype,
+  required List<OsvVuln>? osv,
+  required List<TrivyVuln>? trivy,
+  required ReportSeverityThreshold threshold,
+  Map<String, ExploitInfo> exploitById = const {},
+  List<String> scanTargets = const [],
+  Map<String, LayerScanResult> layerScans = const {},
+  _CrossSort crossSortCol = _CrossSort.severity,
+  bool crossSortAsc = true,
+}) {
+  final f = filterForReport(grype, osv, trivy, threshold, exploitById);
+  Set<String> ids(List<List<VulnRow>?> lists) => {
+        for (final l in lists) ...?l?.map((v) => _normalizeVulnId(v.id)),
+      };
+  return _dashboardReportAdoc(
+    scansRun: [f.grype, f.osv, f.trivy].where((l) => l != null).length,
+    uniqueIds: ids([f.grype, f.osv, f.trivy]).length,
+    grype: f.grype,
+    osv: f.osv,
+    trivy: f.trivy,
+    crossRows: _crossScannerRows(f.grype, f.osv, f.trivy),
+    exploitById: exploitById,
+    crossSortCol: crossSortCol,
+    crossSortAsc: crossSortAsc,
+    scanTargets: scanTargets,
+    layers: _layerSynthesis(f.grype, f.osv, f.trivy, layerScans),
+    threshold: threshold,
+    totalIds: ids([grype, osv, trivy]).length,
+  );
+}
+
+/// Rapport AsciiDoc du tableau de bord (tri par défaut) — pour les tests.
+@visibleForTesting
+Future<String> dashboardReportAdoc({
+  required List<GrypeVuln>? grype,
+  required List<OsvVuln>? osv,
+  required List<TrivyVuln>? trivy,
+  ReportSeverityThreshold threshold = ReportSeverityThreshold.all,
+  Map<String, ExploitInfo> exploitById = const {},
+  Map<String, LayerScanResult> layerScans = const {},
+}) =>
+    _buildDashboardReport(
+      grype: grype,
+      osv: osv,
+      trivy: trivy,
+      threshold: threshold,
+      exploitById: exploitById,
+      layerScans: layerScans,
+    );
+
+/// Écrit [adoc] dans le fichier choisi par l'utilisateur puis le convertit
+/// en PDF.
+Future<void> _exportDashboard(
+  BuildContext context, {
+  required String adoc,
+  required ReportSeverityThreshold threshold,
+}) async {
+  final path = await FilePicker.saveFile(
+    dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
+    fileName: threshold == ReportSeverityThreshold.all
+        ? 'rapport-vulnerabilites.adoc'
+        : 'rapport-vulnerabilites-${threshold.name}.adoc',
+    type: FileType.custom,
+    allowedExtensions: ['adoc'],
+  );
+  if (path == null || !context.mounted) return;
+  await File(path).writeAsString(adoc);
   if (!context.mounted) return;
 
   final pdfPath = path.endsWith('.adoc')
@@ -743,12 +905,18 @@ class _GlobalSummary extends StatelessWidget {
   /// (aucun scanner exécuté, rien à exporter).
   final VoidCallback? onExport;
 
+  /// Seuil de sévérité du rapport exporté.
+  final ReportSeverityThreshold threshold;
+  final ValueChanged<ReportSeverityThreshold> onThresholdChanged;
+
   const _GlobalSummary({
     required this.uniqueIds,
     required this.scansRun,
     required this.grypeCount,
     required this.osvCount,
     required this.trivyCount,
+    required this.threshold,
+    required this.onThresholdChanged,
     this.onExport,
   });
 
@@ -788,6 +956,26 @@ class _GlobalSummary extends StatelessWidget {
                   color: uniqueIds == 0 ? Colors.green : Colors.red[700]!),
               const SizedBox(width: 8),
             ],
+            Tooltip(
+              message: 'Sévérité minimale des CVE du rapport PDF '
+                  '(les CVE CISA KEV sont toujours incluses)',
+              child: DropdownButton<ReportSeverityThreshold>(
+                key: const Key('report-severity'),
+                value: threshold,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: [
+                  for (final t in ReportSeverityThreshold.values)
+                    DropdownMenuItem(
+                      value: t,
+                      child: Text(t.label, style: const TextStyle(fontSize: 13)),
+                    ),
+                ],
+                onChanged: (t) {
+                  if (t != null) onThresholdChanged(t);
+                },
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: 'Exporter en AsciiDoc + PDF',

@@ -2105,6 +2105,22 @@ Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n'y a ici qu'une seule
 vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
 la colonne de tri active du tableau inter-scanners est respectée.
 
+*Niveau de sévérité du rapport* : le menu à gauche du bouton d'export
+(*Critical*, *≥ High*, *≥ Medium*, *All* — *All* par défaut) limite tout
+le rapport aux CVE de ce niveau ou plus : résumé exécutif, répartition par
+scanner, couches de l'image, comparaison inter-scanners et détail. Le choix
+est mémorisé d'une session à l'autre ; l'affichage à l'écran n'est pas
+filtré.
+
+* Une CVE est retenue d'après sa *pire* sévérité, tous scanners confondus :
+  une CVE High pour Grype et Medium pour Trivy apparaît dans un rapport
+  « ≥ High » avec les deux scanners, pour que la comparaison reste juste.
+* Les CVE au catalogue *CISA KEV* (exploitées activement) sont toujours
+  incluses, quelle que soit leur sévérité.
+* Le rapport filtré le signale en tête (niveau choisi, nombre de CVE
+  retenues sur le total) et le nom de fichier proposé porte le niveau
+  (`rapport-vulnerabilites-high.adoc`).
+
 Le bouton reste désactivé tant qu'aucun scanner n'a été exécuté. Une fois le
 fichier `.adoc` écrit (emplacement choisi via une boîte de dialogue), la
 conversion en PDF via `asciidoctor-pdf` est tentée automatiquement ; si

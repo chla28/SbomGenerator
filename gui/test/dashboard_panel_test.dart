@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sbom_generator_gui/models/layer_scan.dart';
 import 'package:sbom_generator_gui/services/scan_enrichment.dart';
 import 'package:sbom_generator_gui/widgets/dashboard_panel.dart';
@@ -384,5 +385,130 @@ void main() {
     expect(find.text('RUN apk add curl'), findsOneWidget);
     expect(find.text('COUCHE(S)'), findsOneWidget);
     expect(find.textContaining('Grype : rattachement'), findsOneWidget);
+  });
+
+  group('filterForReport (seuil de sévérité du rapport PDF)', () {
+    final grype = [
+      _g('CVE-2026-0001', 'Critical'),
+      _g('CVE-2026-0002', 'High'),
+      _g('CVE-2026-0003', 'Medium'),
+      _g('CVE-2026-0004', 'Low'),
+    ];
+    // Trivy : même CVE-0002 mais jugée MEDIUM (casse différente).
+    final trivy = [_t('CVE-2026-0002', 'MEDIUM'), _t('CVE-2026-0005', 'LOW')];
+    // OSV : préfixe distro, CVE-0004 Low mais au catalogue KEV.
+    final osv = [_o('DEBIAN-CVE-2026-0004', 'Low')];
+    const kev = {
+      'CVE-2026-0004': ExploitInfo(inKev: true),
+    };
+    List<String> ids(List<VulnRow>? l) => [for (final v in l!) v.id];
+
+    test('All : listes inchangées', () {
+      final f = filterForReport(
+          grype, osv, trivy, ReportSeverityThreshold.all, kev);
+      expect(identical(f.grype, grype), isTrue);
+      expect(identical(f.trivy, trivy), isTrue);
+    });
+
+    test('≥ High : pire sévérité tous scanners + CVE KEV', () {
+      final f = filterForReport(
+          grype, osv, trivy, ReportSeverityThreshold.high, kev);
+      expect(ids(f.grype),
+          ['CVE-2026-0001', 'CVE-2026-0002', 'CVE-2026-0004']);
+      // La ligne MEDIUM de Trivy reste : la CVE est High pour Grype.
+      expect(ids(f.trivy), ['CVE-2026-0002']);
+      expect(ids(f.osv), ['DEBIAN-CVE-2026-0004']);
+    });
+
+    test('Critical et ≥ Medium', () {
+      expect(
+          ids(filterForReport(grype, osv, trivy,
+                  ReportSeverityThreshold.critical, const {})
+              .grype),
+          ['CVE-2026-0001']);
+      expect(
+          ids(filterForReport(grype, osv, trivy,
+                  ReportSeverityThreshold.medium, const {})
+              .grype),
+          ['CVE-2026-0001', 'CVE-2026-0002', 'CVE-2026-0003']);
+    });
+
+    test('scanner non exécuté : reste null', () {
+      final f = filterForReport(
+          grype, null, null, ReportSeverityThreshold.high, const {});
+      expect(f.osv, isNull);
+      expect(f.trivy, isNull);
+    });
+  });
+
+  testWidgets('menu du seuil de sévérité : All par défaut, choix mémorisé',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: DashboardPanel(
+          grypeVulns: [_g('CVE-2026-0001', 'High')],
+          osvVulns: null,
+          trivyVulns: null,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('All'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('report-severity')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('≥ High').last);
+    await tester.pumpAndSettle();
+    expect(find.text('≥ High'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('dashboard_report_severity_v1'), 'high');
+
+    // Relu au prochain affichage.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: DashboardPanel(
+          grypeVulns: [_g('CVE-2026-0001', 'High')],
+          osvVulns: null,
+          trivyVulns: null,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('≥ High'), findsOneWidget);
+  });
+
+  test('rapport ≥ High : note de filtre, CVE Medium exclue, KEV conservée',
+      () async {
+    final grype = [
+      _g('CVE-2026-0001', 'Critical'),
+      _g('CVE-2026-0003', 'Medium'),
+      _g('CVE-2026-0004', 'Low'),
+    ];
+    final adoc = await dashboardReportAdoc(
+      grype: grype,
+      osv: null,
+      trivy: null,
+      threshold: ReportSeverityThreshold.high,
+      exploitById: const {'CVE-2026-0004': ExploitInfo(inKev: true)},
+    );
+    expect(adoc, contains('Filtre de sévérité : *≥ High*'));
+    expect(adoc, contains('2 CVE retenue(s) sur 3'));
+    expect(adoc, contains('CVE-2026-0001'));
+    expect(adoc, contains('CVE-2026-0004'));
+    expect(adoc, isNot(contains('CVE-2026-0003')));
+    // Répartition par scanner calculée sur le sous-ensemble.
+    expect(adoc, contains('| *Total* | *2*'));
+
+    final all = await dashboardReportAdoc(
+        grype: grype, osv: null, trivy: null);
+    expect(all, isNot(contains('Filtre de sévérité')));
+    expect(all, contains('CVE-2026-0003'));
+    expect(all, contains('| *Total* | *3*'));
   });
 }

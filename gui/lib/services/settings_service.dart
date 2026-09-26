@@ -12,6 +12,7 @@ class SettingsService {
   static const _themeKey = 'theme_mode';
   static const _themeColorKey = 'theme_color_index';
   static const _scanEnrichKey = 'scan_enrich_online_v1';
+  static const _reportSeverityKey = 'dashboard_report_severity_v1';
 
   static String get cliBinary {
     final exeDir = p.dirname(Platform.resolvedExecutable);
@@ -78,6 +79,18 @@ class SettingsService {
   static Future<void> saveScanEnrichOnline(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_scanEnrichKey, value);
+  }
+
+  /// Seuil de sévérité du rapport PDF du tableau de bord (nom de la valeur
+  /// d'énumération, ex. `high`) ; `null` si jamais choisi.
+  static Future<String?> loadReportSeverity() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_reportSeverityKey);
+  }
+
+  static Future<void> saveReportSeverity(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_reportSeverityKey, value);
   }
 
   // ── Profils de configuration ──────────────────────────────────────────────

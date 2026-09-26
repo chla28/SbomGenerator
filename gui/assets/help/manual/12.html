@@ -355,6 +355,32 @@ vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
 la colonne de tri active du tableau inter-scanners est respectée.</p>
 </div>
 <div class="paragraph">
+<p><strong>Niveau de sévérité du rapport</strong> : le menu à gauche du bouton d’export
+(<strong>Critical</strong>, <strong>≥ High</strong>, <strong>≥ Medium</strong>, <strong>All</strong> — <strong>All</strong> par défaut) limite tout
+le rapport aux CVE de ce niveau ou plus : résumé exécutif, répartition par
+scanner, couches de l’image, comparaison inter-scanners et détail. Le choix
+est mémorisé d’une session à l’autre ; l’affichage à l’écran n’est pas
+filtré.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Une CVE est retenue d’après sa <strong>pire</strong> sévérité, tous scanners confondus :
+une CVE High pour Grype et Medium pour Trivy apparaît dans un rapport
+« ≥ High » avec les deux scanners, pour que la comparaison reste juste.</p>
+</li>
+<li>
+<p>Les CVE au catalogue <strong>CISA KEV</strong> (exploitées activement) sont toujours
+incluses, quelle que soit leur sévérité.</p>
+</li>
+<li>
+<p>Le rapport filtré le signale en tête (niveau choisi, nombre de CVE
+retenues sur le total) et le nom de fichier proposé porte le niveau
+(<code>rapport-vulnerabilites-high.adoc</code>).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
 <p>Le bouton reste désactivé tant qu’aucun scanner n’a été exécuté. Une fois le
 fichier <code>.adoc</code> écrit (emplacement choisi via une boîte de dialogue), la
 conversion en PDF via <code>asciidoctor-pdf</code> est tentée automatiquement ; si

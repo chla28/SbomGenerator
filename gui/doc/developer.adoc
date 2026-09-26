@@ -1227,6 +1227,22 @@ critiques, élevées, méthode par scanner), colonne *COUCHE(S)* dans
 l'image* et colonne *Couche(s)* dans `_exportDashboard` (`layers:`).
 
 [[sec-dashboard-export]]
+===== Seuil de sévérité du rapport (`ReportSeverityThreshold`)
+
+`enum ReportSeverityThreshold { critical, high, medium, all }` (libellé +
+rang de sévérité maximal accepté), choisi par le `DropdownButton` de
+`_GlobalSummary` (clé `report-severity`) et mémorisé par
+`SettingsService.save/loadReportSeverity` (`dashboard_report_severity_v1`).
+`filterForReport(grype, osv, trivy, threshold, exploitById)` filtre *par
+CVE* (id normalisé) : une CVE garde toutes ses lignes si sa pire sévérité
+tous scanners atteint le seuil ou si elle est CISA KEV. La chaîne d'export
+est découpée en `_buildDashboardReport` (filtre, puis agrégats recalculés
+sur le sous-ensemble : CVE uniques, lignes croisées, synthèse par couche)
+→ `_dashboardReportAdoc` (contenu AsciiDoc, note de filtre en tête) →
+`_exportDashboard` (choix du fichier, écriture, `asciidoctor-pdf`).
+`dashboardReportAdoc` (`@visibleForTesting`) expose la génération aux
+tests.
+
 ===== `_crossScannerRows` / `_exportDashboard` — export AsciiDoc + PDF
 
 Contrairement à `VulnTableView` (grype/osv/trivy_panel.dart, voir

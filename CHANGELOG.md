@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI, Tableau de bord — niveau de sévérité du rapport PDF** : menu
+  *Critical* / *≥ High* / *≥ Medium* / *All* (défaut *All*, mémorisé) à
+  côté du bouton d'export. Tout le rapport (résumé, répartition par
+  scanner, couches, comparaison inter-scanners, détail) porte sur les CVE
+  retenues, d'après leur pire sévérité tous scanners confondus ; les CVE
+  CISA KEV sont toujours incluses. Le rapport filtré l'indique en tête.
+
 ## [1.5.13] - 2026-09-26
 
 ### Added
