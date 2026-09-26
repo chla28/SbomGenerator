@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.13] - 2026-09-26
+
 ### Added
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) : analyse statique et
   tests du CLI et de la GUI sur chaque push vers `main` et chaque pull
