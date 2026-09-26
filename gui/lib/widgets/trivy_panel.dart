@@ -8,6 +8,8 @@ import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
+import '../models/layer_scan.dart';
+import '../services/layer_scan_service.dart';
 import '../services/trivy_runner.dart';
 import 'help_icon.dart';
 import '../services/version_service.dart';
@@ -112,6 +114,9 @@ class TrivyPanel extends StatefulWidget {
 
   /// Cible réellement analysée — pour l'en-tête des rapports exportés.
   final void Function(String target)? onScanTargetChanged;
+
+  /// Analyse par couche du dernier scan (`null` : scan sans couches).
+  final void Function(LayerScanResult?)? onLayerScanChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -122,6 +127,7 @@ class TrivyPanel extends StatefulWidget {
     this.onVulnsChanged,
     this.onExploitChanged,
     this.onScanTargetChanged,
+    this.onLayerScanChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -144,6 +150,12 @@ class _TrivyPanelState extends State<TrivyPanel>
 
   // Source à analyser : fichier SBOM (par défaut) ou image de conteneur
   ScanSourceKind _sourceKind = ScanSourceKind.sbomFile;
+
+  // Analyse par couche (source image)
+  LayerScanSettings _layerSettings = const LayerScanSettings();
+  LayerScanResult? _layerScan;
+  String? _status;
+  bool _layeredCancelled = false;
 
   // Options Trivy
   final Set<String> _selectedSeverities = {};
@@ -303,22 +315,17 @@ class _TrivyPanelState extends State<TrivyPanel>
       _parseFailed = false;
       _exitCode = null;
       _scannedTarget = targetLabel;
+      _layerScan = null;
+      _status = null;
     });
 
-    _runner
-        .run(
-          target: target,
-          useImage: useImage,
-          platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
-              ? _imagePlatformCtrl.text.trim()
-              : null,
-          severities: _selectedSeverities.toList(),
-          ignoreUnfixed: _ignoreUnfixed,
-          skipDbUpdate: _skipDbUpdate,
-          configFile:
-              _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-        )
-        .listen(
+    if (useImage && _layerSettings.enabled) {
+      _analyzeLayered(target);
+      return;
+    }
+    widget.onLayerScanChanged?.call(null);
+
+    _start(target, useImage).listen(
       (event) {
         if (!mounted) return;
         switch (event) {
@@ -365,7 +372,96 @@ class _TrivyPanelState extends State<TrivyPanel>
     );
   }
 
+  Stream<TrivyEvent> _start(String target, bool useImage) => _runner.run(
+        target: target,
+        useImage: useImage,
+        platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
+            ? _imagePlatformCtrl.text.trim()
+            : null,
+        severities: _selectedSeverities.toList(),
+        ignoreUnfixed: _ignoreUnfixed,
+        skipDbUpdate: _skipDbUpdate,
+        configFile:
+            _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
+      );
+
+  Future<ScanOutput> _scanOnce(String target, bool useImage) async {
+    var json = '';
+    var code = 1;
+    String? err;
+    await for (final e in _start(target, useImage)) {
+      switch (e) {
+        case TrivyOutputEvent(:final jsonOutput):
+          json = jsonOutput;
+        case TrivyDoneEvent(:final exitCode, :final stderr):
+          code = exitCode;
+          err = stderr;
+      }
+    }
+    return (json: json, exitCode: code, stderr: err);
+  }
+
+  /// Analyse par couche de l'image [image] (voir [LayerScanService.run]) ;
+  /// en rattachement, la couche indiquée par trivy lui-même
+  /// (`Layer.DiffID`) est prioritaire.
+  Future<void> _analyzeLayered(String image) async {
+    _layeredCancelled = false;
+    try {
+      final r = await LayerScanService.run(
+        image: image,
+        settings: _layerSettings,
+        scanOnce: _scanOnce,
+        parse: TrivyVuln.fromJson,
+        merge: mergeTrivyJson,
+        nativeDigests: trivyLayerDigests,
+        onStatus: (st) {
+          if (mounted) setState(() => _status = st);
+        },
+        isCancelled: () => _layeredCancelled,
+      );
+      if (!mounted) return;
+      var vulns = <TrivyVuln>[];
+      var parseFailed = false;
+      var error = r.stderr;
+      if (r.json.isNotEmpty) {
+        try {
+          vulns = dedupeVulns(
+              TrivyVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
+          error = null;
+        } catch (e) {
+          parseFailed = true;
+          error = 'Sortie trivy illisible (JSON invalide) : $e';
+        }
+      }
+      setState(() {
+        _isRunning = false;
+        _status = null;
+        _exitCode = r.exitCode;
+        _jsonOutput = r.json;
+        _vulns = vulns;
+        _parseFailed = parseFailed;
+        _error = vulns.isEmpty ? error : null;
+        _layerScan = r.layerScan;
+        _exploitById = const {};
+      });
+      widget.onVulnsChanged?.call(_vulns);
+      widget.onLayerScanChanged?.call(_layerScan);
+      if (vulns.isNotEmpty) _enrich(r.json, vulns);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+          _status = null;
+          _error = '$e';
+          _exitCode = 1;
+        });
+      }
+    }
+  }
+
   void _stop() {
+    _layeredCancelled = true;
+    LayerScanService.kill();
     _runner.kill();
     setState(() => _isRunning = false);
   }
@@ -383,6 +479,8 @@ class _TrivyPanelState extends State<TrivyPanel>
           imagePlatformCtrl: _imagePlatformCtrl,
           sourceKind: _sourceKind,
           onSourceKindChanged: (k) => setState(() => _sourceKind = k),
+          layerSettings: _layerSettings,
+          onLayerSettingsChanged: (v) => setState(() => _layerSettings = v),
           onPickImageArchive: _pickImageArchive,
           onPickImageOciDir: _pickImageOciDir,
           configCtrl: _configCtrl,
@@ -409,6 +507,10 @@ class _TrivyPanelState extends State<TrivyPanel>
           onStop: _stop,
           versionInfo: _versionInfo,
         ),
+        if (_isRunning && _status != null) ...[
+          const LinearProgressIndicator(minHeight: 3),
+          ScanStatusLine(_status!),
+        ],
         if (hasDone && _error != null)
           ErrorBanner(message: _error!),
         if (hasDone && _error == null)
@@ -474,6 +576,7 @@ class _TrivyPanelState extends State<TrivyPanel>
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
                   exploitById: _exploitById,
+                  layerScan: _layerScan,
                   scanTarget: _scannedTarget,
                   enrichPending: _enrichPending,
                   enrichOnline: _enrichOnline,
@@ -506,6 +609,8 @@ class _ConfigSection extends StatelessWidget {
   final TextEditingController imagePlatformCtrl;
   final ScanSourceKind sourceKind;
   final ValueChanged<ScanSourceKind> onSourceKindChanged;
+  final LayerScanSettings layerSettings;
+  final ValueChanged<LayerScanSettings> onLayerSettingsChanged;
   final VoidCallback onPickImageArchive;
   final VoidCallback onPickImageOciDir;
   final TextEditingController configCtrl;
@@ -540,6 +645,8 @@ class _ConfigSection extends StatelessWidget {
     required this.imagePlatformCtrl,
     required this.sourceKind,
     required this.onSourceKindChanged,
+    required this.layerSettings,
+    required this.onLayerSettingsChanged,
     required this.onPickImageArchive,
     required this.onPickImageOciDir,
     required this.configCtrl,
@@ -639,6 +746,12 @@ class _ConfigSection extends StatelessWidget {
                 style:
                     const TextStyle(fontFamily: 'monospace', fontSize: 12),
               ),
+            ),
+            const SizedBox(height: 6),
+            LayerScanOptions(
+              settings: layerSettings,
+              enabled: !isRunning,
+              onChanged: onLayerSettingsChanged,
             ),
           ],
           const SizedBox(height: 10),

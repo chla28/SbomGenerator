@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Vulnérabilités par couche d'image** — CLI : `scan --per-layer`, avec
+  `--layer-scan attribute|each` :
+  - `attribute` (défaut) : un scan du SBOM global, chaque CVE rattachée à la
+    couche d'origine de son paquet (`sbom_generator:layer:index`) ;
+  - `each` : le SBOM de chaque couche est scanné (CVE d'une version
+    remplacée plus haut dans la pile incluses).
+  `scan --image <image>` (exclusif de `--sbom`, avec `--oci-tool` et
+  `--layer-mode`) génère le SBOM — et les SBOM de couche — dans un
+  répertoire temporaire avant de le scanner. Sortie texte : colonne
+  `COUCHE` + tableau « CVE par couche » ; SARIF : propriété `layer` ;
+  rapports markdown/asciidoc/pdf : section « Couches de l'image » et
+  colonne « Couche(s) ». Nouveau module `lib/layer_scan.dart`.
+- **GUI** : option *Par couche* (Rattachement / Chaque couche,
+  Métadonnées / Rootfs) dans les onglets Grype, OSV-Scanner et Trivy en
+  mode image ; en rattachement, la couche native de Trivy (`Layer.DiffID`)
+  et d'OSV-Scanner (`image_origin_details`) est prioritaire. Tableau :
+  colonne *COUCHE*, filtre par couche, regroupement par couche (en-têtes
+  avec instruction et compteurs), exports CSV/PDF avec couches. Tableau de
+  bord : carte *Couches de l'image*, colonne *COUCHE(S)* dans la
+  comparaison inter-scanners, section dans l'export PDF.
+
 ## [1.5.10] - 2026-09-26
 
 ### Added

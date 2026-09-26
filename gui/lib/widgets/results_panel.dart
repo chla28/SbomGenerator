@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/cve_date_filter.dart';
+import '../models/layer_scan.dart';
 import '../models/sbom_result.dart';
 import '../services/scan_enrichment.dart';
 import 'cra_panel.dart';
@@ -68,6 +69,10 @@ class _ResultsPanelState extends State<ResultsPanel>
   List<GrypeVuln>? _grypeVulns;
   List<OsvVuln>? _osvVulns;
   List<TrivyVuln>? _trivyVulns;
+
+  // Analyses par couche des onglets de scan (source image, option « Par
+  // couche ») — transmises au tableau de bord.
+  final Map<String, LayerScanResult> _layerScans = {};
 
   // Signaux d'exploitabilité par scanner (id CVE normalisé → ExploitInfo),
   // fusionnés pour le tableau de bord.
@@ -449,6 +454,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 trivyVulns: _trivyVulns,
                 exploitById: _mergedExploit,
                 scanTargets: _scanTargets,
+                layerScans: Map.of(_layerScans),
               ),
 
               // Tab 3 : Grype
@@ -457,6 +463,9 @@ class _ResultsPanelState extends State<ResultsPanel>
                 onVulnsChanged: (v) => setState(() => _grypeVulns = v),
                 onExploitChanged: (m) => setState(() => _grypeExploit = m),
                 onScanTargetChanged: (t) => setState(() => _grypeTarget = t),
+                onLayerScanChanged: (r) => setState(() => r == null
+                    ? _layerScans.remove('Grype')
+                    : _layerScans['Grype'] = r),
                 dateFilter: _grypeFilter,
                 onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
                 onPropagate: (f) => setState(() {
@@ -471,6 +480,9 @@ class _ResultsPanelState extends State<ResultsPanel>
                 onVulnsChanged: (v) => setState(() => _osvVulns = v),
                 onExploitChanged: (m) => setState(() => _osvExploit = m),
                 onScanTargetChanged: (t) => setState(() => _osvTarget = t),
+                onLayerScanChanged: (r) => setState(() => r == null
+                    ? _layerScans.remove('OSV-Scanner')
+                    : _layerScans['OSV-Scanner'] = r),
                 dateFilter: _osvFilter,
                 onDateFilterChanged: (f) => setState(() => _osvFilter = f),
                 onPropagate: (f) => setState(() {
@@ -485,6 +497,9 @@ class _ResultsPanelState extends State<ResultsPanel>
                 onVulnsChanged: (v) => setState(() => _trivyVulns = v),
                 onExploitChanged: (m) => setState(() => _trivyExploit = m),
                 onScanTargetChanged: (t) => setState(() => _trivyTarget = t),
+                onLayerScanChanged: (r) => setState(() => r == null
+                    ? _layerScans.remove('Trivy')
+                    : _layerScans['Trivy'] = r),
                 dateFilter: _trivyFilter,
                 onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
                 onPropagate: (f) => setState(() {

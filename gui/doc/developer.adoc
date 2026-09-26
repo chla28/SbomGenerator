@@ -112,7 +112,8 @@ gui/
 │   │   ├── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
 │   │   ├── app_themes.dart           # Thèmes de couleur prédéfinis (kAppThemes, AppTheme)
 │   │   ├── cve_date_filter.dart      # Filtre temporel CVE (CveDateFilter, CveDateField)
-│   │   └── layer_nav.dart            # Jeu de SBOM --per-layer : global ↔ couches, champs de couche
+│   │   ├── layer_nav.dart            # Jeu de SBOM --per-layer : global ↔ couches, champs de couche
+│   │   └── layer_scan.dart           # Analyse de vulnérabilités par couche : jeu, résultat, fusions JSON
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
 │   │   ├── grype_runner.dart         # Exécute grype (SBOM ou image), stream d'événements
@@ -120,6 +121,7 @@ gui/
 │   │   ├── trivy_runner.dart         # Exécute trivy (SBOM ou image), stream d'événements
 │   │   ├── vuln_enrichment.dart      # Copie synchro du module CLI : CISA KEV / EPSS / PoC / CVSS
 │   │   ├── scan_enrichment.dart      # Graines depuis le JSON des scanners + normalizeCveId + enrichCves
+│   │   ├── layer_scan_service.dart   # SBOM par couche (CLI --per-layer) + orchestration du scan par couche
 │   │   ├── version_service.dart      # Détection version installée + dernière release GitHub
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème + enrichissement
 │   └── widgets/
@@ -159,6 +161,7 @@ gui/
 │   ├── vuln_shared_test.dart
 │   ├── scan_source_test.dart
 │   ├── layer_nav_test.dart
+│   ├── layer_scan_test.dart
 │   ├── sbom_tree_panel_layers_test.dart
 │   └── sbom_viewer_panel_test.dart
 └── pubspec.yaml
@@ -1212,6 +1215,16 @@ confirmé sur `security-tracker.debian.org` pour `CVE-2026-19499`/`glibc`
 vérification complète dans `user.adoc`, section « Pourquoi Grype,
 OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».
 
+===== Couches de l'image (`layerScans`)
+
+`DashboardPanel.layerScans` (`Map<String, LayerScanResult>`, clé = nom du
+scanner) alimente `_layerSynthesis()` : union des couches, CVE (id
+normalisé) → couches, et couche → CVE → pire sévérité (`_LayerSynthesis`).
+Affichage par `_LayersSection` (carte : couche, digest, instruction, CVE,
+critiques, élevées, méthode par scanner), colonne *COUCHE(S)* dans
+`_CrossScannerSection` / `_CrossRow` (`layersById`), section *Couches de
+l'image* et colonne *Couche(s)* dans `_exportDashboard` (`layers:`).
+
 [[sec-dashboard-export]]
 ===== `_crossScannerRows` / `_exportDashboard` — export AsciiDoc + PDF
 
@@ -1796,6 +1809,15 @@ colonnes KEV/EPSS, filtre « CISA KEV » et badges masqués
 |`enrichOnline` / `onEnrichOnlineChanged`
 |État et bascule du bouton `☁` de la barre d'outils (en ligne / hors-ligne) —
 l'appelant persiste le choix (`SettingsService`) et relance l'enrichissement
+
+|`layerScan`
+|`LayerScanResult?` de l'analyse par couche (voir <<sec-layer-scan>>) : colonne
+*COUCHE* (`_layerChip`, info-bulle digest + instruction), menu de filtre
+`_layerFilter` (`_layerFilterMenu`), bascule `_groupByLayer` (liste
+construite par `_entries` : en-tête `_layerHeader` par couche puis ses
+lignes, « couche inconnue » en fin), bandeau du nombre non rattaché,
+colonne *Couche(s)* dans les exports CSV / AsciiDoc et section *Couches de
+l'image* dans l'AsciiDoc. `null` = aucun de ces éléments
 |===
 
 `_VulnTableViewState<T>` maintient recherche, tri (`VulnSortCol` — étendu avec
@@ -1832,6 +1854,54 @@ conteneur (voir <<sec-scan-image>> côté runners) :
 Ces trois éléments ne portent aucune logique de commande : le choix entre
 "registre / archive / répertoire OCI" et sa traduction en arguments CLI
 reste dans chaque `*_runner.dart` (voir <<sec-scan-image>>), pas ici.
+
+* `LayerScanOptions` — case *Par couche* + `SegmentedButton`
+  Rattachement / Chaque couche et Métadonnées / Rootfs, liée à un
+  `LayerScanSettings` tenu par chaque panneau (`_layerSettings`), affichée
+  sous le champ image. `ScanStatusLine` affiche l'étape en cours sous la
+  barre de progression.
+
+[[sec-layer-scan]]
+=== Analyse par couche — `models/layer_scan.dart` + `services/layer_scan_service.dart`
+
+* `LayeredSbomSet.parse(globalPath, json)` — jeu produit par
+  `sbom-generator --per-layer` : `layerByPackage` (`nom@version` → couche,
+  depuis `sbom_generator:layer:index`), couches (`LayerInfo` : index,
+  digest, instruction depuis `sbom_generator:layers:NNN`, chemin du SBOM de
+  couche via `LayerNav.discover`). `layerOf(nom, version)` (repli sur le nom
+  seul s'il est univoque), `layerOfDigest(digest)` (digest complet, puis
+  préfixe court lu dans le nom de fichier).
+* `vulnLayerKey(id, paquet, version)` — clé commune aux lignes brutes et
+  dédupliquées (`dedupeVulns` fusionne sur les mêmes champs + sévérité) :
+  les couches sont portées par une map `LayerScanResult.layersByKey` plutôt
+  que par les trois modèles `GrypeVuln` / `OsvVuln` / `TrivyVuln`.
+* `mergeGrypeJson` / `mergeOsvJson` / `mergeTrivyJson` — fusion des sorties
+  du mode « chaque couche » en un document au format natif (concaténation
+  de `matches` / `results` / `Results`) : `fromJson`, la vue JSON et
+  l'enrichissement (`seedsFrom…Json`) s'appliquent sans changement.
+* `trivyLayerDigests` (`Layer.DiffID`) / `osvLayerDigests`
+  (`image_origin_details.index` → `image_metadata.layer_metadata[i].diff_id`)
+  — couche native d'une sortie de scan d'image, prioritaire en
+  rattachement. Nécessaire pour OSV-Scanner, qui rapporte le paquet
+  *source* (`expat`) là où le SBOM porte le binaire (`libexpat`).
+* `LayerScanService.prepare(image, layerMode)` — lance le CLI
+  (`SettingsService.cliBinary --image … --oci-tool syft --per-layer
+  --layer-mode … -f cyclonedx`) dans un répertoire temporaire ; résultat
+  mis en cache par (image, mode) pour la session (les trois onglets le
+  partagent), un échec n'est pas mis en cache. `kill()` interrompt la
+  génération (bouton *Stop*).
+* `LayerScanService.run(image, settings, scanOnce, parse, merge,
+  nativeDigests?, onStatus?, isCancelled?, prepareSet?)` — orchestre les
+  deux méthodes ; chaque panneau fournit `_scanOnce(target, useImage)`
+  (son runner consommé jusqu'à l'événement de fin, via `_start`, qui porte
+  les options du panneau), son `fromJson` et sa fonction de fusion.
+  `prepareSet` remplace `prepare` dans les tests.
+
+Chaque panneau (`_analyze`) bascule sur `_analyzeLayered` quand la source
+est une image et `_layerSettings.enabled` ; le résultat est remonté par
+`onLayerScanChanged` (`null` pour un scan sans couches) à `ResultsPanel`,
+qui tient `_layerScans` (clé : nom du scanner) et le passe au tableau de
+bord.
 
 === Export CSV et AsciiDoc + PDF
 

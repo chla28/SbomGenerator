@@ -7,8 +7,10 @@ import 'help_icon.dart';
 import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
+import '../models/layer_scan.dart';
 import '../models/sbom_result.dart';
 import '../services/grype_runner.dart';
+import '../services/layer_scan_service.dart';
 import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
 import '../services/version_service.dart';
@@ -119,6 +121,9 @@ class GrypePanel extends StatefulWidget {
   /// Cible réellement analysée (« SBOM x.cdx.json » ou « image nginx:latest »),
   /// rapportée au lancement du scan — pour l'en-tête des rapports exportés.
   final void Function(String target)? onScanTargetChanged;
+
+  /// Analyse par couche du dernier scan (`null` : scan sans couches).
+  final void Function(LayerScanResult?)? onLayerScanChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -129,6 +134,7 @@ class GrypePanel extends StatefulWidget {
     this.onVulnsChanged,
     this.onExploitChanged,
     this.onScanTargetChanged,
+    this.onLayerScanChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -153,6 +159,12 @@ class _GrypePanelState extends State<GrypePanel>
 
   // Source à analyser : fichier SBOM (par défaut) ou image de conteneur
   ScanSourceKind _sourceKind = ScanSourceKind.sbomFile;
+
+  // Analyse par couche (source image)
+  LayerScanSettings _layerSettings = const LayerScanSettings();
+  LayerScanResult? _layerScan;
+  String? _status;
+  bool _layeredCancelled = false;
 
   // Options scan
   bool _platformLinux = true;
@@ -321,32 +333,19 @@ class _GrypePanelState extends State<GrypePanel>
       _parseFailed = false;
       _exitCode = null;
       _scannedTarget = targetLabel;
+      _layerScan = null;
+      _status = null;
     });
+
+    if (useImage && _layerSettings.enabled) {
+      _analyzeLayered(target);
+      return;
+    }
+    widget.onLayerScanChanged?.call(null);
 
     final tmpl = _templateCtrl.text.trim();
 
-    _runner
-        .run(
-          target: target,
-          failOn: _failOn.isEmpty ? null : _failOn,
-          onlyFixed: _onlyFixed,
-          configFile:
-              _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-          // La case --platform linux (ci-dessous) vise le mode fichier SBOM,
-          // où grype l'ignore (source non-image) : ne pas l'appliquer en
-          // mode image, où 'linux' seul (sans arch) est rejeté par grype
-          // pour une image multi-plateforme — seul le champ dédié ci-dessous
-          // doit fixer la plateforme dans ce mode.
-          platformLinux: useImage ? false : _platformLinux,
-          platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
-              ? _imagePlatformCtrl.text.trim()
-              : null,
-          addCpesIfNone: _addCpesIfNone,
-          byCve: _byCve,
-          distroVersion:
-              _distroVersion.isEmpty ? null : _distroVersion,
-          templateFile: tmpl.isEmpty ? null : tmpl,
-        )
+    _start(target, useImage, templateFile: tmpl.isEmpty ? null : tmpl)
         .listen(
       (event) {
         if (!mounted) return;
@@ -400,6 +399,101 @@ class _GrypePanelState extends State<GrypePanel>
     );
   }
 
+  Stream<GrypeEvent> _start(String target, bool useImage,
+          {String? templateFile}) =>
+      _runner.run(
+        target: target,
+        failOn: _failOn.isEmpty ? null : _failOn,
+        onlyFixed: _onlyFixed,
+        configFile:
+            _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
+        // La case --platform linux (ci-dessous) vise le mode fichier SBOM,
+        // où grype l'ignore (source non-image) : ne pas l'appliquer en
+        // mode image, où 'linux' seul (sans arch) est rejeté par grype
+        // pour une image multi-plateforme — seul le champ dédié ci-dessous
+        // doit fixer la plateforme dans ce mode.
+        platformLinux: useImage ? false : _platformLinux,
+        platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
+            ? _imagePlatformCtrl.text.trim()
+            : null,
+        addCpesIfNone: _addCpesIfNone,
+        byCve: _byCve,
+        distroVersion: _distroVersion.isEmpty ? null : _distroVersion,
+        templateFile: templateFile,
+      );
+
+  Future<ScanOutput> _scanOnce(String target, bool useImage) async {
+    var json = '';
+    var code = 1;
+    String? err;
+    await for (final e in _start(target, useImage)) {
+      switch (e) {
+        case GrypeOutputEvent(:final jsonOutput):
+          json = jsonOutput;
+        case GrypeDoneEvent(:final exitCode, :final stderr):
+          code = exitCode;
+          err = stderr;
+        case GrypeTemplateEvent():
+          break;
+      }
+    }
+    return (json: json, exitCode: code, stderr: err);
+  }
+
+  /// Analyse par couche de l'image [image] (voir [LayerScanService.run]).
+  Future<void> _analyzeLayered(String image) async {
+    _layeredCancelled = false;
+    try {
+      final r = await LayerScanService.run(
+        image: image,
+        settings: _layerSettings,
+        scanOnce: _scanOnce,
+        parse: GrypeVuln.fromJson,
+        merge: mergeGrypeJson,
+        onStatus: (st) {
+          if (mounted) setState(() => _status = st);
+        },
+        isCancelled: () => _layeredCancelled,
+      );
+      if (!mounted) return;
+      var vulns = <GrypeVuln>[];
+      var parseFailed = false;
+      var error = r.stderr;
+      if (r.json.isNotEmpty) {
+        try {
+          vulns = dedupeVulns(
+              GrypeVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
+        } catch (e) {
+          parseFailed = true;
+          error = 'Sortie grype illisible (JSON invalide) : $e';
+        }
+      }
+      setState(() {
+        _isRunning = false;
+        _status = null;
+        _exitCode = r.exitCode;
+        _jsonOutput = r.json;
+        _vulns = vulns;
+        _parseFailed = parseFailed;
+        _error = vulns.isEmpty ? error : null;
+        _layerScan = r.layerScan;
+        _exploitById = const {};
+      });
+      widget.onVulnsChanged?.call(_vulns);
+      widget.onLayerScanChanged?.call(_layerScan);
+      if (vulns.isNotEmpty) _enrich(r.json, vulns);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+          _status = null;
+          _error = '$e';
+          _exitCode = 1;
+        });
+      }
+    }
+  }
+
   /// Enrichit les CVE trouvées avec les signaux d'exploitabilité (best-effort,
   /// asynchrone). Grype fournit déjà KEV/EPSS/CVSS dans son JSON — le réseau ne
   /// sert qu'au signal PoC quand l'enrichissement en ligne est activé.
@@ -427,6 +521,8 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   void _stop() {
+    _layeredCancelled = true;
+    LayerScanService.kill();
     _runner.kill();
     setState(() => _isRunning = false);
   }
@@ -445,6 +541,8 @@ class _GrypePanelState extends State<GrypePanel>
           imagePlatformCtrl: _imagePlatformCtrl,
           sourceKind: _sourceKind,
           onSourceKindChanged: (k) => setState(() => _sourceKind = k),
+          layerSettings: _layerSettings,
+          onLayerSettingsChanged: (v) => setState(() => _layerSettings = v),
           onPickImageArchive: _pickImageArchive,
           onPickImageOciDir: _pickImageOciDir,
           configCtrl: _configCtrl,
@@ -480,6 +578,7 @@ class _GrypePanelState extends State<GrypePanel>
         ),
         const Divider(height: 1),
         if (_isRunning) const LinearProgressIndicator(minHeight: 3),
+        if (_isRunning && _status != null) ScanStatusLine(_status!),
         if (!_isRunning && _exitCode != null)
           _GrypeBanner(
               exitCode: _exitCode!, vulns: _vulns, error: _error),
@@ -557,6 +656,7 @@ class _GrypePanelState extends State<GrypePanel>
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
                   exploitById: _exploitById,
+                  layerScan: _layerScan,
                   scanTarget: _scannedTarget,
                   enrichPending: _enrichPending,
                   enrichOnline: _enrichOnline,
@@ -593,6 +693,8 @@ class _ConfigSection extends StatelessWidget {
   final TextEditingController imagePlatformCtrl;
   final ScanSourceKind sourceKind;
   final ValueChanged<ScanSourceKind> onSourceKindChanged;
+  final LayerScanSettings layerSettings;
+  final ValueChanged<LayerScanSettings> onLayerSettingsChanged;
   final VoidCallback onPickImageArchive;
   final VoidCallback onPickImageOciDir;
   final TextEditingController configCtrl;
@@ -628,6 +730,8 @@ class _ConfigSection extends StatelessWidget {
     required this.imagePlatformCtrl,
     required this.sourceKind,
     required this.onSourceKindChanged,
+    required this.layerSettings,
+    required this.onLayerSettingsChanged,
     required this.onPickImageArchive,
     required this.onPickImageOciDir,
     required this.configCtrl,
@@ -739,6 +843,12 @@ class _ConfigSection extends StatelessWidget {
                 ),
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               ),
+            ),
+            const SizedBox(height: 6),
+            LayerScanOptions(
+              settings: layerSettings,
+              enabled: !isRunning,
+              onChanged: onLayerSettingsChanged,
             ),
           ],
           const SizedBox(height: 10),

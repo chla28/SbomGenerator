@@ -75,6 +75,7 @@ sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator licenses -i <sbom-source> -o <licences.adoc>
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
+sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator cra --sbom <fichier> [options]
 ```
 
@@ -611,6 +612,35 @@ avec `--sort risk`. L'absence d'un scanner demandé est signalée sans faire
 échouer les autres. Codes de retour (`text` / `sarif`) : `0` = aucune
 vulnérabilité dans la plage demandée, `1` = au moins une trouvée (ou erreur
 de scanner) ; les formats rapport renvoient `0` dès qu'un fichier est écrit.
+
+**Vulnérabilités par couche d'image (`--per-layer`)** : rattache chaque CVE
+à la couche de l'image qui apporte le paquet vulnérable.
+
+```bash
+# Image analysée directement : jeu de SBOM par couche généré à la volée
+./sbom_generator scan --image ./app.tar --per-layer --scanner all
+
+# SBOM de chaque couche scanné, couches calculées en mode rootfs, rapport PDF
+./sbom_generator scan --image nginx:latest --per-layer --layer-scan each \
+  --layer-mode rootfs --scanner all -f pdf -o nginx-couches.pdf
+
+# À partir d'un jeu déjà produit par --per-layer (SBOM de couche à côté)
+./sbom_generator scan --sbom out/app.cdx.json --per-layer
+```
+
+| `--layer-scan` | Principe | Ce qu'on voit |
+|---|---|---|
+| `attribute` *(défaut)* | un seul scan du SBOM global ; chaque CVE est rattachée à la couche d'origine de son paquet (`sbom_generator:layer:index`) | les CVE de l'image finale, par couche qui les a introduites |
+| `each` | le SBOM de chaque couche est scanné séparément | en plus, les CVE d'une version introduite par une couche puis remplacée plus haut (avec `--layer-mode rootfs`) ; une CVE peut apparaître dans plusieurs couches |
+
+`--image` (exclusif de `--sbom`) génère d'abord le SBOM CycloneDX de l'image
+(`--oci-tool`, défaut `syft` ; avec `--per-layer`, aussi les SBOM de couche,
+`--layer-mode` au choix) dans un répertoire temporaire supprimé en fin
+d'exécution. Sortie texte : colonne `COUCHE` et tableau « CVE par couche »
+(digest, instruction, nombre de CVE, critiques, élevées) ; SARIF : propriété
+`layer` ; rapports markdown/asciidoc/pdf : section « Couches de l'image » et
+colonne « Couche(s) » dans la comparaison inter-scanners. En `attribute`, une
+CVE dont le paquet est absent du SBOM global reste sans couche (signalé).
 
 **Exploitabilité et exploitation active** : chaque CVE est enrichie (actif
 par défaut) avec **CISA KEV** (exploitée dans la nature), **EPSS**

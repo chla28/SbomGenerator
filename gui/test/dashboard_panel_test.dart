@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sbom_generator_gui/models/layer_scan.dart';
 import 'package:sbom_generator_gui/services/scan_enrichment.dart';
 import 'package:sbom_generator_gui/widgets/dashboard_panel.dart';
 import 'package:sbom_generator_gui/widgets/grype_panel.dart';
@@ -343,5 +344,45 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('RAPPORTÉ PAR'), findsNothing);
     });
+  });
+
+  testWidgets('analyse par couche : section « Couches » et colonne Couche(s)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    LayerScanResult scan(Map<String, Set<int>> byKey) => LayerScanResult(
+          mode: LayerScanMode.attribute,
+          layers: const [
+            LayerInfo(index: 1, digest: 'sha256:aaaaaaaaaaaaaaaa', createdBy: 'ADD base'),
+            LayerInfo(index: 2, digest: 'sha256:bbbbbbbbbbbbbbbb', createdBy: 'RUN apk add curl'),
+          ],
+          layersByKey: byKey,
+        );
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: DashboardPanel(
+          grypeVulns: [_g('CVE-2026-0001', 'Critical'), _g('CVE-2026-0002', 'High')],
+          osvVulns: [_o('CVE-2026-0002', 'High')],
+          trivyVulns: null,
+          layerScans: {
+            'Grype': scan({
+              vulnLayerKey('CVE-2026-0001', 'pkg', '1.0'): {1},
+              vulnLayerKey('CVE-2026-0002', 'pkg', '1.0'): {2},
+            }),
+            'OSV-Scanner': scan({
+              vulnLayerKey('CVE-2026-0002', 'pkg', '1.0'): {2},
+            }),
+          },
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Couches de l\'image (2)'), findsOneWidget);
+    expect(find.text('RUN apk add curl'), findsOneWidget);
+    expect(find.text('COUCHE(S)'), findsOneWidget);
+    expect(find.textContaining('Grype : rattachement'), findsOneWidget);
   });
 }

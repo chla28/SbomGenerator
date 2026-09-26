@@ -19,6 +19,7 @@ import 'package:sbom_generator/asciidoc_generator.dart';
 import 'package:sbom_generator/html_generator.dart';
 import 'package:sbom_generator/oci_parser.dart';
 import 'package:sbom_generator/image_layers.dart';
+import 'package:sbom_generator/layer_scan.dart';
 import 'package:sbom_generator/sbom_diff.dart';
 import 'package:sbom_generator/sbom_merger.dart';
 import 'package:sbom_generator/policy_checker.dart';
@@ -1449,8 +1450,36 @@ Future<void> _runScan(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('sbom',
         abbr: 's',
-        mandatory: true,
-        help: 'Chemin vers le fichier SBOM à analyser (.cdx.json, .spdx.json…)')
+        help: 'Chemin vers le fichier SBOM à analyser (.cdx.json, .spdx.json…).\n'
+            'Exclusif de --image.')
+    ..addOption('image',
+        abbr: 'I',
+        help: 'Image de conteneur à analyser (registre, archive tar, OCI\n'
+            'layout) : son SBOM CycloneDX est d\'abord généré (via\n'
+            '--oci-tool) dans un répertoire temporaire, puis scanné.\n'
+            'Exclusif de --sbom.')
+    ..addOption('oci-tool',
+        defaultsTo: 'syft',
+        allowed: _validOciTools,
+        help: 'Backend de génération du SBOM pour --image.')
+    ..addFlag('per-layer',
+        negatable: false,
+        help: 'Vulnérabilités par couche d\'image. Avec --sbom, le SBOM doit\n'
+            'être le SBOM global d\'un jeu produit par --per-layer (SBOM de\n'
+            'couche à côté) ; avec --image, le jeu est généré.')
+    ..addOption('layer-scan',
+        allowed: validLayerScanModes,
+        defaultsTo: 'attribute',
+        help: 'Méthode de --per-layer :\n'
+            '  attribute  un scan du SBOM global, chaque CVE rattachée à la\n'
+            '             couche d\'origine de son paquet (défaut)\n'
+            '  each       SBOM de chaque couche scanné séparément (CVE\n'
+            '             introduites puis corrigées plus haut incluses)')
+    ..addOption('layer-mode',
+        allowed: validLayerModes,
+        help: 'Avec --image --per-layer : calcul des couches (voir\n'
+            '--layer-mode de la génération ; défaut metadata pour\n'
+            'syft/trivy, rootfs sinon).')
     ..addOption('scanner',
         abbr: 'S',
         defaultsTo: 'grype',
@@ -1538,7 +1567,21 @@ Future<void> _runScan(List<String> arguments) async {
     exit(0);
   }
 
-  final sbomFile = args['sbom'] as String;
+  final imageRef = args['image'] as String?;
+  if ((args['sbom'] == null) == (imageRef == null)) {
+    stderr.writeln('scan: indiquer --sbom <fichier> ou --image <image> '
+        '(exactement l\'un des deux).');
+    _printScanUsage(parser);
+    exit(1);
+  }
+  final perLayer = args['per-layer'] as bool;
+  final layerScan = args['layer-scan'] as String;
+  final layerMode = args['layer-mode'] as String?;
+  if (layerMode != null && (imageRef == null || !perLayer)) {
+    stderr.writeln('scan: --layer-mode nécessite --image et --per-layer.');
+    exit(1);
+  }
+  var sbomFile = (args['sbom'] as String?) ?? '';
   final scanner = args['scanner'] as String;
   final dateField = args['cve-date-field'] as String;
   final includeUndated = args['include-undated'] as bool;
@@ -1576,7 +1619,7 @@ Future<void> _runScan(List<String> arguments) async {
     stderr.writeln('scan: format invalide "$format". Valides : ${_validScanFormats.join(', ')}');
     exit(1);
   }
-  if (!await File(sbomFile).exists()) {
+  if (imageRef == null && !await File(sbomFile).exists()) {
     stderr.writeln('scan: fichier SBOM introuvable : $sbomFile');
     exit(1);
   }
@@ -1612,9 +1655,74 @@ Future<void> _runScan(List<String> arguments) async {
       : [scanner];
 
   final quiet = format == 'sarif' || isReport;
+
+  // --image : SBOM (et SBOM de couche) générés dans un répertoire temporaire,
+  // supprimé avant chaque sortie.
+  Directory? tmpDir;
+  Future<Never> quit(int code) async {
+    final dir = tmpDir;
+    if (dir != null) {
+      await Process.run('chmod', ['-R', 'u+rwX', dir.path]);
+      await dir.delete(recursive: true);
+    }
+    exit(code);
+  }
+
+  if (imageRef != null) {
+    tmpDir = await Directory.systemTemp.createTemp('sbom_scan_');
+    sbomFile = '${tmpDir.path}/image.cdx.json';
+    stderr.writeln('Génération du SBOM de l\'image $imageRef…');
+    final code = await _runSelf([
+      '--image', imageRef,
+      '--oci-tool', args['oci-tool'] as String,
+      '-f', 'cyclonedx',
+      '-o', sbomFile,
+      if (perLayer) '--per-layer',
+      if (layerMode != null) ...['--layer-mode', layerMode],
+    ]);
+    if (code != 0 || !File(sbomFile).existsSync()) {
+      stderr.writeln('scan: échec de la génération du SBOM de $imageRef '
+          '(code $code).');
+      await quit(1);
+    }
+  }
+
+  LayeredSbomSet? layerSet;
+  if (perLayer) {
+    layerSet = LayeredSbomSet.load(sbomFile);
+    if (layerSet == null || layerSet.layers.isEmpty) {
+      stderr.writeln('scan: $sbomFile ne porte aucune information de couche '
+          '— produire le SBOM avec --per-layer (ou utiliser --image).');
+      await quit(1);
+    }
+  }
+
   final resultsByScanner = <String, List<Map<String, dynamic>>>{};
   for (final s in scanners) {
-    final vulns = await _runScanner(s, sbomFile, quiet: quiet);
+    List<Map<String, dynamic>>? vulns;
+    if (layerSet != null && layerScan == 'each') {
+      // Un scan par SBOM de couche ; chaque résultat porte sa couche.
+      if (!quiet) stdout.writeln('\n── ${_scannerTitle(s)} (par couche) '
+          '──────────────────────────');
+      for (final l in layerSet.layers) {
+        if (l.path == null) continue;
+        final found = await _runScanner(s, l.path!, quiet: true);
+        if (found == null) continue;
+        for (final v in found) {
+          v['layer'] = l.index;
+        }
+        (vulns ??= []).addAll(found);
+      }
+    } else {
+      vulns = await _runScanner(s, sbomFile, quiet: quiet);
+      if (vulns != null && layerSet != null) {
+        final unknown = attributeLayers(vulns, layerSet);
+        if (unknown > 0 && !quiet) {
+          stderr.writeln('  $unknown résultat(s) sans couche d\'origine connue '
+              '(paquet absent du SBOM global).');
+        }
+      }
+    }
     if (vulns == null) continue;
     resultsByScanner[s] =
         _filterByDate(vulns, dateField, after, before, includeUndated);
@@ -1646,9 +1754,13 @@ Future<void> _runScan(List<String> arguments) async {
     }
     totalShown += filtered.length;
   }
+  if (!quiet && layerSet != null) {
+    _printLayerSummary(resultsByScanner, layerSet, layerScan);
+  }
 
   if (format == 'sarif') {
-    final sarif = _buildSarifReport(resultsByScanner, sbomFile, exploitById);
+    final sarif = _buildSarifReport(
+        resultsByScanner, imageRef ?? sbomFile, exploitById);
     final json = const JsonEncoder.withIndent('  ').convert(sarif);
     if (outputPath != null) {
       await File(outputPath).writeAsString(json);
@@ -1662,10 +1774,12 @@ Future<void> _runScan(List<String> arguments) async {
     if (resultsByScanner.isEmpty) {
       stderr.writeln(
           'scan: aucun scanner n\'a produit de résultat — rapport non généré.');
-      exit(1);
+      await quit(1);
     }
     final gen = ScanReportGenerator(
-      sbomPath: sbomFile,
+      sbomPath: imageRef != null ? 'image $imageRef' : sbomFile,
+      layers: layerSet?.layers ?? const [],
+      layerScanMode: layerSet != null ? layerScan : null,
       resultsByScanner: resultsByScanner,
       exploitById: exploitById,
       toolVersions: {
@@ -1679,10 +1793,50 @@ Future<void> _runScan(List<String> arguments) async {
     _printSeverityAlerts(gen, colorMode, exploitById);
     await _writeScanReport(format, outputPath!, gen);
     // Un rapport produit n'est pas un échec, quel que soit le nombre de CVE.
-    exit(0);
+    await quit(0);
   }
 
-  exit(totalShown > 0 ? 1 : 0);
+  await quit(totalShown > 0 ? 1 : 0);
+}
+
+String _scannerTitle(String s) =>
+    {'grype': 'Grype', 'osv': 'OSV-Scanner', 'trivy': 'Trivy'}[s] ?? s;
+
+/// Relance ce même programme (script `dart` ou exécutable compilé) avec
+/// [args], sa sortie renvoyée sur stderr (stdout peut porter du SARIF).
+Future<int> _runSelf(List<String> args) async {
+  final script = Platform.script.toFilePath();
+  final viaVm = script.endsWith('.dart') ||
+      script.endsWith('.snapshot') ||
+      script.endsWith('.dill');
+  final p = await Process.start(
+      Platform.resolvedExecutable, [if (viaVm) script, ...args]);
+  await Future.wait([
+    p.stdout.forEach(stderr.add),
+    p.stderr.forEach(stderr.add),
+  ]);
+  return p.exitCode;
+}
+
+/// Tableau console « CVE par couche » (`scan --per-layer`, format texte).
+void _printLayerSummary(
+  Map<String, List<Map<String, dynamic>>> resultsByScanner,
+  LayeredSbomSet set,
+  String layerScan,
+) {
+  stdout.writeln('\n── CVE par couche (${layerScan == 'each' ? 'scan de chaque '
+      'couche' : 'rattachement au SBOM global'}) ──────────');
+  stdout.writeln('${'COUCHE'.padRight(8)}  ${'DIGEST'.padRight(12)}  '
+      '${'CVE'.padLeft(4)}  ${'CRIT'.padLeft(4)}  ${'HIGH'.padLeft(4)}  '
+      'INSTRUCTION');
+  for (final l in summarizeByLayer(resultsByScanner, set.layers)) {
+    final by = l.layer.createdBy ?? '';
+    stdout.writeln('${'${l.layer.index}'.padRight(8)}  '
+        '${l.layer.shortDigest.padRight(12)}  '
+        '${'${l.total}'.padLeft(4)}  ${'${l.count('critical')}'.padLeft(4)}  '
+        '${'${l.count('high')}'.padLeft(4)}  '
+        '${by.length > 70 ? '${by.substring(0, 69)}…' : by}');
+  }
 }
 
 /// Affiche, une ligne par CVE unique, les vulnérabilités Critical (rouge) et
@@ -2186,10 +2340,12 @@ void _printScanResults(
   if (vulns.isEmpty) return;
 
   const w0 = 10, w1 = 20, w2 = 30, w3 = 4, w4 = 10;
+  final withLayer = vulns.any((v) => v['layer'] != null);
   stdout.writeln('${'SÉVÉRITÉ'.padRight(w0)}  ${'CVE / ID'.padRight(w1)}  '
-      '${'PAQUET'.padRight(w2)}  ${'KEV'.padRight(w3)}  ${'EPSS'.padRight(w4)}  PoC');
+      '${'PAQUET'.padRight(w2)}  ${'KEV'.padRight(w3)}  ${'EPSS'.padRight(w4)}  '
+      '${withLayer ? 'PoC  COUCHE' : 'PoC'}');
   stdout.writeln('${'-' * w0}  ${'-' * w1}  ${'-' * w2}  ${'-' * w3}  '
-      '${'-' * w4}  ---');
+      '${'-' * w4}  ---${withLayer ? '  ------' : ''}');
   for (final v in vulns) {
     final e = ex(v);
     final sev = (v['severity'] as String).padRight(w0);
@@ -2204,7 +2360,10 @@ void _printScanResults(
     final poc = e.pocCount > 0
         ? '✓${e.pocCount}'
         : (e.pocKnown ? '✓' : (e.hasAnySignal || e.cvssVector != null ? '—' : '?'));
-    stdout.writeln('$sev  $id  $pkg  $kev  $epss  $poc');
+    final layer = withLayer ? '  ${poc.padRight(3)}  ${v['layer'] ?? '?'}' : '';
+    stdout.writeln(withLayer
+        ? '$sev  $id  $pkg  $kev  $epss$layer'
+        : '$sev  $id  $pkg  $kev  $epss  $poc');
   }
 }
 
@@ -2219,6 +2378,7 @@ sbom_generator scan – Analyser les CVE d'un fichier SBOM avec filtre par date.
 
 Usage:
   sbom-generator scan --sbom <fichier.cdx.json> [options]
+  sbom-generator scan --image <image> [--per-layer] [options]
 
 ${parser.usage}
 
@@ -2251,6 +2411,17 @@ Exemples:
 
   # Hors-ligne : pas de requête réseau (KEV/EPSS/PoC seulement via Grype + cache)
   sbom-generator scan --sbom sbom.cdx.json --no-enrich
+
+  # CVE par couche d'une image (SBOM généré à la volée, un scan rattaché)
+  sbom-generator scan --image ./app.tar --per-layer --scanner all
+
+  # Idem, SBOM de chaque couche scanné (couches calculées en mode rootfs),
+  # rapport PDF avec section « Couches de l'image »
+  sbom-generator scan --image nginx:latest --per-layer --layer-scan each \\
+    --layer-mode rootfs --scanner all -f pdf -o nginx-layers.pdf
+
+  # À partir d'un jeu déjà produit par sbom-generator --per-layer
+  sbom-generator scan --sbom out/app.cdx.json --per-layer
 
 Enrichissement : chaque CVE est complétée par CISA KEV (exploitée dans la
 nature), EPSS (probabilité d'exploitation à 30 jours), un signal PoC public
@@ -2318,11 +2489,15 @@ Map<String, dynamic> _buildSarifReport(
             },
           });
 
+      final layer = v['layer'];
       results.add({
         'ruleId': id,
         'level': _sarifLevel(severity),
-        'message': {'text': 'Paquet vulnérable : $pkg (sévérité $severity)'},
-        'properties': exploitProps,
+        'message': {
+          'text': 'Paquet vulnérable : $pkg (sévérité $severity)'
+              '${layer != null ? ' — couche $layer' : ''}',
+        },
+        'properties': {...exploitProps, if (layer != null) 'layer': layer},
         'locations': [
           {
             'physicalLocation': {

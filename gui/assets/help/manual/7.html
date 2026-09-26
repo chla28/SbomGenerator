@@ -124,9 +124,102 @@ Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_options_de_scan">8.3. Options de scan</h3>
+<h3 id="sec-scan-couches">8.3. Analyse par couche (source « Image de conteneur »)</h3>
+<div class="paragraph">
+<p>En mode <strong>Image de conteneur</strong>, la case <strong>Par couche</strong> (commune aux trois
+onglets de scan) attribue chaque vulnérabilité à la <strong>couche</strong> de l’image qui
+apporte le paquet vulnérable. L’application génère d’abord, via
+<code>sbom-generator --image … --per-layer</code> (backend syft), un SBOM global et un
+SBOM par couche dans un répertoire temporaire ; ce jeu est réutilisé par les
+trois onglets tant que l’image et le calcul ne changent pas.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 14.2857%;">
+<col style="width: 42.8571%;">
+<col style="width: 42.8572%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Méthode</th>
+<th class="tableblock halign-left valign-top">Principe</th>
+<th class="tableblock halign-left valign-top">Ce qu’on voit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rattachement (défaut)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Un seul scan de l’image, comme sans l’option ; chaque vulnérabilité est
+rattachée à la couche d’origine de son paquet. Trivy et OSV-Scanner
+indiquent eux-mêmes cette couche (<code>Layer.DiffID</code>, <code>image_origin_details</code>),
+utilisée en priorité ; sinon, le paquet est cherché dans le SBOM global.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Les CVE de l’image finale, par couche qui les a introduites.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Chaque couche</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Le SBOM de chaque couche est scanné séparément (un scan par couche) ;
+les sorties sont fusionnées.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">En plus, les CVE d’une version introduite par une couche puis remplacée
+plus haut (avec le calcul <strong>Rootfs</strong>). Une CVE peut apparaître dans
+plusieurs couches.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Le second sélecteur choisit le calcul des couches : <strong>Métadonnées</strong>
+(couche d’origine indiquée par syft — rapide, ajouts seulement) ou
+<strong>Rootfs</strong> (couches appliquées une à une et réanalysées — ajouts,
+modifications, suppressions ; plus lent). Pendant l’analyse, une ligne
+d’état indique l’étape en cours (préparation des SBOM, couche i/N…) ; le
+bouton <strong>Stop</strong> interrompt aussi la génération et les scans restants.</p>
+</div>
+<div class="paragraph">
+<p>Dans la <strong>Vue Table</strong> (voir <a href="#sec-vue-table">[sec-vue-table]</a>) :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>une colonne <strong>COUCHE</strong> affiche la ou les couches de chaque vulnérabilité
+(<code>?</code> si le paquet est absent du SBOM de l’image — un bandeau en indique
+le nombre) ; l’info-bulle rappelle le digest et l’instruction de build ;</p>
+</li>
+<li>
+<p>le menu <strong>Toutes les couches / Couche N (n)</strong> filtre sur une couche ;</p>
+</li>
+<li>
+<p>le bouton <strong>Grouper par couche</strong> (icône de couches) regroupe la liste sous
+un en-tête par couche — digest, instruction de build et compteurs par
+sévérité ;</p>
+</li>
+<li>
+<p>les exports CSV et AsciiDoc + PDF ajoutent une colonne <strong>Couche(s)</strong> et,
+pour le PDF, une section <strong>Couches de l’image</strong>.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Le <strong>Tableau de bord</strong> reprend ces informations (voir <a href="#sec-dashboard-couches">Couches de l’image</a>).</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+En mode <strong>Chaque couche</strong>, OSV-Scanner analyse des SBOM et non l’image :
+il trouve alors peu ou pas de CVE sur les paquets système (voir
+<a href="#sec-pourquoi-ecarts-scanners">[sec-pourquoi-ecarts-scanners]</a>) — préférer le <strong>Rattachement</strong> avec cet
+outil.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_options_de_scan">8.4. Options de scan</h3>
 <div class="sect3">
-<h4 id="_platform_linux">8.3.1. <code>--platform linux</code></h4>
+<h4 id="_platform_linux">8.4.1. <code>--platform linux</code></h4>
 <div class="paragraph">
 <p>Force grype à considérer la plateforme cible comme Linux lors de la
 résolution des vulnérabilités, en mode <strong>Fichier SBOM</strong> uniquement. Recommandé
@@ -152,7 +245,7 @@ architecture, est d’ailleurs rejeté par grype sur une image multi-plateforme)
 </div>
 </div>
 <div class="sect3">
-<h4 id="_add_cpes_if_none">8.3.2. <code>--add-cpes-if-none</code></h4>
+<h4 id="_add_cpes_if_none">8.4.2. <code>--add-cpes-if-none</code></h4>
 <div class="paragraph">
 <p>Grype utilise les identifiants <strong>CPE</strong> (Common Platform Enumeration) pour
 faire correspondre les paquets aux entrées CVE. Si un paquet du SBOM ne
@@ -165,7 +258,7 @@ automatiquement depuis le nom et la version du paquet.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_by_cve">8.3.3. <code>--by-cve</code></h4>
+<h4 id="_by_cve">8.4.3. <code>--by-cve</code></h4>
 <div class="paragraph">
 <p>Sans cette option, grype groupe les résultats par identifiant <strong>GHSA</strong>
 (GitHub Security Advisory) quand il est disponible.
@@ -179,7 +272,7 @@ défauts, etc.) ou des référentiels de vulnérabilités internes.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_distro_rhelversion">8.3.4. <code>--distro rhel:&lt;version&gt;</code></h4>
+<h4 id="_distro_rhelversion">8.4.4. <code>--distro rhel:&lt;version&gt;</code></h4>
 <div class="paragraph">
 <p>Précise la distribution Linux cible. Sans cette option, grype tente
 de la déduire du SBOM, ce qui peut échouer ou produire des correspondances
@@ -206,7 +299,7 @@ ou des faux-négatifs. Vérifiez la version exacte de votre système avec
 </div>
 </div>
 <div class="sect3">
-<h4 id="_fail_on_sévérité">8.3.5. <code>--fail-on &lt;sévérité&gt;</code></h4>
+<h4 id="_fail_on_sévérité">8.4.5. <code>--fail-on &lt;sévérité&gt;</code></h4>
 <div class="paragraph">
 <p>Contrôle le code de retour de grype. Avec cette option, grype retourne
 un code d’erreur (non nul) si au moins une vulnérabilité du niveau
@@ -222,7 +315,7 @@ si grype a retourné une erreur, fond vert sinon.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_only_fixed">8.3.6. <code>--only-fixed</code></h4>
+<h4 id="_only_fixed">8.4.6. <code>--only-fixed</code></h4>
 <div class="paragraph">
 <p>N’affiche que les vulnérabilités pour lesquelles une version corrigée
 est disponible. Permet de se concentrer sur les actions immédiatement
@@ -231,7 +324,7 @@ réalisables.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_template_de_sortie_t">8.4. Template de sortie (<code>-t</code>)</h3>
+<h3 id="_template_de_sortie_t">8.5. Template de sortie (<code>-t</code>)</h3>
 <div class="paragraph">
 <p>Le champ <strong>Template (-t)</strong> permet de générer une sortie personnalisée
 (CSV, HTML, texte) via un fichier template Go.</p>
@@ -270,7 +363,7 @@ JSON (pour la vue Table) et la sortie template (via un fichier temporaire).
 </div>
 </div>
 <div class="sect2">
-<h3 id="_fichier_de_configuration_grype_yaml">8.5. Fichier de configuration (<code>grype.yaml</code>)</h3>
+<h3 id="_fichier_de_configuration_grype_yaml">8.6. Fichier de configuration (<code>grype.yaml</code>)</h3>
 <div class="paragraph">
 <p>Chemin vers un fichier de configuration grype au format YAML.
 Permet de définir des règles d’ignorance, des bases de données personnalisées,
@@ -285,16 +378,16 @@ configuration grype par défaut (<code>~/.grype.yaml</code> si elle existe).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_lancer_et_arrêter_lanalyse">8.6. Lancer et arrêter l’analyse</h3>
+<h3 id="_lancer_et_arrêter_lanalyse">8.7. Lancer et arrêter l’analyse</h3>
 <div class="paragraph">
 <p>Cliquez sur <strong>Analyser</strong> pour démarrer. Une barre de progression linéaire
 s’affiche pendant l’exécution. Le bouton devient <strong>Stop</strong> pour interrompre.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_interprétation_des_résultats">8.7. Interprétation des résultats</h3>
+<h3 id="_interprétation_des_résultats">8.8. Interprétation des résultats</h3>
 <div class="sect3">
-<h4 id="_bannière_de_résumé">8.7.1. Bannière de résumé</h4>
+<h4 id="_bannière_de_résumé">8.8.1. Bannière de résumé</h4>
 <div class="paragraph">
 <p>Apparaît une fois l’analyse terminée, avant les onglets de résultats.</p>
 </div>
@@ -330,7 +423,7 @@ s’affiche pendant l’exécution. Le bouton devient <strong>Stop</strong> pour
 </table>
 </div>
 <div class="sect3">
-<h4 id="_vue_table">8.7.2. Vue Table</h4>
+<h4 id="_vue_table">8.8.2. Vue Table</h4>
 <div id="sec-vue-table" class="paragraph">
 <p>La vue Table affiche une barre d’outils de recherche/tri, les filtres par
 sévérité, puis la liste des vulnérabilités :</p>
@@ -488,7 +581,7 @@ bouton <strong>copier l’identifiant</strong>. Re-cliquer sur la ligne la refer
 </div>
 </div>
 <div class="sect3">
-<h4 id="_exploitabilité_et_exploitation_active">8.7.3. Exploitabilité et exploitation active</h4>
+<h4 id="_exploitabilité_et_exploitation_active">8.8.3. Exploitabilité et exploitation active</h4>
 <div id="sec-exploitabilite" class="paragraph">
 <p>Après chaque scan, l’application enrichit les CVE trouvées avec quatre signaux
 de priorisation, affichés sous forme de pastilles sous chaque ligne et de
@@ -541,7 +634,7 @@ tête.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_vue_json">8.7.4. Vue JSON</h4>
+<h4 id="_vue_json">8.8.4. Vue JSON</h4>
 <div id="sec-vue-json" class="paragraph">
 <p>Affiche la sortie JSON brute de grype, formatée et indentée. Utile pour
 inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées…).</p>
@@ -551,7 +644,7 @@ inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées�
 </div>
 </div>
 <div class="sect3">
-<h4 id="_vue_template">8.7.5. Vue Template</h4>
+<h4 id="_vue_template">8.8.5. Vue Template</h4>
 <div id="sec-vue-template" class="paragraph">
 <p>Affiche le résultat de la génération du fichier template (CSV ou autre format
 personnalisé). Visible uniquement si un fichier template a été configuré

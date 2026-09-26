@@ -1145,7 +1145,7 @@ if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     r
 `_runScan(args)` interroge un ou plusieurs scanners externes sur un SBOM
 déjà généré, avec filtrage temporel :
 
-Options : `--sbom <fichier>` (obligatoire), `--scanner <grype|osv|trivy|all>`
+Options : `--sbom <fichier>` (ou `--image`, voir plus bas), `--scanner <grype|osv|trivy|all>`
 (défaut `grype`), `--cve-after`/`--cve-before <AAAA-MM-JJ>`,
 `--cve-date-field <published|modified|latest>`, `--include-undated`,
 `--format <text|sarif|markdown|asciidoc|pdf>` (défaut `text`),
@@ -1174,6 +1174,42 @@ le signal PoC. Détail complet : `doc/developer.adoc`.
 Code retour (`text` / `sarif`) : `0` si aucune vulnérabilité dans la plage,
 `1` sinon (ou erreur de scanner) ; les formats rapport renvoient `0` dès
 qu'un fichier est écrit.
+
+#### Vulnérabilités par couche (`--image`, `--per-layer`) — `lib/layer_scan.dart`
+
+Options : `--image <image>` (exclusif de `--sbom`, qui n'est plus
+obligatoire), `--oci-tool` (défaut `syft`), `--per-layer`,
+`--layer-scan <attribute|each>` (défaut `attribute`), `--layer-mode
+<metadata|rootfs>` (seulement avec `--image --per-layer`).
+
+- **`--image`** : `_runSelf()` relance ce même programme (script `dart` —
+  `Platform.script` en `.dart`/`.snapshot`/`.dill` passé à
+  `Platform.resolvedExecutable` — ou exécutable compilé) avec
+  `--image … -f cyclonedx -o <tmp>/image.cdx.json [--per-layer
+  --layer-mode …]`, sortie renvoyée sur stderr (stdout peut porter du
+  SARIF). Garantit un jeu de SBOM identique à celui de la génération
+  normale sans dupliquer le pipeline de `main()`. Le répertoire temporaire
+  est supprimé par la fonction locale `quit(code)`, qui remplace les
+  `exit()` de `_runScan` après sa création.
+- **`LayeredSbomSet.load(globalPath)`** relit le jeu : composants du global
+  (`sbom_generator:layer:index` — propriétés CycloneDX, annotations SPDX
+  2.3 / 3.0) → `layerByPackage` (`nom@version` → couche), résumés
+  `sbom_generator:layers:NNN` (digest, instruction), SBOM de couche
+  retrouvés par leur nom (`layerFilesOf` : même base, même extension ;
+  global sans extension → couches `.cdx.json`). `null` sans information de
+  couche → `scan` s'arrête.
+- **`attribute`** : scan habituel du global, puis `attributeLayers()` pose
+  la clé `layer` (index) sur chaque finding (`package` = `nom@version`,
+  repli sur le nom seul s'il est univoque — les scanners normalisent parfois
+  la version).
+- **`each`** : `_runScanner()` sur chaque SBOM de couche (`quiet: true`,
+  un seul en-tête par scanner), `layer` posé sur chaque finding, listes
+  concaténées. Une même CVE peut donc figurer dans plusieurs couches.
+- **Rendu** : `_printScanResults` ajoute la colonne `COUCHE` dès qu'un
+  finding porte `layer` ; `_printLayerSummary` (texte) et
+  `ScanReportGenerator(layers:, layerScanMode:)` s'appuient sur
+  `summarizeByLayer()` (CVE uniques par couche, id normalisé, pire sévérité
+  entre scanners) ; SARIF : propriété `layer` + mention dans le message.
 
 ### Options CI/CD
 

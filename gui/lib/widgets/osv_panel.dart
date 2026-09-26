@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
+import '../models/layer_scan.dart';
+import '../services/layer_scan_service.dart';
 import '../services/osv_runner.dart';
 import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
@@ -181,6 +183,9 @@ class OsvPanel extends StatefulWidget {
 
   /// Cible réellement analysée — pour l'en-tête des rapports exportés.
   final void Function(String target)? onScanTargetChanged;
+
+  /// Analyse par couche du dernier scan (`null` : scan sans couches).
+  final void Function(LayerScanResult?)? onLayerScanChanged;
   final CveDateFilter dateFilter;
   final void Function(CveDateFilter)? onDateFilterChanged;
   final void Function(CveDateFilter)? onPropagate;
@@ -191,6 +196,7 @@ class OsvPanel extends StatefulWidget {
     this.onVulnsChanged,
     this.onExploitChanged,
     this.onScanTargetChanged,
+    this.onLayerScanChanged,
     this.dateFilter = CveDateFilter.empty,
     this.onDateFilterChanged,
     this.onPropagate,
@@ -212,6 +218,12 @@ class _OsvPanelState extends State<OsvPanel>
 
   // Source à analyser : fichier SBOM (par défaut) ou image de conteneur
   ScanSourceKind _sourceKind = ScanSourceKind.sbomFile;
+
+  // Analyse par couche (source image)
+  LayerScanSettings _layerSettings = const LayerScanSettings();
+  LayerScanResult? _layerScan;
+  String? _status;
+  bool _layeredCancelled = false;
 
   bool _isRunning = false;
   List<OsvVuln> _vulns = [];
@@ -357,16 +369,17 @@ class _OsvPanelState extends State<OsvPanel>
       _parseFailed = false;
       _exitCode = null;
       _scannedTarget = targetLabel;
+      _layerScan = null;
+      _status = null;
     });
 
-    _runner
-        .run(
-          target: target,
-          useImage: useImage,
-          configFile:
-              _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-        )
-        .listen(
+    if (useImage && _layerSettings.enabled) {
+      _analyzeLayered(target);
+      return;
+    }
+    widget.onLayerScanChanged?.call(null);
+
+    _start(target, useImage).listen(
       (event) {
         if (!mounted) return;
         switch (event) {
@@ -413,7 +426,90 @@ class _OsvPanelState extends State<OsvPanel>
     );
   }
 
+  Stream<OsvEvent> _start(String target, bool useImage) => _runner.run(
+        target: target,
+        useImage: useImage,
+        configFile:
+            _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
+      );
+
+  Future<ScanOutput> _scanOnce(String target, bool useImage) async {
+    var json = '';
+    var code = 1;
+    String? err;
+    await for (final e in _start(target, useImage)) {
+      switch (e) {
+        case OsvOutputEvent(:final jsonOutput):
+          json = jsonOutput;
+        case OsvDoneEvent(:final exitCode, :final stderr):
+          code = exitCode;
+          err = stderr;
+      }
+    }
+    return (json: json, exitCode: code, stderr: err);
+  }
+
+  /// Analyse par couche de l'image [image] (voir [LayerScanService.run]) ;
+  /// en rattachement, la couche indiquée par osv-scanner lui-même
+  /// (`image_origin_details`) est prioritaire.
+  Future<void> _analyzeLayered(String image) async {
+    _layeredCancelled = false;
+    try {
+      final r = await LayerScanService.run(
+        image: image,
+        settings: _layerSettings,
+        scanOnce: _scanOnce,
+        parse: OsvVuln.fromJson,
+        merge: mergeOsvJson,
+        nativeDigests: osvLayerDigests,
+        onStatus: (st) {
+          if (mounted) setState(() => _status = st);
+        },
+        isCancelled: () => _layeredCancelled,
+      );
+      if (!mounted) return;
+      var vulns = <OsvVuln>[];
+      var parseFailed = false;
+      var error = r.stderr;
+      if (r.json.isNotEmpty) {
+        try {
+          vulns = dedupeVulns(
+              OsvVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
+          error = null;
+        } catch (e) {
+          parseFailed = true;
+          error = 'Sortie osv-scanner illisible (JSON invalide) : $e';
+        }
+      }
+      setState(() {
+        _isRunning = false;
+        _status = null;
+        _exitCode = r.exitCode;
+        _jsonOutput = r.json;
+        _vulns = vulns;
+        _parseFailed = parseFailed;
+        _error = vulns.isEmpty ? error : null;
+        _layerScan = r.layerScan;
+        _exploitById = const {};
+      });
+      widget.onVulnsChanged?.call(_vulns);
+      widget.onLayerScanChanged?.call(_layerScan);
+      if (vulns.isNotEmpty) _enrich(r.json, vulns);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+          _status = null;
+          _error = '$e';
+          _exitCode = 1;
+        });
+      }
+    }
+  }
+
   void _stop() {
+    _layeredCancelled = true;
+    LayerScanService.kill();
     _runner.kill();
     setState(() => _isRunning = false);
   }
@@ -430,6 +526,8 @@ class _OsvPanelState extends State<OsvPanel>
           imageCtrl: _imageCtrl,
           sourceKind: _sourceKind,
           onSourceKindChanged: (k) => setState(() => _sourceKind = k),
+          layerSettings: _layerSettings,
+          onLayerSettingsChanged: (v) => setState(() => _layerSettings = v),
           onPickImageArchive: _pickImageArchive,
           configCtrl: _configCtrl,
           isRunning: _isRunning,
@@ -441,6 +539,10 @@ class _OsvPanelState extends State<OsvPanel>
           onStop: _stop,
           versionInfo: _versionInfo,
         ),
+        if (_isRunning && _status != null) ...[
+          const LinearProgressIndicator(minHeight: 3),
+          ScanStatusLine(_status!),
+        ],
         if (hasDone && _error != null)
           ErrorBanner(message: _error!),
         if (hasDone && _error == null)
@@ -507,6 +609,7 @@ class _OsvPanelState extends State<OsvPanel>
                   onDateFilterChanged: widget.onDateFilterChanged,
                   onPropagate: widget.onPropagate,
                   exploitById: _exploitById,
+                  layerScan: _layerScan,
                   scanTarget: _scannedTarget,
                   enrichPending: _enrichPending,
                   enrichOnline: _enrichOnline,
@@ -538,6 +641,8 @@ class _ConfigSection extends StatelessWidget {
   final TextEditingController imageCtrl;
   final ScanSourceKind sourceKind;
   final ValueChanged<ScanSourceKind> onSourceKindChanged;
+  final LayerScanSettings layerSettings;
+  final ValueChanged<LayerScanSettings> onLayerSettingsChanged;
   final VoidCallback onPickImageArchive;
   final TextEditingController configCtrl;
   final bool isRunning;
@@ -554,6 +659,8 @@ class _ConfigSection extends StatelessWidget {
     required this.imageCtrl,
     required this.sourceKind,
     required this.onSourceKindChanged,
+    required this.layerSettings,
+    required this.onLayerSettingsChanged,
     required this.onPickImageArchive,
     required this.configCtrl,
     required this.isRunning,
@@ -619,13 +726,20 @@ class _ConfigSection extends StatelessWidget {
                 ),
               ],
             )
-          else
+          else ...[
             ImageRefField(
               controller: imageCtrl,
               enabled: !isRunning,
               allowOciDir: false,
               onPickArchive: onPickImageArchive,
             ),
+            const SizedBox(height: 6),
+            LayerScanOptions(
+              settings: layerSettings,
+              enabled: !isRunning,
+              onChanged: onLayerSettingsChanged,
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [

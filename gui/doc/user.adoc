@@ -960,6 +960,61 @@ Un champ optionnel *Plateforme* apparaît en mode image, pour forcer la
 plateforme cible sur une image multi-architecture (ex. `linux/arm64`).
 Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.
 
+[[sec-scan-couches]]
+=== Analyse par couche (source « Image de conteneur »)
+
+En mode *Image de conteneur*, la case *Par couche* (commune aux trois
+onglets de scan) attribue chaque vulnérabilité à la *couche* de l'image qui
+apporte le paquet vulnérable. L'application génère d'abord, via
+`sbom-generator --image … --per-layer` (backend syft), un SBOM global et un
+SBOM par couche dans un répertoire temporaire ; ce jeu est réutilisé par les
+trois onglets tant que l'image et le calcul ne changent pas.
+
+[cols="1,3,3",options="header"]
+|===
+|Méthode |Principe |Ce qu'on voit
+
+|Rattachement (défaut)
+|Un seul scan de l'image, comme sans l'option ; chaque vulnérabilité est
+rattachée à la couche d'origine de son paquet. Trivy et OSV-Scanner
+indiquent eux-mêmes cette couche (`Layer.DiffID`, `image_origin_details`),
+utilisée en priorité ; sinon, le paquet est cherché dans le SBOM global.
+|Les CVE de l'image finale, par couche qui les a introduites.
+
+|Chaque couche
+|Le SBOM de chaque couche est scanné séparément (un scan par couche) ;
+les sorties sont fusionnées.
+|En plus, les CVE d'une version introduite par une couche puis remplacée
+plus haut (avec le calcul *Rootfs*). Une CVE peut apparaître dans
+plusieurs couches.
+|===
+
+Le second sélecteur choisit le calcul des couches : *Métadonnées*
+(couche d'origine indiquée par syft — rapide, ajouts seulement) ou
+*Rootfs* (couches appliquées une à une et réanalysées — ajouts,
+modifications, suppressions ; plus lent). Pendant l'analyse, une ligne
+d'état indique l'étape en cours (préparation des SBOM, couche i/N…) ; le
+bouton *Stop* interrompt aussi la génération et les scans restants.
+
+Dans la *Vue Table* (voir <<sec-vue-table>>) :
+
+* une colonne *COUCHE* affiche la ou les couches de chaque vulnérabilité
+  (`?` si le paquet est absent du SBOM de l'image — un bandeau en indique
+  le nombre) ; l'info-bulle rappelle le digest et l'instruction de build ;
+* le menu *Toutes les couches / Couche N (n)* filtre sur une couche ;
+* le bouton *Grouper par couche* (icône de couches) regroupe la liste sous
+  un en-tête par couche — digest, instruction de build et compteurs par
+  sévérité ;
+* les exports CSV et AsciiDoc + PDF ajoutent une colonne *Couche(s)* et,
+  pour le PDF, une section *Couches de l'image*.
+
+Le *Tableau de bord* reprend ces informations (voir <<sec-dashboard-couches>>).
+
+NOTE: En mode *Chaque couche*, OSV-Scanner analyse des SBOM et non l'image :
+il trouve alors peu ou pas de CVE sur les paquets système (voir
+<<sec-pourquoi-ecarts-scanners>>) — préférer le *Rattachement* avec cet
+outil.
+
 === Options de scan
 
 ==== `--platform linux`
@@ -1306,6 +1361,9 @@ NOTE: Contrairement à Grype et Trivy, OSV-Scanner ne sait pas lire un
 répertoire au format OCI layout directement : seule l'archive est proposée
 ici. Il n'a pas non plus d'option de plateforme (`--platform`).
 
+L'option *Par couche* est disponible en mode image, comme pour Grype —
+voir <<sec-scan-couches>>.
+
 === Configuration optionnelle (toml)
 
 Chemin vers un fichier de configuration `osv-scanner.toml` permettant
@@ -1439,6 +1497,10 @@ l'analyseur de jars intégré à Trivy pour les jars sans `pom.properties`
 (ex. rebuilds internes Red Hat), que le cataloguer de syft détecte via le
 nom de fichier là où Trivy échoue. Voir <<sec-pourquoi-ecarts-scanners>>
 pour le détail avec des chiffres réels.
+
+L'option *Par couche* est disponible en mode image, comme pour Grype ;
+en rattachement, la couche indiquée par Trivy lui-même (`Layer.DiffID`) est
+utilisée — voir <<sec-scan-couches>>.
 
 === Options de scan
 
@@ -1868,6 +1930,17 @@ n'apparaît donc qu'une seule fois, sous sa forme CVE nue, au lieu de deux
 lignes distinctes dont une marquée à tort « vue par un seul scanner ».
 
 [[sec-pourquoi-ecarts-scanners]]
+[[sec-dashboard-couches]]
+=== Couches de l'image
+
+Quand au moins un onglet de scan a analysé une image avec l'option *Par
+couche* (voir <<sec-scan-couches>>), une carte *Couches de l'image*
+s'affiche : pour chaque couche, son digest, son instruction de build et le
+nombre de CVE uniques (tous scanners confondus), dont critiques et
+élevées ; la méthode employée par chaque scanner est rappelée en tête. La
+*Comparaison inter-scanners* gagne une colonne *COUCHE(S)*, et l'export
+AsciiDoc + PDF une section *Couches de l'image* et la même colonne.
+
 === Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE
 
 Il est normal — et attendu — qu'une bonne partie des lignes du tableau

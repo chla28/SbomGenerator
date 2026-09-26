@@ -182,4 +182,33 @@ void main() {
       expect(r.stderr, contains('--layer-mode metadata nécessite'));
     });
   });
+
+  group('scan --per-layer : validation', () {
+    test('--sbom et --image exclusifs', () async {
+      final r = await _cli(['scan', '--sbom', 'a.json', '--image', 'x.tar']);
+      expect(r.exitCode, 1);
+      expect(r.stderr, contains('exactement l\'un des deux'));
+    });
+
+    test('--layer-mode sans --image', () async {
+      final f = File('${tmp.path}/s.cdx.json')..writeAsStringSync('{}');
+      final r = await _cli(
+          ['scan', '--sbom', f.path, '--per-layer', '--layer-mode', 'rootfs']);
+      expect(r.exitCode, 1);
+      expect(r.stderr, contains('--layer-mode nécessite --image'));
+    });
+
+    test('SBOM sans information de couche', () async {
+      final f = File('${tmp.path}/s.cdx.json')
+        ..writeAsStringSync(jsonEncode({
+          'bomFormat': 'CycloneDX',
+          'components': [
+            {'name': 'a', 'version': '1'},
+          ],
+        }));
+      final r = await _cli(['scan', '--sbom', f.path, '--per-layer']);
+      expect(r.exitCode, 1);
+      expect(r.stderr, contains('aucune information de couche'));
+    });
+  });
 }

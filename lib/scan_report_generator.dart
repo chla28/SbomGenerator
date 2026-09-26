@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'layer_scan.dart';
 import 'vuln_enrichment.dart';
 
 /// Builds a cross-scanner vulnerability *synthesis* report (Markdown /
@@ -25,13 +26,53 @@ class ScanReportGenerator {
   /// alors omises.
   final Map<String, ExploitInfo> exploitById;
 
+  /// Couches de l'image (`scan --per-layer`) : les résultats portent alors une
+  /// clé `layer` (index). Vide = rapport sans section « Couches ».
+  final List<LayerRef> layers;
+
+  /// Méthode de `--per-layer` : `attribute` ou `each` (voir `layer_scan.dart`).
+  final String? layerScanMode;
+
   ScanReportGenerator({
     required this.sbomPath,
     required this.resultsByScanner,
     DateTime? generatedAt,
     this.toolVersions = const {},
     this.exploitById = const {},
+    this.layers = const [],
+    this.layerScanMode,
   }) : generatedAt = generatedAt ?? DateTime.now();
+
+  bool get _hasLayers => layers.isNotEmpty;
+
+  /// Index des couches où chaque CVE (id normalisé) a été trouvée.
+  Map<String, Set<int>> get _layersById {
+    final m = <String, Set<int>>{};
+    for (final vulns in resultsByScanner.values) {
+      for (final v in vulns ?? const <Map<String, dynamic>>[]) {
+        final i = v['layer'];
+        final id = _normalizeId((v['id'] as String?) ?? '');
+        if (i is int && id.isNotEmpty) (m[id] ??= {}).add(i);
+      }
+    }
+    return m;
+  }
+
+  String _layersCell(Map<String, Set<int>> byId, String id) {
+    final l = (byId[id]?.toList() ?? const <int>[])..sort();
+    return l.isEmpty ? '—' : l.join(', ');
+  }
+
+  String get _layerModeText => switch (layerScanMode) {
+        'each' => 'SBOM de chaque couche scanné séparément : une CVE est '
+            'comptée dans chaque couche qui apporte le paquet vulnérable, '
+            'y compris une version remplacée plus haut dans la pile',
+        _ => 'un seul scan du SBOM global, chaque CVE rattachée à la couche '
+            'qui a introduit son paquet (CVE de l\'image finale uniquement)',
+      };
+
+  static String _short(String s, int max) =>
+      s.length <= max ? s : '${s.substring(0, max - 1)}…';
 
   static const _scannerOrder = ['grype', 'osv', 'trivy'];
   static const _scannerLabels = {
@@ -371,21 +412,39 @@ class ScanReportGenerator {
       b.writeln();
     }
 
+    if (_hasLayers) {
+      b.writeln('## Couches de l\'image');
+      b.writeln();
+      b.writeln('Méthode : $_layerModeText.');
+      b.writeln();
+      b.writeln('| Couche | Digest | Instruction | CVE | Critiques | Élevées |');
+      b.writeln('|---|---|---|--:|--:|--:|');
+      for (final l in summarizeByLayer(resultsByScanner, layers)) {
+        b.writeln('| ${l.layer.index} | `${l.layer.shortDigest}` '
+            '| ${_mdEsc(_short(l.layer.createdBy ?? '—', 90))} '
+            '| ${l.total} | ${l.count('critical')} | ${l.count('high')} |');
+      }
+      b.writeln();
+    }
+
     if (run.length >= 2) {
       b.writeln('## Comparaison inter-scanners');
       b.writeln();
       final rows = _crossRows();
+      final layersById = _layersById;
       if (rows.isEmpty) {
         b.writeln('_Aucune CVE détectée par les scanners exécutés._');
       } else {
-        b.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy |');
-        b.writeln('|---|---|:-:|:-:|:-:|');
+        b.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy |'
+            '${_hasLayers ? ' Couche(s) |' : ''}');
+        b.writeln('|---|---|:-:|:-:|:-:|${_hasLayers ? '---|' : ''}');
         for (final r in rows) {
           b.writeln('| ${r.severity.isEmpty ? "?" : r.severity.toUpperCase()} '
               '| ${_mdEsc(r.id)} '
               '| ${r.present['grype']! ? '✓' : '—'} '
               '| ${r.present['osv']! ? '✓' : '—'} '
-              '| ${r.present['trivy']! ? '✓' : '—'} |');
+              '| ${r.present['trivy']! ? '✓' : '—'} |'
+              '${_hasLayers ? ' ${_layersCell(layersById, r.id)} |' : ''}');
         }
       }
       b.writeln();
@@ -560,22 +619,46 @@ class ScanReportGenerator {
       b.writeln();
     }
 
+    if (_hasLayers) {
+      b.writeln('== Couches de l\'image');
+      b.writeln();
+      b.writeln('Méthode : $_layerModeText.');
+      b.writeln();
+      b.writeln('[cols="2,3,7,2,3,3",options="header"]');
+      b.writeln('|===');
+      b.writeln('| Couche | Digest | Instruction | CVE | Critiques | Élevées');
+      for (final l in summarizeByLayer(resultsByScanner, layers)) {
+        final crit = l.count('critical');
+        b.writeln('| ${l.layer.index} | `${l.layer.shortDigest}` '
+            '| ${_adocEsc(_short(l.layer.createdBy ?? '—', 160))} '
+            '| ${l.total} '
+            '| ${crit > 0 ? '*$crit*' : '0'} | ${l.count('high')}');
+      }
+      b.writeln('|===');
+      b.writeln();
+    }
+
     if (run.length >= 2) {
       b.writeln('== Comparaison inter-scanners');
       b.writeln();
       final rows = _crossRows();
+      final layersById = _layersById;
       if (rows.isEmpty) {
         b.writeln('_Aucune CVE détectée par les scanners exécutés._');
       } else {
-        b.writeln('[cols="2,5,1,1,1",options="header"]');
+        b.writeln(_hasLayers
+            ? '[cols="2,5,1,1,1,2",options="header"]'
+            : '[cols="2,5,1,1,1",options="header"]');
         b.writeln('|===');
-        b.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy');
+        b.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy'
+            '${_hasLayers ? ' | Couche(s)' : ''}');
         for (final r in rows) {
           b.writeln('| ${_sevBadge(r.severity)} '
               '| ${_adocEsc(r.id)} '
               '| ${r.present['grype']! ? '✓' : '—'} '
               '| ${r.present['osv']! ? '✓' : '—'} '
-              '| ${r.present['trivy']! ? '✓' : '—'}');
+              '| ${r.present['trivy']! ? '✓' : '—'}'
+              '${_hasLayers ? ' | ${_layersCell(layersById, r.id)}' : ''}');
         }
         b.writeln('|===');
       }

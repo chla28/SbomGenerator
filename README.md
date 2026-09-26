@@ -162,6 +162,7 @@ sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator validate <sbom1> [<sbom2> ...] [--strict]
 sbom_generator scan --sbom <fichier> [options]
+sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator cra --sbom <fichier> [options]
 
 Options :
@@ -237,6 +238,11 @@ sbom_generator scan --sbom sbom.cdx.json --no-enrich   # hors-ligne (CI)
 # Rapport de synthèse inter-scanners (markdown | asciidoc | pdf), avec section
 # « Priorisation par risque » et propriétés kev/epss/poc en SARIF
 sbom_generator scan --sbom sbom.cdx.json --scanner all -f pdf -o scan-report.pdf
+
+# CVE par couche d'une image (SBOM par couche générés à la volée) :
+# rattachement à la couche d'origine du paquet, ou scan de chaque couche
+sbom_generator scan --image ./app.tar --per-layer --scanner all
+sbom_generator scan --image ./app.tar --per-layer --layer-scan each --layer-mode rootfs
 
 # Rapport de conformité Cyber Resilience Act (UE 2024/2847) — périmètre
 # vérifiable automatiquement : complétude du SBOM (BSI TR-03183-2, éléments

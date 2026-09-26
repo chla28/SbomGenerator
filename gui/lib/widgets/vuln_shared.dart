@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/cve_date_filter.dart';
+import '../models/layer_scan.dart';
 import '../services/scan_enrichment.dart';
 import 'cve_detail.dart';
 import 'help_icon.dart';
@@ -406,6 +407,120 @@ class ImageRefField extends StatelessWidget {
   }
 }
 
+/// Ligne d'état sous la barre de progression d'un scan (étapes de l'analyse
+/// par couche : préparation des SBOM, couche i/N…).
+class ScanStatusLine extends StatelessWidget {
+  final String text;
+  const ScanStatusLine(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+        child: Text(text,
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      );
+}
+
+/// Options de l'analyse par couche (source « Image de conteneur ») :
+/// activation, méthode (rattachement / chaque couche) et calcul des couches
+/// (`--layer-mode`). Partagé par les trois onglets de scan.
+class LayerScanOptions extends StatelessWidget {
+  final LayerScanSettings settings;
+  final bool enabled;
+  final ValueChanged<LayerScanSettings> onChanged;
+
+  const LayerScanOptions({
+    super.key,
+    required this.settings,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const segStyle = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    return Wrap(
+      spacing: 10,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Checkbox(
+              value: settings.enabled,
+              visualDensity: VisualDensity.compact,
+              onChanged: enabled
+                  ? (v) => onChanged(settings.copyWith(enabled: v ?? false))
+                  : null,
+            ),
+            const Text('Par couche', style: TextStyle(fontSize: 13)),
+            const SizedBox(width: 4),
+            const HelpIcon(
+              'Attribue chaque vulnérabilité à la couche de l\'image qui\n'
+              'apporte le paquet vulnérable (SBOM par couche générés par\n'
+              'sbom-generator --per-layer, via syft).\n'
+              '• Rattachement : un seul scan de l\'image, chaque CVE\n'
+              '  rattachée à la couche d\'origine de son paquet — CVE de\n'
+              '  l\'image finale uniquement.\n'
+              '• Chaque couche : le SBOM de chaque couche est scanné —\n'
+              '  inclut les CVE d\'une version remplacée plus haut dans la\n'
+              '  pile (avec le calcul Rootfs).\n'
+              '• Métadonnées / Rootfs : calcul des couches (--layer-mode).',
+            ),
+          ],
+        ),
+        if (settings.enabled) ...[
+          SegmentedButton<LayerScanMode>(
+            style: segStyle,
+            segments: const [
+              ButtonSegment(
+                value: LayerScanMode.attribute,
+                label: Text('Rattachement'),
+                tooltip: 'Un scan de l\'image, CVE rattachées à la couche '
+                    'd\'origine du paquet',
+              ),
+              ButtonSegment(
+                value: LayerScanMode.each,
+                label: Text('Chaque couche'),
+                tooltip: 'Un scan par SBOM de couche',
+              ),
+            ],
+            selected: {settings.mode},
+            onSelectionChanged: enabled
+                ? (v) => onChanged(settings.copyWith(mode: v.first))
+                : null,
+          ),
+          SegmentedButton<String>(
+            style: segStyle,
+            segments: const [
+              ButtonSegment(
+                value: 'metadata',
+                label: Text('Métadonnées'),
+                tooltip: 'Couche d\'origine indiquée par syft — ajouts',
+              ),
+              ButtonSegment(
+                value: 'rootfs',
+                label: Text('Rootfs'),
+                tooltip: 'Réanalyse après chaque couche — ajouts, '
+                    'modifications, suppressions',
+              ),
+            ],
+            selected: {settings.layerMode},
+            onSelectionChanged: enabled
+                ? (v) => onChanged(settings.copyWith(layerMode: v.first))
+                : null,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 // ─── Barre de filtre par date CVE ───────────────────────────────────────────
 
 class DateFilterBar extends StatelessWidget {
@@ -719,6 +834,10 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
   /// relance l'enrichissement. Null = pas de bouton affiché.
   final ValueChanged<bool>? onEnrichOnlineChanged;
 
+  /// Analyse par couche (source image) : couches de chaque vulnérabilité.
+  /// Null = pas de colonne / filtre / regroupement par couche.
+  final LayerScanResult? layerScan;
+
   const VulnTableView({
     super.key,
     required this.vulns,
@@ -741,6 +860,7 @@ class VulnTableView<T extends VulnRow> extends StatefulWidget {
     this.enrichPending = false,
     this.enrichOnline = true,
     this.onEnrichOnlineChanged,
+    this.layerScan,
   });
 
   @override
@@ -757,7 +877,27 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
 
   final Set<String> _expanded = {};
 
+  // Analyse par couche : filtre sur une couche, regroupement par couche.
+  int? _layerFilter;
+  bool _groupByLayer = false;
+
   bool get _hasExploit => widget.exploitById.isNotEmpty;
+
+  List<int> _layersOf(T v) =>
+      widget.layerScan?.layersOf(v.id, v.packageName, v.installedVersion) ??
+      const [];
+
+  String _layerLabel(T v) =>
+      widget.layerScan?.label(v.id, v.packageName, v.installedVersion) ?? '';
+
+  @override
+  void didUpdateWidget(VulnTableView<T> old) {
+    super.didUpdateWidget(old);
+    if (widget.layerScan != old.layerScan) {
+      _layerFilter = null;
+      if (widget.layerScan == null) _groupByLayer = false;
+    }
+  }
 
   ExploitInfo _ex(T v) =>
       widget.exploitById[normalizeCveId(v.id)] ?? ExploitInfo.empty;
@@ -825,6 +965,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       list = list
           .where((v) => widget.dateFilter.matches(v.publishedDate, v.modifiedDate))
           .toList();
+    }
+    if (_layerFilter != null) {
+      list = list.where((v) => _layersOf(v).contains(_layerFilter)).toList();
     }
     list = List.of(list)
       ..sort((a, b) {
@@ -933,13 +1076,17 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   Future<void> _exportCsv(BuildContext context) async {
     final rows = _filtered;
     final buf = StringBuffer();
-    buf.writeln(_hasExploit
-        ? '${widget.csvHeader},${_exploitHeaders.join(',')}'
-        : widget.csvHeader);
+    final withLayers = widget.layerScan != null;
+    buf.writeln([
+      widget.csvHeader,
+      if (_hasExploit) _exploitHeaders.join(','),
+      if (withLayers) 'Couche(s)',
+    ].join(','));
     for (final v in rows) {
       final cells = [
         ...widget.csvRow(v),
         if (_hasExploit) ..._exploitCells(v),
+        if (withLayers) _layerLabel(v),
       ];
       buf.writeln(cells.map(csvEscape).join(','));
     }
@@ -973,9 +1120,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     for (final v in rows) {
       counts[v.severity] = (counts[v.severity] ?? 0) + 1;
     }
+    final layerScan = widget.layerScan;
     final columns = [
       ...widget.csvHeader.split(','),
       if (_hasExploit) ..._exploitHeaders,
+      if (layerScan != null) 'Couche(s)',
     ];
     final kevCount = _hasExploit
         ? rows.where((v) => _ex(v).inKev).length
@@ -1050,6 +1199,30 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('|===');
     buf.writeln();
 
+    if (layerScan != null) {
+      buf.writeln('== Couches de l\'image');
+      buf.writeln();
+      buf.writeln('Méthode : ${layerScan.modeLabel}'
+          '${layerScan.unattributed > 0 ? ' — ${layerScan.unattributed} '
+              'vulnérabilité(s) sans couche connue' : ''}.');
+      buf.writeln();
+      buf.writeln('[cols="2,3,7,2,3,3",options="header"]');
+      buf.writeln('|===');
+      buf.writeln('| Couche | Digest | Instruction | Vulnérabilités '
+          '| Critiques | Élevées');
+      for (final l in layerScan.layers) {
+        final inLayer = rows.where((v) => _layersOf(v).contains(l.index));
+        int sev(String k) =>
+            inLayer.where((v) => v.severity.toLowerCase() == k).length;
+        final by = l.createdBy ?? '—';
+        buf.writeln('| ${l.index} | `${l.shortDigest}` '
+            '| ${adocEscape(by.length > 160 ? '${by.substring(0, 159)}…' : by)} '
+            '| ${inLayer.length} | ${sev('critical')} | ${sev('high')}');
+      }
+      buf.writeln('|===');
+      buf.writeln();
+    }
+
     buf.writeln('== Détail');
     buf.writeln();
     buf.writeln(
@@ -1061,6 +1234,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       final cells = [
         ...widget.csvRow(v),
         if (_hasExploit) ..._exploitCells(v),
+        if (layerScan != null) _layerLabel(v),
       ];
       final formatted = [
         pdfSeverityBadge(cells.first),
@@ -1098,6 +1272,134 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     }
   }
 
+  /// Lignes de la liste : à plat, ou regroupées par couche (en-tête de
+  /// couche puis ses vulnérabilités ; une vulnérabilité apportée par
+  /// plusieurs couches apparaît sous chacune, « ? » en fin de liste).
+  List<({int? layer, T? vuln, List<T> rows})> _entries(List<T> filtered) {
+    final scan = widget.layerScan;
+    if (scan == null || !_groupByLayer) {
+      return [for (final v in filtered) (layer: null, vuln: v, rows: const [])];
+    }
+    final out = <({int? layer, T? vuln, List<T> rows})>[];
+    for (final l in [...scan.layers.map((l) => l.index), -1]) {
+      final rows = filtered.where((v) {
+        final ls = _layersOf(v);
+        return l == -1 ? ls.isEmpty : ls.contains(l);
+      }).toList();
+      if (rows.isEmpty) continue;
+      out.add((layer: l, vuln: null, rows: rows));
+      out.addAll([for (final v in rows) (layer: l, vuln: v, rows: const [])]);
+    }
+    return out;
+  }
+
+  Widget _layerFilterMenu() {
+    final scan = widget.layerScan!;
+    int count(int l) =>
+        widget.vulns.where((v) => _layersOf(v).contains(l)).length;
+    return DropdownButton<int?>(
+      value: _layerFilter,
+      isDense: true,
+      hint: const Text('Toutes les couches', style: TextStyle(fontSize: 12)),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text('Toutes les couches', style: TextStyle(fontSize: 12)),
+        ),
+        for (final l in scan.layers)
+          DropdownMenuItem<int?>(
+            value: l.index,
+            child: Text('Couche ${l.index} (${count(l.index)})',
+                style: const TextStyle(fontSize: 12)),
+          ),
+      ],
+      onChanged: (v) => setState(() => _layerFilter = v),
+    );
+  }
+
+  Widget _layerChip(BuildContext context, T v) {
+    final layers = _layersOf(v);
+    final scan = widget.layerScan!;
+    final tip = layers.isEmpty
+        ? 'Couche inconnue (paquet absent du SBOM de l\'image)'
+        : layers.map((i) {
+            final l = scan.layer(i);
+            return 'Couche $i${l == null ? '' : ' (${l.shortDigest})'}'
+                '${l?.createdBy == null ? '' : ' — ${l!.createdBy}'}';
+          }).join('\n');
+    return Tooltip(
+      message: tip,
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 30),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          _layerLabel(v),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onTertiaryContainer,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _layerHeader(BuildContext context, int index, List<T> rows) {
+    final theme = Theme.of(context);
+    final l = index < 0 ? null : widget.layerScan!.layer(index);
+    final counts = <String, int>{};
+    for (final v in rows) {
+      counts[v.severity] = (counts[v.severity] ?? 0) + 1;
+    }
+    return Container(
+      color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.layers_outlined, size: 16, color: theme.colorScheme.tertiary),
+          const SizedBox(width: 6),
+          Text(
+            index < 0
+                ? 'Couche inconnue'
+                : 'Couche $index${l == null ? '' : ' (${l.shortDigest})'}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              l?.createdBy ?? '',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          for (final s in widget.severityOrder)
+            if (counts.containsKey(s))
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: severityBg(s),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('${counts[s]}',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: severityFg(s))),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.parseFailed) {
@@ -1132,6 +1434,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       counts[v.severity] = (counts[v.severity] ?? 0) + 1;
     }
     final filtered = _filtered;
+    final entries = _entries(filtered);
 
     return Column(
       children: [
@@ -1198,6 +1501,22 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                   ],
                 ),
               ),
+              if (widget.layerScan != null) ...[
+                const SizedBox(width: 8),
+                _layerFilterMenu(),
+                IconButton(
+                  icon: Icon(
+                    _groupByLayer ? Icons.layers : Icons.layers_outlined,
+                    size: 18,
+                  ),
+                  isSelected: _groupByLayer,
+                  tooltip: _groupByLayer
+                      ? 'Liste à plat'
+                      : 'Grouper par couche',
+                  onPressed: () =>
+                      setState(() => _groupByLayer = !_groupByLayer),
+                ),
+              ],
               const SizedBox(width: 8),
               SizedBox(
                 width: 200,
@@ -1288,17 +1607,38 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                 SortHeader('EPSS', _sortCol == VulnSortCol.epss, _sortAsc,
                     () => _onSort(VulnSortCol.epss)),
               ],
-              if (widget.extraColumnHeader != null) ...[
+              if (widget.extraColumnHeader != null ||
+                  widget.layerScan != null)
                 const Spacer(),
+              if (widget.extraColumnHeader != null)
                 Text(widget.extraColumnHeader!,
                     style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: Colors.grey)),
+              if (widget.layerScan != null) ...[
+                const SizedBox(width: 16),
+                const Text('COUCHE',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey)),
+                const SizedBox(width: 26),
               ],
             ],
           ),
         ),
+        if (widget.layerScan != null && widget.layerScan!.unattributed > 0)
+          Container(
+            width: double.infinity,
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            child: Text(
+              '${widget.layerScan!.unattributed} vulnérabilité(s) sans couche '
+              'connue (paquet absent du SBOM de l\'image) — colonne « ? ».',
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
         if (widget.enrichPending)
           Container(
             width: double.infinity,
@@ -1335,9 +1675,13 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                   ),
                 )
               : ListView.builder(
-                  itemCount: filtered.length,
+                  itemCount: entries.length,
                   itemBuilder: (context, i) {
-                    final v = filtered[i];
+                    final entry = entries[i];
+                    final v = entry.vuln;
+                    if (v == null) {
+                      return _layerHeader(context, entry.layer!, entry.rows);
+                    }
                     final fg = severityFg(v.severity);
                     final bg = severityBg(v.severity);
                     final description = widget.descriptionOf?.call(v) ?? '';
@@ -1452,6 +1796,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                               style: const TextStyle(
                                   fontSize: 11, color: Colors.grey),
                             ),
+                          if (widget.layerScan != null) ...[
+                            const SizedBox(width: 12),
+                            _layerChip(context, v),
+                          ],
                           Icon(
                               isOpen
                                   ? Icons.expand_less

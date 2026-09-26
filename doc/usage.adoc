@@ -143,6 +143,7 @@ sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator licenses -i <sbom-source> -o <licences.adoc>
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
+sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator cra --sbom <fichier> [options]
 ....
 
@@ -987,8 +988,31 @@ filtrage optionnel par date de publication ou de modification des CVE.
 |Option |Défaut |Description
 
 |`--sbom <fichier>` / `-s`
-|_(obligatoire)_
+|_(ou `--image`)_
 |Fichier SBOM à analyser (`.cdx.json`, `.spdx.json`…)
+
+|`--image <image>` / `-I`
+|_(ou `--sbom`)_
+|Image de conteneur (registre, archive tar, OCI layout) : son SBOM CycloneDX
+est généré dans un répertoire temporaire puis scanné — voir
+<<sec-scan-per-layer>>
+
+|`--oci-tool <outil>`
+|`syft`
+|Backend de génération du SBOM pour `--image`
+
+|`--per-layer`
+|—
+|Vulnérabilités par couche d'image — voir <<sec-scan-per-layer>>
+
+|`--layer-scan <mode>`
+|`attribute`
+|`attribute` (un scan, rattachement à la couche d'origine du paquet) ou
+`each` (SBOM de chaque couche scanné)
+
+|`--layer-mode <mode>`
+|—
+|Avec `--image --per-layer` : calcul des couches (`metadata` ou `rootfs`)
 
 |`--scanner <valeur>` / `-S`
 |`grype`
@@ -1141,6 +1165,56 @@ demandée (tous scanners confondus), `1` = au moins une CVE trouvée, ou erreur
 de scanner. Les formats rapport (`markdown` / `asciidoc` / `pdf`) renvoient
 `0` dès qu'un rapport est écrit ; `1` seulement si `--output` manque ou si
 aucun scanner n'a produit de résultat.
+
+[[sec-scan-per-layer]]
+=== Vulnérabilités par couche d'image (`scan --per-layer`)
+
+Rattache chaque CVE à la couche de l'image qui apporte le paquet vulnérable.
+
+[source,bash]
+----
+# Image analysée directement : jeu de SBOM par couche généré à la volée
+./sbom_generator scan --image ./app.tar --per-layer --scanner all
+
+# SBOM de chaque couche scanné, couches calculées en mode rootfs, rapport PDF
+./sbom_generator scan --image nginx:latest --per-layer --layer-scan each \
+  --layer-mode rootfs --scanner all -f pdf -o nginx-couches.pdf
+
+# À partir d'un jeu déjà produit par --per-layer (SBOM de couche à côté)
+./sbom_generator scan --sbom out/app.cdx.json --per-layer
+----
+
+[cols="1,3,3",options="header"]
+|===
+|`--layer-scan` |Principe |Ce qu'on voit
+
+|`attribute` _(défaut)_
+|Un seul scan du SBOM global ; chaque CVE est rattachée à la couche
+d'origine de son paquet (`sbom_generator:layer:index`, correspondance
+`nom@version`, puis nom seul s'il est univoque).
+|Les CVE de l'image finale, par couche qui les a introduites.
+
+|`each`
+|Le SBOM de chaque couche est scanné séparément.
+|En plus, les CVE d'une version introduite par une couche puis remplacée
+plus haut (avec `--layer-mode rootfs`) ; une CVE peut apparaître dans
+plusieurs couches.
+|===
+
+`--image` (exclusif de `--sbom`) génère d'abord le SBOM CycloneDX de l'image
+(`--oci-tool`, défaut `syft` ; avec `--per-layer`, aussi les SBOM de couche,
+`--layer-mode` au choix) dans un répertoire temporaire supprimé en fin
+d'exécution. Avec `--sbom`, le fichier doit être le SBOM global d'un jeu
+produit par `--per-layer`, SBOM de couche à côté (même base, même
+extension) ; sinon `scan` s'arrête avec un message explicite.
+
+* Sortie `text` : colonne `COUCHE` et tableau « CVE par couche » (digest,
+  instruction, nombre de CVE uniques, critiques, élevées).
+* SARIF : propriété `layer` de chaque résultat.
+* Rapports `markdown` / `asciidoc` / `pdf` : section « Couches de l'image »
+  et colonne « Couche(s) » dans la comparaison inter-scanners.
+* En `attribute`, une CVE dont le paquet est absent du SBOM global reste
+  sans couche (nombre signalé sur la console).
 
 === Exploitabilité et exploitation active
 

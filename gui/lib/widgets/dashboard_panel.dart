@@ -3,13 +3,14 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../models/layer_scan.dart';
 import '../services/scan_enrichment.dart';
 import 'cve_detail.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
 import 'trivy_panel.dart';
-import 'vuln_shared.dart' show adocEscape, SortHeader;
+import 'vuln_shared.dart' show adocEscape, SortHeader, VulnRow;
 
 // ─── Tableau de bord de synthèse ─────────────────────────────────────────────
 
@@ -26,6 +27,10 @@ class DashboardPanel extends StatefulWidget {
   /// du rapport exporté. Généralement une seule entrée.
   final List<String> scanTargets;
 
+  /// Analyses par couche des onglets de scan (clé : nom du scanner —
+  /// « Grype », « OSV-Scanner », « Trivy »). Vide = pas de section Couches.
+  final Map<String, LayerScanResult> layerScans;
+
   const DashboardPanel({
     super.key,
     required this.grypeVulns,
@@ -33,6 +38,7 @@ class DashboardPanel extends StatefulWidget {
     required this.trivyVulns,
     this.exploitById = const {},
     this.scanTargets = const [],
+    this.layerScans = const {},
   });
 
   // Normalise les sévérités en clé minuscule commune
@@ -89,6 +95,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
       if (trivy != null) ...trivy.map((v) => _normalizeVulnId(v.id)),
     };
     final scansRun = [grype, osv, trivy].where((l) => l != null).length;
+    final layers = _layerSynthesis(grype, osv, trivy, widget.layerScans);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -116,6 +123,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
                       crossSortCol: _effectiveCrossSort,
                       crossSortAsc: _effectiveCrossAsc,
                       scanTargets: widget.scanTargets,
+                      layers: layers,
                     ),
           ),
 
@@ -165,6 +173,12 @@ class _DashboardPanelState extends State<DashboardPanel> {
                   );
           }),
 
+          // ── Couches de l'image (analyse par couche) ──
+          if (layers != null) ...[
+            const SizedBox(height: 24),
+            _LayersSection(synthesis: layers),
+          ],
+
           // ── Comparaison inter-scanners (union complète des CVE) ──
           if (scansRun >= 2 && allIds.isNotEmpty) ...[
             const SizedBox(height: 24),
@@ -177,6 +191,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
               sortCol: _effectiveCrossSort,
               sortAsc: _effectiveCrossAsc,
               onSort: _onCrossSort,
+              layersById: layers?.layersById ?? const {},
             ),
           ],
         ],
@@ -216,6 +231,80 @@ final RegExp _distroPrefixedCveRe = RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$');
 
 String _normalizeVulnId(String id) =>
     _distroPrefixedCveRe.firstMatch(id)?.group(1) ?? id;
+
+// ─── Synthèse par couche (analyse par couche des onglets de scan) ──────────
+
+/// Couches de l'image et CVE (id normalisé) de chaque couche, tous scanners
+/// confondus.
+class _LayerSynthesis {
+  final List<LayerInfo> layers;
+
+  /// Méthode employée par scanner (« Grype : rattachement… »).
+  final Map<String, String> modes;
+
+  /// CVE → couches où elle a été trouvée.
+  final Map<String, Set<int>> layersById;
+
+  /// Couche → CVE → pire sévérité.
+  final Map<int, Map<String, String>> worstByLayer;
+
+  const _LayerSynthesis(
+      this.layers, this.modes, this.layersById, this.worstByLayer);
+
+  int count(int layer, [String? severity]) {
+    final m = worstByLayer[layer] ?? const {};
+    return severity == null
+        ? m.length
+        : m.values.where((s) => s.toLowerCase() == severity).length;
+  }
+
+  String layersLabel(String id) {
+    final l = (layersById[id]?.toList() ?? <int>[])..sort();
+    return l.isEmpty ? '—' : l.join(', ');
+  }
+}
+
+_LayerSynthesis? _layerSynthesis(
+  List<GrypeVuln>? grype,
+  List<OsvVuln>? osv,
+  List<TrivyVuln>? trivy,
+  Map<String, LayerScanResult> scans,
+) {
+  if (scans.isEmpty) return null;
+  final layers = <int, LayerInfo>{};
+  for (final s in scans.values) {
+    for (final l in s.layers) {
+      layers.putIfAbsent(l.index, () => l);
+    }
+  }
+  final byId = <String, Set<int>>{};
+  final worst = <int, Map<String, String>>{};
+  void take(String scanner, List<VulnRow>? vulns) {
+    final scan = scans[scanner];
+    if (scan == null || vulns == null) return;
+    for (final v in vulns) {
+      final id = _normalizeVulnId(v.id);
+      final ls = scan.layersOf(v.id, v.packageName, v.installedVersion);
+      (byId[id] ??= {}).addAll(ls);
+      for (final l in ls) {
+        final m = worst[l] ??= {};
+        final prev = m[id];
+        final sev = v.severity;
+        if (prev == null || _crossSevOrd(sev) < _crossSevOrd(prev)) m[id] = sev;
+      }
+    }
+  }
+
+  take('Grype', grype);
+  take('OSV-Scanner', osv);
+  take('Trivy', trivy);
+  return _LayerSynthesis(
+    layers.values.toList()..sort((a, b) => a.index.compareTo(b.index)),
+    {for (final e in scans.entries) e.key: e.value.modeLabel},
+    byId,
+    worst,
+  );
+}
 
 List<_CrossRowData> _crossScannerRows(
   List<GrypeVuln>? grypeVulns,
@@ -376,6 +465,7 @@ Future<void> _exportDashboard(
   _CrossSort crossSortCol = _CrossSort.severity,
   bool crossSortAsc = true,
   List<String> scanTargets = const [],
+  _LayerSynthesis? layers,
 }) async {
   final path = await FilePicker.saveFile(
     dialogTitle: 'Exporter le tableau de bord (AsciiDoc + PDF)',
@@ -496,9 +586,34 @@ Future<void> _exportDashboard(
     buf.writeln();
   }
 
+  if (layers != null) {
+    buf.writeln('== Couches de l\'image');
+    buf.writeln();
+    buf.writeln('Méthode : ${layers.modes.entries.map((e) => '${e.key} — '
+        '${e.value}').join(' ; ')}.');
+    buf.writeln();
+    buf.writeln('[cols="2,3,7,2,3,3",options="header"]');
+    buf.writeln('|===');
+    buf.writeln('| Couche | Digest | Instruction | CVE | Critiques | Élevées');
+    for (final l in layers.layers) {
+      final by = l.createdBy ?? '—';
+      buf.writeln('| ${l.index} | `${l.shortDigest}` '
+          '| ${adocEscape(by.length > 160 ? '${by.substring(0, 159)}…' : by)} '
+          '| ${layers.count(l.index)} | ${layers.count(l.index, 'critical')} '
+          '| ${layers.count(l.index, 'high')}');
+    }
+    buf.writeln('|===');
+    buf.writeln();
+  }
+
   buf.writeln('== Comparaison inter-scanners');
   buf.writeln();
   final withExploit = exploitById.isNotEmpty;
+  final withLayers = layers != null;
+  String layerCell(String id) =>
+      withLayers ? ' | ${layers.layersLabel(id)}' : '';
+  final layerCol = withLayers ? ',2' : '';
+  final layerHead = withLayers ? ' | Couche(s)' : '';
   ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
   // Même ordre qu'à l'écran (colonne de tri active du tableau de bord).
   final rows =
@@ -507,10 +622,10 @@ Future<void> _exportDashboard(
     buf.writeln('_Aucune CVE détectée par les scanners exécutés._');
   } else {
     if (withExploit) {
-      buf.writeln('[cols="2,5,1,1,1,1,1",options="header"]');
+      buf.writeln('[cols="2,5,1,1,1,1,1$layerCol",options="header"]');
       buf.writeln('|===');
       buf.writeln('| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV '
-          '| Trivy');
+          '| Trivy$layerHead');
       for (final row in rows) {
         final e = ex(row.id);
         buf.writeln('| ${pdfSeverityBadge(row.severity)} '
@@ -519,19 +634,19 @@ Future<void> _exportDashboard(
             '| ${e.epssScore == null ? '—' : e.epssScore!.toStringAsFixed(2)} '
             '| ${row.inGrype ? '✓' : '—'} '
             '| ${row.inOsv ? '✓' : '—'} '
-            '| ${row.inTrivy ? '✓' : '—'}');
+            '| ${row.inTrivy ? '✓' : '—'}${layerCell(row.id)}');
       }
       buf.writeln('|===');
     } else {
-      buf.writeln('[cols="2,5,1,1,1",options="header"]');
+      buf.writeln('[cols="2,5,1,1,1$layerCol",options="header"]');
       buf.writeln('|===');
-      buf.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy');
+      buf.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy$layerHead');
       for (final row in rows) {
         buf.writeln('| ${pdfSeverityBadge(row.severity)} '
             '| ${adocEscape(row.id)} '
             '| ${row.inGrype ? '✓' : '—'} '
             '| ${row.inOsv ? '✓' : '—'} '
-            '| ${row.inTrivy ? '✓' : '—'}');
+            '| ${row.inTrivy ? '✓' : '—'}${layerCell(row.id)}');
       }
       buf.writeln('|===');
     }
@@ -1046,6 +1161,9 @@ class _CrossScannerSection extends StatefulWidget {
   final bool sortAsc;
   final ValueChanged<_CrossSort> onSort;
 
+  /// CVE → couches (analyse par couche) ; vide = pas de colonne.
+  final Map<String, Set<int>> layersById;
+
   const _CrossScannerSection({
     required this.grypeVulns,
     required this.osvVulns,
@@ -1055,6 +1173,7 @@ class _CrossScannerSection extends StatefulWidget {
     required this.sortAsc,
     required this.onSort,
     this.exploitById = const {},
+    this.layersById = const {},
   });
 
   @override
@@ -1123,6 +1242,15 @@ class _CrossScannerSectionState extends State<_CrossScannerSection> {
                   header('Grype', _CrossSort.grype, width: 58),
                   header('OSV', _CrossSort.osv, width: 58),
                   header('Trivy', _CrossSort.trivy, width: 58),
+                  if (widget.layersById.isNotEmpty)
+                    const SizedBox(
+                      width: 70,
+                      child: Text('COUCHE(S)',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey)),
+                    ),
                   const SizedBox(width: 24),
                 ],
               ),
@@ -1138,6 +1266,11 @@ class _CrossScannerSectionState extends State<_CrossScannerSection> {
                 scansRun: widget.scansRun,
                 hasExploit: hasExploit,
                 exploit: hasExploit ? ex(row.id) : null,
+                layers: widget.layersById.isEmpty
+                    ? null
+                    : ((widget.layersById[row.id]?.toList() ?? <int>[])
+                          ..sort())
+                        .join(', '),
                 expanded: _expanded.contains(row.id),
                 onToggle: () => setState(() {
                   _expanded.contains(row.id)
@@ -1167,6 +1300,9 @@ class _CrossRow extends StatelessWidget {
   final int scansRun;
   final bool hasExploit;
   final ExploitInfo? exploit;
+
+  /// Couches où la CVE a été trouvée (`null` : pas de colonne).
+  final String? layers;
   final bool expanded;
   final VoidCallback? onToggle;
   final Widget? detail;
@@ -1180,6 +1316,7 @@ class _CrossRow extends StatelessWidget {
     required this.scansRun,
     this.hasExploit = false,
     this.exploit,
+    this.layers,
     this.expanded = false,
     this.onToggle,
     this.detail,
@@ -1294,6 +1431,13 @@ class _CrossRow extends StatelessWidget {
                 color: present ? Colors.green[600] : Colors.grey[300],
               ),
             ),
+          if (layers != null)
+            SizedBox(
+              width: 70,
+              child: Text(layers!.isEmpty ? '—' : layers!,
+                  style: const TextStyle(fontSize: 11),
+                  overflow: TextOverflow.ellipsis),
+            ),
           SizedBox(
             width: 24,
             child: Icon(
@@ -1340,6 +1484,109 @@ class _CrossRow extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.bold,
           color: s >= 0.10 ? Colors.deepOrange : Colors.blueGrey,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Couches de l'image ──────────────────────────────────────────────────────
+
+class _LayersSection extends StatelessWidget {
+  final _LayerSynthesis synthesis;
+  const _LayersSection({required this.synthesis});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const head = TextStyle(
+        fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey);
+    Widget num(int n, {Color? color}) => SizedBox(
+          width: 64,
+          child: Text('$n',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: n > 0 && color != null ? FontWeight.bold : null,
+                  color: n > 0 ? color : Colors.grey)),
+        );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.layers_outlined,
+                    size: 18, color: theme.colorScheme.tertiary),
+                const SizedBox(width: 8),
+                Text('Couches de l\'image (${synthesis.layers.length})',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            for (final e in synthesis.modes.entries)
+              Text('${e.key} : ${e.value}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            const SizedBox(height: 8),
+            Container(
+              color: theme.colorScheme.surfaceContainerHigh,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: const Row(
+                children: [
+                  SizedBox(width: 60, child: Text('COUCHE', style: head)),
+                  SizedBox(width: 100, child: Text('DIGEST', style: head)),
+                  Expanded(child: Text('INSTRUCTION', style: head)),
+                  SizedBox(
+                      width: 64,
+                      child: Text('CVE', textAlign: TextAlign.right, style: head)),
+                  SizedBox(
+                      width: 64,
+                      child: Text('CRIT.', textAlign: TextAlign.right, style: head)),
+                  SizedBox(
+                      width: 64,
+                      child: Text('ÉLEV.', textAlign: TextAlign.right, style: head)),
+                ],
+              ),
+            ),
+            for (final l in synthesis.layers)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  border: Border(
+                      bottom: BorderSide(color: Colors.grey[200]!, width: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                        width: 60,
+                        child: Text('${l.index}',
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600))),
+                    SizedBox(
+                        width: 100,
+                        child: Text(l.shortDigest,
+                            style: const TextStyle(
+                                fontFamily: 'monospace', fontSize: 11))),
+                    Expanded(
+                      child: Tooltip(
+                        message: l.createdBy ?? '',
+                        child: Text(l.createdBy ?? '—',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11)),
+                      ),
+                    ),
+                    num(synthesis.count(l.index)),
+                    num(synthesis.count(l.index, 'critical'),
+                        color: const Color(0xFFB71C1C)),
+                    num(synthesis.count(l.index, 'high'),
+                        color: const Color(0xFFBF360C)),
+                  ],
+                ),
+              ),
+          ],
         ),
       ),
     );

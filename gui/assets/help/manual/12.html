@@ -162,7 +162,19 @@ lignes distinctes dont une marquée à tort « vue par un seul scanner ».
 </div>
 </div>
 <div class="sect2">
-<h3 id="sec-pourquoi-ecarts-scanners">13.4. Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</h3>
+<h3 id="sec-dashboard-couches">13.4. Couches de l’image</h3>
+<div class="paragraph">
+<p>Quand au moins un onglet de scan a analysé une image avec l’option <strong>Par
+couche</strong> (voir <a href="#sec-scan-couches">Analyse par couche (source « Image de conteneur »)</a>), une carte <strong>Couches de l’image</strong>
+s’affiche : pour chaque couche, son digest, son instruction de build et le
+nombre de CVE uniques (tous scanners confondus), dont critiques et
+élevées ; la méthode employée par chaque scanner est rappelée en tête. La
+<strong>Comparaison inter-scanners</strong> gagne une colonne <strong>COUCHE(S)</strong>, et l’export
+AsciiDoc + PDF une section <strong>Couches de l’image</strong> et la même colonne.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_pourquoi_grype_osv_scanner_et_trivy_ne_trouvent_pas_les_mêmes_cve">13.5. Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</h3>
 <div class="paragraph">
 <p>Il est normal — et attendu — qu’une bonne partie des lignes du tableau
 inter-scanners soient isolées (vues par un seul outil). Sur une même image
@@ -302,7 +314,7 @@ maximale avec cet outil, scanner l’image directement.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="sec-dashboard-export">13.5. Export AsciiDoc + PDF</h3>
+<h3 id="sec-dashboard-export">13.6. Export AsciiDoc + PDF</h3>
 <div class="paragraph">
 <p>Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte un
 rapport reprenant l’intégralité de la vue affichée :</p>
@@ -326,7 +338,7 @@ scan — « indisponible » si l’outil n’est plus dans le <code>PATH</code>)
 <p>le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
 présence par outil, et colonnes KEV / EPSS si l’enrichissement a tourné),
 dans le <strong>même ordre que celui affiché à l’écran</strong>, avec les CVE préfixés
-distro déjà normalisés (voir <a href="#sec-pourquoi-ecarts-scanners">Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE</a>) ;</p>
+distro déjà normalisés (voir <a href="#sec-pourquoi-ecarts-scanners">[sec-pourquoi-ecarts-scanners]</a>) ;</p>
 </li>
 <li>
 <p>une section <strong>« Détail des CVE prioritaires »</strong> : un bloc par CVE au
