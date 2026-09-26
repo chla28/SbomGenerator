@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.10] - 2026-09-26
+
 ### Added
 - **`--per-layer` : un SBOM par couche d'image** (avec `--image`), en plus
   du SBOM global, dans chaque format demandé :
