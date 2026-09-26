@@ -308,6 +308,16 @@ Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
 Les deux préférences sont sauvegardées.
 
+Le bouton *文A* (langue de l'interface) propose *Système*, *Français* et
+*English*. *Système* suit la langue du poste, avec repli sur le français
+si elle n'est pas prise en charge. Le choix s'applique immédiatement et
+est sauvegardé.
+
+NOTE: La traduction anglaise est en cours : pour l'instant, seuls les
+éléments communs aux onglets de scan et l'onglet *Grype* sont traduits. Les
+autres écrans, les rapports exportés, ce manuel et les messages du CLI
+restent en français.
+
 == Panneau Configuration
 
 === Section Entrée

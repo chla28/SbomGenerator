@@ -2231,6 +2231,58 @@ TrivyRunner.run(...)   →   Process.start('trivy', ['sbom'|'image', '--format',
   └── TrivyDoneEvent(exitCode)      →  setState() → _isRunning=false
 ----
 
+[[sec-l10n]]
+== Localisation (FR / EN)
+
+L'interface utilise le mécanisme standard de Flutter (`gen-l10n`) :
+
+* `l10n.yaml` : fichiers ARB dans `lib/l10n/`, *français = langue de
+  référence* (`app_fr.arb`, template), classe générée `AppLocalizations`.
+* `lib/l10n/app_<langue>.arb` : un fichier par langue ; le français porte
+  la description de chaque clé (`@clé.description`) et les paramètres
+  (`placeholders`). Pluriels et paramètres en syntaxe ICU
+  (`{count, plural, =1{…} other{…}}`) — jamais de concaténation de
+  morceaux de phrase ni de « (s) ».
+* `lib/l10n/app_localizations*.dart` : code *généré* (par `flutter pub get`
+  ou `flutter gen-l10n`), versionné ; ne pas le modifier à la main.
+* `lib/l10n/l10n.dart` : `AppLanguage` (`system` / `fr` / `en`, réglage
+  mémorisé par `SettingsService.load/saveLanguage`, clé `ui_language_v1`),
+  `resolveAppLocale` (langue du système si prise en charge, sinon
+  français), et l'extension `context.l10n`. Celle-ci retombe sur le
+  français hors d'une application localisée : les tests de widgets montés
+  sans délégués — la plupart des tests existants — voient donc les textes
+  français sans modification.
+* `main.dart` branche `localizationsDelegates`, `supportedLocales`,
+  `locale` et `localeListResolutionCallback` ; `home_screen.dart` porte le
+  menu de langue (clé `language-menu`).
+
+*Ajouter un texte* : clé dans `app_fr.arb` (avec description), traduction
+dans `app_en.arb`, `flutter gen-l10n`, puis `context.l10n.maCle` (ou
+`l10n.maCle(param)`) dans le widget. Préfixe par zone : `common…`,
+`scanSource…`, `vulnTable…`, `dateFilter…`, `layerScan…`, `cliCommand…`,
+`<onglet>…` (`grype…`). Une fonction hors widget reçoit `AppLocalizations`
+en paramètre (ex. `equivalentScanNote(l10n, …)`) ; un service ne produit
+jamais de phrase affichée mais une valeur typée que l'interface traduit
+(ex. `LayerScanStep` → `layerScanStepLabel`).
+
+*Ajouter une langue* : `lib/l10n/app_<code>.arb` avec toutes les clés, puis
+une valeur dans `AppLanguage` et son libellé dans le menu.
+
+*Tests* : `test/l10n_test.dart` vérifie que chaque fichier ARB a les mêmes
+clés et paramètres que le français, que chaque clé française est
+documentée, la résolution de langue, le repli et le menu ;
+`test/l10n_grype_test.dart` affiche l'onglet pilote en anglais.
+
+*Ce qui n'est pas traduit* : le contenu des rapports exportés (AsciiDoc,
+PDF, CSV), l'aide intégrée et les messages du CLI (lots suivants du plan de
+localisation), ainsi que tout texte lu par un programme — lignes du CLI
+analysées par la GUI (`SBOM written → …`), propriétés `sbom_generator:*`,
+texte embarqué dans les SBOM — qui doit rester identique quelle que soit la
+langue.
+
+État : infrastructure, `widgets/vuln_shared.dart` et onglet Grype migrés ;
+les autres écrans restent à faire.
+
 == Concepts Flutter pour débutant
 
 [[sec-flutter-stateful]]

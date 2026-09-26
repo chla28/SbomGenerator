@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'l10n/l10n.dart';
 import 'models/app_themes.dart';
 import 'models/sbom_config.dart';
 import 'models/sbom_result.dart';
@@ -19,6 +20,10 @@ class HomeScreen extends StatefulWidget {
   final int themeIndex;
   final ValueChanged<int> onThemeIndexChanged;
 
+  /// Langue de l'interface choisie (réglage mémorisé).
+  final AppLanguage language;
+  final ValueChanged<AppLanguage> onLanguageChanged;
+
   const HomeScreen({
     super.key,
     this.initialConfig,
@@ -26,6 +31,8 @@ class HomeScreen extends StatefulWidget {
     required this.onThemeToggle,
     required this.themeIndex,
     required this.onThemeIndexChanged,
+    this.language = AppLanguage.system,
+    required this.onLanguageChanged,
   });
 
   @override
@@ -258,6 +265,25 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.help_outline),
             tooltip: 'Aide — Manuel utilisateur',
             onPressed: () => _showHelp(context),
+          ),
+          PopupMenuButton<AppLanguage>(
+            key: const Key('language-menu'),
+            icon: const Icon(Icons.translate),
+            tooltip: context.l10n.languageMenuTooltip,
+            initialValue: widget.language,
+            onSelected: widget.onLanguageChanged,
+            itemBuilder: (context) => [
+              for (final l in AppLanguage.values)
+                CheckedPopupMenuItem(
+                  value: l,
+                  checked: l == widget.language,
+                  child: Text(switch (l) {
+                    AppLanguage.system => context.l10n.languageSystem,
+                    AppLanguage.fr => context.l10n.languageFrench,
+                    AppLanguage.en => context.l10n.languageEnglish,
+                  }),
+                ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.palette_outlined),

@@ -1,0 +1,733 @@
+{
+  "@@locale": "fr",
+  "languageMenuTooltip": "Langue de l'interface",
+  "@languageMenuTooltip": {
+    "description": "Info-bulle du menu de choix de langue (barre d'application)."
+  },
+  "languageSystem": "Système",
+  "@languageSystem": {
+    "description": "Choix de langue : suivre la langue du système."
+  },
+  "languageFrench": "Français",
+  "@languageFrench": {
+    "description": "Nom de la langue française, toujours écrit en français."
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Nom de la langue anglaise, toujours écrit en anglais."
+  },
+  "commonCopy": "Copier",
+  "@commonCopy": {
+    "description": "Info-bulle / action : copier dans le presse-papiers."
+  },
+  "commonClose": "Fermer",
+  "@commonClose": {
+    "description": "Bouton de fermeture d'un dialogue."
+  },
+  "commonStop": "Stop",
+  "@commonStop": {
+    "description": "Bouton d'arrêt d'une analyse en cours."
+  },
+  "commonAnalyze": "Analyser",
+  "@commonAnalyze": {
+    "description": "Bouton de lancement d'une analyse."
+  },
+  "commonBrowse": "Choisir",
+  "@commonBrowse": {
+    "description": "Bouton ouvrant le menu de sélection de fichier."
+  },
+  "commonPickFiltered": "Type filtré ({filter})",
+  "@commonPickFiltered": {
+    "description": "Menu de sélection de fichier : ne montrer que les extensions attendues.",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "commonPickAllFiles": "Tous les fichiers",
+  "@commonPickAllFiles": {
+    "description": "Menu de sélection de fichier : aucun filtre d'extension."
+  },
+  "commonFileNotFound": "Fichier introuvable : {path}",
+  "@commonFileNotFound": {
+    "description": "Erreur : le fichier ou répertoire indiqué n'existe pas.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "commonNone": "(aucun)",
+  "@commonNone": {
+    "description": "Valeur vide d'une liste déroulante (masculin)."
+  },
+  "commonNoneFeminine": "(aucune)",
+  "@commonNoneFeminine": {
+    "description": "Valeur vide d'une liste déroulante (féminin, ex. distribution)."
+  },
+  "commonPlatform": "Plateforme",
+  "@commonPlatform": {
+    "description": "Libellé du champ de plateforme d'image (ex. linux/arm64)."
+  },
+  "commonPlatformHint": "linux/amd64, linux/arm64…",
+  "@commonPlatformHint": {
+    "description": "Exemple affiché dans le champ de plateforme."
+  },
+  "commonSbomFileHint": "chemin/vers/sbom.cdx.json",
+  "@commonSbomFileHint": {
+    "description": "Exemple affiché dans le champ de fichier SBOM."
+  },
+  "jsonViewEmpty": "Pas de sortie JSON.",
+  "@jsonViewEmpty": {
+    "description": "Vue JSON brut vide."
+  },
+  "jsonViewCopyTooltip": "Copier le JSON",
+  "@jsonViewCopyTooltip": {
+    "description": "Info-bulle du bouton de copie de la vue JSON."
+  },
+  "jsonViewCopied": "JSON copié",
+  "@jsonViewCopied": {
+    "description": "Confirmation de copie du JSON."
+  },
+  "scanSourceSbom": "Fichier SBOM",
+  "@scanSourceSbom": {
+    "description": "Bascule de source d'analyse : fichier SBOM (aussi libellé du champ)."
+  },
+  "scanSourceImage": "Image de conteneur",
+  "@scanSourceImage": {
+    "description": "Bascule de source d'analyse : image de conteneur (aussi libellé du champ)."
+  },
+  "scanSourceImageHelp": "Référence d'une image à analyser directement, sans\npasser par un fichier SBOM :\n• Registre : nginx:latest, ghcr.io/org/app:tag\n• Archive : ./image.tar(.gz) (docker save)\n{ociDirLine}Un registre privé est résolu via la configuration\nDocker locale (docker login), sans champ dédié ici.",
+  "@scanSourceImageHelp": {
+    "description": "Aide du champ image ; ociDirLine = scanSourceImageHelpOciDir ou vide.",
+    "placeholders": {
+      "ociDirLine": {
+        "type": "String"
+      }
+    }
+  },
+  "scanSourceImageHelpOciDir": "• Répertoire OCI layout : ./oci_dir/\n",
+  "@scanSourceImageHelpOciDir": {
+    "description": "Ligne d'aide optionnelle (répertoire OCI layout), terminée par un saut de ligne."
+  },
+  "scanSourcePickArchive": "Choisir une archive (.tar, .tar.gz, .tgz)",
+  "@scanSourcePickArchive": {
+    "description": "Info-bulle du bouton de choix d'archive d'image."
+  },
+  "scanSourcePickOciDir": "Choisir un répertoire OCI layout",
+  "@scanSourcePickOciDir": {
+    "description": "Info-bulle / titre du sélecteur de répertoire OCI layout."
+  },
+  "scanSourceMissingImage": "Veuillez indiquer une image à analyser.",
+  "@scanSourceMissingImage": {
+    "description": "Erreur : aucune image saisie."
+  },
+  "scanSourceMissingSbom": "Veuillez sélectionner un fichier SBOM.",
+  "@scanSourceMissingSbom": {
+    "description": "Erreur : aucun fichier SBOM choisi."
+  },
+  "scanPickSbomTitle": "Choisir un fichier SBOM",
+  "@scanPickSbomTitle": {
+    "description": "Titre du sélecteur de fichier SBOM."
+  },
+  "scanPickImageArchiveTitle": "Choisir une archive image (docker save / OCI)",
+  "@scanPickImageArchiveTitle": {
+    "description": "Titre du sélecteur d'archive d'image."
+  },
+  "scanUnreadableOutput": "Sortie {tool} illisible (JSON invalide) : {error}",
+  "@scanUnreadableOutput": {
+    "description": "Erreur de lecture de la sortie JSON d'un scanner.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "scanUnreadableOutputShort": "Sortie {tool} illisible : voir le message d'erreur ci-dessus",
+  "@scanUnreadableOutputShort": {
+    "description": "Message du tableau quand la sortie du scanner est illisible.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "scanNoVulnerabilities": "Aucune vulnérabilité détectée",
+  "@scanNoVulnerabilities": {
+    "description": "Aucune vulnérabilité trouvée."
+  },
+  "scanSummary": "{count, plural, =1{1 vulnérabilité : {details}} other{{count} vulnérabilités : {details}}}",
+  "@scanSummary": {
+    "description": "Bannière de résultat : total et détail par sévérité (ex. « 2 High, 1 Low »).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "scanExportCsvDialog": "Exporter les vulnérabilités {tool}",
+  "@scanExportCsvDialog": {
+    "description": "Titre du dialogue d'export CSV.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "layerScanCheckbox": "Par couche",
+  "@layerScanCheckbox": {
+    "description": "Case d'activation de l'analyse par couche."
+  },
+  "layerScanHelp": "Attribue chaque vulnérabilité à la couche de l'image qui\napporte le paquet vulnérable (SBOM par couche générés par\nsbom-generator --per-layer, via syft).\n• Rattachement : un seul scan de l'image, chaque CVE\n  rattachée à la couche d'origine de son paquet — CVE de\n  l'image finale uniquement.\n• Chaque couche : le SBOM de chaque couche est scanné —\n  inclut les CVE d'une version remplacée plus haut dans la\n  pile (avec le calcul Rootfs).\n• Métadonnées / Rootfs : calcul des couches (--layer-mode).",
+  "@layerScanHelp": {
+    "description": "Aide de l'option d'analyse par couche."
+  },
+  "layerScanAttribute": "Rattachement",
+  "@layerScanAttribute": {
+    "description": "Méthode : un scan, CVE rattachées à la couche d'origine du paquet."
+  },
+  "layerScanAttributeTooltip": "Un scan de l'image, CVE rattachées à la couche d'origine du paquet",
+  "@layerScanAttributeTooltip": {
+    "description": "Info-bulle de la méthode Rattachement."
+  },
+  "layerScanEach": "Chaque couche",
+  "@layerScanEach": {
+    "description": "Méthode : un scan par SBOM de couche."
+  },
+  "layerScanEachTooltip": "Un scan par SBOM de couche",
+  "@layerScanEachTooltip": {
+    "description": "Info-bulle de la méthode Chaque couche."
+  },
+  "layerModeMetadata": "Métadonnées",
+  "@layerModeMetadata": {
+    "description": "Calcul des couches : couche d'origine indiquée par syft."
+  },
+  "layerModeMetadataTooltip": "Couche d'origine indiquée par syft — ajouts",
+  "@layerModeMetadataTooltip": {
+    "description": "Info-bulle du calcul Métadonnées."
+  },
+  "layerModeRootfs": "Rootfs",
+  "@layerModeRootfs": {
+    "description": "Calcul des couches : réanalyse après chaque couche."
+  },
+  "layerModeRootfsTooltip": "Réanalyse après chaque couche — ajouts, modifications, suppressions",
+  "@layerModeRootfsTooltip": {
+    "description": "Info-bulle du calcul Rootfs."
+  },
+  "cliCommandButton": "CLI Commande",
+  "@cliCommandButton": {
+    "description": "Bouton ouvrant le popup des lignes de commande."
+  },
+  "cliCommandDialogTitle": "Ligne de commande",
+  "@cliCommandDialogTitle": {
+    "description": "Titre du popup des lignes de commande."
+  },
+  "cliCommandCopied": "Commande copiée",
+  "@cliCommandCopied": {
+    "description": "Confirmation de copie d'une commande."
+  },
+  "cliCommandExecuted": "Commande exécutée par l'onglet",
+  "@cliCommandExecuted": {
+    "description": "Titre : commande native exécutée."
+  },
+  "cliCommandExecutedLayered": "Commandes exécutées par l'onglet (analyse par couche)",
+  "@cliCommandExecutedLayered": {
+    "description": "Titre : séquence de commandes de l'analyse par couche."
+  },
+  "cliCommandEquivalent": "Équivalent sbom-generator scan",
+  "@cliCommandEquivalent": {
+    "description": "Titre : commande sbom-generator équivalente."
+  },
+  "cliCommandLayerDirNote": "Le jeu de SBOM par couche est généré dans un répertoire temporaire (ici {dir}).",
+  "@cliCommandLayerDirNote": {
+    "description": "Remarque sur le répertoire temporaire des SBOM de couche.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      }
+    }
+  },
+  "cliCommandImageNote": "Avec --image, sbom-generator scanne le SBOM CycloneDX généré (syft), pas l'image directement.",
+  "@cliCommandImageNote": {
+    "description": "Remarque : différence de cible avec --image."
+  },
+  "cliCommandNotCarried": "Non transposable : {options}.",
+  "@cliCommandNotCarried": {
+    "description": "Remarque : options de l'onglet sans équivalent CLI.",
+    "placeholders": {
+      "options": {
+        "type": "String"
+      }
+    }
+  },
+  "cliOptionPlatform": "plateforme",
+  "@cliOptionPlatform": {
+    "description": "Nom d'option dans la liste des options non transposables."
+  },
+  "vulnTableFilter": "Filtre :",
+  "@vulnTableFilter": {
+    "description": "Libellé de la barre de filtres de sévérité."
+  },
+  "vulnTableShowAll": "Tout voir",
+  "@vulnTableShowAll": {
+    "description": "Puce réinitialisant les filtres."
+  },
+  "vulnTableKevChip": "CISA KEV ({count})",
+  "@vulnTableKevChip": {
+    "description": "Puce de filtre CISA KEV.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTableSearchHint": "Paquet ou CVE…",
+  "@vulnTableSearchHint": {
+    "description": "Champ de recherche du tableau."
+  },
+  "vulnTableEnrichOnline": "Enrichissement en ligne actif (CISA KEV / EPSS / poc-in-github) — cliquer pour passer hors-ligne",
+  "@vulnTableEnrichOnline": {
+    "description": "Info-bulle du bouton d'enrichissement (état en ligne)."
+  },
+  "vulnTableEnrichOffline": "Enrichissement hors-ligne (Grype + cache local seulement) — cliquer pour réactiver le réseau",
+  "@vulnTableEnrichOffline": {
+    "description": "Info-bulle du bouton d'enrichissement (état hors-ligne)."
+  },
+  "vulnTableExportCsv": "Exporter CSV",
+  "@vulnTableExportCsv": {
+    "description": "Info-bulle du bouton d'export CSV."
+  },
+  "vulnTableExportPdf": "Exporter en AsciiDoc + PDF",
+  "@vulnTableExportPdf": {
+    "description": "Info-bulle du bouton d'export AsciiDoc + PDF."
+  },
+  "vulnTableExportPdfDialog": "Exporter le rapport {tool} (AsciiDoc + PDF)",
+  "@vulnTableExportPdfDialog": {
+    "description": "Titre du dialogue d'export AsciiDoc + PDF.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableExported": "{count, plural, =1{1 vulnérabilité exportée → {path}} other{{count} vulnérabilités exportées → {path}}}",
+  "@vulnTableExported": {
+    "description": "Confirmation d'export.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableExportedPdf": "{count, plural, =1{1 vulnérabilité exportée → {path} et {pdf}} other{{count} vulnérabilités exportées → {path} et {pdf}}}",
+  "@vulnTableExportedPdf": {
+    "description": "Confirmation d'export AsciiDoc + PDF.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "path": {
+        "type": "String"
+      },
+      "pdf": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableExportedPdfFailed": "{count, plural, =1{1 vulnérabilité exportée → {path} (échec conversion PDF, code {code})} other{{count} vulnérabilités exportées → {path} (échec conversion PDF, code {code})}}",
+  "@vulnTableExportedPdfFailed": {
+    "description": "Export AsciiDoc réussi, conversion PDF en échec.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "path": {
+        "type": "String"
+      },
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTableExportedNoPdf": "{count, plural, =1{1 vulnérabilité exportée → {path} (asciidoctor-pdf introuvable, PDF non généré)} other{{count} vulnérabilités exportées → {path} (asciidoctor-pdf introuvable, PDF non généré)}}",
+  "@vulnTableExportedNoPdf": {
+    "description": "Export AsciiDoc réussi, asciidoctor-pdf absent.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableColSeverity": "SÉVÉRITÉ",
+  "@vulnTableColSeverity": {
+    "description": "En-tête de colonne (majuscules)."
+  },
+  "vulnTableColId": "CVE / ID",
+  "@vulnTableColId": {
+    "description": "En-tête de colonne (majuscules)."
+  },
+  "vulnTableColPackage": "PAQUET",
+  "@vulnTableColPackage": {
+    "description": "En-tête de colonne (majuscules)."
+  },
+  "vulnTableColLayer": "COUCHE",
+  "@vulnTableColLayer": {
+    "description": "En-tête de colonne (majuscules)."
+  },
+  "vulnTableUnattributed": "{count, plural, =1{1 vulnérabilité sans couche connue (paquet absent du SBOM de l'image) — colonne « ? ».} other{{count} vulnérabilités sans couche connue (paquet absent du SBOM de l'image) — colonne « ? ».}}",
+  "@vulnTableUnattributed": {
+    "description": "Bandeau : vulnérabilités sans couche connue.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTableEnrichPending": "Enrichissement en ligne (CISA KEV / EPSS / PoC) en cours…",
+  "@vulnTableEnrichPending": {
+    "description": "Bandeau pendant l'enrichissement."
+  },
+  "vulnTableNoMatchSearch": "Aucun résultat pour \"{term}\"",
+  "@vulnTableNoMatchSearch": {
+    "description": "Aucune ligne pour la recherche.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableNoMatchFilter": "Aucun résultat pour {filters}",
+  "@vulnTableNoMatchFilter": {
+    "description": "Aucune ligne pour les filtres de sévérité.",
+    "placeholders": {
+      "filters": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableOccurrences": "Ce composant est présent à {count} emplacements distincts de l'image/du SBOM (ex. une bibliothèque autonome et une copie embarquée dans un autre paquet) — la même vulnérabilité y a été fusionnée en une seule ligne.",
+  "@vulnTableOccurrences": {
+    "description": "Info-bulle du badge ×N d'occurrences fusionnées.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTableNoExploitSignal": "aucun signal d'exploitation",
+  "@vulnTableNoExploitSignal": {
+    "description": "Ligne sans signal KEV/EPSS/PoC."
+  },
+  "vulnTableKevTooltip": "CISA KEV — exploitée activement dans la nature{added}{ransomware}",
+  "@vulnTableKevTooltip": {
+    "description": "Info-bulle du badge KEV ; added/ransomware = compléments optionnels.",
+    "placeholders": {
+      "added": {
+        "type": "String"
+      },
+      "ransomware": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableKevAdded": " (ajoutée le {date})",
+  "@vulnTableKevAdded": {
+    "description": "Complément : date d'ajout au catalogue KEV.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableKevRansomware": " · usage par rançongiciel",
+  "@vulnTableKevRansomware": {
+    "description": "Complément : usage par rançongiciel."
+  },
+  "vulnTableEpssTooltip": "EPSS — probabilité d'exploitation à 30 jours (percentile {percentile})",
+  "@vulnTableEpssTooltip": {
+    "description": "Info-bulle du badge EPSS.",
+    "placeholders": {
+      "percentile": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTablePocRepos": "{count, plural, =1{1 dépôt PoC public recensé} other{{count} dépôts PoC publics recensés}}",
+  "@vulnTablePocRepos": {
+    "description": "Info-bulle du badge PoC (nombre de dépôts).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTablePocMaturity": "Maturité de l'exploit : {maturity}",
+  "@vulnTablePocMaturity": {
+    "description": "Info-bulle du badge PoC (maturité CVSS).",
+    "placeholders": {
+      "maturity": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableExploitabilityTooltip": "Sous-score d'exploitabilité CVSS (AV/AC/PR/UI){maturity}",
+  "@vulnTableExploitabilityTooltip": {
+    "description": "Info-bulle du badge d'exploitabilité ; maturity = complément optionnel.",
+    "placeholders": {
+      "maturity": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableExploitabilityMaturity": " · maturité {maturity}",
+  "@vulnTableExploitabilityMaturity": {
+    "description": "Complément : maturité de l'exploit.",
+    "placeholders": {
+      "maturity": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnTableAllLayers": "Toutes les couches",
+  "@vulnTableAllLayers": {
+    "description": "Menu de filtre par couche : aucune couche sélectionnée."
+  },
+  "vulnTableLayerItem": "Couche {index} ({count})",
+  "@vulnTableLayerItem": {
+    "description": "Entrée du menu de filtre par couche.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnTableFlatList": "Liste à plat",
+  "@vulnTableFlatList": {
+    "description": "Info-bulle : revenir à la liste à plat."
+  },
+  "vulnTableGroupByLayer": "Grouper par couche",
+  "@vulnTableGroupByLayer": {
+    "description": "Info-bulle : regrouper par couche."
+  },
+  "vulnTableLayerUnknownTooltip": "Couche inconnue (paquet absent du SBOM de l'image)",
+  "@vulnTableLayerUnknownTooltip": {
+    "description": "Info-bulle d'une couche inconnue."
+  },
+  "vulnTableLayerUnknown": "Couche inconnue",
+  "@vulnTableLayerUnknown": {
+    "description": "En-tête de groupe : couche inconnue."
+  },
+  "vulnTableLayerLabel": "Couche {index}",
+  "@vulnTableLayerLabel": {
+    "description": "Nom d'une couche (suivi éventuellement du digest).",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "dateFilterLabel": "Date CVE :",
+  "@dateFilterLabel": {
+    "description": "Libellé de la barre de filtre de date."
+  },
+  "dateFilterPublished": "Publication",
+  "@dateFilterPublished": {
+    "description": "Champ de date : publication."
+  },
+  "dateFilterModified": "Modification",
+  "@dateFilterModified": {
+    "description": "Champ de date : dernière modification."
+  },
+  "dateFilterLatest": "La plus récente",
+  "@dateFilterLatest": {
+    "description": "Champ de date : la plus récente des deux."
+  },
+  "dateFilterAfterEmpty": "Après le…",
+  "@dateFilterAfterEmpty": {
+    "description": "Puce de borne basse vide."
+  },
+  "dateFilterAfter": "Après : {date}",
+  "@dateFilterAfter": {
+    "description": "Puce de borne basse renseignée.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "dateFilterBeforeEmpty": "Avant le…",
+  "@dateFilterBeforeEmpty": {
+    "description": "Puce de borne haute vide."
+  },
+  "dateFilterBefore": "Avant : {date}",
+  "@dateFilterBefore": {
+    "description": "Puce de borne haute renseignée.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "dateFilterUndated": "Sans date",
+  "@dateFilterUndated": {
+    "description": "Case : inclure les CVE sans date."
+  },
+  "dateFilterPropagate": "Propager aux autres onglets",
+  "@dateFilterPropagate": {
+    "description": "Bouton : appliquer le filtre aux autres onglets."
+  },
+  "grypePickConfigTitle": "Choisir grype.yaml",
+  "@grypePickConfigTitle": {
+    "description": "Titre du sélecteur de configuration Grype."
+  },
+  "grypePickTemplateTitle": "Choisir un fichier template Grype",
+  "@grypePickTemplateTitle": {
+    "description": "Titre du sélecteur de template Grype."
+  },
+  "grypeTabTable": "Table ({count})",
+  "@grypeTabTable": {
+    "description": "Onglet de résultats : tableau.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "grypeTabJson": "JSON",
+  "@grypeTabJson": {
+    "description": "Onglet de résultats : JSON brut."
+  },
+  "grypeTabTemplate": "Template",
+  "@grypeTabTemplate": {
+    "description": "Onglet de résultats : sortie template."
+  },
+  "grypeColType": "TYPE",
+  "@grypeColType": {
+    "description": "En-tête de la colonne supplémentaire (type de paquet)."
+  },
+  "grypePlatformHelp": "Optionnel. Force la plateforme cible sur une\nimage multi-architecture, ex. linux/arm64.\nLaisser vide = détection automatique par\ngrype (la case --platform linux ci-dessous ne\ns'applique pas en mode image).",
+  "@grypePlatformHelp": {
+    "description": "Aide du champ Plateforme (Grype)."
+  },
+  "grypePlatformLinuxHelp": "Fixe la plateforme cible à linux/amd64.\nÀ activer si Grype ne détecte pas\nautomatiquement la plateforme de l'image.",
+  "@grypePlatformLinuxHelp": {
+    "description": "Aide de l'option --platform linux."
+  },
+  "grypeAddCpesHelp": "Génère des CPE (Common Platform Enumeration)\npour les paquets qui n'en ont pas.\nAméliore le taux de correspondance CVE.",
+  "@grypeAddCpesHelp": {
+    "description": "Aide de l'option --add-cpes-if-none."
+  },
+  "grypeByCveHelp": "Groupe les résultats par CVE plutôt que par\npaquet. Évite les doublons quand plusieurs\npaquets sont touchés par la même CVE.",
+  "@grypeByCveHelp": {
+    "description": "Aide de l'option --by-cve."
+  },
+  "grypeDistroHelp": "Distribution cible pour l'évaluation des CVE.\nSi vide, Grype tente de la détecter\nautomatiquement depuis le SBOM.",
+  "@grypeDistroHelp": {
+    "description": "Aide de l'option --distro."
+  },
+  "grypeFailOnHelp": "Sévérité minimum pour que Grype retourne\nun code d'erreur 1 (utile en CI/CD).\nSi vide, Grype retourne toujours 0.",
+  "@grypeFailOnHelp": {
+    "description": "Aide de l'option --fail-on."
+  },
+  "grypeOnlyFixedHelp": "N'affiche que les vulnérabilités pour lesquelles\nune version corrigée est disponible.",
+  "@grypeOnlyFixedHelp": {
+    "description": "Aide de l'option --only-fixed."
+  },
+  "grypeTemplateLabel": "Template (-t)",
+  "@grypeTemplateLabel": {
+    "description": "Libellé du champ template."
+  },
+  "grypeTemplateHelp": "Modèle Go pour formater la sortie de Grype.\nEx : ./grype_csv.tmpl pour un export CSV.\nVoir la doc Grype pour la syntaxe des templates.",
+  "@grypeTemplateHelp": {
+    "description": "Aide du champ template."
+  },
+  "grypeConfigLabel": "grype.yaml (optionnel)",
+  "@grypeConfigLabel": {
+    "description": "Libellé du champ de configuration Grype."
+  },
+  "grypeConfigHelp": "Fichier de configuration Grype (YAML).\nPermet de définir des exceptions, des sources\nde données, ou de personnaliser le comportement.",
+  "@grypeConfigHelp": {
+    "description": "Aide du champ de configuration Grype."
+  },
+  "grypeConfigHint": "/chemin/vers/grype.yaml",
+  "@grypeConfigHint": {
+    "description": "Exemple du champ de configuration Grype."
+  },
+  "grypeTemplateEmptyRun": "Lancez l'analyse pour afficher la sortie template",
+  "@grypeTemplateEmptyRun": {
+    "description": "Vue template vide (template configuré)."
+  },
+  "grypeTemplateEmptyConfigure": "Configurez un fichier template (-t) pour activer cette vue",
+  "@grypeTemplateEmptyConfigure": {
+    "description": "Vue template vide (aucun template)."
+  },
+  "grypeTemplateCopyTooltip": "Copier la sortie",
+  "@grypeTemplateCopyTooltip": {
+    "description": "Info-bulle de copie de la sortie template."
+  },
+  "grypeTemplateCopied": "Sortie template copiée",
+  "@grypeTemplateCopied": {
+    "description": "Confirmation de copie de la sortie template."
+  },
+  "grypeEmptyHint": "Choisissez un fichier SBOM ou une image de conteneur,\npuis lancez l'analyse Grype",
+  "@grypeEmptyHint": {
+    "description": "État initial de l'onglet Grype."
+  },
+  "grypeRunning": "Analyse Grype en cours…",
+  "@grypeRunning": {
+    "description": "État pendant l'analyse Grype."
+  },
+  "grypeCliTemplateOutputNote": "Sortie du template écrite dans un fichier temporaire (ici {file}).",
+  "@grypeCliTemplateOutputNote": {
+    "description": "Remarque CLI : fichier de sortie du template.",
+    "placeholders": {
+      "file": {
+        "type": "String"
+      }
+    }
+  },
+  "grypeCliTemplateNotLayered": "Le template (-t) n'est pas appliqué en analyse par couche.",
+  "@grypeCliTemplateNotLayered": {
+    "description": "Remarque CLI : template ignoré par couche."
+  },
+  "grypeCliCpesByCveUnchecked": "décochage de --add-cpes-if-none / --by-cve (toujours actifs)",
+  "@grypeCliCpesByCveUnchecked": {
+    "description": "Option non transposable : cases décochées."
+  },
+  "layerScanStepPreparing": "Préparation des SBOM de couche…",
+  "@layerScanStepPreparing": {
+    "description": "Étape de l'analyse par couche : génération des SBOM."
+  },
+  "layerScanStepImage": "Analyse de l'image…",
+  "@layerScanStepImage": {
+    "description": "Étape de l'analyse par couche : scan de l'image (rattachement)."
+  },
+  "layerScanStepLayer": "Couche {index}/{total}…",
+  "@layerScanStepLayer": {
+    "description": "Étape de l'analyse par couche : scan du SBOM d'une couche.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
+}

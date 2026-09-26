@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI — localisation français / anglais (début)** : infrastructure
+  `gen-l10n` (fichiers ARB `gui/lib/l10n/`, français comme référence,
+  pluriels ICU), menu *Langue de l'interface* (Système / Français /
+  English, mémorisé, repli sur le français). Traduits : composants communs
+  aux onglets de scan (tableau, filtres, sources, analyse par couche, popup
+  CLI) et onglet Grype. Les autres écrans, les rapports exportés, l'aide et
+  le CLI suivront.
+
 ## [1.5.14] - 2026-09-27
 
 ### Added

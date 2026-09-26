@@ -17,6 +17,29 @@ typedef LayeredScanOutcome = ({
   LayerScanResult layerScan,
 });
 
+/// Étape en cours d'une analyse par couche (libellé fourni par l'interface,
+/// dans sa langue — voir `layerScanStepLabel`).
+sealed class LayerScanStep {
+  const LayerScanStep();
+}
+
+/// Génération du jeu de SBOM par couche.
+class LayerScanPreparing extends LayerScanStep {
+  const LayerScanPreparing();
+}
+
+/// Scan de l'image (méthode « rattachement »).
+class LayerScanScanningImage extends LayerScanStep {
+  const LayerScanScanningImage();
+}
+
+/// Scan du SBOM de la couche [index] sur [total] (méthode « chaque couche »).
+class LayerScanScanningLayer extends LayerScanStep {
+  final int index;
+  final int total;
+  const LayerScanScanningLayer(this.index, this.total);
+}
+
 /// Prépare les jeux de SBOM par couche (`sbom-generator --per-layer`) et
 /// orchestre l'analyse par couche des onglets de scan.
 class LayerScanService {
@@ -102,13 +125,13 @@ class LayerScanService {
     required List<VulnRow> Function(String json) parse,
     required String Function(List<String> outputs) merge,
     Map<String, String> Function(String json)? nativeDigests,
-    void Function(String status)? onStatus,
+    void Function(LayerScanStep step)? onStatus,
     bool Function()? isCancelled,
 
     /// Remplace [prepare] (tests).
     Future<LayeredSbomSet> Function(String image, String layerMode)? prepareSet,
   }) async {
-    onStatus?.call('Préparation des SBOM de couche…');
+    onStatus?.call(const LayerScanPreparing());
     final set = await (prepareSet ?? prepare)(image, settings.layerMode);
 
     if (settings.mode == LayerScanMode.each) {
@@ -120,7 +143,7 @@ class LayerScanService {
         if (isCancelled?.call() ?? false) break;
         final path = l.path;
         if (path == null) continue;
-        onStatus?.call('Couche ${l.index}/${set.layers.length}…');
+        onStatus?.call(LayerScanScanningLayer(l.index, set.layers.length));
         final out = await scanOnce(path, false);
         if (out.exitCode > exitCode) exitCode = out.exitCode;
         if (out.stderr != null && out.json.isEmpty) {
@@ -142,7 +165,7 @@ class LayerScanService {
       );
     }
 
-    onStatus?.call('Analyse de l\'image…');
+    onStatus?.call(const LayerScanScanningImage());
     final out = await scanOnce(image, true);
     final byKey = <String, Set<int>>{};
     var unknown = 0;

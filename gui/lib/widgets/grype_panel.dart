@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'help_icon.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
 import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
 import '../models/sbom_result.dart';
@@ -254,7 +255,7 @@ class _GrypePanelState extends State<GrypePanel>
     final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
-      dialogTitle: 'Choisir un fichier SBOM',
+      dialogTitle: context.l10n.scanPickSbomTitle,
     );
     if (result?.files.single.path != null) {
       setState(() => _fileCtrl.text = result!.files.single.path!);
@@ -265,7 +266,7 @@ class _GrypePanelState extends State<GrypePanel>
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['tar', 'gz', 'tgz'],
-      dialogTitle: 'Choisir une archive image (docker save / OCI)',
+      dialogTitle: context.l10n.scanPickImageArchiveTitle,
     );
     if (result?.files.single.path != null) {
       setState(() => _imageCtrl.text = result!.files.single.path!);
@@ -274,7 +275,7 @@ class _GrypePanelState extends State<GrypePanel>
 
   Future<void> _pickImageOciDir() async {
     final dir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Choisir un répertoire OCI layout',
+      dialogTitle: context.l10n.scanSourcePickOciDir,
     );
     if (dir != null) setState(() => _imageCtrl.text = dir);
   }
@@ -283,7 +284,7 @@ class _GrypePanelState extends State<GrypePanel>
     final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['yaml', 'yml'] : null,
-      dialogTitle: 'Choisir grype.yaml',
+      dialogTitle: context.l10n.grypePickConfigTitle,
     );
     if (result?.files.single.path != null) {
       setState(() => _configCtrl.text = result!.files.single.path!);
@@ -294,7 +295,7 @@ class _GrypePanelState extends State<GrypePanel>
     final result = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['tmpl', 'tpl', 'txt'] : null,
-      dialogTitle: 'Choisir un fichier template Grype',
+      dialogTitle: context.l10n.grypePickTemplateTitle,
     );
     if (result?.files.single.path != null) {
       setState(() => _templateCtrl.text = result!.files.single.path!);
@@ -306,8 +307,8 @@ class _GrypePanelState extends State<GrypePanel>
     final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
     if (target.isEmpty) {
       setState(() => _error = useImage
-          ? 'Veuillez indiquer une image à analyser.'
-          : 'Veuillez sélectionner un fichier SBOM.');
+          ? context.l10n.scanSourceMissingImage
+          : context.l10n.scanSourceMissingSbom);
       return;
     }
     // Une référence de registre (nginx:latest) n'est pas un chemin local :
@@ -315,7 +316,7 @@ class _GrypePanelState extends State<GrypePanel>
     // répertoire OCI local explicitement désigné comme tel (préfixe ./, /, ~).
     if ((!useImage || looksLikeLocalPath(target)) && !File(target).existsSync()
         && !Directory(target).existsSync()) {
-      setState(() => _error = 'Fichier introuvable : $target');
+      setState(() => _error = context.l10n.commonFileNotFound(target));
       return;
     }
 
@@ -370,7 +371,7 @@ class _GrypePanelState extends State<GrypePanel>
                 _jsonOutput = jsonOutput;
                 _vulns = [];
                 _parseFailed = true;
-                _error = 'Sortie grype illisible (JSON invalide) : $e';
+                _error = context.l10n.scanUnreadableOutput('grype', '$e');
               });
             }
           case GrypeTemplateEvent(:final content):
@@ -448,9 +449,10 @@ class _GrypePanelState extends State<GrypePanel>
           templateOutput: 'grype_template.txt',
         );
 
+    final l10n = context.l10n;
     final native = layered
         ? CliCommandSection(
-            'Commandes exécutées par l\'onglet (analyse par couche)',
+            l10n.cliCommandExecutedLayered,
             layeredCliSequence(
               cliBinary: SettingsService.cliBinary,
               prepareArgs: LayerScanService.prepareArgs(target,
@@ -460,17 +462,16 @@ class _GrypePanelState extends State<GrypePanel>
               layerScan: (f) => shellCommand('grype', args('LAYER_SBOM', false))
                   .replaceAll('LAYER_SBOM', f),
             ),
-            note: 'Le jeu de SBOM par couche est généré dans un répertoire '
-                'temporaire (ici $cliLayerDir).'
-                '${tmpl.isNotEmpty ? ' Le template (-t) n\'est pas appliqué '
-                    'en analyse par couche.' : ''}',
+            note: [
+              l10n.cliCommandLayerDirNote(cliLayerDir),
+              if (tmpl.isNotEmpty) l10n.grypeCliTemplateNotLayered,
+            ].join(' '),
           )
         : CliCommandSection(
-            'Commande exécutée par l\'onglet',
+            l10n.cliCommandExecuted,
             shellCommand('grype', args(target, useImage, withTemplate: true)),
             note: tmpl.isNotEmpty
-                ? 'Sortie du template écrite dans un fichier temporaire '
-                    '(ici grype_template.txt).'
+                ? l10n.grypeCliTemplateOutputNote('grype_template.txt')
                 : null,
           );
 
@@ -480,14 +481,14 @@ class _GrypePanelState extends State<GrypePanel>
       if (_onlyFixed) '--only-fixed',
       if (_distroVersion.isNotEmpty) '--distro',
       if (_configCtrl.text.trim().isNotEmpty) 'grype.yaml',
-      if (useImage && _imagePlatformCtrl.text.trim().isNotEmpty) 'plateforme',
-      if (!_addCpesIfNone || !_byCve)
-        'décochage de --add-cpes-if-none / --by-cve (toujours actifs)',
+      if (useImage && _imagePlatformCtrl.text.trim().isNotEmpty)
+        l10n.cliOptionPlatform,
+      if (!_addCpesIfNone || !_byCve) l10n.grypeCliCpesByCveUnchecked,
     ];
     return [
       native,
       CliCommandSection(
-        'Équivalent sbom-generator scan',
+        l10n.cliCommandEquivalent,
         shellCommand(
           SettingsService.cliBinary,
           sbomGeneratorScanArgs(
@@ -499,7 +500,7 @@ class _GrypePanelState extends State<GrypePanel>
             enrichOnline: _enrichOnline,
           ),
         ),
-        note: equivalentScanNote(useImage, notCarried),
+        note: equivalentScanNote(l10n, useImage, notCarried),
       ),
     ];
   }
@@ -532,8 +533,10 @@ class _GrypePanelState extends State<GrypePanel>
         scanOnce: _scanOnce,
         parse: GrypeVuln.fromJson,
         merge: mergeGrypeJson,
-        onStatus: (st) {
-          if (mounted) setState(() => _status = st);
+        onStatus: (step) {
+          if (mounted) {
+            setState(() => _status = layerScanStepLabel(context.l10n, step));
+          }
         },
         isCancelled: () => _layeredCancelled,
       );
@@ -547,7 +550,7 @@ class _GrypePanelState extends State<GrypePanel>
               GrypeVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
         } catch (e) {
           parseFailed = true;
-          error = 'Sortie grype illisible (JSON invalide) : $e';
+          error = context.l10n.scanUnreadableOutput('grype', '$e');
         }
       }
       setState(() {
@@ -680,27 +683,27 @@ class _GrypePanelState extends State<GrypePanel>
                     children: [
                       const Icon(Icons.table_rows_outlined, size: 16),
                       const SizedBox(width: 6),
-                      Text('Table (${_vulns.length})'),
+                      Text(context.l10n.grypeTabTable(_vulns.length)),
                     ],
                   ),
                 ),
-                const Tab(
+                Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.data_object, size: 16),
-                      SizedBox(width: 6),
-                      Text('JSON'),
+                      const Icon(Icons.data_object, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.grypeTabJson),
                     ],
                   ),
                 ),
-                const Tab(
+                Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.article_outlined, size: 16),
-                      SizedBox(width: 6),
-                      Text('Template'),
+                      const Icon(Icons.article_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.grypeTabTemplate),
                     ],
                   ),
                 ),
@@ -715,12 +718,12 @@ class _GrypePanelState extends State<GrypePanel>
                   vulns: _vulns,
                   parseFailed: _parseFailed,
                   parseFailedMessage:
-                      'Sortie grype illisible : voir le message d\'erreur ci-dessus',
+                      context.l10n.scanUnreadableOutputShort('grype'),
                   severityOrder: const [
                     'Critical', 'High', 'Medium', 'Low', 'Negligible'
                   ],
                   toolName: 'Grype',
-                  csvDialogTitle: 'Exporter les vulnérabilités Grype',
+                  csvDialogTitle: context.l10n.scanExportCsvDialog('Grype'),
                   csvFileName: 'grype_vulns.csv',
                   csvHeader:
                       'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Type,Emplacements',
@@ -733,7 +736,7 @@ class _GrypePanelState extends State<GrypePanel>
                     v.packageType,
                     '${v.occurrenceCount}',
                   ],
-                  extraColumnHeader: 'TYPE',
+                  extraColumnHeader: context.l10n.grypeColType,
                   extraOf: (v) => v.packageType,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
@@ -849,6 +852,7 @@ class _ConfigSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
       child: Column(
@@ -882,10 +886,10 @@ class _ConfigSection extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: fileCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Fichier SBOM',
-                      hintText: 'chemin/vers/sbom.cdx.json',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l10n.scanSourceSbom,
+                      hintText: l10n.commonSbomFileHint,
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     style: const TextStyle(
@@ -913,17 +917,10 @@ class _ConfigSection extends StatelessWidget {
               child: TextField(
                 controller: imagePlatformCtrl,
                 enabled: !isRunning,
-                decoration: const InputDecoration(
-                  label: HelpLabel(
-                    'Plateforme',
-                    'Optionnel. Force la plateforme cible sur une\n'
-                        'image multi-architecture, ex. linux/arm64.\n'
-                        'Laisser vide = détection automatique par\n'
-                        'grype (la case --platform linux ci-dessous ne\n'
-                        's\'applique pas en mode image).',
-                  ),
-                  hintText: 'linux/amd64, linux/arm64…',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  label: HelpLabel(l10n.commonPlatform, l10n.grypePlatformHelp),
+                  hintText: l10n.commonPlatformHint,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
@@ -948,30 +945,21 @@ class _ConfigSection extends StatelessWidget {
                 value: platformLinux,
                 enabled: !isRunning,
                 onChanged: onPlatformLinuxChanged,
-                helpText:
-                    'Fixe la plateforme cible à linux/amd64.\n'
-                    'À activer si Grype ne détecte pas\n'
-                    'automatiquement la plateforme de l\'image.',
+                helpText: l10n.grypePlatformLinuxHelp,
               ),
               _CheckOption(
                 label: '--add-cpes-if-none',
                 value: addCpesIfNone,
                 enabled: !isRunning,
                 onChanged: onAddCpesIfNoneChanged,
-                helpText:
-                    'Génère des CPE (Common Platform Enumeration)\n'
-                    'pour les paquets qui n\'en ont pas.\n'
-                    'Améliore le taux de correspondance CVE.',
+                helpText: l10n.grypeAddCpesHelp,
               ),
               _CheckOption(
                 label: '--by-cve',
                 value: byCve,
                 enabled: !isRunning,
                 onChanged: onByCveChanged,
-                helpText:
-                    'Groupe les résultats par CVE plutôt que par\n'
-                    'paquet. Évite les doublons quand plusieurs\n'
-                    'paquets sont touchés par la même CVE.',
+                helpText: l10n.grypeByCveHelp,
               ),
             ],
           ),
@@ -989,17 +977,14 @@ class _ConfigSection extends StatelessWidget {
                     .map((v) => DropdownMenuItem(
                           value: v,
                           child: Text(
-                            v.isEmpty ? '(aucune)' : 'rhel:$v',
+                            v.isEmpty ? l10n.commonNoneFeminine : 'rhel:$v',
                             style: const TextStyle(fontSize: 13),
                           ),
                         ))
                     .toList(),
                 enabled: !isRunning,
                 onChanged: (v) => onDistroVersionChanged(v ?? ''),
-                helpText:
-                    'Distribution cible pour l\'évaluation des CVE.\n'
-                    'Si vide, Grype tente de la détecter\n'
-                    'automatiquement depuis le SBOM.',
+                helpText: l10n.grypeDistroHelp,
               ),
               const SizedBox(width: 16),
 
@@ -1011,17 +996,14 @@ class _ConfigSection extends StatelessWidget {
                     .map((s) => DropdownMenuItem(
                           value: s,
                           child: Text(
-                            s.isEmpty ? '(aucun)' : s,
+                            s.isEmpty ? l10n.commonNone : s,
                             style: const TextStyle(fontSize: 13),
                           ),
                         ))
                     .toList(),
                 enabled: !isRunning,
                 onChanged: (v) => onFailOnChanged(v ?? ''),
-                helpText:
-                    'Sévérité minimum pour que Grype retourne\n'
-                    'un code d\'erreur 1 (utile en CI/CD).\n'
-                    'Si vide, Grype retourne toujours 0.',
+                helpText: l10n.grypeFailOnHelp,
               ),
               const SizedBox(width: 8),
 
@@ -1031,9 +1013,7 @@ class _ConfigSection extends StatelessWidget {
                 value: onlyFixed,
                 enabled: !isRunning,
                 onChanged: onOnlyFixedChanged,
-                helpText:
-                    'N\'affiche que les vulnérabilités pour lesquelles\n'
-                    'une version corrigée est disponible.',
+                helpText: l10n.grypeOnlyFixedHelp,
               ),
 
               const Spacer(),
@@ -1046,14 +1026,14 @@ class _ConfigSection extends StatelessWidget {
                   ? OutlinedButton.icon(
                       onPressed: onStop,
                       icon: const Icon(Icons.stop, size: 18),
-                      label: const Text('Stop'),
+                      label: Text(l10n.commonStop),
                       style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red),
                     )
                   : FilledButton.icon(
                       onPressed: onRun,
                       icon: const Icon(Icons.security, size: 18),
-                      label: const Text('Analyser'),
+                      label: Text(l10n.commonAnalyze),
                     ),
             ],
           ),
@@ -1065,15 +1045,10 @@ class _ConfigSection extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: templateCtrl,
-                  decoration: const InputDecoration(
-                    label: HelpLabel(
-                      'Template (-t)',
-                      'Modèle Go pour formater la sortie de Grype.\n'
-                          'Ex : ./grype_csv.tmpl pour un export CSV.\n'
-                          'Voir la doc Grype pour la syntaxe des templates.',
-                    ),
+                  decoration: InputDecoration(
+                    label: HelpLabel(l10n.grypeTemplateLabel, l10n.grypeTemplateHelp),
                     hintText: './grype_csv.tmpl',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   style: const TextStyle(
@@ -1096,15 +1071,10 @@ class _ConfigSection extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: configCtrl,
-                  decoration: const InputDecoration(
-                    label: HelpLabel(
-                      'grype.yaml (optionnel)',
-                      'Fichier de configuration Grype (YAML).\n'
-                          'Permet de définir des exceptions, des sources\n'
-                          'de données, ou de personnaliser le comportement.',
-                    ),
-                    hintText: '/chemin/vers/grype.yaml',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    label: HelpLabel(l10n.grypeConfigLabel, l10n.grypeConfigHelp),
+                    hintText: l10n.grypeConfigHint,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   style: const TextStyle(
@@ -1260,8 +1230,8 @@ class _GrypeBanner extends StatelessWidget {
       if ((counts[s] ?? 0) > 0) parts.add('${counts[s]} $s');
     }
     final summary = vulns.isEmpty
-        ? 'Aucune vulnérabilité détectée'
-        : '${vulns.length} vulnérabilité(s) : ${parts.join(', ')}';
+        ? context.l10n.scanNoVulnerabilities
+        : context.l10n.scanSummary(vulns.length, parts.join(', '));
 
     return Container(
       color: bgColor,
@@ -1301,8 +1271,8 @@ class _TemplateView extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               hasTemplate
-                  ? 'Lancez l\'analyse pour afficher la sortie template'
-                  : 'Configurez un fichier template (-t) pour activer cette vue',
+                  ? context.l10n.grypeTemplateEmptyRun
+                  : context.l10n.grypeTemplateEmptyConfigure,
               style: const TextStyle(color: Colors.grey, fontSize: 14),
               textAlign: TextAlign.center,
             ),
@@ -1333,16 +1303,16 @@ class _TemplateView extends StatelessWidget {
           top: 8,
           right: 8,
           child: Tooltip(
-            message: 'Copier la sortie',
+            message: context.l10n.grypeTemplateCopyTooltip,
             child: IconButton(
               icon: const Icon(Icons.copy_outlined,
                   size: 18, color: Colors.white70),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: content));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Sortie template copiée'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(context.l10n.grypeTemplateCopied),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               },
@@ -1360,17 +1330,16 @@ class _GrypeEmptyHint extends StatelessWidget {
   const _GrypeEmptyHint();
 
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.security_outlined, size: 56, color: Colors.grey),
-            SizedBox(height: 12),
+            const Icon(Icons.security_outlined, size: 56, color: Colors.grey),
+            const SizedBox(height: 12),
             Text(
-              'Choisissez un fichier SBOM ou une image de conteneur,\n'
-              'puis lancez l\'analyse Grype',
+              context.l10n.grypeEmptyHint,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 15),
+              style: const TextStyle(color: Colors.grey, fontSize: 15),
             ),
           ],
         ),
@@ -1381,15 +1350,15 @@ class _GrypeRunningHint extends StatelessWidget {
   const _GrypeRunningHint();
 
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
             Text(
-              'Analyse Grype en cours…',
-              style: TextStyle(color: Colors.grey, fontSize: 15),
+              context.l10n.grypeRunning,
+              style: const TextStyle(color: Colors.grey, fontSize: 15),
             ),
           ],
         ),

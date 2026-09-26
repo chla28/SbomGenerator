@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
+import '../l10n/l10n.dart';
 import '../models/layer_scan.dart';
 import '../services/layer_scan_service.dart';
 import '../services/osv_runner.dart';
@@ -476,7 +477,7 @@ class _OsvPanelState extends State<OsvPanel>
             enrichOnline: _enrichOnline,
           ),
         ),
-        note: equivalentScanNote(
+        note: equivalentScanNote(context.l10n,
             useImage, [if (config != null) 'fichier de config (toml)']),
       ),
     ];
@@ -511,8 +512,10 @@ class _OsvPanelState extends State<OsvPanel>
         parse: OsvVuln.fromJson,
         merge: mergeOsvJson,
         nativeDigests: osvLayerDigests,
-        onStatus: (st) {
-          if (mounted) setState(() => _status = st);
+        onStatus: (step) {
+          if (mounted) {
+            setState(() => _status = layerScanStepLabel(context.l10n, step));
+          }
         },
         isCancelled: () => _layeredCancelled,
       );

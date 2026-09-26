@@ -8,6 +8,7 @@ import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
 import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
+import '../l10n/l10n.dart';
 import '../models/layer_scan.dart';
 import '../services/layer_scan_service.dart';
 import '../services/trivy_runner.dart';
@@ -436,7 +437,7 @@ class _TrivyPanelState extends State<TrivyPanel>
             enrichOnline: _enrichOnline,
           ),
         ),
-        note: equivalentScanNote(useImage, [
+        note: equivalentScanNote(context.l10n, useImage, [
           if (_selectedSeverities.isNotEmpty) '--severity',
           if (_ignoreUnfixed) '--ignore-unfixed',
           if (_skipDbUpdate) '--skip-db-update',
@@ -476,8 +477,10 @@ class _TrivyPanelState extends State<TrivyPanel>
         parse: TrivyVuln.fromJson,
         merge: mergeTrivyJson,
         nativeDigests: trivyLayerDigests,
-        onStatus: (st) {
-          if (mounted) setState(() => _status = st);
+        onStatus: (step) {
+          if (mounted) {
+            setState(() => _status = layerScanStepLabel(context.l10n, step));
+          }
         },
         isCancelled: () => _layeredCancelled,
       );

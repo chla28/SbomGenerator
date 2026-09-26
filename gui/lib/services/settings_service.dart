@@ -13,6 +13,7 @@ class SettingsService {
   static const _themeColorKey = 'theme_color_index';
   static const _scanEnrichKey = 'scan_enrich_online_v1';
   static const _reportSeverityKey = 'dashboard_report_severity_v1';
+  static const _languageKey = 'ui_language_v1';
 
   static String get cliBinary {
     final exeDir = p.dirname(Platform.resolvedExecutable);
@@ -79,6 +80,17 @@ class SettingsService {
   static Future<void> saveScanEnrichOnline(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_scanEnrichKey, value);
+  }
+
+  /// Langue de l'interface (`system`, `fr`, `en` — voir `AppLanguage`).
+  static Future<String?> loadLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_languageKey);
+  }
+
+  static Future<void> saveLanguage(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languageKey, value);
   }
 
   /// Seuil de sévérité du rapport PDF du tableau de bord (nom de la valeur

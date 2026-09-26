@@ -1,0 +1,8 @@
+# Localisation de l'interface (flutter gen-l10n) — voir doc/developer.adoc,
+# « Localisation (FR / EN) ». Le français est la langue de référence : toute
+# nouvelle clé est d'abord ajoutée à app_fr.arb (avec sa description), puis
+# traduite dans les autres fichiers ARB.
+arb-dir: lib/l10n
+template-arb-file: app_fr.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
