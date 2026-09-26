@@ -385,6 +385,68 @@ class _TrivyPanelState extends State<TrivyPanel>
             _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
       );
 
+  /// Commandes du popup « CLI Commande » pour le paramétrage courant.
+  List<CliCommandSection> _cliSections() {
+    final useImage = _sourceKind == ScanSourceKind.image;
+    final raw = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    final target =
+        raw.isNotEmpty ? raw : (useImage ? '<image>' : '<sbom.cdx.json>');
+    final config =
+        _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim();
+    final platform = _imagePlatformCtrl.text.trim();
+    List<String> args(String t, bool image) => TrivyRunner.buildArgs(
+          target: t,
+          useImage: image,
+          platform: image && platform.isNotEmpty ? platform : null,
+          severities: _selectedSeverities.toList(),
+          ignoreUnfixed: _ignoreUnfixed,
+          skipDbUpdate: _skipDbUpdate,
+          configFile: config,
+        );
+    final layered = useImage && _layerSettings.enabled;
+    return [
+      layered
+          ? CliCommandSection(
+              'Commandes exécutées par l\'onglet (analyse par couche)',
+              layeredCliSequence(
+                cliBinary: SettingsService.cliBinary,
+                prepareArgs: LayerScanService.prepareArgs(target,
+                    _layerSettings.layerMode, '$cliLayerDir/image.cdx.json'),
+                layers: _layerSettings,
+                imageScan: shellCommand('trivy', args(target, true)),
+                layerScan: (f) =>
+                    shellCommand('trivy', args('LAYER_SBOM', false))
+                        .replaceAll('LAYER_SBOM', f),
+              ),
+              note: 'Le jeu de SBOM par couche est généré dans un répertoire '
+                  'temporaire (ici $cliLayerDir).',
+            )
+          : CliCommandSection('Commande exécutée par l\'onglet',
+              shellCommand('trivy', args(target, useImage))),
+      CliCommandSection(
+        'Équivalent sbom-generator scan',
+        shellCommand(
+          SettingsService.cliBinary,
+          sbomGeneratorScanArgs(
+            scanner: 'trivy',
+            target: target,
+            useImage: useImage,
+            layers: _layerSettings,
+            dateFilter: widget.dateFilter,
+            enrichOnline: _enrichOnline,
+          ),
+        ),
+        note: equivalentScanNote(useImage, [
+          if (_selectedSeverities.isNotEmpty) '--severity',
+          if (_ignoreUnfixed) '--ignore-unfixed',
+          if (_skipDbUpdate) '--skip-db-update',
+          if (config != null) 'fichier de config',
+          if (useImage && platform.isNotEmpty) 'plateforme',
+        ]),
+      ),
+    ];
+  }
+
   Future<ScanOutput> _scanOnce(String target, bool useImage) async {
     var json = '';
     var code = 1;
@@ -505,6 +567,7 @@ class _TrivyPanelState extends State<TrivyPanel>
               setState(() => _skipDbUpdate = v ?? false),
           onRun: _analyze,
           onStop: _stop,
+          cliSections: _cliSections,
           versionInfo: _versionInfo,
         ),
         if (_isRunning && _status != null) ...[
@@ -627,6 +690,7 @@ class _ConfigSection extends StatelessWidget {
   final ValueChanged<bool?> onSkipDbUpdateChanged;
   final VoidCallback onRun;
   final VoidCallback onStop;
+  final List<CliCommandSection> Function() cliSections;
   final ToolVersionInfo? versionInfo;
 
   static const _severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
@@ -663,6 +727,7 @@ class _ConfigSection extends StatelessWidget {
     required this.onSkipDbUpdateChanged,
     required this.onRun,
     required this.onStop,
+    required this.cliSections,
     this.versionInfo,
   });
 
@@ -874,27 +939,32 @@ class _ConfigSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          SizedBox(
-            width: double.infinity,
-            child: isRunning
-                ? OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(42),
-                      side: const BorderSide(color: Colors.red),
-                      foregroundColor: Colors.red,
-                    ),
-                    onPressed: onStop,
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Arrêter'),
-                  )
-                : FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(42),
-                    ),
-                    onPressed: onRun,
-                    icon: const Icon(Icons.search),
-                    label: const Text('Analyser avec trivy'),
-                  ),
+          Row(
+            children: [
+              Expanded(
+                child: isRunning
+                    ? OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(42),
+                          side: const BorderSide(color: Colors.red),
+                          foregroundColor: Colors.red,
+                        ),
+                        onPressed: onStop,
+                        icon: const Icon(Icons.stop),
+                        label: const Text('Arrêter'),
+                      )
+                    : FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(42),
+                        ),
+                        onPressed: onRun,
+                        icon: const Icon(Icons.search),
+                        label: const Text('Analyser avec trivy'),
+                      ),
+              ),
+              const SizedBox(width: 8),
+              CliCommandButton(sections: cliSections, height: 42),
+            ],
           ),
         ],
       ),

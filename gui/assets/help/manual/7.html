@@ -124,7 +124,45 @@ Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="sec-scan-couches">8.3. Analyse par couche (source « Image de conteneur »)</h3>
+<h3 id="sec-cli-commande">8.3. Ligne de commande (bouton <strong>CLI Commande</strong>)</h3>
+<div class="paragraph">
+<p>Le bouton <strong>CLI Commande</strong>, à côté du bouton d’analyse (commun aux trois
+onglets de scan), ouvre un popup avec les commandes correspondant au
+paramétrage courant de l’onglet, chacune avec un bouton <strong>Copier</strong> :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Commande exécutée par l’onglet</strong> — la ligne <code>grype</code> / <code>osv-scanner</code> /
+<code>trivy</code> exacte, avec toutes les options de l’onglet (construite par le
+même code que l’exécution). Avec l’option <strong>Par couche</strong> (voir
+<a href="#sec-scan-couches">Analyse par couche (source « Image de conteneur »)</a>), la séquence réellement lancée : génération du jeu
+de SBOM par couche (<code>sbom-generator --image … --per-layer</code>), puis le scan
+de l’image (<strong>Rattachement</strong>) ou une boucle <code>for f in …; do …; done</code> sur les
+SBOM de couche (<strong>Chaque couche</strong>). Le répertoire temporaire de
+l’application est remplacé par <code>/tmp/sbom-couches</code>.</p>
+</li>
+<li>
+<p><strong>Équivalent sbom-generator scan</strong> — la commande du CLI du projet qui
+produit le même type d’analyse : cible (<code>--sbom</code> ou <code>--image</code>),
+<code>--scanner</code>, options par couche (<code>--per-layer --layer-scan …
+--layer-mode …</code>), filtre de date de l’onglet (<code>--cve-after</code>,
+<code>--cve-before</code>, <code>--cve-date-field</code>, <code>--include-undated</code>) et
+enrichissement hors-ligne (<code>--no-enrich</code>). Une remarque signale les
+options de l’onglet sans équivalent (template, <code>--fail-on</code>,
+<code>--only-fixed</code>, sévérités Trivy, fichiers de configuration…) et
+rappelle qu’avec <code>--image</code>, <code>sbom-generator scan</code> analyse le SBOM
+généré par syft et non l’image directement.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Tant que la cible n’est pas renseignée, elle apparaît sous la forme
+<code>&lt;sbom.cdx.json&gt;</code> ou <code>&lt;image&gt;</code>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-scan-couches">8.4. Analyse par couche (source « Image de conteneur »)</h3>
 <div class="paragraph">
 <p>En mode <strong>Image de conteneur</strong>, la case <strong>Par couche</strong> (commune aux trois
 onglets de scan) attribue chaque vulnérabilité à la <strong>couche</strong> de l’image qui
@@ -217,9 +255,9 @@ outil.
 </div>
 </div>
 <div class="sect2">
-<h3 id="_options_de_scan">8.4. Options de scan</h3>
+<h3 id="_options_de_scan">8.5. Options de scan</h3>
 <div class="sect3">
-<h4 id="_platform_linux">8.4.1. <code>--platform linux</code></h4>
+<h4 id="_platform_linux">8.5.1. <code>--platform linux</code></h4>
 <div class="paragraph">
 <p>Force grype à considérer la plateforme cible comme Linux lors de la
 résolution des vulnérabilités, en mode <strong>Fichier SBOM</strong> uniquement. Recommandé
@@ -245,7 +283,7 @@ architecture, est d’ailleurs rejeté par grype sur une image multi-plateforme)
 </div>
 </div>
 <div class="sect3">
-<h4 id="_add_cpes_if_none">8.4.2. <code>--add-cpes-if-none</code></h4>
+<h4 id="_add_cpes_if_none">8.5.2. <code>--add-cpes-if-none</code></h4>
 <div class="paragraph">
 <p>Grype utilise les identifiants <strong>CPE</strong> (Common Platform Enumeration) pour
 faire correspondre les paquets aux entrées CVE. Si un paquet du SBOM ne
@@ -258,7 +296,7 @@ automatiquement depuis le nom et la version du paquet.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_by_cve">8.4.3. <code>--by-cve</code></h4>
+<h4 id="_by_cve">8.5.3. <code>--by-cve</code></h4>
 <div class="paragraph">
 <p>Sans cette option, grype groupe les résultats par identifiant <strong>GHSA</strong>
 (GitHub Security Advisory) quand il est disponible.
@@ -272,7 +310,7 @@ défauts, etc.) ou des référentiels de vulnérabilités internes.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_distro_rhelversion">8.4.4. <code>--distro rhel:&lt;version&gt;</code></h4>
+<h4 id="_distro_rhelversion">8.5.4. <code>--distro rhel:&lt;version&gt;</code></h4>
 <div class="paragraph">
 <p>Précise la distribution Linux cible. Sans cette option, grype tente
 de la déduire du SBOM, ce qui peut échouer ou produire des correspondances
@@ -299,7 +337,7 @@ ou des faux-négatifs. Vérifiez la version exacte de votre système avec
 </div>
 </div>
 <div class="sect3">
-<h4 id="_fail_on_sévérité">8.4.5. <code>--fail-on &lt;sévérité&gt;</code></h4>
+<h4 id="_fail_on_sévérité">8.5.5. <code>--fail-on &lt;sévérité&gt;</code></h4>
 <div class="paragraph">
 <p>Contrôle le code de retour de grype. Avec cette option, grype retourne
 un code d’erreur (non nul) si au moins une vulnérabilité du niveau
@@ -315,7 +353,7 @@ si grype a retourné une erreur, fond vert sinon.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_only_fixed">8.4.6. <code>--only-fixed</code></h4>
+<h4 id="_only_fixed">8.5.6. <code>--only-fixed</code></h4>
 <div class="paragraph">
 <p>N’affiche que les vulnérabilités pour lesquelles une version corrigée
 est disponible. Permet de se concentrer sur les actions immédiatement
@@ -324,7 +362,7 @@ réalisables.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_template_de_sortie_t">8.5. Template de sortie (<code>-t</code>)</h3>
+<h3 id="_template_de_sortie_t">8.6. Template de sortie (<code>-t</code>)</h3>
 <div class="paragraph">
 <p>Le champ <strong>Template (-t)</strong> permet de générer une sortie personnalisée
 (CSV, HTML, texte) via un fichier template Go.</p>
@@ -363,7 +401,7 @@ JSON (pour la vue Table) et la sortie template (via un fichier temporaire).
 </div>
 </div>
 <div class="sect2">
-<h3 id="_fichier_de_configuration_grype_yaml">8.6. Fichier de configuration (<code>grype.yaml</code>)</h3>
+<h3 id="_fichier_de_configuration_grype_yaml">8.7. Fichier de configuration (<code>grype.yaml</code>)</h3>
 <div class="paragraph">
 <p>Chemin vers un fichier de configuration grype au format YAML.
 Permet de définir des règles d’ignorance, des bases de données personnalisées,
@@ -378,16 +416,16 @@ configuration grype par défaut (<code>~/.grype.yaml</code> si elle existe).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_lancer_et_arrêter_lanalyse">8.7. Lancer et arrêter l’analyse</h3>
+<h3 id="_lancer_et_arrêter_lanalyse">8.8. Lancer et arrêter l’analyse</h3>
 <div class="paragraph">
 <p>Cliquez sur <strong>Analyser</strong> pour démarrer. Une barre de progression linéaire
 s’affiche pendant l’exécution. Le bouton devient <strong>Stop</strong> pour interrompre.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_interprétation_des_résultats">8.8. Interprétation des résultats</h3>
+<h3 id="_interprétation_des_résultats">8.9. Interprétation des résultats</h3>
 <div class="sect3">
-<h4 id="_bannière_de_résumé">8.8.1. Bannière de résumé</h4>
+<h4 id="_bannière_de_résumé">8.9.1. Bannière de résumé</h4>
 <div class="paragraph">
 <p>Apparaît une fois l’analyse terminée, avant les onglets de résultats.</p>
 </div>
@@ -423,7 +461,7 @@ s’affiche pendant l’exécution. Le bouton devient <strong>Stop</strong> pour
 </table>
 </div>
 <div class="sect3">
-<h4 id="_vue_table">8.8.2. Vue Table</h4>
+<h4 id="_vue_table">8.9.2. Vue Table</h4>
 <div id="sec-vue-table" class="paragraph">
 <p>La vue Table affiche une barre d’outils de recherche/tri, les filtres par
 sévérité, puis la liste des vulnérabilités :</p>
@@ -581,7 +619,7 @@ bouton <strong>copier l’identifiant</strong>. Re-cliquer sur la ligne la refer
 </div>
 </div>
 <div class="sect3">
-<h4 id="_exploitabilité_et_exploitation_active">8.8.3. Exploitabilité et exploitation active</h4>
+<h4 id="_exploitabilité_et_exploitation_active">8.9.3. Exploitabilité et exploitation active</h4>
 <div id="sec-exploitabilite" class="paragraph">
 <p>Après chaque scan, l’application enrichit les CVE trouvées avec quatre signaux
 de priorisation, affichés sous forme de pastilles sous chaque ligne et de
@@ -634,7 +672,7 @@ tête.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_vue_json">8.8.4. Vue JSON</h4>
+<h4 id="_vue_json">8.9.4. Vue JSON</h4>
 <div id="sec-vue-json" class="paragraph">
 <p>Affiche la sortie JSON brute de grype, formatée et indentée. Utile pour
 inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées…).</p>
@@ -644,7 +682,7 @@ inspecter le détail d’une vulnérabilité (CVSS, références, métadonnées�
 </div>
 </div>
 <div class="sect3">
-<h4 id="_vue_template">8.8.5. Vue Template</h4>
+<h4 id="_vue_template">8.9.5. Vue Template</h4>
 <div id="sec-vue-template" class="paragraph">
 <p>Affiche le résultat de la génération du fichier template (CSV ou autre format
 personnalisé). Visible uniquement si un fichier template a été configuré

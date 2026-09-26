@@ -162,6 +162,7 @@ gui/
 │   ├── scan_source_test.dart
 │   ├── layer_nav_test.dart
 │   ├── layer_scan_test.dart
+│   ├── cli_command_test.dart
 │   ├── sbom_tree_panel_layers_test.dart
 │   └── sbom_viewer_panel_test.dart
 └── pubspec.yaml
@@ -1860,6 +1861,30 @@ reste dans chaque `*_runner.dart` (voir <<sec-scan-image>>), pas ici.
   `LayerScanSettings` tenu par chaque panneau (`_layerSettings`), affichée
   sous le champ image. `ScanStatusLine` affiche l'étape en cours sous la
   barre de progression.
+
+[[sec-cli-commande-dev]]
+=== Aperçu « CLI Commande »
+
+* Les arguments des scanners sont construits par des méthodes statiques
+  `GrypeRunner.buildArgs` / `OsvRunner.buildArgs` / `TrivyRunner.buildArgs`
+  (et `LayerScanService.prepareArgs` pour la génération du jeu par couche),
+  appelées à la fois par `run()` et par l'aperçu : la commande affichée est
+  par construction celle qui est exécutée. `GrypeRunner.buildArgs` reçoit le
+  fichier de sortie du template (`templateOutput`), choisi par `run()` dans
+  le répertoire temporaire.
+* `vuln_shared.dart` : `shellQuote` / `shellCommand` (quotage POSIX),
+  `sbomGeneratorScanArgs` (équivalent `sbom-generator scan` : cible,
+  scanner, options par couche, filtre de date `CveDateFilter`,
+  `--no-enrich`), `equivalentScanNote` (options non transposables),
+  `layeredCliSequence` (préparation + scan de l'image ou boucle `for` sur
+  les SBOM de couche, répertoire fictif `cliLayerDir`),
+  `CliCommandSection`, `CliCommandButton`, `CliCommandDialog`
+  (`SelectableText` + copie via `Clipboard`).
+* Chaque panneau fournit `_cliSections()` (paramétrage courant, lu au clic)
+  à son `_ConfigSection` (`cliSections`), qui place le bouton à côté du
+  bouton d'analyse. Dans la boucle du mode « chaque couche », la commande
+  est construite avec la cible `LAYER_SBOM`, remplacée ensuite par `"$f"`
+  (non quoté).
 
 [[sec-layer-scan]]
 === Analyse par couche — `models/layer_scan.dart` + `services/layer_scan_service.dart`

@@ -422,6 +422,88 @@ class _GrypePanelState extends State<GrypePanel>
         templateFile: templateFile,
       );
 
+  /// Commandes du popup « CLI Commande » pour le paramétrage courant.
+  List<CliCommandSection> _cliSections() {
+    final useImage = _sourceKind == ScanSourceKind.image;
+    final raw = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    final target =
+        raw.isNotEmpty ? raw : (useImage ? '<image>' : '<sbom.cdx.json>');
+    final tmpl = _templateCtrl.text.trim();
+    final layered = useImage && _layerSettings.enabled;
+    List<String> args(String t, bool image, {bool withTemplate = false}) =>
+        GrypeRunner.buildArgs(
+          target: t,
+          failOn: _failOn.isEmpty ? null : _failOn,
+          onlyFixed: _onlyFixed,
+          configFile:
+              _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
+          platformLinux: image ? false : _platformLinux,
+          platform: image && _imagePlatformCtrl.text.trim().isNotEmpty
+              ? _imagePlatformCtrl.text.trim()
+              : null,
+          addCpesIfNone: _addCpesIfNone,
+          byCve: _byCve,
+          distroVersion: _distroVersion.isEmpty ? null : _distroVersion,
+          templateFile: withTemplate && tmpl.isNotEmpty ? tmpl : null,
+          templateOutput: 'grype_template.txt',
+        );
+
+    final native = layered
+        ? CliCommandSection(
+            'Commandes exécutées par l\'onglet (analyse par couche)',
+            layeredCliSequence(
+              cliBinary: SettingsService.cliBinary,
+              prepareArgs: LayerScanService.prepareArgs(target,
+                  _layerSettings.layerMode, '$cliLayerDir/image.cdx.json'),
+              layers: _layerSettings,
+              imageScan: shellCommand('grype', args(target, true)),
+              layerScan: (f) => shellCommand('grype', args('LAYER_SBOM', false))
+                  .replaceAll('LAYER_SBOM', f),
+            ),
+            note: 'Le jeu de SBOM par couche est généré dans un répertoire '
+                'temporaire (ici $cliLayerDir).'
+                '${tmpl.isNotEmpty ? ' Le template (-t) n\'est pas appliqué '
+                    'en analyse par couche.' : ''}',
+          )
+        : CliCommandSection(
+            'Commande exécutée par l\'onglet',
+            shellCommand('grype', args(target, useImage, withTemplate: true)),
+            note: tmpl.isNotEmpty
+                ? 'Sortie du template écrite dans un fichier temporaire '
+                    '(ici grype_template.txt).'
+                : null,
+          );
+
+    final notCarried = [
+      if (tmpl.isNotEmpty) 'template (-t)',
+      if (_failOn.isNotEmpty) '--fail-on',
+      if (_onlyFixed) '--only-fixed',
+      if (_distroVersion.isNotEmpty) '--distro',
+      if (_configCtrl.text.trim().isNotEmpty) 'grype.yaml',
+      if (useImage && _imagePlatformCtrl.text.trim().isNotEmpty) 'plateforme',
+      if (!_addCpesIfNone || !_byCve)
+        'décochage de --add-cpes-if-none / --by-cve (toujours actifs)',
+    ];
+    return [
+      native,
+      CliCommandSection(
+        'Équivalent sbom-generator scan',
+        shellCommand(
+          SettingsService.cliBinary,
+          sbomGeneratorScanArgs(
+            scanner: 'grype',
+            target: target,
+            useImage: useImage,
+            layers: _layerSettings,
+            dateFilter: widget.dateFilter,
+            enrichOnline: _enrichOnline,
+          ),
+        ),
+        note: equivalentScanNote(useImage, notCarried),
+      ),
+    ];
+  }
+
   Future<ScanOutput> _scanOnce(String target, bool useImage) async {
     var json = '';
     var code = 1;
@@ -574,6 +656,7 @@ class _GrypePanelState extends State<GrypePanel>
               setState(() => _onlyFixed = v ?? false),
           onRun: _analyze,
           onStop: _stop,
+          cliSections: _cliSections,
           versionInfo: _versionInfo,
         ),
         const Divider(height: 1),
@@ -722,6 +805,7 @@ class _ConfigSection extends StatelessWidget {
   final ValueChanged<bool?> onOnlyFixedChanged;
   final VoidCallback onRun;
   final VoidCallback onStop;
+  final List<CliCommandSection> Function() cliSections;
   final ToolVersionInfo? versionInfo;
 
   const _ConfigSection({
@@ -759,6 +843,7 @@ class _ConfigSection extends StatelessWidget {
     required this.onOnlyFixedChanged,
     required this.onRun,
     required this.onStop,
+    required this.cliSections,
     this.versionInfo,
   });
 
@@ -952,6 +1037,9 @@ class _ConfigSection extends StatelessWidget {
               ),
 
               const Spacer(),
+
+              CliCommandButton(sections: cliSections),
+              const SizedBox(width: 8),
 
               // Bouton Analyser / Stop
               isRunning

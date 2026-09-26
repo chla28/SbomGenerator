@@ -71,4 +71,32 @@ void main() {
     expect(find.textContaining('nginx:latest'), findsOneWidget);
     expect(find.text('Plateforme'), findsOneWidget);
   });
+
+  testWidgets('GrypePanel : « CLI Commande » reflète le paramétrage de '
+      'l\'onglet', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: GrypePanel(outputFiles: <OutputFile>[]),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Fichier SBOM'), '/tmp/mon sbom.cdx.json');
+    await tester.tap(find.text('CLI Commande'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Commande exécutée par l\'onglet'), findsOneWidget);
+    expect(
+        find.textContaining("grype '/tmp/mon sbom.cdx.json' --output json"),
+        findsOneWidget);
+    expect(
+        find.textContaining(
+            "scan --sbom '/tmp/mon sbom.cdx.json' --scanner grype"),
+        findsOneWidget);
+  });
 }

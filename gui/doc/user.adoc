@@ -960,6 +960,35 @@ Un champ optionnel *Plateforme* apparaît en mode image, pour forcer la
 plateforme cible sur une image multi-architecture (ex. `linux/arm64`).
 Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.
 
+[[sec-cli-commande]]
+=== Ligne de commande (bouton *CLI Commande*)
+
+Le bouton *CLI Commande*, à côté du bouton d'analyse (commun aux trois
+onglets de scan), ouvre un popup avec les commandes correspondant au
+paramétrage courant de l'onglet, chacune avec un bouton *Copier* :
+
+* *Commande exécutée par l'onglet* — la ligne `grype` / `osv-scanner` /
+  `trivy` exacte, avec toutes les options de l'onglet (construite par le
+  même code que l'exécution). Avec l'option *Par couche* (voir
+  <<sec-scan-couches>>), la séquence réellement lancée : génération du jeu
+  de SBOM par couche (`sbom-generator --image … --per-layer`), puis le scan
+  de l'image (*Rattachement*) ou une boucle `for f in …; do …; done` sur les
+  SBOM de couche (*Chaque couche*). Le répertoire temporaire de
+  l'application est remplacé par `/tmp/sbom-couches`.
+* *Équivalent sbom-generator scan* — la commande du CLI du projet qui
+  produit le même type d'analyse : cible (`--sbom` ou `--image`),
+  `--scanner`, options par couche (`--per-layer --layer-scan …
+  --layer-mode …`), filtre de date de l'onglet (`--cve-after`,
+  `--cve-before`, `--cve-date-field`, `--include-undated`) et
+  enrichissement hors-ligne (`--no-enrich`). Une remarque signale les
+  options de l'onglet sans équivalent (template, `--fail-on`,
+  `--only-fixed`, sévérités Trivy, fichiers de configuration…) et
+  rappelle qu'avec `--image`, `sbom-generator scan` analyse le SBOM
+  généré par syft et non l'image directement.
+
+Tant que la cible n'est pas renseignée, elle apparaît sous la forme
+`<sbom.cdx.json>` ou `<image>`.
+
 [[sec-scan-couches]]
 === Analyse par couche (source « Image de conteneur »)
 

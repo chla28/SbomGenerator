@@ -42,13 +42,8 @@ class LayerScanService {
   static Future<LayeredSbomSet> _generate(String image, String layerMode) async {
     final dir = await Directory.systemTemp.createTemp('sbomgen_gui_layers_');
     final out = '${dir.path}/image.cdx.json';
-    final p = await Process.start(SettingsService.cliBinary, [
-      '--image', image,
-      '--oci-tool', 'syft',
-      '--per-layer', '--layer-mode', layerMode,
-      '-f', 'cyclonedx',
-      '-o', out,
-    ]);
+    final p = await Process.start(
+        SettingsService.cliBinary, prepareArgs(image, layerMode, out));
     _process = p;
     final err = StringBuffer();
     await Future.wait([
@@ -68,6 +63,18 @@ class LayerScanService {
     }
     return set;
   }
+
+  /// Arguments de `sbom-generator` qui produisent le jeu de SBOM par couche
+  /// de [image] dans [output] (partagés avec l'aperçu « CLI Commande »).
+  static List<String> prepareArgs(
+          String image, String layerMode, String output) =>
+      [
+        '--image', image,
+        '--oci-tool', 'syft',
+        '--per-layer', '--layer-mode', layerMode,
+        '-f', 'cyclonedx',
+        '-o', output,
+      ];
 
   /// Interrompt la génération en cours, s'il y en a une.
   static void kill() {

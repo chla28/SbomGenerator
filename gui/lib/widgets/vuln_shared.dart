@@ -407,6 +407,213 @@ class ImageRefField extends StatelessWidget {
   }
 }
 
+// ─── Aperçu « CLI Commande » ─────────────────────────────────────────────────
+
+/// Argument sûr pour un shell POSIX : inchangé s'il ne contient que des
+/// caractères inoffensifs, sinon entre apostrophes.
+String shellQuote(String arg) {
+  if (arg.isNotEmpty && RegExp(r'^[A-Za-z0-9_@%+=:,./-]+$').hasMatch(arg)) {
+    return arg;
+  }
+  return "'${arg.replaceAll("'", r"'\''")}'";
+}
+
+/// Ligne de commande shell : [exe] suivi de [args] quotés.
+String shellCommand(String exe, List<String> args) =>
+    [exe, ...args].map(shellQuote).join(' ');
+
+/// Arguments de `sbom-generator scan` équivalents au paramétrage d'un onglet
+/// de scan ([scanner] : `grype`, `osv` ou `trivy`).
+List<String> sbomGeneratorScanArgs({
+  required String scanner,
+  required String target,
+  required bool useImage,
+  LayerScanSettings layers = const LayerScanSettings(),
+  CveDateFilter dateFilter = CveDateFilter.empty,
+  bool enrichOnline = true,
+}) {
+  String day(DateTime d) => d.toIso8601String().substring(0, 10);
+  return [
+    'scan',
+    useImage ? '--image' : '--sbom',
+    target,
+    '--scanner',
+    scanner,
+    if (useImage && layers.enabled) ...[
+      '--per-layer',
+      '--layer-scan',
+      layers.mode == LayerScanMode.each ? 'each' : 'attribute',
+      '--layer-mode',
+      layers.layerMode,
+    ],
+    if (dateFilter.after != null) ...['--cve-after', day(dateFilter.after!)],
+    if (dateFilter.before != null) ...['--cve-before', day(dateFilter.before!)],
+    if (dateFilter.hasConstraints &&
+        dateFilter.field != CveDateField.published)
+      ...['--cve-date-field', dateFilter.field.name],
+    if (dateFilter.hasConstraints && dateFilter.includeUndated)
+      '--include-undated',
+    if (!enrichOnline) '--no-enrich',
+  ];
+}
+
+/// Une partie du popup « CLI Commande » : titre, commande(s), remarque.
+class CliCommandSection {
+  final String title;
+
+  /// Texte à copier tel quel (une ou plusieurs lignes shell).
+  final String command;
+  final String? note;
+
+  const CliCommandSection(this.title, this.command, {this.note});
+}
+
+/// Bouton « CLI Commande » des onglets de scan : ouvre un popup avec la ou
+/// les lignes de commande correspondant au paramétrage courant, calculées
+/// au moment du clic par [sections].
+class CliCommandButton extends StatelessWidget {
+  final List<CliCommandSection> Function() sections;
+  final double? height;
+
+  const CliCommandButton({super.key, required this.sections, this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: OutlinedButton.icon(
+        icon: const Icon(Icons.terminal, size: 18),
+        label: const Text('CLI Commande'),
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => CliCommandDialog(sections: sections()),
+        ),
+      ),
+    );
+  }
+}
+
+/// Popup listant des lignes de commande, chacune copiable.
+class CliCommandDialog extends StatelessWidget {
+  final List<CliCommandSection> sections;
+  const CliCommandDialog({super.key, required this.sections});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.terminal, size: 20),
+          SizedBox(width: 8),
+          Text('Ligne de commande'),
+        ],
+      ),
+      content: SizedBox(
+        width: 760,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final sec in sections) ...[
+                Text(sec.title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          sec.command,
+                          style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              color: Color(0xFFE0E0E0)),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy,
+                            size: 16, color: Color(0xFFBDBDBD)),
+                        tooltip: 'Copier',
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: sec.command));
+                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                            const SnackBar(
+                              content: Text('Commande copiée'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                if (sec.note != null) ...[
+                  const SizedBox(height: 4),
+                  Text(sec.note!,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.6))),
+                ],
+                const SizedBox(height: 14),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fermer'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Remarque de la section « Équivalent sbom-generator scan » : différence
+/// de cible en mode image, options de l'onglet sans équivalent.
+String? equivalentScanNote(bool useImage, List<String> notCarried) {
+  final parts = [
+    if (useImage)
+      'Avec --image, sbom-generator scanne le SBOM CycloneDX généré (syft), '
+          'pas l\'image directement.',
+    if (notCarried.isNotEmpty) 'Non transposable : ${notCarried.join(', ')}.',
+  ];
+  return parts.isEmpty ? null : parts.join(' ');
+}
+
+/// Répertoire fictif affiché pour le jeu de SBOM par couche dans l'aperçu
+/// « CLI Commande » (l'application utilise un répertoire temporaire).
+const cliLayerDir = '/tmp/sbom-couches';
+
+/// Commandes réellement lancées par l'analyse par couche : préparation du
+/// jeu de SBOM par [cliBinary], puis le scan de l'image ([imageScan]) ou
+/// une boucle sur les SBOM de couche ([layerScan] : commande pour le SBOM
+/// `$f`).
+String layeredCliSequence({
+  required String cliBinary,
+  required List<String> prepareArgs,
+  required LayerScanSettings layers,
+  required String imageScan,
+  required String Function(String sbomVar) layerScan,
+}) {
+  final prep = shellCommand(cliBinary, prepareArgs);
+  if (layers.mode == LayerScanMode.attribute) return '$prep\n$imageScan';
+  return '$prep\nfor f in $cliLayerDir/image.layer-*.cdx.json; do\n'
+      '  ${layerScan(r'"$f"')}\ndone';
+}
+
 /// Ligne d'état sous la barre de progression d'un scan (étapes de l'analyse
 /// par couche : préparation des SBOM, couche i/N…).
 class ScanStatusLine extends StatelessWidget {

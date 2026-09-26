@@ -40,30 +40,15 @@ class TrivyRunner {
   }) {
     final controller = StreamController<TrivyEvent>();
 
-    final args = <String>[useImage ? 'image' : 'sbom', '--format', 'json', '--quiet'];
-    if (severities.isNotEmpty) {
-      args.addAll(['--severity', severities.join(',')]);
-    }
-    if (ignoreUnfixed) args.add('--ignore-unfixed');
-    if (skipDbUpdate) args.add('--skip-db-update');
-    if (configFile != null && configFile.isNotEmpty) {
-      args.addAll(['--config', configFile]);
-    }
-    if (useImage) {
-      if (platform != null && platform.isNotEmpty) {
-        args.addAll(['--platform', platform]);
-      }
-      // --input accepte aussi bien une archive (docker save / OCI) qu'un
-      // répertoire OCI layout ; une référence de registre se passe en
-      // argument positionnel classique.
-      if (FileSystemEntity.typeSync(target) != FileSystemEntityType.notFound) {
-        args.addAll(['--input', target]);
-      } else {
-        args.add(target);
-      }
-    } else {
-      args.add(target);
-    }
+    final args = buildArgs(
+      target: target,
+      useImage: useImage,
+      platform: platform,
+      severities: severities,
+      ignoreUnfixed: ignoreUnfixed,
+      skipDbUpdate: skipDbUpdate,
+      configFile: configFile,
+    );
 
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
@@ -109,6 +94,44 @@ class TrivyRunner {
     });
 
     return controller.stream;
+  }
+
+  /// Arguments de `trivy` pour ces options — partagés par [run] et par
+  /// l'aperçu « CLI Commande » de l'onglet.
+  static List<String> buildArgs({
+    required String target,
+    bool useImage = false,
+    String? platform,
+    List<String> severities = const [],
+    bool ignoreUnfixed = false,
+    bool skipDbUpdate = false,
+    String? configFile,
+  }) {
+    final args = <String>[useImage ? 'image' : 'sbom', '--format', 'json', '--quiet'];
+    if (severities.isNotEmpty) {
+      args.addAll(['--severity', severities.join(',')]);
+    }
+    if (ignoreUnfixed) args.add('--ignore-unfixed');
+    if (skipDbUpdate) args.add('--skip-db-update');
+    if (configFile != null && configFile.isNotEmpty) {
+      args.addAll(['--config', configFile]);
+    }
+    if (useImage) {
+      if (platform != null && platform.isNotEmpty) {
+        args.addAll(['--platform', platform]);
+      }
+      // --input accepte aussi bien une archive (docker save / OCI) qu'un
+      // répertoire OCI layout ; une référence de registre se passe en
+      // argument positionnel classique.
+      if (FileSystemEntity.typeSync(target) != FileSystemEntityType.notFound) {
+        args.addAll(['--input', target]);
+      } else {
+        args.add(target);
+      }
+    } else {
+      args.add(target);
+    }
+    return args;
   }
 
   void kill() {

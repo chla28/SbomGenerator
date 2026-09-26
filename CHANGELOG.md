@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI — bouton « CLI Commande »** dans les onglets Grype, OSV-Scanner et
+  Trivy : popup affichant, avec bouton Copier, la commande native exacte
+  correspondant au paramétrage de l'onglet (séquence réelle — génération
+  des SBOM de couche puis scan(s) — avec l'option *Par couche*) et
+  l'équivalent `sbom-generator scan` (options par couche, filtre de date,
+  `--no-enrich`), avec la liste des options non transposables. Les
+  arguments des scanners sont désormais construits par
+  `GrypeRunner/OsvRunner/TrivyRunner.buildArgs`, partagés entre
+  l'exécution et l'aperçu.
+
 ## [1.5.11] - 2026-09-26
 
 ### Added

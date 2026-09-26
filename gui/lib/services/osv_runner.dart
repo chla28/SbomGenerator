@@ -32,28 +32,8 @@ class OsvRunner {
     String? configFile,
   }) {
     final controller = StreamController<OsvEvent>();
-
-    final args = <String>[];
-    if (useImage) {
-      // `scan image` est la seule sous-commande d'osv-scanner qui sache
-      // analyser une image de conteneur ; elle n'existe pas dans l'ancien
-      // style de commande utilisé ci-dessous pour les fichiers SBOM.
-      // --archive n'accepte qu'une archive locale (tar) ; un répertoire OCI
-      // layout n'est pas géré par osv-scanner, on passe donc la cible telle
-      // quelle dans ce cas (osv-scanner rapportera son propre message
-      // d'erreur si ce n'est pas supporté).
-      args.addAll(['scan', 'image', '--format', 'json']);
-      if (FileSystemEntity.typeSync(target) == FileSystemEntityType.file) {
-        args.addAll(['--archive', target]);
-      } else {
-        args.add(target);
-      }
-    } else {
-      args.addAll(['--format', 'json', '--sbom', target]);
-    }
-    if (configFile != null && configFile.isNotEmpty) {
-      args.addAll(['--config', configFile]);
-    }
+    final args =
+        buildArgs(target: target, useImage: useImage, configFile: configFile);
 
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
@@ -100,6 +80,38 @@ class OsvRunner {
     });
 
     return controller.stream;
+  }
+
+  /// Arguments d'`osv-scanner` pour ces options — partagés par [run] et par
+  /// l'aperçu « CLI Commande » de l'onglet.
+  static List<String> buildArgs({
+    required String target,
+    bool useImage = false,
+    String? configFile,
+  }) {
+    final args = <String>[];
+    if (useImage) {
+      // `scan image` est la seule sous-commande d'osv-scanner qui sache
+      // analyser une image de conteneur ; elle n'existe pas dans l'ancien
+      // style de commande utilisé ci-dessous pour les fichiers SBOM.
+      // --archive n'accepte qu'une archive locale (tar) ; un répertoire OCI
+      // layout n'est pas géré par osv-scanner, on passe donc la cible telle
+      // quelle dans ce cas (osv-scanner rapportera son propre message
+      // d'erreur si ce n'est pas supporté).
+      args.addAll(['scan', 'image', '--format', 'json']);
+      if (FileSystemEntity.typeSync(target) == FileSystemEntityType.file) {
+        args.addAll(['--archive', target]);
+      } else {
+        args.add(target);
+      }
+    } else {
+      args.addAll(['--format', 'json', '--sbom', target]);
+    }
+    if (configFile != null && configFile.isNotEmpty) {
+      args.addAll(['--config', configFile]);
+    }
+
+    return args;
   }
 
   void kill() {

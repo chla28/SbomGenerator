@@ -53,28 +53,19 @@ class GrypeRunner {
       );
     }
 
-    final args = <String>[target, '--output', 'json'];
-    if (tmpFile != null) {
-      args.addAll([
-        '--output', 'template=${tmpFile.path}',
-        '--template', templateFile!,
-      ]);
-    }
-    if (platform != null && platform.isNotEmpty) {
-      args.addAll(['--platform', platform]);
-    } else if (platformLinux) {
-      args.addAll(['--platform', 'linux']);
-    }
-    if (addCpesIfNone) args.add('--add-cpes-if-none');
-    if (byCve) args.add('--by-cve');
-    if (distroVersion != null && distroVersion.isNotEmpty) {
-      args.addAll(['--distro', 'rhel:$distroVersion']);
-    }
-    if (failOn != null && failOn.isNotEmpty) args.addAll(['--fail-on', failOn]);
-    if (onlyFixed) args.add('--only-fixed');
-    if (configFile != null && configFile.isNotEmpty) {
-      args.addAll(['--config', configFile]);
-    }
+    final args = buildArgs(
+      target: target,
+      failOn: failOn,
+      onlyFixed: onlyFixed,
+      configFile: configFile,
+      platformLinux: platformLinux,
+      addCpesIfNone: addCpesIfNone,
+      byCve: byCve,
+      distroVersion: distroVersion,
+      templateFile: templateFile,
+      templateOutput: tmpFile?.path,
+      platform: platform,
+    );
 
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
@@ -135,6 +126,47 @@ class GrypeRunner {
     });
 
     return controller.stream;
+  }
+
+  /// Arguments de `grype` pour ces options — partagés par [run] et par
+  /// l'aperçu « CLI Commande » des onglets. [templateOutput] : fichier de
+  /// sortie du template (requis pour l'émettre avec [templateFile]).
+  static List<String> buildArgs({
+    required String target,
+    String? failOn,
+    bool onlyFixed = false,
+    String? configFile,
+    bool platformLinux = true,
+    bool addCpesIfNone = true,
+    bool byCve = true,
+    String? distroVersion,
+    String? templateFile,
+    String? templateOutput,
+    String? platform,
+  }) {
+    final args = <String>[target, '--output', 'json'];
+    if (templateFile != null && templateFile.isNotEmpty && templateOutput != null) {
+      args.addAll([
+        '--output', 'template=$templateOutput',
+        '--template', templateFile,
+      ]);
+    }
+    if (platform != null && platform.isNotEmpty) {
+      args.addAll(['--platform', platform]);
+    } else if (platformLinux) {
+      args.addAll(['--platform', 'linux']);
+    }
+    if (addCpesIfNone) args.add('--add-cpes-if-none');
+    if (byCve) args.add('--by-cve');
+    if (distroVersion != null && distroVersion.isNotEmpty) {
+      args.addAll(['--distro', 'rhel:$distroVersion']);
+    }
+    if (failOn != null && failOn.isNotEmpty) args.addAll(['--fail-on', failOn]);
+    if (onlyFixed) args.add('--only-fixed');
+    if (configFile != null && configFile.isNotEmpty) {
+      args.addAll(['--config', configFile]);
+    }
+    return args;
   }
 
   void kill() {
