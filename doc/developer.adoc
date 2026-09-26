@@ -3716,6 +3716,44 @@ d'une exécution antérieure. Exécuté automatiquement par
 `.github/workflows/ci.yml` (`dart analyze --fatal-infos` puis `dart test`)
 sur chaque push/pull request vers `main`.
 
+[[sec-ci-release]]
+=== Intégration continue et releases (GitHub Actions)
+
+[cols="2,2,5",options="header"]
+|===
+|Workflow |Déclencheur |Contenu
+
+|`.github/workflows/ci.yml`
+|push sur `main`, pull request, manuel
+|Job `cli` (`dart analyze --fatal-infos`, `dart test`), job `gui`
+(`flutter analyze`, `flutter test -j 1`), puis job `build`
+(`dart compile exe` + `flutter build linux --release`, artefacts conservés
+7 jours).
+
+|`.github/workflows/release.yml`
+|tag `vX.Y.Z`
+|Conteneur `almalinux:9` préparé par `.github/scripts/setup-almalinux.sh`
+(Flutter, `rpm-build`, grype / osv-scanner / trivy, asciidoctor-pdf),
+contrôle tag = `version:` de `pubspec.yaml`, `scripts/build-dist.sh --rpm`,
+puis GitHub Release : archive `.tar.gz`, RPM, SBOM CycloneDX, rapports CVE
+PDF ; notes = section `[X.Y.Z]` du CHANGELOG
+(`.github/scripts/changelog-section.sh`).
+|===
+
+* SDK figés dans les workflows (`DART_VERSION`, `FLUTTER_VERSION`) : ceux de
+  la machine de développement.
+* AlmaLinux 9 (glibc 2.34) pour la release : les binaires et les RPM
+  tournent aussi sur RHEL 9 / 10 et les Fedora récentes ; `rpm` y est
+  disponible pour décrire les dépendances runtime dans le SBOM de l'archive.
+* Les tests sont en français mais ne comparent que des chaînes produites par
+  le projet : la locale anglaise du runner ne les affecte pas (vérifié avec
+  `LANG=C.UTF-8`). Les archives de `example/3PP` utilisées par
+  `test/integration/tar_integration_test.dart` sont versionnées (1,1 Mo).
+* Une release se déclenche en poussant le tag du commit
+  `chore(release): passage en version X.Y.Z` ; si le tag ne correspond pas à
+  `pubspec.yaml` ou si le CHANGELOG n'a pas de section `[X.Y.Z]`, le job
+  échoue avant publication.
+
 === Suites unitaires
 
 [cols="2,1,3", options="header"]

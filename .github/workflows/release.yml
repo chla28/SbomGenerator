@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.47.5"
+
+jobs:
+  release:
+    name: Build & publish release
+    runs-on: ubuntu-latest
+    # AlmaLinux 9 (glibc 2.34): the CLI, the GUI bundle and the RPMs then also
+    # run on RHEL 9 / 10 and recent Fedora releases, and `rpm` is available
+    # for the release SBOM.
+    container: almalinux:9
+    steps:
+      - name: Install git
+        run: dnf install -y git
+
+      - uses: actions/checkout@v4
+
+      - name: Prepare build environment (Flutter, rpm-build, scanners)
+        run: .github/scripts/setup-almalinux.sh
+
+      - name: Check that the tag matches pubspec.yaml
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1 | tr -d '[:space:]')"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match pubspec.yaml version ${version}"
+            exit 1
+          fi
+
+      - name: Build distribution (tar.gz, RPMs, SBOMs, CVE reports)
+        run: ./scripts/build-dist.sh --rpm
+
+      - name: Extract release notes from CHANGELOG.md
+        run: .github/scripts/changelog-section.sh "${GITHUB_REF_NAME#v}" > release-notes.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SBOM Generator ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            dist/*.tar.gz
+            dist/*.cdx.json
+            dist/*-scan-report.pdf
+            dist/rpmbuild/RPMS/*/*.rpm

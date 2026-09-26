@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **CI GitHub Actions** (`.github/workflows/ci.yml`) : analyse statique et
+  tests du CLI et de la GUI sur chaque push vers `main` et chaque pull
+  request, puis build Linux (`dart compile exe`, `flutter build linux
+  --release`, artefacts conservés 7 jours). SDK figés sur ceux du
+  développement (Dart 3.13.4, Flutter 3.47.5).
+- **Release automatique sur tag `vX.Y.Z`** (`.github/workflows/release.yml`)
+  : `build-dist.sh --rpm` dans un conteneur AlmaLinux 9 (binaires et RPM
+  compatibles RHEL 9 / 10 et Fedora récentes), rapports CVE PDF (grype,
+  osv-scanner, trivy), publication de l'archive, des RPM, des SBOM et des
+  rapports dans une GitHub Release dont les notes sont la section du
+  CHANGELOG ; échec si le tag ne correspond pas à `pubspec.yaml`.
+
+### Changed
+- Les archives de test `example/3PP` (1,1 Mo) sont versionnées : les tests
+  d'intégration tar/zip tournent aussi en CI.
+
 ## [1.5.12] - 2026-09-26
 
 ### Added

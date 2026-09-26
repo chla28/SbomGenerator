@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same SDKs as the development machine (Flutter ships its own Dart SDK).
+  DART_VERSION: "3.13.4"
+  FLUTTER_VERSION: "3.47.5"
+
+# Note on language: test names and assertions are in French, like the rest of
+# the project. They only compare strings produced by the project itself, never
+# locale-dependent output of the runner (the suites were checked with
+# LANG=C.UTF-8), so the English runner locale does not affect them.
+
+jobs:
+  cli:
+    name: CLI — analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Static analysis
+        run: dart analyze --fatal-infos
+
+      # Integration tests that need tools or fixtures missing on the runner
+      # (rpm, syft, grype, keycloak_26.tar…) skip themselves.
+      - name: Tests
+        run: dart test
+
+  gui:
+    name: GUI — analyze & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      # -j 1: run test files sequentially — slower but deterministic on
+      # runners with limited resources.
+      - name: Tests
+        run: flutter test -j 1
+
+  build:
+    name: Build — Linux (CLI + GUI)
+    runs-on: ubuntu-latest
+    needs: [cli, gui]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+
+      - name: Compile CLI (dart compile exe)
+        run: |
+          dart pub get
+          mkdir -p build/ci
+          dart compile exe bin/sbom_generator.dart -o build/ci/sbom-generator
+          build/ci/sbom-generator --version
+
+      - name: Build GUI (flutter build linux --release)
+        working-directory: gui
+        run: |
+          flutter pub get
+          flutter build linux --release
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-generator-linux-x64
+          path: |
+            build/ci/sbom-generator
+            gui/build/linux/x64/release/bundle/
+          retention-days: 7
