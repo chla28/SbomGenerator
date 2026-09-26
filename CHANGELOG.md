@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.12] - 2026-09-26
+
 ### Added
 - **GUI — bouton « CLI Commande »** dans les onglets Grype, OSV-Scanner et
   Trivy : popup affichant, avec bouton Copier, la commande native exacte
