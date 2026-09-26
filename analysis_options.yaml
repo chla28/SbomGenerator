@@ -1,0 +1,11 @@
+# Analysis of the CLI package (repository root).
+#
+# gui/ is a separate Flutter package with its own analysis_options.yaml and
+# dependencies: it is analyzed by `flutter analyze` from gui/ (CI job "gui").
+# Excluding it here keeps `dart analyze` at the root independent of whether
+# gui/'s packages have been fetched (they are not in the CI "cli" job).
+analyzer:
+  exclude:
+    - gui/**
+    - build/**
+    - dist/**
