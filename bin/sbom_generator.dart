@@ -18,6 +18,7 @@ import 'package:sbom_generator/markdown_generator.dart';
 import 'package:sbom_generator/asciidoc_generator.dart';
 import 'package:sbom_generator/html_generator.dart';
 import 'package:sbom_generator/oci_parser.dart';
+import 'package:sbom_generator/image_layers.dart';
 import 'package:sbom_generator/sbom_diff.dart';
 import 'package:sbom_generator/sbom_merger.dart';
 import 'package:sbom_generator/policy_checker.dart';
@@ -143,6 +144,25 @@ Future<void> main(List<String> arguments) async {
           '  trivy   Aqua Trivy — tous types de paquets\n'
           '  skopeo  Skopeo + extraction manuelle (dpkg/rpm/apk)\n'
           '  cdxgen  OWASP cdxgen — tous types de paquets',
+    )
+    ..addFlag(
+      'per-layer',
+      negatable: false,
+      help: 'Avec --image : génère en plus un SBOM par couche de l\'image\n'
+          '(delta de la couche : composants ajoutés/modifiés, supprimés\n'
+          'listés à part), dans chaque format demandé, à côté de -o :\n'
+          '<base>.layer-NN-<digest12>.<ext>. Le SBOM global indique la\n'
+          'couche d\'origine de chaque composant.',
+    )
+    ..addOption(
+      'layer-mode',
+      allowed: validLayerModes,
+      help: 'Méthode de calcul de --per-layer :\n'
+          '  metadata  couche d\'origine indiquée par le backend (défaut ;\n'
+          '            syft et trivy uniquement) — rapide, ajouts seulement\n'
+          '  rootfs    couches appliquées une à une et rootfs réanalysé\n'
+          '            après chacune — ajouts, modifications, suppressions\n'
+          '            (défaut forcé pour skopeo et cdxgen)',
     )
     ..addOption(
       'output',
@@ -365,6 +385,44 @@ Future<void> main(List<String> arguments) async {
   if (!_validOciTools.contains(ociTool)) {
     _err('Outil OCI inconnu "$ociTool". Valides : ${_validOciTools.join(', ')}');
     exit(1);
+  }
+
+  // Validation --per-layer / --layer-mode
+  final perLayer = args['per-layer'] as bool;
+  var layerMode = args['layer-mode'] as String?;
+  if (layerMode != null && !perLayer) {
+    _err('--layer-mode nécessite --per-layer.');
+    exit(1);
+  }
+  if (perLayer) {
+    if (binaryPath != null ||
+        imageRef == null ||
+        OciParser.detectRefType(imageRef) == OciRefType.binary) {
+      _err('--per-layer nécessite une image de conteneur (--image) : un '
+          'binaire autonome n\'a pas de couches.');
+      exit(1);
+    }
+    if (layerMode == 'metadata' && !metadataLayerTools.contains(ociTool)) {
+      _err('--layer-mode metadata nécessite --oci-tool '
+          '${metadataLayerTools.join(' ou ')} ($ociTool n\'indique pas la '
+          'couche d\'origine des paquets) — utiliser --layer-mode rootfs.');
+      exit(1);
+    }
+    if (layerMode == null) {
+      layerMode = metadataLayerTools.contains(ociTool) ? 'metadata' : 'rootfs';
+      if (layerMode == 'rootfs') {
+        print('--per-layer : mode rootfs (seul mode possible avec $ociTool).');
+      }
+    }
+    // Le mode rootfs copie une image de registre en local via skopeo.
+    if (layerMode == 'rootfs' &&
+        ociTool != 'skopeo' &&
+        OciParser.detectRefType(imageRef) == OciRefType.registry &&
+        (await Process.run('skopeo', ['--version'])).exitCode != 0) {
+      _err('--layer-mode rootfs sur une image de registre nécessite skopeo '
+          '(copie locale des couches).');
+      exit(1);
+    }
   }
 
   // Load license overrides
@@ -595,6 +653,33 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
+  // --- Analyse par couche (--per-layer) ---
+  LayerAnalysis? layerAnalysis;
+  if (perLayer) {
+    print('Analyse par couche (mode $layerMode) via $ociTool…');
+    try {
+      final parser = OciParser();
+      if (layerMode == 'metadata') {
+        final at = await parser.layerAttribution(imageRef!, ociTool,
+            verbose: verbose);
+        layerAnalysis = metadataLayerAnalysis(at.layers, at.layerOf, ociPackages);
+        final unattributed =
+            ociPackages.where((p) => !at.layerOf.containsKey(p.bomRef)).length;
+        if (unattributed > 0) {
+          stderr.writeln('⚠  $unattributed paquet(s) sans couche d\'origine '
+              'connue — absents des SBOM de couche.');
+        }
+      } else {
+        layerAnalysis = await parser.rootfsLayerAnalysis(imageRef!, ociTool,
+            verbose: verbose, log: print);
+      }
+      print('${layerAnalysis.layers.length} couche(s) analysée(s).');
+    } catch (e) {
+      _err('Échec de l\'analyse par couche : $e');
+      exit(1);
+    }
+  }
+
   // --- Detect tool availability ---
   final hasRpm = mainRefs.any((r) =>
       !r.endsWith('.whl') &&
@@ -779,6 +864,14 @@ Future<void> main(List<String> arguments) async {
     }
   }
 
+  // Mêmes surcharges (licence, fournisseur) sur les composants des couches.
+  if (layerAnalysis != null &&
+      (licenseOverrides.isNotEmpty || supplierFallback.isNotEmpty)) {
+    layerAnalysis = layerAnalysis.map((p) => _applySupplierFallback(
+            _applyLicenseOverrides([p], licenseOverrides), supplierFallback)
+        .single);
+  }
+
   final failedNote = failed > 0 ? '  ($failed échec(s))' : '';
   final dupeNote = dupes > 0 ? '  ($dupes doublon(s) supprimé(s))' : '';
   print(
@@ -821,54 +914,141 @@ Future<void> main(List<String> arguments) async {
   }
 
   // --- Generate SBOM (loop over requested formats) ---
-  final outputBase = formats.length > 1 ? _basePath(outputPath) : null;
-  for (final fmt in formats) {
-    final outPath =
-        outputBase != null ? '$outputBase${_formatExtension(fmt)}' : outputPath;
-    print('Generating SBOM ($fmt)…');
-    try {
-      switch (fmt) {
-        case 'cyclonedx':
-          await CycloneDxGenerator().writeToFile(
-              uniquePackages, dependencies, outPath,
-              documentName: docName,
-              specVersion: cycloneDxVersion,
-              tlp: tlp,
-              citationSource: citationSource,
-              patentsByPackageName: patentMap,
-              osInfo: ociOs,
-              sdkTools: sdkVersions);
-        case 'spdx':
-          await SpdxGenerator().writeToFile(
-              uniquePackages, dependencies, outPath,
-              documentName: docName, osInfo: ociOs, sdkTools: sdkVersions);
-        case 'spdx3':
-          await Spdx3Generator().writeToFile(
-              uniquePackages, dependencies, outPath,
-              documentName: docName, osInfo: ociOs, sdkTools: sdkVersions);
-        case 'json':
-          await SimpleJsonGenerator().writeToFile(
-              uniquePackages, dependencies, outPath, documentName: docName);
-        case 'markdown':
-          await MarkdownGenerator()
-              .writeToFile(uniquePackages, outPath, documentName: docName);
-        case 'asciidoc':
-          await AsciidocGenerator()
-              .writeToFile(uniquePackages, outPath, documentName: docName);
-        case 'html':
-          await HtmlGenerator()
-              .writeToFile(uniquePackages, outPath, documentName: docName);
-        case 'csv':
-          await CsvGenerator()
-              .writeToFile(uniquePackages, outPath, documentName: docName);
+  final needsDeps =
+      formats.any((f) => f != 'markdown' && f != 'asciidoc' && f != 'html');
+  Future<void> writeAll(
+    List<Package> pkgs,
+    List<PackageDependency> deps,
+    String Function(String fmt) pathFor, {
+    LayerAnnotations? layers,
+    String label = 'SBOM',
+  }) async {
+    for (final fmt in formats) {
+      final outPath = pathFor(fmt);
+      print('Generating $label ($fmt)…');
+      try {
+        switch (fmt) {
+          case 'cyclonedx':
+            await CycloneDxGenerator().writeToFile(pkgs, deps, outPath,
+                documentName: docName,
+                specVersion: cycloneDxVersion,
+                tlp: tlp,
+                citationSource: citationSource,
+                patentsByPackageName: patentMap,
+                osInfo: ociOs,
+                sdkTools: sdkVersions,
+                layers: layers);
+          case 'spdx':
+            await SpdxGenerator().writeToFile(pkgs, deps, outPath,
+                documentName: docName,
+                osInfo: ociOs,
+                sdkTools: sdkVersions,
+                layers: layers);
+          case 'spdx3':
+            await Spdx3Generator().writeToFile(pkgs, deps, outPath,
+                documentName: docName,
+                osInfo: ociOs,
+                sdkTools: sdkVersions,
+                layers: layers);
+          case 'json':
+            await SimpleJsonGenerator().writeToFile(pkgs, deps, outPath,
+                documentName: docName, layers: layers);
+          case 'markdown':
+            await MarkdownGenerator().writeToFile(pkgs, outPath,
+                documentName: docName, layers: layers);
+          case 'asciidoc':
+            await AsciidocGenerator().writeToFile(pkgs, outPath,
+                documentName: docName, layers: layers);
+          case 'html':
+            await HtmlGenerator().writeToFile(pkgs, outPath,
+                documentName: docName, layers: layers);
+          case 'csv':
+            await CsvGenerator().writeToFile(pkgs, outPath,
+                documentName: docName, layers: layers);
+        }
+      } catch (e, st) {
+        _err('Failed to write $label ($fmt): $e');
+        if (verbose) stderr.writeln(st);
+        exit(1);
       }
-    } catch (e, st) {
-      _err('Failed to write SBOM ($fmt): $e');
-      if (verbose) stderr.writeln(st);
-      exit(1);
+      final sz = await File(outPath).length();
+      print('SBOM written → $outPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
     }
-    final sz = await File(outPath).length();
-    print('SBOM written → $outPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
+  }
+
+  // --per-layer : un SBOM par couche en plus du global. Les identifiants de
+  // document sont fixés d'avance, pour que global et couches se référencent
+  // mutuellement ; le global est écrit en premier (premier fichier produit,
+  // celui que la GUI ouvre par défaut).
+  final layerJobs = <({
+    List<Package> pkgs,
+    String fileBase,
+    String label,
+    LayerAnnotations layers,
+  })>[];
+  LayerAnnotations? globalLayers;
+  if (layerAnalysis != null) {
+    final analysis = layerAnalysis;
+    final globalUuid = generateUuidV4();
+    final layerBase = _basePath(outputPath);
+    final globalFileBase = layerBase.split('/').last;
+    final total = analysis.layers.length;
+    final summaries = <LayerSummary>[];
+    for (var i = 0; i < total; i++) {
+      final layer = analysis.layers[i];
+      final delta = analysis.deltas[i];
+      final fileBase = layerFileBase(layerBase, layer, total);
+      final summary = LayerSummary(
+        layer: layer,
+        total: total,
+        added: delta.added.length,
+        modified: delta.modified.length,
+        removed: delta.removed.length,
+        fileBase: fileBase.split('/').last,
+        documentUuid: generateUuidV4(),
+      );
+      summaries.add(summary);
+      layerJobs.add((
+        pkgs: delta.packages,
+        fileBase: fileBase,
+        label: 'SBOM couche ${layer.index}/$total',
+        layers: LayerAnnotations.forLayer(
+          mode: analysis.mode,
+          self: summary,
+          delta: delta,
+          documentUuid: summary.documentUuid,
+          globalUuid: globalUuid,
+          globalFileBase: globalFileBase,
+        ),
+      ));
+    }
+    globalLayers = LayerAnnotations.forGlobal(
+      mode: analysis.mode,
+      layers: summaries,
+      originByRef: analysis.origins(),
+      documentUuid: globalUuid,
+    );
+  }
+
+  final outputBase = formats.length > 1 ? _basePath(outputPath) : null;
+  await writeAll(
+    uniquePackages,
+    dependencies,
+    (fmt) =>
+        outputBase != null ? '$outputBase${_formatExtension(fmt)}' : outputPath,
+    layers: globalLayers,
+  );
+
+  final layerPrimaryPaths = <String>[];
+  for (final job in layerJobs) {
+    await writeAll(
+      job.pkgs,
+      needsDeps ? rpmParser.buildDependencies(job.pkgs) : const [],
+      (fmt) => '${job.fileBase}${_formatExtension(fmt)}',
+      label: job.label,
+      layers: job.layers,
+    );
+    layerPrimaryPaths.add('${job.fileBase}${_formatExtension(formats.first)}');
   }
 
   // ── Vérification des politiques ──────────────────────────────────────────
@@ -915,6 +1095,9 @@ Future<void> main(List<String> arguments) async {
         ? outputPath
         : '${_basePath(outputPath)}${_formatExtension(formats.first)}';
     await _signWithCosign(primaryOut, verbose: verbose);
+    for (final p in layerPrimaryPaths) {
+      await _signWithCosign(p, verbose: verbose);
+    }
   }
 
   if (policyFailures > 0) {
@@ -2901,6 +3084,10 @@ Examples:
 
   # CycloneDX depuis une image Docker Hub, backend cdxgen
   dart run bin/sbom_generator.dart --image nginx:latest --oci-tool cdxgen -o nginx.cdx.json
+
+  # Un SBOM par couche de l'image (delta), en plus du global
+  dart run bin/sbom_generator.dart --image ./app.tar --per-layer -o out/app
+  dart run bin/sbom_generator.dart --image ./app.tar --per-layer --layer-mode rootfs -o out/app
 
   # Combiner image OCI + liste de paquets supplémentaires
   dart run bin/sbom_generator.dart --image nginx:latest -i extra_pkgs.txt -o sbom.cdx.json

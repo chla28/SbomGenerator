@@ -33,6 +33,10 @@ const ociToolLabels = {
   'cdxgen': 'cdxgen',
 };
 
+/// Backends capables de `--layer-mode metadata` (ils indiquent la couche
+/// d'origine de chaque paquet) ; les autres n'acceptent que `rootfs`.
+const metadataLayerTools = {'syft', 'trivy'};
+
 /// Versions CycloneDX supportées par --cyclonedx-version.
 const allCycloneDxVersions = ['1.6', '1.7'];
 
@@ -64,6 +68,14 @@ class SbomConfig {
   /// Version CycloneDX générée (--cyclonedx-version) : '1.6' ou '1.7'.
   String cycloneDxVersion;
 
+  /// Un SBOM par couche de l'image en plus du global (--per-layer). Sans
+  /// effet sans [imageRef].
+  bool perLayer;
+
+  /// Méthode de --per-layer (--layer-mode) : 'metadata' ou 'rootfs'. Voir
+  /// [effectiveLayerMode] pour la valeur réellement transmise.
+  String layerMode;
+
   SbomConfig({
     this.inputFile = '',
     this.outputBase = 'sbom',
@@ -80,6 +92,8 @@ class SbomConfig {
     this.ociTool = 'syft',
     this.binaryPath = '',
     this.cycloneDxVersion = '1.6',
+    this.perLayer = false,
+    this.layerMode = 'metadata',
   }) : formats = formats ?? {'cyclonedx'};
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +110,8 @@ class SbomConfig {
     'ociTool': ociTool,
     'binaryPath': binaryPath,
     'cycloneDxVersion': cycloneDxVersion,
+    'perLayer': perLayer,
+    'layerMode': layerMode,
   };
 
   factory SbomConfig.fromJson(Map<String, dynamic> j) => SbomConfig(
@@ -112,7 +128,15 @@ class SbomConfig {
     ociTool: j['ociTool'] as String? ?? 'syft',
     binaryPath: j['binaryPath'] as String? ?? '',
     cycloneDxVersion: j['cycloneDxVersion'] as String? ?? '1.6',
+    perLayer: j['perLayer'] as bool? ?? false,
+    layerMode: j['layerMode'] as String? ?? 'metadata',
   );
+
+  /// Mode --layer-mode transmis au CLI : 'rootfs' pour les backends qui
+  /// n'indiquent pas la couche d'origine des paquets (skopeo, cdxgen), quel
+  /// que soit le choix mémorisé.
+  String get effectiveLayerMode =>
+      metadataLayerTools.contains(ociTool) ? layerMode : 'rootfs';
 
   List<String> toArgs() {
     final args = <String>[];
@@ -125,6 +149,9 @@ class SbomConfig {
     } else if (imageRef.isNotEmpty) {
       args.addAll(['--image', imageRef]);
       args.addAll(['--oci-tool', ociTool]);
+      if (perLayer) {
+        args.addAll(['--per-layer', '--layer-mode', effectiveLayerMode]);
+      }
     }
     if (outputBase.isNotEmpty) {
       args.addAll(['--output', outputBase]);

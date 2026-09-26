@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'hash_utils.dart' show spdx2Alg;
+import 'image_layers.dart';
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -23,9 +24,14 @@ class SpdxGenerator {
     /// SDK/toolchain de build (`{'flutter': '3.47.2', 'dart': '3.9.0'}`),
     /// ajouté aux `creationInfo.creators` sous forme `Tool: <nom>-<version>`.
     Map<String, String> sdkTools = const {},
+
+    /// Analyse par couche (`--per-layer`) : description de la couche ou des
+    /// couches en commentaire du document, couche d'origine / changement en
+    /// annotation de chaque paquet.
+    LayerAnnotations? layers,
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
-    final docUuid = generateUuidV4();
+    final docUuid = layers?.documentUuid ?? generateUuidV4();
     final docNamespace = 'https://sbom.local/spdx/$docUuid';
 
     final refToSpdxId = <String, String>{
@@ -54,12 +60,13 @@ class SpdxGenerator {
         ],
         'licenseListVersion': '3.21',
       },
-      'name': documentName ?? 'Package Set SBOM',
+      'name': _documentTitle(documentName ?? 'Package Set SBOM', layers),
       'dataLicense': 'CC0-1.0',
       'documentNamespace': docNamespace,
+      if (layers != null) 'comment': layers.describe().join('\n'),
       'packages': [
         if (osInfo != null) _osToSpdx(osInfo),
-        for (final pkg in packages) _packageToSpdx(pkg),
+        for (final pkg in packages) _packageToSpdx(pkg, layers),
       ],
       'relationships': relationships,
     };
@@ -138,7 +145,10 @@ class SpdxGenerator {
     return rels;
   }
 
-  Map<String, dynamic> _packageToSpdx(Package pkg) {
+  String _documentTitle(String name, LayerAnnotations? layers) =>
+      layers?.isLayerDocument == true ? '$name — ${layers!.layerLabel}' : name;
+
+  Map<String, dynamic> _packageToSpdx(Package pkg, LayerAnnotations? layers) {
     final spdxPkg = <String, dynamic>{
       'SPDXID': pkg.spdxId,
       'name': pkg.name,
@@ -173,7 +183,11 @@ class SpdxGenerator {
         _hasValue(pkg.vendor) ? 'Organization: ${pkg.vendor}' : 'NOASSERTION';
 
     // Package-type specific metadata as annotation comment
-    final comment = _annotationComment(pkg);
+    final comment = [
+      _annotationComment(pkg),
+      for (final e in (layers?.componentFields(pkg) ?? const {}).entries)
+        '$layerPropertyPrefix${e.key}=${e.value}',
+    ].where((c) => c.isNotEmpty).join('; ');
     if (comment.isNotEmpty) {
       spdxPkg['annotations'] = [
         {
@@ -217,9 +231,13 @@ class SpdxGenerator {
     String? documentName,
     OsInfo? osInfo,
     Map<String, String> sdkTools = const {},
+    LayerAnnotations? layers,
   }) async {
     final sbom = generate(packages, dependencies,
-        documentName: documentName, osInfo: osInfo, sdkTools: sdkTools);
+        documentName: documentName,
+        osInfo: osInfo,
+        sdkTools: sdkTools,
+        layers: layers);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

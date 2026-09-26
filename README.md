@@ -55,6 +55,23 @@ fonctionne aussi (même mécanisme, syft détecte lui-même une source fichier
 locale) — `--binary` documente l'intention et refuse un `--oci-tool` autre
 que `syft`.
 
+**Un SBOM par couche (`--per-layer`)** — avec `--image`, produit en plus du
+SBOM global un SBOM par couche de l'image, dans chaque format demandé, à
+côté de `-o` : `<base>.layer-NN-<digest12>.<ext>`. Le SBOM d'une couche
+décrit son **delta** : composants ajoutés ou modifiés, composants supprimés
+listés à part. Le SBOM global indique la couche d'origine de chaque
+composant et référence chaque SBOM de couche (BOM-Link en CycloneDX). Deux
+méthodes (`--layer-mode`) :
+
+| Mode | Principe | Backends | Contenu du delta |
+|------|----------|----------|------------------|
+| `metadata` *(défaut)* | couche d'origine indiquée par le backend (`Layer.DiffID` de trivy ; couche la plus basse où syft voit le paquet en `--scope all-layers`) | `syft`, `trivy` | ajouts |
+| `rootfs` | couches appliquées une à une sur un rootfs cumulé (*whiteouts* compris), rootfs réanalysé après chaque couche | les quatre (seul mode pour `skopeo`/`cdxgen`) | ajouts, modifications (ex. montée de version), suppressions |
+
+Le mode `rootfs` coûte une analyse par couche ; une image de registre est
+d'abord copiée localement via `skopeo` (repli sur le stockage local de
+podman puis de Docker pour une image construite localement).
+
 **Traitement :**
 - RPM : 3 appels `rpm` en parallèle par paquet (`--queryformat`, `--requires`, `--provides`)
 - Wheel : lecture du fichier `METADATA` embarqué dans le ZIP (via `python3`)
@@ -70,6 +87,7 @@ que `syft`.
   - `pubspec.yaml` : dépendances directes de la section `dependencies:` uniquement (la section `dev_dependencies:` est ignorée) ; version déduite de la contrainte quand elle est univoque (`^1.2.3`, `1.2.3`, `>=1.2.3`), sinon vide.
   - Dans un scan de dossier, si `pubspec.lock` et `pubspec.yaml` coexistent, seul le `.lock` est retenu.
 - Image OCI (`--image`) : analyse via `syft`, `trivy`, `skopeo` ou `cdxgen` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
+  - `--per-layer` : analyse supplémentaire par couche (`lib/image_layers.dart`) ; les paquets venus de `--input` ne figurent que dans le SBOM global
   - `cdxgen` : produit un SBOM CycloneDX complet dont on ne retient que les composants porteurs d'un PURL d'écosystème réel (l'inventaire fichier par fichier de cdxgen et ses actifs cryptographiques sont écartés) ; l'OS de base est reconstitué depuis le qualifiant `distro=` des PURL système
 - Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`, `pubspec.yaml`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
@@ -153,6 +171,11 @@ Options :
   -b, --binary             Binaire local à analyser directement (ex. exécutable
                            Go lié statiquement) ; force --oci-tool syft
       --oci-tool            Backend d'analyse OCI : syft (défaut) | trivy | skopeo | cdxgen
+      --per-layer          Avec --image : un SBOM par couche en plus du global
+                           (<base>.layer-NN-<digest12>.<ext>, delta de la couche)
+      --layer-mode         Méthode de --per-layer : metadata (défaut, syft/trivy)
+                           | rootfs (réanalyse après chaque couche ; forcé pour
+                           skopeo et cdxgen)
   -o, --output             Fichier de sortie (défaut : sbom.json)
                            Avec plusieurs formats, utilisé comme base de nom
   -f, --format             Format(s), virgule-séparés :
@@ -261,6 +284,13 @@ sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si no
 
 # Combiner une image OCI et une liste de paquets supplémentaires
 ./sbom_generator -I nginx:latest -i extra_pkgs.txt -o sbom.cdx.json
+
+# Un SBOM par couche de l'image (delta de chaque couche), en plus du global
+./sbom_generator -I ./app.tar --per-layer -f cyclonedx,html -o out/app
+# → out/app.cdx.json, out/app.layer-01-74d97c428c51.cdx.json, …
+
+# Idem avec modifications et suppressions (réanalyse du rootfs par couche)
+./sbom_generator -I ./app.tar --per-layer --layer-mode rootfs -o out/app
 
 # Analyser un binaire lié statiquement (ex. exécutable Go) — dépendances
 # embarquées lues via syft, sans registre ni conteneur

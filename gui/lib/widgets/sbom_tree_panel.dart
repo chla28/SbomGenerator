@@ -5,8 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/layer_nav.dart';
 import '../models/sbom_result.dart';
 import 'help_icon.dart';
+import 'layer_selector.dart';
 
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
@@ -17,15 +19,20 @@ class _SbomComponent {
   final String license;
   final String purl;
 
+  /// Champs `sbom_generator:layer:*` (voir [layerFieldsOf]).
+  final Map<String, String> layerFields;
+
   const _SbomComponent({
     required this.name,
     required this.version,
     required this.type,
     required this.license,
     required this.purl,
+    this.layerFields = const {},
   });
 
   String get key => '$name@$version';
+  String get layer => layerColumnLabel(layerFields);
 }
 
 class _SbomInfo {
@@ -42,6 +49,8 @@ class _SbomInfo {
     required this.rootVersion,
     required this.components,
   });
+
+  bool get hasLayers => components.any((c) => c.layerFields.isNotEmpty);
 
   int get uniqueLicenseCount =>
       components.map((c) => c.license).where((l) => l.isNotEmpty).toSet().length;
@@ -67,6 +76,7 @@ class _SbomInfo {
         type: c['type'] as String? ?? 'unknown',
         license: _cdxLicense(c['licenses']),
         purl: c['purl'] as String? ?? '',
+        layerFields: layerFieldsOf(c),
       );
     }).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -106,6 +116,7 @@ class _SbomInfo {
         type: 'package',
         license: p['licenseConcluded'] as String? ?? '',
         purl: purl,
+        layerFields: layerFieldsOf(p),
       );
     }).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -142,6 +153,7 @@ class _SbomInfo {
         type: 'package',
         license: license == 'NOASSERTION' ? '' : license,
         purl: purl,
+        layerFields: layerFieldsOf(p),
       );
     }).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -172,7 +184,7 @@ class _CompItem extends _ListItem {
 
 // ─── Groupement ───────────────────────────────────────────────────────────────
 
-enum _GroupBy { none, type, license }
+enum _GroupBy { none, type, license, layer }
 
 // ─── Panel principal ──────────────────────────────────────────────────────────
 
@@ -193,6 +205,11 @@ class _SbomTreePanelState extends State<SbomTreePanel>
   String? _selectedPath;
   String? _error;
   bool _loading = false;
+
+  // Jeu de SBOM par couche (--per-layer) auquel appartient le fichier ouvert.
+  LayerNav? _nav;
+  LayerDocInfo _layerInfo = LayerDocInfo.empty;
+  Map<int, String> _layerLabels = const {};
 
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
@@ -225,11 +242,14 @@ class _SbomTreePanelState extends State<SbomTreePanel>
   }
 
   void _autoLoad(List<OutputFile> files) {
+    // Le SBOM global plutôt qu'un SBOM de couche (--per-layer) : les couches
+    // restent accessibles depuis le sélecteur de couche.
     final f = files
         .where((f) =>
-            f.path.endsWith('.cdx.json') ||
-            f.path.endsWith('.spdx.json') ||
-            f.path.endsWith('.spdx3.jsonld'))
+            (f.path.endsWith('.cdx.json') ||
+                f.path.endsWith('.spdx.json') ||
+                f.path.endsWith('.spdx3.jsonld')) &&
+            !isLayerSbomFile(f.path))
         .firstOrNull;
     if (f != null) _loadFile(f.path);
   }
@@ -244,10 +264,31 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     try {
       final raw = await File(path).readAsString();
       final info = _SbomInfo.parse(raw);
+      final nav = info == null ? null : LayerNav.discover(path);
+      var layerInfo = LayerDocInfo.empty;
+      if (info != null) {
+        try {
+          layerInfo = LayerDocInfo.fromSbom(
+              jsonDecode(raw) as Map<String, dynamic>);
+        } catch (_) {}
+      }
+      final labels = nav == null
+          ? const <int, String>{}
+          : layerInfo.layerLabels.isNotEmpty
+              ? layerInfo.layerLabels
+              : nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty
+                  ? _layerLabels
+                  : await readLayerLabels(nav.globalPath);
       setState(() {
         _loading = false;
         _selectedPath = path;
         _info = info;
+        _nav = nav;
+        _layerInfo = layerInfo;
+        _layerLabels = labels;
+        if (_groupBy == _GroupBy.layer && info?.hasLayers != true) {
+          _groupBy = _GroupBy.type;
+        }
         _error = info == null ? 'Format non reconnu (ni CycloneDX ni SPDX).' : null;
         if (info != null) {
           // Déplier tous les groupes si peu nombreux
@@ -293,9 +334,11 @@ class _SbomTreePanelState extends State<SbomTreePanel>
 
     final groups = <String, List<_SbomComponent>>{};
     for (final c in comps) {
-      final k = _groupBy == _GroupBy.type
-          ? c.type
-          : (c.license.isEmpty ? '(non spécifié)' : c.license);
+      final k = switch (_groupBy) {
+        _GroupBy.type => c.type,
+        _GroupBy.layer => layerGroupKey(c.layerFields),
+        _ => c.license.isEmpty ? '(non spécifié)' : c.license,
+      };
       (groups[k] ??= []).add(c);
     }
 
@@ -326,6 +369,16 @@ class _SbomTreePanelState extends State<SbomTreePanel>
           onSelectFile: _loadFile,
         ),
 
+        // ── Navigation par couche (--per-layer) ──
+        if (info != null && _nav != null)
+          LayerSelector(
+            nav: _nav!,
+            currentPath: _selectedPath!,
+            info: _layerInfo,
+            layerLabels: _layerLabels,
+            onOpen: _loadFile,
+          ),
+
         // ── Infos SBOM ──
         if (info != null)
           _InfoBar(info: info, selectedPath: _selectedPath!),
@@ -340,6 +393,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                 // Grouper par
                 _GroupBySelector(
                   value: _groupBy,
+                  showLayer: info.hasLayers,
                   onChanged: (v) {
                     setState(() {
                       _groupBy = v;
@@ -348,6 +402,11 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                         final types =
                             info.components.map((c) => c.type).toSet();
                         if (types.length <= 6) _expandedGroups.addAll(types);
+                      } else if (v == _GroupBy.layer) {
+                        final keys = info.components
+                            .map((c) => layerGroupKey(c.layerFields))
+                            .toSet();
+                        if (keys.length <= 6) _expandedGroups.addAll(keys);
                       }
                     });
                   },
@@ -355,12 +414,10 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                 const SizedBox(width: 8),
                 // Tout déplier / replier
                 if (_groupBy != _GroupBy.none) ...[
-                  TextButton.icon(
-                    icon: const Icon(Icons.unfold_more, size: 14),
-                    label: const Text('Tout', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4)),
+                  IconButton(
+                    icon: const Icon(Icons.unfold_more, size: 16),
+                    tooltip: 'Tout déplier',
+                    visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() {
                       final keys = items
                           .whereType<_GroupHeader>()
@@ -369,12 +426,10 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                       _expandedGroups.addAll(keys);
                     }),
                   ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.unfold_less, size: 14),
-                    label: const Text('Aucun', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4)),
+                  IconButton(
+                    icon: const Icon(Icons.unfold_less, size: 16),
+                    tooltip: 'Tout replier',
+                    visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() => _expandedGroups.clear()),
                   ),
                   const SizedBox(width: 4),
@@ -497,11 +552,13 @@ class _FileBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Les SBOM de couche (--per-layer) passent par le sélecteur de couche.
     final sbomFiles = outputFiles
         .where((f) =>
-            f.path.endsWith('.cdx.json') ||
-            f.path.endsWith('.spdx.json') ||
-            f.path.endsWith('.spdx3.jsonld'))
+            (f.path.endsWith('.cdx.json') ||
+                f.path.endsWith('.spdx.json') ||
+                f.path.endsWith('.spdx3.jsonld')) &&
+            !isLayerSbomFile(f.path))
         .toList();
 
     return Container(
@@ -621,7 +678,14 @@ class _GroupBySelector extends StatelessWidget {
   final _GroupBy value;
   final ValueChanged<_GroupBy> onChanged;
 
-  const _GroupBySelector({required this.value, required this.onChanged});
+  /// Propose le regroupement par couche (SBOM produit avec --per-layer).
+  final bool showLayer;
+
+  const _GroupBySelector({
+    required this.value,
+    required this.onChanged,
+    this.showLayer = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -634,14 +698,20 @@ class _GroupBySelector extends StatelessWidget {
           'Mode de regroupement des composants.\n'
           '• Aucun : liste à plat alphabétique\n'
           '• Type : groupé par écosystème (rpm, pypi…)\n'
-          '• Licence : groupé par expression SPDX',
+          '• Licence : groupé par expression SPDX\n'
+          '• Couche : groupé par couche d\'origine (SBOM global) ou par '
+          'changement (SBOM de couche) — SBOM produits avec --per-layer',
         ),
         const SizedBox(width: 4),
         SegmentedButton<_GroupBy>(
-          segments: const [
-            ButtonSegment(value: _GroupBy.none, label: Text('Aucun')),
-            ButtonSegment(value: _GroupBy.type, label: Text('Type')),
-            ButtonSegment(value: _GroupBy.license, label: Text('Licence')),
+          segments: [
+            const ButtonSegment(value: _GroupBy.none, label: Text('Aucun')),
+            const ButtonSegment(value: _GroupBy.type, label: Text('Type')),
+            const ButtonSegment(
+                value: _GroupBy.license, label: Text('Licence')),
+            if (showLayer)
+              const ButtonSegment(
+                  value: _GroupBy.layer, label: Text('Couche')),
           ],
           selected: {value},
           onSelectionChanged: (s) => onChanged(s.first),
@@ -804,6 +874,7 @@ class _ComponentTile extends StatelessWidget {
                   _DetailRow('Type', comp.type),
                 if (comp.license.isNotEmpty)
                   _DetailRow('Licence', comp.license),
+                if (comp.layer.isNotEmpty) _DetailRow('Couche', comp.layer),
               ],
             ),
           ),

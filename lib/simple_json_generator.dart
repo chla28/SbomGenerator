@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'image_layers.dart';
 import 'models.dart';
 
 /// Generates a human-friendly, custom JSON SBOM.
@@ -8,6 +9,7 @@ class SimpleJsonGenerator {
     List<Package> packages,
     List<PackageDependency> dependencies, {
     String? documentName,
+    LayerAnnotations? layers,
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
 
@@ -48,6 +50,9 @@ class SimpleJsonGenerator {
         base['buildTime'] = pkg.buildTime;
       }
 
+      final layerFields = layers?.componentFields(pkg) ?? const {};
+      if (layerFields.isNotEmpty) base['layer'] = layerFields;
+
       return base;
     }).toList();
 
@@ -78,6 +83,30 @@ class SimpleJsonGenerator {
       },
       'packages': pkgList,
       'dependencyGraph': depGraph,
+      if (layers != null) ..._layersJson(layers),
+    };
+  }
+
+  Map<String, dynamic> _layersJson(LayerAnnotations l) {
+    final self = l.self;
+    if (self == null) {
+      return {
+        'layers': {
+          'mode': l.mode,
+          'items': [for (final s in l.layers) s.toJson()],
+        },
+      };
+    }
+    return {
+      'layer': {
+        'mode': l.mode,
+        ...self.toJson(),
+        'globalFile': l.globalFileBase,
+        'removed': [
+          for (final p in l.removed)
+            {'ref': p.bomRef, 'name': p.name, 'version': p.fullVersion},
+        ],
+      },
     };
   }
 
@@ -86,8 +115,10 @@ class SimpleJsonGenerator {
     List<PackageDependency> dependencies,
     String outputPath, {
     String? documentName,
+    LayerAnnotations? layers,
   }) async {
-    final sbom = generate(packages, dependencies, documentName: documentName);
+    final sbom = generate(packages, dependencies,
+        documentName: documentName, layers: layers);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

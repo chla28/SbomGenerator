@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'image_layers.dart';
 import 'models.dart';
 
 class AsciidocGenerator {
@@ -6,9 +7,11 @@ class AsciidocGenerator {
     List<Package> packages,
     String outputPath, {
     String? documentName,
+    LayerAnnotations? layers,
   }) async {
     final buf = StringBuffer();
-    final title = documentName ?? 'Software Bill of Materials — Licences';
+    var title = documentName ?? 'Software Bill of Materials — Licences';
+    if (layers?.isLayerDocument == true) title = '$title — ${layers!.layerLabel}';
     final sorted = List<Package>.from(packages)
       ..sort((a, b) => a.name.compareTo(b.name));
 
@@ -18,9 +21,18 @@ class AsciidocGenerator {
     buf.writeln(':toclevels: 1');
     buf.writeln(':icons: font');
     buf.writeln();
-    buf.writeln('[cols="<1,<2,<1,<2",options="header",stripes=odd]');
+    if (layers != null) {
+      for (final line in layers.describe()) {
+        buf.writeln('* ${_escText(line)}');
+      }
+      buf.writeln();
+    }
+    buf.writeln(layers != null
+        ? '[cols="<1,<2,<1,<2,<1",options="header",stripes=odd]'
+        : '[cols="<1,<2,<1,<2",options="header",stripes=odd]');
     buf.writeln('|===');
-    buf.writeln('| Paquet | Version | Architecture | Licence');
+    buf.writeln('| Paquet | Version | Architecture | Licence'
+        '${layers != null ? ' | ${layers.columnTitle}' : ''}');
     buf.writeln();
 
     for (final pkg in sorted) {
@@ -28,10 +40,26 @@ class AsciidocGenerator {
       final version = _esc(pkg.fullVersion);
       final arch = _esc(pkg.arch);
       final license = _esc(pkg.license.isEmpty ? '(inconnue)' : pkg.license);
-      buf.writeln('| $name | $version | $arch | $license');
+      final layerCell =
+          layers != null ? ' | ${_esc(layers.columnValue(pkg))}' : '';
+      buf.writeln('| $name | $version | $arch | $license$layerCell');
     }
 
     buf.writeln('|===');
+    if (layers != null && layers.removed.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('== Supprimés par cette couche');
+      buf.writeln();
+      buf.writeln('[cols="<1,<2,<1",options="header",stripes=odd]');
+      buf.writeln('|===');
+      buf.writeln('| Paquet | Version | Architecture');
+      buf.writeln();
+      for (final pkg in layers.removed) {
+        buf.writeln('| ${_esc(pkg.name)} | ${_esc(pkg.fullVersion)} '
+            '| ${_esc(pkg.arch)}');
+      }
+      buf.writeln('|===');
+    }
     buf.writeln();
     buf.writeln('_Généré par sbom_generator — ${packages.length} paquet(s)._');
 
@@ -41,4 +69,9 @@ class AsciidocGenerator {
   // Dans une cellule AsciiDoc inline, "|" en début de contenu est ambigu.
   // On échappe systématiquement pour éviter tout problème de rendu.
   String _esc(String s) => s.replaceAll('|', '\\|');
+
+  // Texte courant (hors tableau) : neutralise les attributs `{…}` et les
+  // macros de passage qu'une instruction de build pourrait contenir.
+  String _escText(String s) =>
+      s.replaceAll('{', '\\{').replaceAll('+++', '\\+++');
 }

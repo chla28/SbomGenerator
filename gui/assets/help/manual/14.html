@@ -62,7 +62,15 @@ nombre total de composants chargés.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_filtre_et_recherche">15.2. Filtre et recherche</h3>
+<h3 id="_navigation_par_couche">15.2. Navigation par couche</h3>
+<div class="paragraph">
+<p>Pour un SBOM produit avec <code>--per-layer</code>, le bandeau de couches décrit dans
+<a href="#sec-nav-couches">Navigation par couche (<code>--per-layer</code>)</a> s’affiche sous l’en-tête : il permet de passer du SBOM
+global à chaque SBOM de couche sans repasser par le sélecteur de fichier.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_filtre_et_recherche">15.3. Filtre et recherche</h3>
 <div class="paragraph">
 <p>Le champ de recherche filtre les composants en temps réel sur :</p>
 </div>
@@ -80,6 +88,9 @@ nombre total de composants chargés.</p>
 <li>
 <p>le PURL</p>
 </li>
+<li>
+<p>la couche (SBOM produit avec <code>--per-layer</code>)</p>
+</li>
 </ul>
 </div>
 <div class="paragraph">
@@ -88,15 +99,18 @@ nombre total de composants chargés.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_tableau_des_composants">15.3. Tableau des composants</h3>
+<h3 id="_tableau_des_composants">15.4. Tableau des composants</h3>
 <div class="paragraph">
-<p>Le tableau affiche les colonnes <strong>Nom</strong>, <strong>Version</strong>, <strong>Type</strong>, <strong>Licence</strong> et <strong>PURL</strong>.
+<p>Le tableau affiche les colonnes <strong>Nom</strong>, <strong>Version</strong>, <strong>Type</strong>, <strong>Licence</strong> et <strong>PURL</strong>,
+plus, pour un SBOM produit avec <code>--per-layer</code>, une colonne <strong>Couche</strong> (SBOM
+global : couche d’origine et couches qui ont modifié le composant) ou
+<strong>Changement</strong> (SBOM de couche : <code>ajouté</code>, <code>modifié (était &lt;version&gt;)</code>).
 Cliquez sur un en-tête de colonne pour trier par ordre croissant, cliquez à
 nouveau pour inverser l’ordre.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_panneau_de_détails">15.4. Panneau de détails</h3>
+<h3 id="_panneau_de_détails">15.5. Panneau de détails</h3>
 <div class="paragraph">
 <p>Cliquez sur une ligne du tableau pour afficher un panneau de détails sur la
 droite, récapitulant tous les champs du composant sélectionné : nom, version,
@@ -104,7 +118,7 @@ type, licence, description et PURL.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_persistance">15.5. Persistance</h3>
+<h3 id="_persistance">15.6. Persistance</h3>
 <div class="paragraph">
 <p>Le fichier ouvert et les filtres actifs sont mémorisés lors de la navigation
 entre onglets. Le fichier n’est pas rechargé automatiquement si son contenu

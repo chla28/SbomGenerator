@@ -39,4 +39,38 @@ void main() {
       expect(args, containsAllInOrder(['--oci-tool', 'trivy']));
     });
   });
+
+  group('SbomConfig.toArgs — --per-layer', () {
+    test('émet --per-layer et --layer-mode avec une image', () {
+      final c = SbomConfig(imageRef: 'nginx:latest', perLayer: true);
+      expect(c.toArgs(),
+          containsAllInOrder(['--per-layer', '--layer-mode', 'metadata']));
+    });
+
+    test('mode rootfs forcé pour skopeo et cdxgen', () {
+      for (final tool in ['skopeo', 'cdxgen']) {
+        final c = SbomConfig(
+            imageRef: 'nginx:latest',
+            ociTool: tool,
+            perLayer: true,
+            layerMode: 'metadata');
+        expect(c.effectiveLayerMode, 'rootfs');
+        expect(c.toArgs(), containsAllInOrder(['--layer-mode', 'rootfs']));
+      }
+    });
+
+    test('ignoré sans image (entrée fichier ou binaire)', () {
+      expect(SbomConfig(inputFile: 'pkgs.txt', perLayer: true).toArgs(),
+          isNot(contains('--per-layer')));
+      expect(SbomConfig(binaryPath: '/bin/x', perLayer: true).toArgs(),
+          isNot(contains('--per-layer')));
+    });
+
+    test('round-trip toJson/fromJson conserve perLayer et layerMode', () {
+      final c = SbomConfig(perLayer: true, layerMode: 'rootfs');
+      final restored = SbomConfig.fromJson(c.toJson());
+      expect(restored.perLayer, isTrue);
+      expect(restored.layerMode, 'rootfs');
+    });
+  });
 }

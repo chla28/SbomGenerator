@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'hash_utils.dart'
     show hashesFromCycloneDx, hashesFromSyftMetadata, packageHashFromDigestString;
+import 'image_layers.dart';
 import 'models.dart';
 
 /// Format de la référence OCI fournie par l'utilisateur.
@@ -53,46 +54,242 @@ class OciParser {
     String imageRef,
     String tool, {
     bool verbose = false,
-  }) async {
-    // Les quatre backends (syft, trivy, skopeo, cdxgen) n'acceptent que des
-    // .tar non compressés en format docker-archive. Si l'entrée est .tar.gz ou .tgz,
-    // on la décompresse dans un répertoire temporaire avant de continuer.
-    Directory? decompDir;
-    String resolvedRef = imageRef;
+  }) =>
+      _withResolvedRef(imageRef, verbose, (resolvedRef) {
+        switch (tool) {
+          case 'syft':
+            return _parseSyft(resolvedRef, verbose: verbose);
+          case 'trivy':
+            return _parseTrivy(resolvedRef, verbose: verbose);
+          case 'skopeo':
+            return _parseSkopeo(resolvedRef, verbose: verbose);
+          case 'cdxgen':
+            return _parseCdxgen(resolvedRef, verbose: verbose);
+          default:
+            throw ArgumentError('Outil OCI inconnu : $tool');
+        }
+      });
 
+  /// Exécute [body] sur une référence utilisable par les backends.
+  ///
+  /// Les quatre backends (syft, trivy, skopeo, cdxgen) n'acceptent que des
+  /// .tar non compressés en format docker-archive. Si l'entrée est .tar.gz
+  /// ou .tgz, on la décompresse dans un répertoire temporaire, supprimé une
+  /// fois [body] terminé.
+  Future<T> _withResolvedRef<T>(String imageRef, bool verbose,
+      Future<T> Function(String resolvedRef) body) async {
     final isCompressed =
         imageRef.endsWith('.tar.gz') || imageRef.endsWith('.tgz');
-    if (isCompressed) {
-      decompDir = await Directory.systemTemp.createTemp('sbom_oci_decomp_');
-      try {
-        resolvedRef = await _decompressDockerArchive(
-            imageRef, decompDir.path,
-            verbose: verbose);
-      } catch (e) {
-        await Process.run('rm', ['-rf', decompDir.path]);
-        rethrow;
-      }
-    }
+    if (!isCompressed) return body(imageRef);
 
+    final decompDir = await Directory.systemTemp.createTemp('sbom_oci_decomp_');
     try {
+      final resolvedRef = await _decompressDockerArchive(
+          imageRef, decompDir.path,
+          verbose: verbose);
       // await obligatoire : sans lui, le finally s'exécuterait dès le retour
       // de la Future, avant que le backend ait pu lire le fichier décompressé.
-      switch (tool) {
-        case 'syft':
-          return await _parseSyft(resolvedRef, verbose: verbose);
-        case 'trivy':
-          return await _parseTrivy(resolvedRef, verbose: verbose);
-        case 'skopeo':
-          return await _parseSkopeo(resolvedRef, verbose: verbose);
-        case 'cdxgen':
-          return await _parseCdxgen(resolvedRef, verbose: verbose);
-        default:
-          throw ArgumentError('Outil OCI inconnu : $tool');
-      }
+      return await body(resolvedRef);
     } finally {
-      if (decompDir != null) {
-        await Process.run('rm', ['-rf', decompDir.path]);
+      await Process.run('rm', ['-rf', decompDir.path]);
+    }
+  }
+
+  // ── Analyse par couche (--per-layer) ─────────────────────────────────────────
+
+  /// Mode `metadata` : couches de l'image et couche d'origine de chaque
+  /// paquet (`bomRef` → index de couche), telles que les expose le backend.
+  ///
+  /// * trivy : `Layer.DiffID` de chaque paquet, couches depuis
+  ///   `Metadata.DiffIDs` et `Metadata.ImageConfig.history`.
+  /// * syft : seconde analyse en `--scope all-layers`, où chaque paquet porte
+  ///   la liste des couches dans lesquelles syft l'a vu ; on retient la plus
+  ///   basse. (L'analyse habituelle, « squashed », ne rattache un paquet
+  ///   qu'à la dernière couche qui a réécrit la base rpm/dpkg/apk.)
+  Future<({List<ImageLayer> layers, Map<String, int> layerOf})>
+      layerAttribution(String imageRef, String tool, {bool verbose = false}) =>
+          _withResolvedRef(imageRef, verbose, (ref) async {
+            switch (tool) {
+              case 'trivy':
+                if (verbose) print('trivy : attribution des couches de $ref…');
+                return _trivyLayerAttribution(
+                    await _runTrivyJson(_trivyImageArgs(ref)), ref);
+              case 'syft':
+                if (verbose) {
+                  print('syft : analyse de toutes les couches de $ref…');
+                }
+                return _syftLayerAttribution(
+                    await _runSyftJson([_syftRef(ref), '--scope', 'all-layers']),
+                    ref);
+              default:
+                throw ArgumentError(
+                    '--layer-mode metadata non pris en charge par $tool');
+            }
+          });
+
+  ({List<ImageLayer> layers, Map<String, int> layerOf}) _trivyLayerAttribution(
+      Map<String, dynamic> data, String imageRef) {
+    final meta = (data['Metadata'] as Map<String, dynamic>?) ?? const {};
+    final diffIds = [
+      for (final d in meta['DiffIDs'] as List? ?? const []) d.toString(),
+    ];
+    final layers = layersFromConfig(
+        diffIds, (meta['ImageConfig'] as Map?)?['history']);
+    final indexOf = {for (final l in layers) l.diffId: l.index};
+    final layerOf = <String, int>{};
+    for (final e in _trivyPackagesWithLayer(data, imageRef)) {
+      final i = indexOf[e.diffId];
+      if (i != null) layerOf[e.pkg.bomRef] = i;
+    }
+    return (layers: layers, layerOf: layerOf);
+  }
+
+  ({List<ImageLayer> layers, Map<String, int> layerOf}) _syftLayerAttribution(
+      Map<String, dynamic> data, String imageRef) {
+    final meta = ((data['source'] as Map?)?['metadata'] as Map?) ?? const {};
+    final diffIds = [
+      for (final l in meta['layers'] as List? ?? const [])
+        if (l is Map && l['digest'] != null) l['digest'].toString(),
+    ];
+    Object? history;
+    final rawConfig = meta['config'];
+    if (rawConfig is String && rawConfig.isNotEmpty) {
+      try {
+        final cfg = jsonDecode(utf8.decode(base64.decode(rawConfig)));
+        if (cfg is Map) history = cfg['history'];
+      } on FormatException {
+        // Config illisible : couches sans instruction de build.
       }
+    }
+    final layers = layersFromConfig(diffIds, history);
+    final indexOf = {for (final l in layers) l.diffId: l.index};
+
+    final codename =
+        ((data['distro'] as Map?)?['versionCodename'] as String?)?.trim();
+    final layerOf = <String, int>{};
+    void attribute(String bomRef, int index) {
+      final prev = layerOf[bomRef];
+      if (prev == null || index < prev) layerOf[bomRef] = index;
+    }
+
+    for (final raw in (data['artifacts'] as List?) ?? const []) {
+      final a = raw as Map<String, dynamic>;
+      int? lowest;
+      for (final loc in a['locations'] as List? ?? const []) {
+        final i = indexOf[(loc as Map)['layerID']];
+        if (i != null && (lowest == null || i < lowest)) lowest = i;
+      }
+      if (lowest == null) continue;
+      final pkg = _syftArtifactToPackage(a, imageRef, distroCodename: codename);
+      if (pkg != null) attribute(pkg.bomRef, lowest);
+      // Paquet source dérivé (voir _parseSyft) : couche de son premier binaire.
+      final src = _syftSourcePackage(a, codename, imageRef, const {});
+      if (src != null) attribute(src.bomRef, lowest);
+    }
+    return (layers: layers, layerOf: layerOf);
+  }
+
+  /// Mode `rootfs` : les couches de l'image sont appliquées une à une sur un
+  /// rootfs cumulé, analysé après chaque couche avec [tool] (voir
+  /// [analyzeRootfsLayers]). Les couches sont lues directement dans une
+  /// archive `docker save` ou un layout OCI ; une référence de registre est
+  /// d'abord copiée localement via skopeo.
+  Future<LayerAnalysis> rootfsLayerAnalysis(String imageRef, String tool,
+      {bool verbose = false, void Function(String message)? log}) async {
+    final work = await Directory.systemTemp.createTemp('sbom_layers_');
+    try {
+      final layers = await _materializeLayers(imageRef, work.path,
+          verbose: verbose);
+      if (layers.isEmpty) {
+        throw StateError('aucune couche trouvée dans $imageRef');
+      }
+      return await analyzeRootfsLayers(
+        layers: layers,
+        workDir: work.path,
+        scan: (dir) => scanRootfs(dir, tool, imageRef, verbose: verbose),
+        log: log,
+      );
+    } finally {
+      await Process.run('chmod', ['-R', 'u+rwX', work.path]);
+      await Process.run('rm', ['-rf', work.path]);
+    }
+  }
+
+  /// Rend les tar des couches de [imageRef] accessibles sous [workDir] et
+  /// renvoie la liste ordonnée des couches.
+  Future<List<ImageLayer>> _materializeLayers(String imageRef, String workDir,
+      {bool verbose = false}) async {
+    var ref = imageRef;
+    if (ref.endsWith('.tar.gz') || ref.endsWith('.tgz')) {
+      final d = Directory('$workDir/decomp')..createSync();
+      ref = await _decompressDockerArchive(ref, d.path, verbose: verbose);
+    }
+    switch (detectRefType(ref)) {
+      case OciRefType.tar:
+        // docker-archive (`manifest.json`) ou oci-archive (`index.json`).
+        final save = Directory('$workDir/save')..createSync();
+        final x = await Process.run(
+            'tar', ['-C', save.path, '--warning=none', '-xf', ref]);
+        if (x.exitCode != 0) {
+          throw Exception('extraction de $ref échouée : ${x.stderr}');
+        }
+        if (File('${save.path}/manifest.json').existsSync()) {
+          return readDockerArchiveLayers(save.path);
+        }
+        if (File('${save.path}/index.json').existsSync()) {
+          return readOciLayoutLayers(save.path);
+        }
+        throw Exception('$ref : ni manifest.json ni index.json — '
+            'archive d\'image non reconnue');
+      case OciRefType.ociLayout:
+        return readOciLayoutLayers(ref);
+      case OciRefType.registry:
+        return readOciLayoutLayers(await _copyToOciLayout(
+            ref, '$workDir/oci_layout',
+            verbose: verbose));
+      case OciRefType.binary:
+        throw ArgumentError('un binaire autonome n\'a pas de couches');
+    }
+  }
+
+  /// Analyse un rootfs déjà extrait ([dir]) avec [tool]. [imageRef] sert de
+  /// référence d'origine des paquets produits.
+  Future<List<Package>> scanRootfs(String dir, String tool, String imageRef,
+      {bool verbose = false}) async {
+    switch (tool) {
+      case 'syft':
+        // Catalogueurs « image » (paquets installés) plutôt que ceux d'un
+        // répertoire source (manifestes déclarés) : même inventaire que
+        // l'analyse de l'image elle-même. --base-path : les liens absolus du
+        // rootfs sont résolus sous [dir], jamais sur l'hôte.
+        return _syftJsonToResult(
+                await _runSyftJson([
+                  'dir:$dir',
+                  '--base-path', dir,
+                  '--override-default-catalogers', 'image',
+                ]),
+                imageRef)
+            .packages;
+      case 'trivy':
+        return _trivyJsonToResult(
+                await _runTrivyJson([
+                  'rootfs', '--format', 'json', '--quiet', '--list-all-pkgs',
+                  dir,
+                ]),
+                imageRef)
+            .packages;
+      case 'skopeo':
+        return _scanExtractedRootfs(dir, imageRef, verbose: verbose);
+      case 'cdxgen':
+        return (await _cdxgenRun([
+          '--type', 'rootfs',
+          '--output', '-',
+          '--no-progress',
+          dir,
+        ], imageRef))
+            .packages;
+      default:
+        throw ArgumentError('Outil OCI inconnu : $tool');
     }
   }
 
@@ -158,32 +355,35 @@ class OciParser {
 
   Future<OciParseResult> _parseSyft(String imageRef,
       {bool verbose = false}) async {
-    final refType = detectRefType(imageRef);
-    final syftRef = switch (refType) {
-      OciRefType.tar => 'docker-archive:$imageRef',
-      OciRefType.ociLayout => 'oci-dir:$imageRef',
-      // Chemin de fichier local : syft détecte lui-même une source `file:`
-      // et applique ses catalogueurs de binaires (buildinfo Go, classifieur
-      // générique…) — c'est ce mécanisme qui rend `--binary` possible.
-      OciRefType.registry || OciRefType.binary => imageRef,
-    };
-
+    final syftRef = _syftRef(imageRef);
     if (verbose) print('syft : analyse de $syftRef…');
+    return _syftJsonToResult(await _runSyftJson([syftRef]), imageRef);
+  }
 
-    final result = await Process.run('syft', [syftRef, '--output', 'json']);
+  String _syftRef(String imageRef) => switch (detectRefType(imageRef)) {
+        OciRefType.tar => 'docker-archive:$imageRef',
+        OciRefType.ociLayout => 'oci-dir:$imageRef',
+        // Chemin de fichier local : syft détecte lui-même une source `file:`
+        // et applique ses catalogueurs de binaires (buildinfo Go, classifieur
+        // générique…) — c'est ce mécanisme qui rend `--binary` possible.
+        OciRefType.registry || OciRefType.binary => imageRef,
+      };
+
+  Future<Map<String, dynamic>> _runSyftJson(List<String> args) async {
+    final result = await Process.run('syft', [...args, '--output', 'json']);
     if (result.exitCode != 0) {
       throw Exception(
           'syft a échoué (code ${result.exitCode}) : ${result.stderr}');
     }
-
-    final Map<String, dynamic> data;
     try {
-      data =
-          jsonDecode(result.stdout as String) as Map<String, dynamic>;
+      return jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
       throw Exception('syft : impossible de parser le JSON : $e');
     }
+  }
 
+  OciParseResult _syftJsonToResult(
+      Map<String, dynamic> data, String imageRef) {
     final distro = data['distro'] as Map<String, dynamic>?;
     final codename = (distro?['versionCodename'] as String?)?.trim();
 
@@ -469,24 +669,12 @@ class OciParser {
 
   Future<OciParseResult> _parseTrivy(String imageRef,
       {bool verbose = false}) async {
-    final refType = detectRefType(imageRef);
-
     if (verbose) print('trivy : analyse de $imageRef…');
+    return _trivyJsonToResult(
+        await _runTrivyJson(_trivyImageArgs(imageRef)), imageRef);
+  }
 
-    final args = ['image', '--format', 'json', '--quiet', '--list-all-pkgs'];
-    switch (refType) {
-      case OciRefType.tar:
-        args.addAll(['--input', imageRef]);
-      case OciRefType.ociLayout:
-        args.add('oci-layout://$imageRef');
-      // `trivy image` ne sait pas analyser un binaire autonome (ce n'est pas
-      // une référence d'image) ; passé tel quel, l'échec est signalé par
-      // trivy lui-même. `--binary` restreint le backend à syft en amont.
-      case OciRefType.registry:
-      case OciRefType.binary:
-        args.add(imageRef);
-    }
-
+  Future<Map<String, dynamic>> _runTrivyJson(List<String> args) async {
     ProcessResult result = await Process.run('trivy', args);
     // --list-all-pkgs non supporté sur les vieilles versions → réessai sans
     if (result.exitCode > 1 &&
@@ -498,27 +686,61 @@ class OciParser {
       throw Exception(
           'trivy a échoué (code ${result.exitCode}) : ${result.stderr}');
     }
-
-    final Map<String, dynamic> data;
     try {
-      data =
-          jsonDecode(result.stdout as String) as Map<String, dynamic>;
+      return jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
       throw Exception('trivy : impossible de parser le JSON : $e');
     }
+  }
 
-    final packages = <Package>[];
+  /// Arguments `trivy image` désignant [imageRef] selon son type.
+  List<String> _trivyImageArgs(String imageRef) {
+    final args = ['image', '--format', 'json', '--quiet', '--list-all-pkgs'];
+    switch (detectRefType(imageRef)) {
+      case OciRefType.tar:
+        args.addAll(['--input', imageRef]);
+      case OciRefType.ociLayout:
+        args.add('oci-layout://$imageRef');
+      // `trivy image` ne sait pas analyser un binaire autonome (ce n'est pas
+      // une référence d'image) ; passé tel quel, l'échec est signalé par
+      // trivy lui-même. `--binary` restreint le backend à syft en amont.
+      case OciRefType.registry:
+      case OciRefType.binary:
+        args.add(imageRef);
+    }
+    return args;
+  }
+
+  /// Paquets d'un rapport trivy, chacun accompagné du `Layer.DiffID` de la
+  /// couche qui l'a introduit (vide si trivy ne l'indique pas).
+  List<({OciPackage pkg, String diffId})> _trivyPackagesWithLayer(
+      Map<String, dynamic> data, String imageRef) {
+    final out = <({OciPackage pkg, String diffId})>[];
     for (final res in (data['Results'] as List?) ?? []) {
       final r = res as Map<String, dynamic>;
       final ecosystemType = (r['Type'] as String?) ?? '';
       for (final pkg in (r['Packages'] as List?) ?? []) {
-        final p =
-            _trivyPkgToPackage(pkg as Map<String, dynamic>, ecosystemType, imageRef);
-        if (p != null) packages.add(p);
+        final json = pkg as Map<String, dynamic>;
+        final p = _trivyPkgToPackage(json, ecosystemType, imageRef);
+        if (p == null) continue;
+        final layer = json['Layer'];
+        out.add((
+          pkg: p,
+          diffId: layer is Map ? (layer['DiffID'] as String?) ?? '' : '',
+        ));
       }
     }
-    return (packages: packages, os: _trivyMetadataToOsInfo(data));
+    return out;
   }
+
+  OciParseResult _trivyJsonToResult(
+          Map<String, dynamic> data, String imageRef) =>
+      (
+        packages: [
+          for (final e in _trivyPackagesWithLayer(data, imageRef)) e.pkg,
+        ],
+        os: _trivyMetadataToOsInfo(data),
+      );
 
   /// Extrait l'OS de base depuis `Metadata.OS` de trivy (absent si trivy n'a
   /// pas pu détecter de base OS, ex. image `scratch`/distroless).
@@ -665,72 +887,18 @@ class OciParser {
 
     final tempDir = await Directory.systemTemp.createTemp('sbom_oci_');
     try {
-      String ociLayoutDir;
-
-      if (refType == OciRefType.ociLayout) {
-        ociLayoutDir = imageRef;
-      } else {
-        ociLayoutDir = '${tempDir.path}/oci_layout';
-
-        final skopeoDst = 'oci:$ociLayoutDir:image';
-        final skopeoSrc = switch (refType) {
-          OciRefType.tar => 'docker-archive:$imageRef',
-          OciRefType.registry => 'docker://$imageRef',
-          _ => imageRef,
-        };
-
-        if (verbose) print('skopeo : copie de $skopeoSrc…');
-
-        final copyResult = await Process.run('skopeo', [
-          'copy',
-          '--insecure-policy',
-          skopeoSrc,
-          skopeoDst,
-        ]);
-        if (copyResult.exitCode != 0) {
-          throw Exception(
-              'skopeo copy a échoué (code ${copyResult.exitCode}) : '
-              '${copyResult.stderr}');
-        }
-      }
+      final ociLayoutDir = refType == OciRefType.ociLayout
+          ? imageRef
+          : await _copyToOciLayout(
+              imageRef, '${tempDir.path}/oci_layout',
+              verbose: verbose);
 
       final fsDir = '${tempDir.path}/rootfs';
       await Directory(fsDir).create();
       await _extractOciLayers(ociLayoutDir, fsDir, verbose: verbose);
 
-      final packages = <Package>[];
-
-      final dpkgStatus = File('$fsDir/var/lib/dpkg/status');
-      if (await dpkgStatus.exists()) {
-        if (verbose) print('skopeo : base dpkg trouvée');
-        packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef, fsDir));
-      }
-
-      // Vérifier les deux emplacements RPM : traditionnel (/var/lib/rpm) et
-      // nouveau (/usr/lib/sysimage/rpm, RHEL 8.4+ / Fedora 33+).
-      final rpmDb = Directory('$fsDir/var/lib/rpm');
-      final rpmDbNew = Directory('$fsDir/usr/lib/sysimage/rpm');
-      if (await rpmDb.exists() || await rpmDbNew.exists()) {
-        if (verbose) print('skopeo : base RPM trouvée');
-        packages.addAll(
-            await _parseRpmRoot(fsDir, imageRef, verbose: verbose));
-      }
-
-      final apkDb = File('$fsDir/lib/apk/db/installed');
-      if (await apkDb.exists()) {
-        if (verbose) print('skopeo : base APK trouvée');
-        packages.addAll(await _parseApkInstalled(apkDb, imageRef));
-      }
-
-      final mavenPkgs = await _parseMavenJars(fsDir, imageRef, verbose: verbose);
-      packages.addAll(mavenPkgs);
-
-      final pyPkgs = await _parsePythonPackages(fsDir, imageRef, verbose: verbose);
-      packages.addAll(pyPkgs);
-
-      final npmPkgs = await _parseNpmPackages(fsDir, imageRef, verbose: verbose);
-      packages.addAll(npmPkgs);
-
+      final packages =
+          await _scanExtractedRootfs(fsDir, imageRef, verbose: verbose);
       if (packages.isEmpty && verbose) {
         stderr.writeln(
             'skopeo : aucune base de paquets reconnue dans les layers.');
@@ -744,6 +912,74 @@ class OciParser {
       await Process.run('chmod', ['-R', 'u+rwX', tempDir.path]);
       await Process.run('rm', ['-rf', tempDir.path]);
     }
+  }
+
+  /// Copie [imageRef] (archive `docker save` ou référence de registre) en
+  /// layout OCI dans [destDir] via skopeo, et renvoie [destDir].
+  ///
+  /// Une référence de registre introuvable à distance est ensuite cherchée
+  /// dans le stockage local de podman (`containers-storage:`) puis de Docker
+  /// (`docker-daemon:`) — cas des images construites localement
+  /// (`localhost/mon-app:1.0`).
+  Future<String> _copyToOciLayout(String imageRef, String destDir,
+      {bool verbose = false}) async {
+    final refType = detectRefType(imageRef);
+    final sources = switch (refType) {
+      OciRefType.tar => ['docker-archive:$imageRef'],
+      OciRefType.registry => [
+          'docker://$imageRef',
+          'containers-storage:$imageRef',
+          'docker-daemon:$imageRef',
+        ],
+      _ => [imageRef],
+    };
+    final errors = <String>[];
+    for (final src in sources) {
+      if (verbose) print('skopeo : copie de $src…');
+      final copyResult = await Process.run('skopeo', [
+        'copy',
+        '--insecure-policy',
+        src,
+        'oci:$destDir:image',
+      ]);
+      if (copyResult.exitCode == 0) return destDir;
+      errors.add('$src : ${(copyResult.stderr as String).trim()}');
+    }
+    throw Exception('skopeo copy a échoué :\n  ${errors.join('\n  ')}');
+  }
+
+  /// Paquets d'un rootfs déjà extrait dans [fsDir] (backend skopeo) : bases
+  /// dpkg, RPM et APK, puis JARs Maven, paquets Python et npm.
+  Future<List<Package>> _scanExtractedRootfs(String fsDir, String imageRef,
+      {bool verbose = false}) async {
+    final packages = <Package>[];
+
+    final dpkgStatus = File('$fsDir/var/lib/dpkg/status');
+    if (await dpkgStatus.exists()) {
+      if (verbose) print('skopeo : base dpkg trouvée');
+      packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef, fsDir));
+    }
+
+    // Vérifier les deux emplacements RPM : traditionnel (/var/lib/rpm) et
+    // nouveau (/usr/lib/sysimage/rpm, RHEL 8.4+ / Fedora 33+).
+    final rpmDb = Directory('$fsDir/var/lib/rpm');
+    final rpmDbNew = Directory('$fsDir/usr/lib/sysimage/rpm');
+    if (await rpmDb.exists() || await rpmDbNew.exists()) {
+      if (verbose) print('skopeo : base RPM trouvée');
+      packages.addAll(await _parseRpmRoot(fsDir, imageRef, verbose: verbose));
+    }
+
+    final apkDb = File('$fsDir/lib/apk/db/installed');
+    if (await apkDb.exists()) {
+      if (verbose) print('skopeo : base APK trouvée');
+      packages.addAll(await _parseApkInstalled(apkDb, imageRef));
+    }
+
+    packages.addAll(await _parseMavenJars(fsDir, imageRef, verbose: verbose));
+    packages
+        .addAll(await _parsePythonPackages(fsDir, imageRef, verbose: verbose));
+    packages.addAll(await _parseNpmPackages(fsDir, imageRef, verbose: verbose));
+    return packages;
   }
 
   Future<void> _extractOciLayers(String ociDir, String destDir,
@@ -1356,12 +1592,16 @@ class OciParser {
 
     if (verbose) print('cdxgen : analyse de $target…');
 
-    final result = await Process.run('cdxgen', [
+    return _cdxgenRun([
       '--type', 'docker',
       '--output', '-',
       '--no-progress',
       target,
-    ]);
+    ], imageRef);
+  }
+
+  Future<OciParseResult> _cdxgenRun(List<String> args, String imageRef) async {
+    final result = await Process.run('cdxgen', args);
     if (result.exitCode != 0) {
       throw Exception(
           'cdxgen a échoué (code ${result.exitCode}) : ${result.stderr}');
@@ -1575,3 +1815,17 @@ OciPackage? ociParserCdxgenComponentToPackage(
 /// `distro` de PURL cdxgen (ex. `debian-12`).
 OsInfo? ociParserCdxgenOsInfo(String? distroQualifier) =>
     OciParser()._cdxgenOsInfo(distroQualifier);
+
+/// Appelle [OciParser._syftLayerAttribution] depuis les tests, sur une sortie
+/// JSON `syft --scope all-layers` déjà décodée, sans lancer syft.
+({List<ImageLayer> layers, Map<String, int> layerOf})
+    ociParserSyftLayerAttribution(
+            Map<String, dynamic> syftJson, String imageRef) =>
+        OciParser()._syftLayerAttribution(syftJson, imageRef);
+
+/// Appelle [OciParser._trivyLayerAttribution] depuis les tests, sur une
+/// sortie JSON `trivy image` déjà décodée, sans lancer trivy.
+({List<ImageLayer> layers, Map<String, int> layerOf})
+    ociParserTrivyLayerAttribution(
+            Map<String, dynamic> trivyJson, String imageRef) =>
+        OciParser()._trivyLayerAttribution(trivyJson, imageRef);

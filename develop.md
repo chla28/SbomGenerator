@@ -22,8 +22,10 @@ Le programme suit un pipeline concurrent, capable de combiner plusieurs sources
         ├─ pom.xml ────────────► MavenParser         (pré-expansion, 1:N)
         │                                                       │
         ▼                                                       ▼
-┌────────────────────────────────────────────┐        OciParser (syft / trivy / skopeo)
+┌────────────────────────────────────────────┐        OciParser (syft / trivy / skopeo / cdxgen)
 │  bin/sbom_generator.dart                    │        → { packages: List<OciPackage>, os: OsInfo? }
+│                                             │        + --per-layer : image_layers.dart
+│                                             │          → LayerAnalysis (delta par couche)
 │  (main + _Semaphore + _printProgress)       │                │
 │  1. Lecture + validation CLI                │◄───────────────┘
 │  2. Détection du type par extension         │
@@ -794,6 +796,71 @@ déclarations de version sans dépendance effective ou des plugins.
 
 ---
 
+## `lib/image_layers.dart` — Analyse par couche (`--per-layer`)
+
+Produit, pour une image de conteneur, le **delta** de chaque couche (composants
+ajoutés, modifiés, supprimés) et les annotations que les générateurs
+ajoutent au SBOM global et aux SBOM de couche. Indépendant du backend :
+l'analyse d'un état du rootfs est injectée (`scan`), et l'attribution par
+métadonnées est fournie par `OciParser`.
+
+### Modèle
+
+| Type | Rôle |
+|---|---|
+| `ImageLayer` | couche : `index` (1 = base), `diffId` (`sha256:…` du tar non compressé), `blobPath` (tar sur disque, mode rootfs), `createdBy`/`created` (`history[]` de la config, entrées `empty_layer` ignorées) |
+| `LayerDelta` | `added`, `modified` (`PackageChange = (before, after)`), `removed` ; `packages` = composants décrits par le SBOM de la couche ; `map(f)` pour appliquer surcharges de licence / fournisseur |
+| `LayerAnalysis` | `mode`, `layers`, `deltas` ; `origins()` → `bomRef` → `LayerOrigin` (couche d'introduction, couches de modification) pour l'état final |
+| `LayerSummary` | résumé d'une couche (compteurs, `fileBase`, `documentUuid`) — sérialisé en JSON dans le SBOM global |
+| `LayerAnnotations` | ce que reçoivent les générateurs (paramètre `layers:` de chaque `generate`/`writeToFile`) : `forLayer` (couche décrite, changement par `bomRef`, version précédente, supprimés, lien vers le global) ou `forGlobal` (couche d'origine par `bomRef`, résumé des couches). `documentUuid` fixe le numéro de série CycloneDX / l'espace de noms SPDX, pour les liens croisés |
+
+### Lecture des couches
+
+- `readDockerArchiveLayers(dir)` : archive `docker save`/`podman save`
+  extraite (`manifest.json` → `Config` + `Layers[]`).
+- `readOciLayoutLayers(dir)` : `index.json` → (index imbriqué, manifeste
+  `linux/amd64` de préférence) → config + `layers[]` (`blobs/sha256/…`).
+- Sans `diff_ids` exploitables, le digest est déduit du nom de fichier.
+
+### Mode `rootfs` : `analyzeRootfsLayers`
+
+Pour chaque couche : `tar -xf` dans un répertoire temporaire (compression
+détectée par tar ; entrées non créables sans privilèges ignorées),
+`chmod -R u+rwX`, puis **`mergeLayerDir`** sur le rootfs cumulé, puis
+`scan(rootDir)` et `diffPackages(previous, current)`.
+
+`mergeLayerDir` applique la sémantique overlayfs : `.wh.<nom>` supprime
+l'entrée inférieure, `.wh..wh..opq` vide le répertoire, un répertoire
+fusionne récursivement, toute autre entrée remplace. Les entrées sont
+**déplacées** (`rename`) et la descente ne passe **jamais** par un lien
+symbolique — contrairement à des `tar -x` successifs dans le même répertoire
+(le backend `skopeo` historique), une couche malveillante (`x -> /` puis
+`x/…`) ne peut rien écrire hors du rootfs (cas couvert par
+`test/unit/image_layers_test.dart`).
+
+`diffPackages` rapproche d'abord par `bomRef` (composant présent des deux
+côtés : « modifié » si PURL, licence, fournisseur ou empreintes diffèrent),
+puis les restes par identité logique `type|nom|arch` quand elle est
+univoque des deux côtés — une montée de version devient « modifiée » plutôt
+que suppression + ajout. Plusieurs versions d'un même nom (`node_modules`
+imbriqués) ne sont pas appariées.
+
+### Mode `metadata` : `metadataLayerAnalysis`
+
+Répartit les paquets de l'analyse habituelle selon `layerOf` (`bomRef` →
+index de couche) fourni par `OciParser.layerAttribution` ; seuls les ajouts
+sont connus. Un paquet sans couche connue ne figure dans aucun SBOM de
+couche (avertissement console).
+
+### Côté `OciParser`
+
+| Méthode | Rôle |
+|---|---|
+| `layerAttribution(ref, tool)` | trivy : `Results[].Packages[].Layer.DiffID`, couches depuis `Metadata.DiffIDs` + `Metadata.ImageConfig.history`. syft : seconde analyse `--scope all-layers` ; chaque artefact porte les `locations[].layerID` où syft l'a vu, on retient la couche la plus basse (le paquet source dérivé hérite de celle de son binaire) ; couches depuis `source.metadata.layers[].digest`, historique depuis `source.metadata.config` (base64). L'analyse « squashed » habituelle ne convient pas : elle rattache tous les paquets système à la dernière couche qui a réécrit la base rpm/dpkg/apk |
+| `rootfsLayerAnalysis(ref, tool)` | `_materializeLayers` (archive tar — docker-archive ou oci-archive —, layout OCI, ou registre copié via `_copyToOciLayout`), puis `analyzeRootfsLayers` avec `scanRootfs` |
+| `scanRootfs(dir, tool, ref)` | syft `dir:<dir> --base-path <dir> --override-default-catalogers image` (mêmes catalogueurs « paquets installés » que pour une image ; liens absolus résolus sous `dir`) ; trivy `rootfs` ; skopeo `_scanExtractedRootfs` (dpkg/RPM/APK/Maven/Python/npm) ; cdxgen `--type rootfs` |
+| `_copyToOciLayout(ref, dest)` | `skopeo copy` vers `oci:<dest>:image` ; pour une référence de registre, repli sur `containers-storage:` (podman) puis `docker-daemon:` (images construites localement) |
+
 ## `lib/sbom_diff.dart` — Comparaison de SBOM (sous-commande `diff`)
 
 ### `SbomDiffer`
@@ -1161,6 +1228,34 @@ Le libellé console (`refTypeLabel`) distingue désormais `OciRefType.binary`
 (registre) via … ») — avant cet ajout, un fichier local passé à `--image`
 tombait dans le cas `registry` par défaut et affichait ce libellé, trompeur
 puisqu'aucun registre n'est interrogé.
+
+### Options `--per-layer` / `--layer-mode`
+
+Validation (après celle de `--oci-tool`) :
+
+- `--layer-mode` sans `--per-layer` → erreur ;
+- `--per-layer` avec `--binary` ou un `--image` de type `OciRefType.binary`
+  → erreur (« un binaire autonome n'a pas de couches ») ;
+- `--layer-mode metadata` avec un backend hors `metadataLayerTools`
+  (`syft`, `trivy`) → erreur ; sans `--layer-mode`, le mode vaut `metadata`
+  pour syft/trivy et `rootfs` sinon (message console) ;
+- mode `rootfs` sur une référence de registre avec un autre backend que
+  skopeo : `skopeo` doit être disponible (copie locale des couches).
+
+Déroulement : l'analyse par couche suit l'analyse OCI habituelle (le SBOM
+global reste celui d'une exécution sans `--per-layer`, annoté). Les
+surcharges `--license-map` / `--supplier` sont appliquées aux composants des
+couches via `LayerAnalysis.map`. La boucle de génération est factorisée dans
+une fonction locale `writeAll(pkgs, deps, pathFor, layers:, label:)`,
+appelée pour le global puis pour chaque couche. Les UUID de document sont
+tirés **avant** toute écriture (liens croisés global ↔ couches), ce qui
+permet d'écrire le **global en premier** : c'est le premier
+`SBOM written → …` de la sortie, celui que les onglets de la GUI ouvrent par
+défaut. Fichiers de couche : `layerFileBase(_basePath(outputPath), layer,
+total)` + `_formatExtension(fmt)`, soit `<base>.layer-NN-<digest12><ext>`.
+Les dépendances d'une couche sont résolues sur ses seuls composants. `--sign`
+signe aussi le premier format de chaque couche ; `--min-quality-score` ne
+porte que sur le global.
 
 ### Rapport d'erreurs structuré
 

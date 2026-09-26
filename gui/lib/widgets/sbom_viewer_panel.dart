@@ -5,6 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/layer_nav.dart';
+import 'layer_selector.dart';
+
 // ─── Modèles ──────────────────────────────────────────────────────────────────
 
 class _Component {
@@ -16,6 +19,10 @@ class _Component {
   final String description;
   final String url;
 
+  /// Couche d'origine (SBOM global) ou changement (SBOM de couche) — voir
+  /// [layerColumnLabel] ; vide hors `--per-layer`.
+  final String layer;
+
   const _Component({
     required this.name,
     required this.version,
@@ -24,6 +31,7 @@ class _Component {
     required this.purl,
     required this.description,
     required this.url,
+    this.layer = '',
   });
 
   static List<_Component> fromSbom(Map<String, dynamic> raw) {
@@ -62,6 +70,7 @@ class _Component {
         purl: c['purl'] as String? ?? '',
         description: c['description'] as String? ?? '',
         url: homepage,
+        layer: layerColumnLabel(layerFieldsOf(c)),
       );
     }).where((c) => c.name.isNotEmpty).toList();
   }
@@ -85,6 +94,7 @@ class _Component {
         purl: purl,
         description: p['comment'] as String? ?? '',
         url: p['downloadLocation'] as String? ?? '',
+        layer: layerColumnLabel(layerFieldsOf(p)),
       );
     }).where((c) => c.name.isNotEmpty).toList();
   }
@@ -111,6 +121,7 @@ class _Component {
         purl: purl,
         description: p['summary'] as String? ?? '',
         url: p['software:downloadLocation'] as String? ?? '',
+        layer: layerColumnLabel(layerFieldsOf(p)),
       );
     }).where((c) => c.name.isNotEmpty).toList();
   }
@@ -134,6 +145,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   String? _error;
   bool _loading = false;
 
+  // Jeu de SBOM par couche (--per-layer) auquel appartient le fichier ouvert.
+  String? _path;
+  LayerNav? _nav;
+  LayerDocInfo _layerInfo = LayerDocInfo.empty;
+  Map<int, String> _layerLabels = const {};
+
   String _search = '';
   String _typeFilter = '';
   int _sortCol = 0;
@@ -154,7 +171,10 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
       allowedExtensions: ['json', 'jsonld'],
     );
     if (result == null || result.files.single.path == null) return;
+    await _openPath(result.files.single.path!);
+  }
 
+  Future<void> _openPath(String path) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -169,9 +189,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
     });
 
     try {
-      final raw = await File(result.files.single.path!).readAsString();
+      final raw = await File(path).readAsString();
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final components = _Component.fromSbom(json);
+      final nav = LayerNav.discover(path);
+      final layerInfo = LayerDocInfo.fromSbom(json);
+      final layerLabels = await _labelsFor(nav, layerInfo);
 
       String? docName;
       String? fmt;
@@ -196,8 +219,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
       setState(() {
         _all = components;
         _filtered = List.from(components);
-        _docName = docName ?? result.files.single.name;
+        _docName = docName ?? path.split('/').last;
         _format = fmt;
+        _path = path;
+        _nav = nav;
+        _layerInfo = layerInfo;
+        _layerLabels = layerLabels;
         _loading = false;
       });
     } catch (e) {
@@ -208,6 +235,19 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
     }
   }
 
+  /// Libellés des couches pour le sélecteur : lus dans le SBOM global (le
+  /// fichier ouvert, ou relu depuis le disque quand on ouvre une couche).
+  Future<Map<int, String>> _labelsFor(LayerNav? nav, LayerDocInfo info) async {
+    if (nav == null) return const {};
+    if (info.layerLabels.isNotEmpty) return info.layerLabels;
+    if (nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty) {
+      return _layerLabels;
+    }
+    return readLayerLabels(nav.globalPath);
+  }
+
+  bool get _hasLayerColumn => _all.any((c) => c.layer.isNotEmpty);
+
   void _applyFilter() {
     final q = _search.toLowerCase();
     final t = _typeFilter.toLowerCase();
@@ -216,7 +256,8 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
           !c.name.toLowerCase().contains(q) &&
           !c.version.toLowerCase().contains(q) &&
           !c.license.toLowerCase().contains(q) &&
-          !c.purl.toLowerCase().contains(q)) {
+          !c.purl.toLowerCase().contains(q) &&
+          !c.layer.toLowerCase().contains(q)) {
         return false;
       }
       if (t.isNotEmpty && c.type.toLowerCase() != t) { return false; }
@@ -238,6 +279,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
         1 => c.version,
         2 => c.type,
         3 => c.license,
+        4 => c.layer,
         _ => c.name,
       };
 
@@ -373,6 +415,16 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
           ),
         ),
 
+        // ── Navigation par couche (--per-layer) ─────────────────────────────
+        if (_nav != null && _path != null)
+          LayerSelector(
+            nav: _nav!,
+            currentPath: _path!,
+            info: _layerInfo,
+            layerLabels: _layerLabels,
+            onOpen: _openPath,
+          ),
+
         // ── Barre filtre ─────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -445,6 +497,11 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                               flex: 2),
                           _Header('Licence', 3, _sortCol, _sortAsc, _sort,
                               flex: 3),
+                          if (_hasLayerColumn)
+                            _Header(
+                                _nav?.isLayer == true ? 'Changement' : 'Couche',
+                                4, _sortCol, _sortAsc, _sort,
+                                flex: 2),
                         ],
                       ),
                     ),
@@ -505,6 +562,13 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
+                                  if (_hasLayerColumn)
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(c.layer,
+                                          style: const TextStyle(fontSize: 12),
+                                          overflow: TextOverflow.ellipsis),
+                                    ),
                                 ],
                               ),
                             ),
@@ -557,6 +621,10 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                   _DetailRow('Version', c.version),
                   _DetailRow('Type', c.type),
                   if (c.license.isNotEmpty) _DetailRow('Licence', c.license),
+                  if (c.layer.isNotEmpty)
+                    _DetailRow(
+                        _nav?.isLayer == true ? 'Changement' : 'Couche',
+                        c.layer),
                   if (c.description.isNotEmpty)
                     _DetailRow('Description', c.description),
                   if (c.url.isNotEmpty) _DetailRow('URL', c.url),

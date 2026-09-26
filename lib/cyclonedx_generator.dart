@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'image_layers.dart';
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -81,6 +82,11 @@ class CycloneDxGenerator {
     /// 'dart': '3.9.0'}`), ajouté à `metadata.tools.components`. Vient de
     /// `--sdk-version` côté CLI.
     Map<String, String> sdkTools = const {},
+
+    /// Analyse par couche (`--per-layer`) : SBOM d'une couche ou SBOM global
+    /// annoté (voir [LayerAnnotations]). Fixe aussi le numéro de série, pour
+    /// les liens BOM-Link entre SBOM global et SBOM de couche.
+    LayerAnnotations? layers,
   }) {
     if (!supportedSpecVersions.contains(specVersion)) {
       throw ArgumentError(
@@ -114,7 +120,8 @@ class CycloneDxGenerator {
     }
 
     final now = DateTime.now().toUtc().toIso8601String();
-    final serialNumber = 'urn:uuid:${generateUuidV4()}';
+    final serialNumber =
+        'urn:uuid:${layers?.documentUuid ?? generateUuidV4()}';
     final orgName = organization ?? 'local';
 
     final depIndex = <String, List<String>>{
@@ -142,11 +149,14 @@ class CycloneDxGenerator {
       'serialNumber': serialNumber,
       'version': 1,
       'metadata': _buildMetadata(now, documentName, author, organization,
-          tlp: tlp, extraTool: citationSource, sdkTools: sdkTools),
+          tlp: tlp,
+          extraTool: citationSource,
+          sdkTools: sdkTools,
+          layers: layers),
       'components': [
         if (osInfo != null) _buildOsComponent(osInfo),
         for (final pkg in packages)
-          _packageToComponent(pkg, patents[pkg.name], orgName),
+          _packageToComponent(pkg, patents[pkg.name], orgName, layers),
       ],
       'dependencies': [rootDep, ...pkgDeps],
       'compositions': [
@@ -185,6 +195,7 @@ class CycloneDxGenerator {
     Map<String, PatentAssertion>? patentsByPackageName,
     OsInfo? osInfo,
     Map<String, String> sdkTools = const {},
+    LayerAnnotations? layers,
   }) async {
     final sbom = generate(
       packages,
@@ -198,6 +209,7 @@ class CycloneDxGenerator {
       patentsByPackageName: patentsByPackageName,
       osInfo: osInfo,
       sdkTools: sdkTools,
+      layers: layers,
     );
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
@@ -213,6 +225,7 @@ class CycloneDxGenerator {
     String? tlp,
     String? extraTool,
     Map<String, String> sdkTools = const {},
+    LayerAnnotations? layers,
   }) {
     final authorName = author ?? 'sbom_generator';
     final orgName = org ?? 'local';
@@ -258,12 +271,14 @@ class CycloneDxGenerator {
           'license': {'id': 'CC0-1.0'}
         }
       ],
-      'component': {
-        'type': 'container',
-        'bom-ref': 'root',
-        'name': name ?? 'Package Set',
-        'version': '1.0',
-      },
+      'component': layers == null
+          ? {
+              'type': 'container',
+              'bom-ref': 'root',
+              'name': name ?? 'Package Set',
+              'version': '1.0',
+            }
+          : _layerRootComponent(name ?? 'Package Set', layers),
     };
 
     // CycloneDX 1.7+ only (schema 1.6 has no `distributionConstraints`).
@@ -272,6 +287,80 @@ class CycloneDxGenerator {
     }
 
     return metadata;
+  }
+
+  // ── Analyse par couche (--per-layer) ──────────────────────────────────────
+
+  /// Composant racine (`metadata.component`) d'un SBOM produit avec
+  /// `--per-layer`.
+  ///
+  /// * SBOM de couche : `version` = digest de la couche, `description` =
+  ///   instruction de build, propriétés `sbom_generator:layer:*` (dont un
+  ///   `…:removed` par composant supprimé) et BOM-Link vers le SBOM global.
+  /// * SBOM global : un résumé JSON par couche (`sbom_generator:layers:NNN`)
+  ///   et un BOM-Link vers chaque SBOM de couche.
+  Map<String, dynamic> _layerRootComponent(String name, LayerAnnotations l) {
+    final self = l.self;
+    if (self != null) {
+      final layer = self.layer;
+      return {
+        'type': 'container',
+        'bom-ref': 'root',
+        'name': '$name — ${l.layerLabel}',
+        'version': layer.diffId,
+        if (layer.createdBy != null) 'description': layer.createdBy,
+        'externalReferences': [
+          {
+            'type': 'bom',
+            'url': bomLink(l.globalUuid!),
+            'comment': 'SBOM global : ${l.globalFileBase}',
+          },
+        ],
+        'properties': [
+          for (final e in {
+            'index': '${layer.index}',
+            'total': '${self.total}',
+            'digest': layer.diffId,
+            if (layer.created != null) 'created': layer.created!,
+            'mode': l.mode,
+            'added': '${self.added}',
+            'modified': '${self.modified}',
+            'removedCount': '${self.removed}',
+            'globalFile': l.globalFileBase!,
+          }.entries)
+            {'name': '$layerPropertyPrefix${e.key}', 'value': e.value},
+          for (final p in l.removed)
+            {
+              'name': '${layerPropertyPrefix}removed',
+              'value': '${p.bomRef} (${p.name} ${p.fullVersion})',
+            },
+        ],
+      };
+    }
+    return {
+      'type': 'container',
+      'bom-ref': 'root',
+      'name': name,
+      'version': '1.0',
+      'externalReferences': [
+        for (final s in l.layers)
+          {
+            'type': 'bom',
+            'url': bomLink(s.documentUuid),
+            'comment': 'couche ${s.layer.index}/${s.total} '
+                '(${s.layer.shortDigest}) : ${s.fileBase}',
+          },
+      ],
+      'properties': [
+        {'name': '${layerSummaryPrefix}mode', 'value': l.mode},
+        for (final s in l.layers)
+          {
+            'name': '$layerSummaryPrefix'
+                '${s.layer.index.toString().padLeft(3, '0')}',
+            'value': jsonEncode(s.toJson()),
+          },
+      ],
+    };
   }
 
   // ── Citations & patents (CycloneDX 1.7) ────────────────────────────────────
@@ -332,8 +421,8 @@ class CycloneDxGenerator {
 
   // ── Component ──────────────────────────────────────────────────────────────
 
-  Map<String, dynamic> _packageToComponent(
-      Package pkg, PatentAssertion? patent, String orgName) {
+  Map<String, dynamic> _packageToComponent(Package pkg,
+      PatentAssertion? patent, String orgName, LayerAnnotations? layers) {
     // Maven coordinates are stored as "groupId:artifactId" in pkg.name.
     // CycloneDX has a dedicated `group` field for exactly this (matching
     // what tools such as syft emit) — split it out instead of leaving the
@@ -450,6 +539,11 @@ class CycloneDxGenerator {
         properties.add({'name': '$ns:requires', 'value': req});
       }
     }
+
+    // Couche d'origine (SBOM global) ou nature du changement (SBOM de couche).
+    layers?.componentFields(pkg).forEach((k, v) {
+      properties.add({'name': '$layerPropertyPrefix$k', 'value': v});
+    });
 
     if (properties.isNotEmpty) {
       component['properties'] = properties;

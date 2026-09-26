@@ -173,6 +173,16 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |`syft`
 |Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo`, `cdxgen`
 
+|`--per-layer`
+|—
+|—
+|Avec `--image` : un SBOM par couche de l'image en plus du global (`<base>.layer-NN-<digest12>.<ext>`, delta de la couche) — voir <<sec-per-layer>>
+
+|`--layer-mode <mode>`
+|—
+|`metadata`
+|Méthode de `--per-layer` : `metadata` (couche d'origine indiquée par syft/trivy) ou `rootfs` (réanalyse après chaque couche ; forcé pour `skopeo` et `cdxgen`)
+
 |`--output <fichier>`
 |`-o`
 |`sbom.json`
@@ -696,6 +706,102 @@ Portée réelle, à connaître avant de s'y fier pour un rapport de conformité 
   moment du build (ex. embarquer un JSON de dépendances comme le fait
   `cargo-auditable` pour Rust).
 ====
+
+[[sec-per-layer]]
+=== Un SBOM par couche de l'image (`--per-layer`)
+
+[source,bash]
+----
+./sbom_generator -I ./app.tar --per-layer -f cyclonedx,csv -o out/app
+# → out/app.cdx.json                              SBOM global (annoté)
+#   out/app.layer-01-74d97c428c51.cdx.json        couche 1 (base)
+#   out/app.layer-02-b676b687f0f5.cdx.json        couche 2 …
+#   (et les mêmes en .csv)
+
+# Ajouts, modifications et suppressions : réanalyse du rootfs par couche
+./sbom_generator -I nginx:latest --per-layer --layer-mode rootfs -o out/nginx
+----
+
+Le global est écrit en premier, puis un SBOM par couche *dans chaque format
+demandé* (`-f`), à côté de `-o`. Le nom de base est celui de `-o` sans
+extension de format ; l'index de couche est sur deux chiffres au moins, pour
+que l'ordre alphabétique suive l'ordre des couches.
+
+[cols="1,3,1,2",options="header"]
+|===
+|Mode (`--layer-mode`) |Principe |Backends |Contenu d'un SBOM de couche
+
+|`metadata` _(défaut)_
+|Couche d'origine indiquée par le backend : `Layer.DiffID` de trivy ; pour
+syft, seconde analyse en `--scope all-layers` et couche la plus basse où le
+paquet apparaît (l'analyse habituelle de syft ne rattache un paquet système
+qu'à la dernière couche qui a réécrit la base rpm/dpkg/apk)
+|`syft`, `trivy`
+|Composants *ajoutés* par la couche
+
+|`rootfs`
+|Les couches sont appliquées une à une sur un rootfs cumulé (sémantique
+overlayfs, _whiteouts_ compris), le rootfs est réanalysé après chaque
+couche, le delta est la différence avec l'état précédent
+|Les quatre — seul mode possible avec `skopeo` et `cdxgen`
+|Composants *ajoutés* et *modifiés* (montée de version, licence ou
+empreinte différente), composants *supprimés* listés à part
+|===
+
+[cols="1,4",options="header"]
+|===
+|Point |Comportement
+
+|SBOM de couche
+|Composant racine `container` : `version` = digest de la couche
+(`diff_id`), `description` = instruction de build (`history[].created_by`),
+propriétés `sbom_generator:layer:*` (index, total, digest, mode, compteurs,
+un `…:removed` par composant supprimé), BOM-Link vers le SBOM global. Chaque
+composant porte `sbom_generator:layer:change` (`added`/`modified`) et, pour
+une montée de version, `…:previousVersion`.
+
+|SBOM global
+|Chaque composant de l'image porte `sbom_generator:layer:index`/`:digest`
+(couche qui l'a introduit) et `…:modifiedBy` (couches qui l'ont modifié) ;
+le composant racine porte un résumé JSON par couche
+(`sbom_generator:layers:NNN`) et un BOM-Link vers chaque SBOM de couche.
+
+|SPDX 2.3 / 3.0
+|Description en commentaire du document, champs de couche en annotation de
+chaque paquet (`sbom_generator:layer:<clé>=<valeur>`) ; même UUID que
+CycloneDX dans l'espace de noms du document.
+
+|Markdown / AsciiDoc / HTML
+|En-tête décrivant la couche (ou les couches), colonne « Couche » (global)
+ou « Changement » (couche), section des composants supprimés.
+
+|CSV
+|Colonnes `layer`, `layer_modified_by` (global) ou `change`,
+`previous_version` (couche, avec une ligne `change=removed` par composant
+supprimé).
+
+|`--input` combiné
+|Les paquets venus de `--input` ne figurent que dans le SBOM global.
+
+|`--license-map`, `--supplier`
+|Appliqués aussi aux composants des SBOM de couche.
+
+|`--sign`
+|Signe aussi le premier format de chaque SBOM de couche.
+
+|Non pris en charge
+|`--binary` (un binaire n'a pas de couches) ; `--layer-mode metadata` avec
+`skopeo`/`cdxgen`.
+|===
+
+Le mode `rootfs` coûte une analyse par couche. Les couches sont lues
+directement dans une archive `docker save` / `podman save` (docker-archive
+ou oci-archive) ou un layout OCI ; une image de registre est d'abord copiée
+localement via `skopeo` (qui doit donc être installé), avec repli sur le
+stockage local de podman (`containers-storage:`) puis de Docker
+(`docker-daemon:`) pour une image construite localement. La fusion des
+couches ne suit jamais un lien symbolique : une couche malveillante ne peut
+rien écrire hors du répertoire temporaire.
 
 === Combiner image OCI et liste de paquets supplémentaires
 

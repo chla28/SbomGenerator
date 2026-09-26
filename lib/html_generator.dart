@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'image_layers.dart';
 import 'models.dart';
 
 /// Génère un rapport SBOM HTML autonome (aucune dépendance externe).
@@ -12,13 +13,17 @@ class HtmlGenerator {
     List<Package> packages,
     String outputPath, {
     String? documentName,
+    LayerAnnotations? layers,
   }) async {
-    final html = _buildHtml(packages, documentName: documentName);
+    final html =
+        _buildHtml(packages, documentName: documentName, layers: layers);
     await File(outputPath).writeAsString(html, flush: true);
   }
 
-  String _buildHtml(List<Package> packages, {String? documentName}) {
-    final title = documentName ?? 'SBOM Report';
+  String _buildHtml(List<Package> packages,
+      {String? documentName, LayerAnnotations? layers}) {
+    var title = documentName ?? 'SBOM Report';
+    if (layers?.isLayerDocument == true) title = '$title — ${layers!.layerLabel}';
     final now = DateTime.now();
     final date = '${now.year.toString().padLeft(4, '0')}-'
         '${now.month.toString().padLeft(2, '0')}-'
@@ -81,8 +86,25 @@ class HtmlGenerator {
           '<td>${_esc(pkg.summary)}</td>'
           '<td>$url</td>'
           '<td class="purl-cell">$purl</td>'
+          '${layers != null ? '<td>${_esc(layers.columnValue(pkg))}</td>' : ''}'
           '</tr>';
     }).join('\n');
+
+    // Analyse par couche : description + composants supprimés.
+    final layerInfo = layers == null
+        ? ''
+        : '''
+  <div class="chart-card layer-info">
+    <h2>${layers.isLayerDocument ? 'Couche' : 'Couches de l\'image'}</h2>
+    <ul>${layers.describe().map((l) => '<li>${_esc(l)}</li>').join()}</ul>
+  </div>''';
+    final removedInfo = layers == null || layers.removed.isEmpty
+        ? ''
+        : '''
+  <div class="chart-card layer-info">
+    <h2>Supprimés par cette couche (${layers.removed.length})</h2>
+    <ul>${layers.removed.map((p) => '<li>${_esc(p.name)} ${_esc(p.fullVersion)}</li>').join()}</ul>
+  </div>''';
 
     return '''<!DOCTYPE html>
 <html lang="fr">
@@ -138,6 +160,9 @@ class HtmlGenerator {
   .purl-cell code { font-size: 11px; color: var(--muted); word-break: break-all; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .layer-info { margin-bottom: 24px; }
+  .layer-info ul { padding-left: 20px; }
+  .layer-info li { margin: 3px 0; word-break: break-word; }
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
 </style>
 </head>
@@ -155,6 +180,9 @@ class HtmlGenerator {
     <div class="stat-card"><div class="num">${licenses.length}</div><div class="lbl">Licences distinctes</div></div>
     <div class="stat-card"><div class="num">${licenses.entries.where((e) => e.key == 'Non spécifiée').fold(0, (s, e) => s + e.value)}</div><div class="lbl">Sans licence</div></div>
   </div>
+
+$layerInfo
+$removedInfo
 
   <!-- Graphiques -->
   <div class="charts">
@@ -188,6 +216,7 @@ class HtmlGenerator {
           <th onclick="sortTable(4)">Description <span class="sort-icon">↕</span></th>
           <th onclick="sortTable(5)">URL <span class="sort-icon">↕</span></th>
           <th>PURL</th>
+          ${layers != null ? '<th onclick="sortTable(7)">${_esc(layers.columnTitle)} <span class="sort-icon">↕</span></th>' : ''}
         </tr>
       </thead>
       <tbody id="compBody">

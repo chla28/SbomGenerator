@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **`--per-layer` : un SBOM par couche d'image** (avec `--image`), en plus
+  du SBOM global, dans chaque format demandé :
+  `<base>.layer-NN-<digest12>.<ext>`. Le SBOM d'une couche décrit son
+  *delta* (composants ajoutés/modifiés, supprimés listés à part) ; son
+  composant racine porte le digest et l'instruction de build de la couche.
+  Le SBOM global indique la couche d'origine de chaque composant
+  (`sbom_generator:layer:index`/`:digest`/`:modifiedBy`) et référence chaque
+  SBOM de couche (BOM-Link CycloneDX, résumé `sbom_generator:layers:NNN`) ;
+  SPDX 2.3/3.0 : commentaire de document + annotations ; Markdown, AsciiDoc,
+  HTML, CSV : colonne « Couche » / « Changement » et composants supprimés.
+  Le global est écrit en premier.
+- **`--layer-mode metadata|rootfs`** :
+  - `metadata` (défaut, syft/trivy) : couche d'origine indiquée par le
+    backend — `Layer.DiffID` de trivy ; pour syft, seconde analyse
+    `--scope all-layers` et couche la plus basse où le paquet apparaît
+    (l'analyse habituelle rattache tous les paquets système à la dernière
+    couche qui a réécrit la base rpm/dpkg/apk). Ajouts uniquement.
+  - `rootfs` (les quatre backends, seul mode pour skopeo/cdxgen) : couches
+    appliquées une à une sur un rootfs cumulé (overlayfs, *whiteouts*
+    compris, sans jamais suivre de lien symbolique), rootfs réanalysé après
+    chaque couche — ajouts, modifications (montée de version…),
+    suppressions. Une image de registre est copiée via skopeo, avec repli
+    sur le stockage local podman/Docker.
+- Nouveau module `lib/image_layers.dart` ; `OciParser.layerAttribution`,
+  `rootfsLayerAnalysis`, `scanRootfs`.
+- **GUI** : case « Un SBOM par couche » + choix Métadonnées/Rootfs sous le
+  backend OCI ; navigation *SBOM global / couche N* (instruction, compteurs,
+  supprimés) dans l'Arborescence et la Visionneuse ; colonne
+  Couche/Changement dans la Visionneuse, regroupement « Couche » dans
+  l'Arborescence. Les SBOM de couche sont exclus des sélections
+  automatiques et du menu « Générés ».
+
+### Changed
+- GUI, Arborescence : boutons « tout déplier / replier » en icônes avec
+  info-bulle (la barre débordait avec le segment « Couche »).
+
 ## [1.5.9] - 2026-09-18
 
 ### Added

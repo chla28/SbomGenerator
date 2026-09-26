@@ -117,4 +117,63 @@ void main() {
     expect(config.inputFile, 'packages.txt');
     expect(config.binaryPath, isEmpty);
   });
+
+  testWidgets('--per-layer : option sous le backend OCI, rootfs forcé pour '
+      'skopeo', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final originalOnError = FlutterError.onError;
+    const ignoredPatterns = [
+      'A RenderFlex overflowed',
+      'ListTile background color or ink splashes may be invisible',
+    ];
+    FlutterError.onError = (details) {
+      final message = details.toString();
+      if (ignoredPatterns.any(message.contains)) return;
+      originalOnError?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = originalOnError);
+
+    final config = SbomConfig(imageRef: 'nginx:latest');
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ConfigPanel(
+          config: config,
+          isRunning: false,
+          onRun: () {},
+          onStop: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final label = find.text('Un SBOM par couche (--per-layer)');
+    expect(label, findsOneWidget);
+    expect(find.text('Métadonnées'), findsNothing);
+
+    final checkbox = find.descendant(
+      of: find.ancestor(of: label, matching: find.byType(Row)).first,
+      matching: find.byType(Checkbox),
+    );
+    await tester.ensureVisible(checkbox);
+    await tester.tap(checkbox);
+    await tester.pumpAndSettle();
+    expect(config.perLayer, isTrue);
+    expect(find.text('Métadonnées'), findsOneWidget);
+    expect(config.toArgs(),
+        containsAllInOrder(['--per-layer', '--layer-mode', 'metadata']));
+
+    // Centré plutôt qu'aligné en haut (ensureVisible) : sinon le segment
+    // reste masqué sous le bord de la zone défilante.
+    Scrollable.ensureVisible(tester.element(find.text('Skopeo')),
+        alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Skopeo'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Mode rootfs forcé'), findsOneWidget);
+    expect(config.toArgs(), containsAllInOrder(['--layer-mode', 'rootfs']));
+  });
 }

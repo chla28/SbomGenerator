@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'hash_utils.dart' show spdx3Alg;
+import 'image_layers.dart';
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -25,9 +26,14 @@ class Spdx3Generator {
     /// SDK/toolchain de build (`{'flutter': '3.47.2', 'dart': '3.9.0'}`),
     /// ajouté au graphe comme éléments `Tool` référencés par `createdBy`.
     Map<String, String> sdkTools = const {},
+
+    /// Analyse par couche (`--per-layer`) : description en commentaire du
+    /// document, couche d'origine / changement en annotation des paquets.
+    LayerAnnotations? layers,
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
-    final base = 'https://sbom.local/spdx3/${generateUuidV4()}';
+    final base =
+        'https://sbom.local/spdx3/${layers?.documentUuid ?? generateUuidV4()}';
 
     final docId = base;
     final ciId = '$base#creationInfo';
@@ -80,7 +86,10 @@ class Spdx3Generator {
       'type': 'SpdxDocument',
       'spdxId': docId,
       'creationInfo': ciId,
-      'name': documentName ?? 'Package Set SBOM',
+      'name': layers?.isLayerDocument == true
+          ? '${documentName ?? 'Package Set SBOM'} — ${layers!.layerLabel}'
+          : documentName ?? 'Package Set SBOM',
+      if (layers != null) 'comment': layers.describe().join('\n'),
       'profileConformance': ['core', 'software'],
       'rootElement': rootElements,
     });
@@ -95,6 +104,7 @@ class Spdx3Generator {
         spdxId: pkgIds[pkg.bomRef]!,
         ciId: ciId,
         vendorId: vendorIds[pkg.vendor],
+        layers: layers,
       ));
     }
 
@@ -182,6 +192,7 @@ class Spdx3Generator {
     required String spdxId,
     required String ciId,
     String? vendorId,
+    LayerAnnotations? layers,
   }) {
     final elem = <String, dynamic>{
       'type': 'software:Package',
@@ -218,7 +229,11 @@ class Spdx3Generator {
 
     if (vendorId != null) elem['suppliedBy'] = vendorId;
 
-    final statement = _annotationStatement(pkg);
+    final statement = [
+      _annotationStatement(pkg),
+      for (final e in (layers?.componentFields(pkg) ?? const {}).entries)
+        '$layerPropertyPrefix${e.key}=${e.value}',
+    ].where((c) => c.isNotEmpty).join('; ');
     if (statement.isNotEmpty) {
       elem['annotation'] = [
         {
@@ -271,9 +286,13 @@ class Spdx3Generator {
     String? documentName,
     OsInfo? osInfo,
     Map<String, String> sdkTools = const {},
+    LayerAnnotations? layers,
   }) async {
     final sbom = generate(packages, dependencies,
-        documentName: documentName, osInfo: osInfo, sdkTools: sdkTools);
+        documentName: documentName,
+        osInfo: osInfo,
+        sdkTools: sdkTools,
+        layers: layers);
     await File(outputPath)
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }

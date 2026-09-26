@@ -236,7 +236,60 @@ filtré aux composants porteurs d’un PURL d’écosystème réel</p></td>
 </table>
 </div>
 <div class="sect3">
-<h4 id="_binaire_autonome_binary">4.2.3. Binaire autonome (<code>--binary</code>)</h4>
+<h4 id="sec-per-layer">4.2.3. Un SBOM par couche (<code>--per-layer</code>)</h4>
+<div class="paragraph">
+<p>Case à cocher visible sous le backend OCI, uniquement pour une <strong>Image OCI</strong>
+(un binaire autonome n’a pas de couches). Une fois cochée, la génération
+produit, en plus du SBOM global, un SBOM par couche de l’image dans chaque
+format coché : <code>&lt;sortie&gt;.layer-NN-&lt;digest&gt;.&lt;ext&gt;</code> (ex.
+<code>sbom.layer-02-b676b687f0f5.cdx.json</code>).</p>
+</div>
+<div class="paragraph">
+<p>Le SBOM d’une couche décrit son <strong>delta</strong> : les composants ajoutés ou
+modifiés par la couche, avec les composants supprimés listés à part ; son
+composant racine porte l’instruction de build (<code>RUN …</code>, <code>COPY …</code>) et le
+digest de la couche. Le SBOM global indique, pour chaque composant, la
+couche qui l’a introduit.</p>
+</div>
+<div class="paragraph">
+<p>Le sélecteur de méthode (<code>--layer-mode</code>) propose :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Méthode</th>
+<th class="tableblock halign-left valign-top">Principe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Métadonnées (défaut)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Couche d’origine indiquée par Syft ou Trivy. Rapide ; seuls les <strong>ajouts</strong>
+sont connus. Indisponible avec Skopeo et cdxgen.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rootfs</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Les couches sont appliquées une à une et l’image est réanalysée après
+chacune : ajouts, <strong>modifications</strong> (montée de version…) et <strong>suppressions</strong>.
+Une analyse par couche, donc plus lent. Seul mode possible avec Skopeo et
+cdxgen (rappel affiché sous le sélecteur). Pour une image de registre,
+<code>skopeo</code> doit être installé.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Les SBOM de couche se parcourent depuis les onglets <strong>Arborescence SBOM</strong>
+et <strong>Visionneuse SBOM</strong> (voir <a href="#sec-nav-couches">Navigation par couche (<code>--per-layer</code>)</a>). Le SBOM global est
+toujours le premier fichier produit : c’est lui que les autres onglets
+(Aperçu, scanners, Qualité, CRA…) sélectionnent par défaut.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_binaire_autonome_binary">4.2.4. Binaire autonome (<code>--binary</code>)</h4>
 <div class="paragraph">
 <p>Champ séparé, sous un second séparateur « OU » : exécutable local à
 analyser directement (pas une image de conteneur) — par exemple un binaire

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'image_layers.dart';
 import 'models.dart';
 
 class MarkdownGenerator {
@@ -6,14 +7,24 @@ class MarkdownGenerator {
     List<Package> packages,
     String outputPath, {
     String? documentName,
+    LayerAnnotations? layers,
   }) async {
     final buf = StringBuffer();
 
-    final title = documentName ?? 'Software Bill of Materials — Licences';
+    var title = documentName ?? 'Software Bill of Materials — Licences';
+    if (layers?.isLayerDocument == true) title = '$title — ${layers!.layerLabel}';
     buf.writeln('# $title');
     buf.writeln();
-    buf.writeln('| Paquet | Version | Architecture | Licence |');
-    buf.writeln('|--------|---------|--------------|---------|');
+    if (layers != null) {
+      for (final line in layers.describe()) {
+        buf.writeln('- ${_escape(line)}');
+      }
+      buf.writeln();
+    }
+    final extra = layers != null ? ' ${layers.columnTitle} |' : '';
+    buf.writeln('| Paquet | Version | Architecture | Licence |$extra');
+    buf.writeln('|--------|---------|--------------|---------|'
+        '${layers != null ? '------|' : ''}');
 
     final sorted = List<Package>.from(packages)
       ..sort((a, b) => a.name.compareTo(b.name));
@@ -23,7 +34,21 @@ class MarkdownGenerator {
       final version = _escape(pkg.fullVersion);
       final arch = _escape(pkg.arch);
       final license = _escape(pkg.license.isEmpty ? '(inconnue)' : pkg.license);
-      buf.writeln('| $name | $version | $arch | $license |');
+      final layerCell =
+          layers != null ? ' ${_escape(layers.columnValue(pkg))} |' : '';
+      buf.writeln('| $name | $version | $arch | $license |$layerCell');
+    }
+
+    if (layers != null && layers.removed.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('## Supprimés par cette couche');
+      buf.writeln();
+      buf.writeln('| Paquet | Version | Architecture |');
+      buf.writeln('|--------|---------|--------------|');
+      for (final pkg in layers.removed) {
+        buf.writeln('| ${_escape(pkg.name)} | ${_escape(pkg.fullVersion)} '
+            '| ${_escape(pkg.arch)} |');
+      }
     }
 
     buf.writeln();

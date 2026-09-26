@@ -111,7 +111,8 @@ gui/
 │   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson + toCommandLine)
 │   │   ├── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
 │   │   ├── app_themes.dart           # Thèmes de couleur prédéfinis (kAppThemes, AppTheme)
-│   │   └── cve_date_filter.dart      # Filtre temporel CVE (CveDateFilter, CveDateField)
+│   │   ├── cve_date_filter.dart      # Filtre temporel CVE (CveDateFilter, CveDateField)
+│   │   └── layer_nav.dart            # Jeu de SBOM --per-layer : global ↔ couches, champs de couche
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
 │   │   ├── grype_runner.dart         # Exécute grype (SBOM ou image), stream d'événements
@@ -136,6 +137,7 @@ gui/
 │       ├── quality_panel.dart        # Onglet Qualité SBOM — sbomqs + sbom-scorecard
 │       ├── dashboard_panel.dart      # Onglet Tableau de bord — synthèse CVE multi-scanners
 │       │                             #   (comparaison inter-scanners triable + lignes dépliables)
+│       ├── layer_selector.dart       # Bandeau « SBOM global / couche N » (--per-layer)
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
 │       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
 │       ├── sbom_merge_panel.dart     # Onglet Fusion SBOM — fusionne plusieurs SBOM
@@ -156,6 +158,8 @@ gui/
 │   ├── sbom_licenses_panel_test.dart
 │   ├── vuln_shared_test.dart
 │   ├── scan_source_test.dart
+│   ├── layer_nav_test.dart
+│   ├── sbom_tree_panel_layers_test.dart
 │   └── sbom_viewer_panel_test.dart
 └── pubspec.yaml
 ----
@@ -252,9 +256,18 @@ Champs ajoutés pour OCI :
 * `String binaryPath` (défaut : `''`) — binaire local à analyser directement
   (`--binary`), voir <<sec-binary-field>>.
 
-Ces trois champs sont inclus dans `toJson()` / `fromJson()` (clés `'imageRef'`,
-`'ociTool'`, `'binaryPath'`) et donc persistés entre sessions. Ils sont
-chargés par `_loadProfileInto()` dans `_ProfilesDialog`.
+* `bool perLayer` (défaut : `false`) — un SBOM par couche (`--per-layer`),
+  voir <<sec-per-layer-option>>.
+* `String layerMode` (défaut : `'metadata'`) — méthode mémorisée
+  (`--layer-mode`) ; la valeur transmise est `effectiveLayerMode`, qui vaut
+  `'rootfs'` pour un backend hors `metadataLayerTools` (`{'syft', 'trivy'}`)
+  quel que soit le choix mémorisé (le CLI refuse `metadata` avec skopeo /
+  cdxgen).
+
+Ces champs sont inclus dans `toJson()` / `fromJson()` (clés `'imageRef'`,
+`'ociTool'`, `'binaryPath'`, `'perLayer'`, `'layerMode'`) et donc persistés
+entre sessions. Ils sont chargés par `_loadProfileInto()` dans
+`_ProfilesDialog`.
 
 Dans `toArgs()` :
 
@@ -267,8 +280,14 @@ if (binaryPath.isNotEmpty) {
 } else if (imageRef.isNotEmpty) {
   args.addAll(['--image', imageRef]);
   args.addAll(['--oci-tool', ociTool]);
+  if (perLayer) {
+    args.addAll(['--per-layer', '--layer-mode', effectiveLayerMode]);
+  }
 }
 ----
+
+`--per-layer` n'est émis qu'avec `--image` : ni `--input` seul ni
+`--binary` (un binaire n'a pas de couches).
 
 Constantes exposées :
 
@@ -840,6 +859,15 @@ Future<void> _pickFile(TextEditingController ctrl,
 }
 ----
 
+[[sec-per-layer-option]]
+*Option Un SBOM par couche* (`--per-layer`) : `_PerLayerOptions` (widget
+privé), affiché sous `_OciToolSelector` donc uniquement quand
+`c.imageRef.isNotEmpty`. Une `Checkbox` liée à `c.perLayer` ; une fois
+cochée, un `SegmentedButton` *Métadonnées / Rootfs* lié à `c.layerMode`,
+dont la sélection affichée est `c.effectiveLayerMode`. Le segment
+*Métadonnées* est désactivé (`enabled: false`) pour un backend hors
+`metadataLayerTools`, avec un rappel « Mode rootfs forcé » en dessous.
+
 *Prévisualisation de la commande* : le widget `_CommandPreview` est inséré
 entre le bouton *▶ Générer le SBOM* et la fin du formulaire. Il lit
 `config.toCommandLine(SettingsService.cliBinary)` à chaque `build()` (donc
@@ -1222,7 +1250,9 @@ Critical/High, rendu par `CveDetail.toAdocRows(adocEscape)`
 
 Modèles privés :
 
-* `_SbomComponent(name, version, type, license, purl)` — un composant SBOM
+* `_SbomComponent(name, version, type, license, purl, layerFields)` — un
+  composant SBOM ; `layerFields` = champs `sbom_generator:layer:*` lus par
+  `layerFieldsOf`, `layer` = libellé `layerColumnLabel`
 * `_SbomInfo` — métadonnées + liste de composants, avec méthode `parse(String json)`:
   ** `_parseCycloneDX()` — lit `components[]`, `licenses[0].expression`
   ** `_parseSpdx()` — lit `packages[]`, `externalRefs[purl]`
@@ -1246,12 +1276,25 @@ L'ensemble `_collapsed` maintient les clés de groupes repliés.
 
 Sous-widgets :
 
-* `_FileBar` — `MenuAnchor` listant les `outputFiles` SBOM + bouton "Ouvrir…"
+* `_FileBar` — `MenuAnchor` listant les `outputFiles` SBOM (hors SBOM de
+  couche, voir `isLayerSbomFile`) + bouton "Ouvrir…"
+* `LayerSelector` (partagé, voir <<sec-layer-nav>>) — sous la barre de
+  fichier quand le fichier ouvert appartient à un jeu `--per-layer`
 * `_InfoBar` — chips de métadonnées (format, nom, nombre de composants)
-* `_GroupBySelector` — `SegmentedButton<_GroupBy>` (Aucun / Type / Licence)
+* `_GroupBySelector` — `SegmentedButton<_GroupBy>` (Aucun / Type / Licence,
+  + Couche si `_SbomInfo.hasLayers`) ; les boutons déplier / replier tout
+  sont des `IconButton` avec info-bulle (des `TextButton` libellés
+  débordaient de la barre une fois le segment *Couche* ajouté)
 * `_GroupHeaderTile` — en-tête de groupe cliquable (expand/collapse)
 * `_ComponentTile` — une ligne expansible avec PURL copiable (`Clipboard.setData`),
   version, type, licence en `SelectableText`
+
+`_autoLoad` ouvre le premier SBOM de `outputFiles` qui n'est *pas* un SBOM
+de couche (le CLI écrit de toute façon le global en premier). `_loadFile`
+calcule en plus `LayerNav.discover(path)`, `LayerDocInfo.fromSbom(json)` et
+les libellés de couches (`readLayerLabels` sur le global, mis en cache tant
+que l'on reste dans le même jeu) ; il repasse en groupement *Type* si le
+nouveau fichier n'a pas de champs de couche.
 
 NOTE: La récupération de `firstOrNull` utilise `.where(...).firstOrNull` (Dart 3
 intégré sur `Iterable`), *pas* `firstWhereOrNull` de `package:collection`.
@@ -1410,7 +1453,12 @@ class _Component {
 
 Méthodes clés :
 
-* `_loadFile()` — `FilePicker.pickFiles()` → JSON parse → `_Component.fromSbom()`
+* `_loadFile()` — `FilePicker.pickFiles()` puis `_openPath(path)`
+* `_openPath(path)` — JSON parse → `_Component.fromSbom()` ; calcule aussi
+  `_nav` (`LayerNav.discover`), `_layerInfo` (`LayerDocInfo.fromSbom`) et
+  `_layerLabels` — c'est aussi le callback `onOpen` du `LayerSelector`
+  affiché sous l'en-tête. `_Component.layer` alimente une colonne *Couche* /
+  *Changement* (tri colonne 4) affichée seulement si un composant en porte
 * `_applyFilter()` — filtre `_all` sur `_search` (nom/version/licence/purl) et `_typeFilter`
 * `_sort(col)` — tri `_filtered` in-place par colonne
 
@@ -1425,6 +1473,37 @@ Sous-widgets privés :
 ====
 `_DetailRow` utilise `label` (pas `key`) pour éviter le conflit avec `Widget.key`.
 ====
+
+[[sec-layer-nav]]
+==== `models/layer_nav.dart` + `widgets/layer_selector.dart` — SBOM par couche
+
+Navigation dans un jeu produit par `sbom-generator --per-layer` (global
+`<base><ext>`, couches `<base>.layer-NN-<digest12><ext>`), partagée par
+l'Arborescence et la Visionneuse :
+
+* `LayerNav.discover(path)` — liste le répertoire du fichier, retrouve les
+  couches du même jeu (même base, même extension ; pour un global sans
+  extension — sortie à format unique nommée sans suffixe — toute extension
+  lisible, `.cdx.json` d'abord) et le global depuis une couche. `null` si le
+  fichier n'appartient à aucun jeu. Le lien se fait *par le nom*, pas par le
+  contenu : il fonctionne pour les trois formats lisibles.
+* `LayerDocInfo.fromSbom(json)` — description à afficher : propriétés
+  `sbom_generator:layer:*` / `sbom_generator:layers:NNN` du composant racine
+  CycloneDX (`layerLabels` : compteurs + instruction par couche,
+  `removed`), commentaire du document en SPDX 2.3 / 3.0.
+* `readLayerLabels(globalPath)` — relit les libellés depuis le global quand
+  on ouvre directement une couche.
+* `layerFieldsOf(component)` — champs de couche d'un composant : propriétés
+  CycloneDX, `annotations[].comment` (SPDX 2.3) ou `annotation[].statement`
+  (SPDX 3.0), motif `sbom_generator:layer:<clé>=<valeur>`.
+* `layerColumnLabel` / `layerGroupKey` — libellé de colonne et clé de
+  regroupement (`Couche 01`… triables, `Ajoutés` / `Modifiés`).
+* `isLayerSbomFile(path)` — exclut les SBOM de couche des sélections
+  automatiques.
+
+`LayerSelector` (sans état) : `DropdownButton` *SBOM global / Couche i/N
+(digest) + libellé*, lignes de `LayerDocInfo.lines`, badge des supprimés
+(info-bulle). Il n'ouvre rien lui-même : il appelle `onOpen(path)`.
 
 ==== `widgets/results_panel.dart` — Panneau de résultats
 

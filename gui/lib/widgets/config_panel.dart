@@ -79,6 +79,8 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.imageRef = loaded.imageRef;
     c.ociTool = loaded.ociTool;
     c.binaryPath = loaded.binaryPath;
+    c.perLayer = loaded.perLayer;
+    c.layerMode = loaded.layerMode;
     _outputCtrl.text = c.outputBase;
     _nameCtrl.text = c.documentName;
     _rpmDirCtrl.text = c.rpmDir;
@@ -367,6 +369,13 @@ class _ConfigPanelState extends State<ConfigPanel> {
                           selected: c.ociTool,
                           onChanged: (tool) => setState(() {
                             c.ociTool = tool;
+                            widget.onChanged?.call();
+                          }),
+                        ),
+                        const SizedBox(height: 10),
+                        _PerLayerOptions(
+                          config: c,
+                          onChanged: () => setState(() {
                             widget.onChanged?.call();
                           }),
                         ),
@@ -1332,6 +1341,107 @@ class _BinaryField extends StatelessWidget {
 }
 
 // ─── Sélecteur d'outil OCI ────────────────────────────────────────────────────
+
+/// Option --per-layer (un SBOM par couche de l'image) et sa méthode de calcul
+/// (--layer-mode), affichées sous le backend OCI.
+class _PerLayerOptions extends StatelessWidget {
+  final SbomConfig config;
+  final VoidCallback onChanged;
+
+  const _PerLayerOptions({required this.config, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final metadataOk = metadataLayerTools.contains(config.ociTool);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              height: 24,
+              width: 24,
+              child: Checkbox(
+                value: config.perLayer,
+                onChanged: (v) {
+                  config.perLayer = v ?? false;
+                  onChanged();
+                },
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Un SBOM par couche (--per-layer)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const HelpIcon(
+              'Génère, en plus du SBOM global, un SBOM par couche de l\'image '
+              '(<sortie>.layer-NN-<digest>.<ext>, dans chaque format coché) '
+              'décrivant le delta de la couche : composants ajoutés ou '
+              'modifiés, composants supprimés listés à part. Le SBOM global '
+              'indique la couche d\'origine de chaque composant.\n'
+              '• Métadonnées : couche d\'origine indiquée par Syft/Trivy — '
+              'rapide, ajouts seulement\n'
+              '• Rootfs : couches appliquées une à une et réanalysées — '
+              'ajouts, modifications, suppressions (seul mode possible '
+              'avec Skopeo et cdxgen)',
+            ),
+          ],
+        ),
+        if (config.perLayer) ...[
+          const SizedBox(height: 6),
+          SegmentedButton<String>(
+            style: SegmentedButton.styleFrom(
+              textStyle: const TextStyle(fontSize: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: const Size(0, 30),
+            ),
+            segments: [
+              ButtonSegment(
+                value: 'metadata',
+                label: const Text('Métadonnées'),
+                icon: const Icon(Icons.bolt_outlined, size: 14),
+                enabled: metadataOk,
+                tooltip: 'Couche d\'origine indiquée par le backend',
+              ),
+              const ButtonSegment(
+                value: 'rootfs',
+                label: Text('Rootfs'),
+                icon: Icon(Icons.layers_outlined, size: 14),
+                tooltip: 'Réanalyse du rootfs après chaque couche',
+              ),
+            ],
+            selected: {config.effectiveLayerMode},
+            onSelectionChanged: (s) {
+              config.layerMode = s.first;
+              onChanged();
+            },
+          ),
+          if (!metadataOk)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Mode rootfs forcé : ${ociToolLabels[config.ociTool]} '
+                'n\'indique pas la couche d\'origine des paquets',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
 
 class _OciToolSelector extends StatelessWidget {
   final String selected;

@@ -438,6 +438,44 @@ filtré aux composants porteurs d'un PURL d'écosystème réel
 |`cdxgen` dans le PATH (requiert Node.js)
 |===
 
+[[sec-per-layer]]
+==== Un SBOM par couche (`--per-layer`)
+
+Case à cocher visible sous le backend OCI, uniquement pour une *Image OCI*
+(un binaire autonome n'a pas de couches). Une fois cochée, la génération
+produit, en plus du SBOM global, un SBOM par couche de l'image dans chaque
+format coché : `<sortie>.layer-NN-<digest>.<ext>` (ex.
+`sbom.layer-02-b676b687f0f5.cdx.json`).
+
+Le SBOM d'une couche décrit son *delta* : les composants ajoutés ou
+modifiés par la couche, avec les composants supprimés listés à part ; son
+composant racine porte l'instruction de build (`RUN …`, `COPY …`) et le
+digest de la couche. Le SBOM global indique, pour chaque composant, la
+couche qui l'a introduit.
+
+Le sélecteur de méthode (`--layer-mode`) propose :
+
+[cols="1,3",options="header"]
+|===
+|Méthode |Principe
+
+|Métadonnées (défaut)
+|Couche d'origine indiquée par Syft ou Trivy. Rapide ; seuls les *ajouts*
+sont connus. Indisponible avec Skopeo et cdxgen.
+
+|Rootfs
+|Les couches sont appliquées une à une et l'image est réanalysée après
+chacune : ajouts, *modifications* (montée de version…) et *suppressions*.
+Une analyse par couche, donc plus lent. Seul mode possible avec Skopeo et
+cdxgen (rappel affiché sous le sélecteur). Pour une image de registre,
+`skopeo` doit être installé.
+|===
+
+Les SBOM de couche se parcourent depuis les onglets *Arborescence SBOM*
+et *Visionneuse SBOM* (voir <<sec-nav-couches>>). Le SBOM global est
+toujours le premier fichier produit : c'est lui que les autres onglets
+(Aperçu, scanners, Qualité, CRA…) sélectionnent par défaut.
+
 ==== Binaire autonome (`--binary`)
 
 Champ séparé, sous un second séparateur « OU » : exécutable local à
@@ -2000,7 +2038,9 @@ SBOM (CycloneDX ou SPDX) sans ouvrir un éditeur JSON.
 
 Le menu déroulant liste les fichiers SBOM générés dans la session courante.
 Le premier fichier `.cdx.json`, `.spdx.json` ou `.spdx3.jsonld` est
-sélectionné automatiquement.
+sélectionné automatiquement. Les SBOM de couche (`--per-layer`) n'y
+figurent pas : ils s'ouvrent depuis le sélecteur de couche (voir
+<<sec-nav-couches>>).
 
 Le bouton *Ouvrir…* permet de charger n'importe quel fichier du système
 de fichiers.
@@ -2028,7 +2068,12 @@ Le sélecteur *Grouper par* propose trois modes :
 |*Aucun* |Tous les composants dans une liste plate triée par nom
 |*Type* |Regroupement par type de paquet (rpm, python, deb…)
 |*Licence* |Regroupement par expression de licence SPDX
+|*Couche* |SBOM produit avec `--per-layer` uniquement : regroupement par
+couche d'origine (`Couche 01`, `Couche 02`… dans le SBOM global) ou par
+changement (`Ajoutés` / `Modifiés` dans un SBOM de couche)
 |===
+
+Les icônes à droite du sélecteur déplient ou replient tous les groupes.
 
 Les groupes sont repliables. Cliquez sur l'en-tête d'un groupe pour
 l'ouvrir ou le fermer.
@@ -2041,8 +2086,30 @@ Cliquez sur un composant pour afficher ses détails (champ expansible) :
 * *Version*
 * *Type*
 * *Licence*
+* *Couche* — couche d'origine (SBOM global) ou changement (SBOM de couche),
+  pour un SBOM produit avec `--per-layer`
 
 NOTE: Les composants sans PURL dans le SBOM n'affichent pas ce champ.
+
+[[sec-nav-couches]]
+=== Navigation par couche (`--per-layer`)
+
+Quand le fichier ouvert appartient à un jeu produit avec `--per-layer`
+(SBOM global ou SBOM de couche), un bandeau *N couche(s)* s'affiche sous la
+barre de fichier, dans cet onglet comme dans la *Visionneuse SBOM* :
+
+* un menu déroulant *SBOM global / Couche 1/N (digest) …* ouvre directement
+  le SBOM choisi ; pour chaque couche, il rappelle les compteurs
+  (`+ajoutés ~modifiés -supprimés`) et l'instruction de build ;
+* sous le menu, la description du document affiché : digest, instruction,
+  compteurs de la couche (ou nombre de couches et mode pour le global) ;
+* un badge *N supprimé(s)* liste au survol les composants supprimés par la
+  couche (mode rootfs).
+
+Les fichiers d'un même jeu sont retrouvés par leur nom dans le répertoire du
+fichier ouvert (`<base>.<ext>` et `<base>.layer-NN-<digest>.<ext>`, même
+format) : la navigation fonctionne aussi pour un jeu ouvert via
+*Ouvrir…*.
 
 === Persistance de l'état
 
@@ -2096,6 +2163,12 @@ Formats supportés :
 La barre d'informations affiche le format détecté, le nom du document et le
 nombre total de composants chargés.
 
+=== Navigation par couche
+
+Pour un SBOM produit avec `--per-layer`, le bandeau de couches décrit dans
+<<sec-nav-couches>> s'affiche sous l'en-tête : il permet de passer du SBOM
+global à chaque SBOM de couche sans repasser par le sélecteur de fichier.
+
 === Filtre et recherche
 
 Le champ de recherche filtre les composants en temps réel sur :
@@ -2104,13 +2177,17 @@ Le champ de recherche filtre les composants en temps réel sur :
 * la version
 * la licence
 * le PURL
+* la couche (SBOM produit avec `--per-layer`)
 
 Le menu déroulant *Tous les types* filtre par type d'écosystème (`rpm`, `java`,
 `pypi`, `npm`, `deb`, `apk`…). Les deux filtres se combinent.
 
 === Tableau des composants
 
-Le tableau affiche les colonnes *Nom*, *Version*, *Type*, *Licence* et *PURL*.
+Le tableau affiche les colonnes *Nom*, *Version*, *Type*, *Licence* et *PURL*,
+plus, pour un SBOM produit avec `--per-layer`, une colonne *Couche* (SBOM
+global : couche d'origine et couches qui ont modifié le composant) ou
+*Changement* (SBOM de couche : `ajouté`, `modifié (était <version>)`).
 Cliquez sur un en-tête de colonne pour trier par ordre croissant, cliquez à
 nouveau pour inverser l'ordre.
 
