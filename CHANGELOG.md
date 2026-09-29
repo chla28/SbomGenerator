@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.16] - 2026-09-29
+
 ### Fixed
 - **GUI — rapport du tableau de bord** : la section « Détail des CVE » ne
   suivait pas le seuil de sévérité choisi (elle restait limitée à
