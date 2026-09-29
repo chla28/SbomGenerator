@@ -291,8 +291,8 @@ des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
 Conformité CRA (rapport de conformité Cyber Resilience Act), Qualité SBOM
 (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
 composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
-(combine plusieurs SBOM en un seul), Licences SBOM (rapport de conformité
-des licences au format AsciiDoc), Visionneuse SBOM (exploration
+(combine plusieurs SBOM en un seul), Licences SBOM (visualisation des licences du
+SBOM et rapport de conformité AsciiDoc, Markdown, HTML, CSV ou JSON), Visionneuse SBOM (exploration
 interactive d'un fichier SBOM externe) et Aperçu (prévisualisation du
 contenu SBOM).
 
@@ -2458,22 +2458,43 @@ en charge en entrée pour la fusion.
 
 == Onglet Licences SBOM
 
-L'onglet *Licences SBOM* génère un rapport de conformité des licences au
-format AsciiDoc, regroupé par licence, à partir d'un fichier SBOM existant.
-Il orchestre la sous-commande `sbom-generator licenses` en arrière-plan.
+L'onglet *Licences SBOM* affiche les licences contenues dans un fichier SBOM
+existant et permet d'en générer un rapport de conformité (AsciiDoc, Markdown,
+HTML, CSV ou JSON) en bas de page. Il orchestre la sous-commande
+`sbom-generator licenses` en arrière-plan.
 
 ----
   ┌─ [📄 Choisir un fichier…]  [📂 Fichiers générés]   /chemin/vers/sbom.cdx.json ─┐
   └──────────────────────────────────────────────────────────────────────────────┘
 
-  Sélectionnez un fichier CycloneDX ou SPDX pour générer un rapport de
-  licences AsciiDoc, regroupé par licence, avec signalement des licences
-  copyleft et des paquets sans licence détectée.
-
-  [ Fichier de sortie : licences.adoc ]  [ Nom du document (optionnel) ]  [⚖ Générer]
+  [12 paquet(s)] [5 licence(s)] [2 copyleft fort] [1 sans licence]
+  [🔍 Filtrer par licence ou par paquet…]        [Par licence | Tableau]
+  ▸ Apache-2.0                                                     3
+  ▾ GPL-3.0-or-later  [copyleft fort]                              2
+        bash 5.3.9-3.fc44
+        …
+  ▸ Sans licence détectée  [sans licence]                          1
+  ────────────────────────────────────────────────────────────────────
+  [Format ▾] [ Fichier de sortie : licences.adoc ] [ Nom (optionnel) ] [⚖ Générer]
 
   ✔ Rapport généré → licences.adoc
 ----
+
+=== Licences du SBOM
+
+Dès qu'un fichier est sélectionné, ses licences s'affichent :
+
+* Une ligne de puces résume le SBOM : nombre de paquets, de licences
+  distinctes, de paquets sous copyleft fort (rouge), copyleft faible
+  (orange) et sans licence détectée (jaune).
+* La vue *Par licence* liste les licences (avec le nombre de paquets) ; un
+  clic déplie les paquets concernés. La vue *Tableau* liste un paquet par
+  ligne (paquet, version, licence), triable en cliquant sur un en-tête.
+* Le champ de filtre retient les licences dont l'identifiant contient le
+  texte saisi, ou les paquets dont le nom correspond (insensible à la casse).
+
+Le regroupement et la classification copyleft sont ceux du CLI : ce sont
+exactement ceux du rapport généré.
 
 === Sélection du fichier source
 
@@ -2489,8 +2510,11 @@ chemin de sortie renseigné.
 
 === Fichier de sortie et nom du document
 
-* *Fichier de sortie* : chemin du rapport AsciiDoc produit (valeur par
-  défaut : `licences.adoc`).
+* *Format* : AsciiDoc (défaut), Markdown, HTML (autonome), CSV ou JSON.
+  L'extension du fichier de sortie suit le format tant qu'elle n'a pas été
+  modifiée à la main.
+* *Fichier de sortie* : chemin du rapport produit (valeur par défaut :
+  `licences.adoc`).
 * *Nom du document* (optionnel) : s'il est renseigné, remplace le nom du
   document dans l'en-tête du rapport ; sinon, le nom du fichier source est
   conservé.
@@ -2505,7 +2529,8 @@ suivi d'une bannière de résultat :
 * *✘ Échec de la génération (code N)* (rouge) en cas d'échec — consultez le
   journal affiché pour le détail de l'erreur.
 
-Le rapport produit regroupe les paquets par licence exacte, avec un résumé
+Le rapport (AsciiDoc ; les autres formats reprennent le même contenu)
+regroupe les paquets par licence exacte, avec un résumé
 chiffré en tête (paquets analysés, licences distinctes, paquets sous licence
 copyleft fort/faible, paquets sans licence détectée), un avertissement
 listant les identifiants copyleft détectés (GPL/AGPL en fort ; LGPL, MPL,

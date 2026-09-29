@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:sbom_generator/license_report_generator.dart';
 import 'package:sbom_generator/models.dart';
@@ -24,7 +25,8 @@ WheelPackage _pkg({
 
 void main() {
   late Directory tmp;
-  setUp(() => tmp = Directory.systemTemp.createTempSync('license_report_test_'));
+  setUp(
+      () => tmp = Directory.systemTemp.createTempSync('license_report_test_'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
   group('LicenseReportGenerator — regroupement', () {
@@ -80,7 +82,8 @@ void main() {
       );
       final content = File(out).readAsStringSync();
       expect(content, contains('[copyleft fort]'));
-      expect(content, contains('Paquets sous licence copyleft fort (GPL/AGPL) | 1'));
+      expect(content,
+          contains('Paquets sous licence copyleft fort (GPL/AGPL) | 1'));
       expect(content, contains('WARNING'));
       expect(content, contains('GPL-3.0-only'));
     });
@@ -93,11 +96,16 @@ void main() {
       );
       final content = File(out).readAsStringSync();
       expect(content, contains('[copyleft faible]'));
-      expect(content, contains('Paquets sous licence copyleft fort (GPL/AGPL) | 0'));
-      expect(content, contains('Paquets sous licence copyleft faible (LGPL/MPL/EPL/CDDL/CPL/EUPL) | 1'));
+      expect(content,
+          contains('Paquets sous licence copyleft fort (GPL/AGPL) | 0'));
+      expect(
+          content,
+          contains(
+              'Paquets sous licence copyleft faible (LGPL/MPL/EPL/CDDL/CPL/EUPL) | 1'));
     });
 
-    test('AGPL détectée comme copyleft fort (et non confondue avec GPL simple)', () async {
+    test('AGPL détectée comme copyleft fort (et non confondue avec GPL simple)',
+        () async {
       final out = '${tmp.path}/licences.adoc';
       await LicenseReportGenerator().writeToFile(
         [_pkg(name: 'agpl-pkg', license: 'AGPL-3.0-only')],
@@ -111,16 +119,21 @@ void main() {
     test('MIT/Apache ne déclenchent aucune alerte copyleft', () async {
       final out = '${tmp.path}/licences.adoc';
       await LicenseReportGenerator().writeToFile(
-        [_pkg(name: 'a', license: 'MIT'), _pkg(name: 'b', license: 'Apache-2.0')],
+        [
+          _pkg(name: 'a', license: 'MIT'),
+          _pkg(name: 'b', license: 'Apache-2.0')
+        ],
         out,
       );
       final content = File(out).readAsStringSync();
       expect(content, isNot(contains('[copyleft')));
       expect(content, isNot(contains('WARNING')));
-      expect(content, contains('Paquets sous licence copyleft fort (GPL/AGPL) | 0'));
+      expect(content,
+          contains('Paquets sous licence copyleft fort (GPL/AGPL) | 0'));
     });
 
-    test('expression composée avec GPL noyé listée avec le token individuel, pas la chaîne entière',
+    test(
+        'expression composée avec GPL noyé listée avec le token individuel, pas la chaîne entière',
         () async {
       final out = '${tmp.path}/licences.adoc';
       const compound = 'BSD-3-Clause AND GPL-2.0-only AND MIT';
@@ -135,6 +148,56 @@ void main() {
       final warningSection = content.split('[WARNING]')[1].split('====')[1];
       expect(warningSection, contains('GPL-2.0-only'));
       expect(warningSection, isNot(contains(compound)));
+    });
+  });
+
+  group('LicenseReportGenerator — formats', () {
+    final pkgs = [
+      _pkg(name: 'a', license: 'MIT'),
+      _pkg(name: 'b', license: 'GPL-3.0-only'),
+      _pkg(name: 'c, "x"', license: 'LGPL-2.1-only'),
+      _pkg(name: 'd', license: ''),
+    ];
+    String render(LicenseReportFormat f) =>
+        LicenseReportGenerator().render(pkgs, documentName: 'Doc', format: f);
+
+    test('parse accepte adoc et refuse un format inconnu', () {
+      expect(LicenseReportFormat.parse('adoc'), LicenseReportFormat.asciidoc);
+      expect(LicenseReportFormat.parse('HTML'), LicenseReportFormat.html);
+      expect(LicenseReportFormat.parse('pdf'), isNull);
+    });
+
+    test('json : résumé, catégories et paquets sans licence', () {
+      final j =
+          jsonDecode(render(LicenseReportFormat.json)) as Map<String, dynamic>;
+      expect(j['summary']['packages'], 4);
+      expect(j['summary']['strongCopyleftPackages'], 1);
+      expect(j['summary']['weakCopyleftPackages'], 1);
+      expect(j['summary']['unknownPackages'], 1);
+      final cats = {
+        for (final l in j['licenses'] as List) l['license']: l['category'],
+      };
+      expect(cats['GPL-3.0-only'], 'strong-copyleft');
+      expect(cats['LGPL-2.1-only'], 'weak-copyleft');
+      expect(cats['MIT'], 'permissive');
+      expect((j['unknown'] as List).single['name'], 'd');
+    });
+
+    test('csv : échappement RFC 4180', () {
+      final csv = render(LicenseReportFormat.csv);
+      expect(csv.split('\r\n').first, 'license,category,name,version,purl');
+      expect(csv, contains('"c, ""x"""'));
+      expect(csv, contains(',unknown,d,'));
+    });
+
+    test('markdown et html : titre, copyleft et échappement HTML', () {
+      final md = render(LicenseReportFormat.markdown);
+      expect(md, contains('# Doc'));
+      expect(md, contains('### GPL-3.0-only [copyleft fort] (1)'));
+      final html = render(LicenseReportFormat.html);
+      expect(html, contains('<title>Doc</title>'));
+      expect(html, contains('copyleft fort'));
+      expect(html, contains('c, &quot;x&quot;'));
     });
   });
 }

@@ -59,7 +59,7 @@ Parser Parser Parser Parser Parser             Parser
    SbomDiffer  ◄── sous-commande diff
    SbomMerger  ◄── sous-commande merge
    SbomReader  ◄── sous-commande convert (source SBOM → List<Package>)
-   LicenseReportGenerator ◄── sous-commande licenses (rapport AsciiDoc)
+   LicenseReportGenerator ◄── sous-commande licenses (rapport AsciiDoc/Markdown/HTML/CSV/JSON)
               │
               ▼
 ┌─────────────────────────────────────────────┐
@@ -1480,14 +1480,28 @@ externe réutilise un `SPDXID` générique pour un autre paquet.
 
 [source,dart]
 ----
+enum LicenseReportFormat { asciidoc, markdown, html, csv, json }
+
 class LicenseReportGenerator {
+  LicenseReport analyze(List<Package> packages, {String? documentName});
+  String render(List<Package> packages,
+      {String? documentName, LicenseReportFormat format});
   Future<void> writeToFile(
     List<Package> packages,
     String outputPath, {
     String? documentName,
+    LicenseReportFormat format,
   });
+  static LicenseCategory classify(String license);
 }
 ----
+
+`analyze` produit un `LicenseReport` (groupes triés, paquets sans licence,
+compteurs et identifiants copyleft) indépendant du format ; chaque format
+n'est qu'un rendu de ce modèle. Le JSON (`-f json`) est le contrat lu par la
+GUI (`gui/lib/models/license_report.dart`) : `summary`, `licenses[]`
+(`license`, `category` = `permissive|weak-copyleft|strong-copyleft`,
+`packages[]`) et `unknown[]`.
 
 Regroupe les paquets par `pkg.license` **exacte** — la chaîne telle que
 présente dans le SBOM source, y compris les expressions composées
@@ -1498,7 +1512,7 @@ détaillée par licence, section des paquets sans licence détectée.
 
 === Classification copyleft
 
-`_classify(license)` applique une heuristique par sous-chaîne sur
+`classify(license)` applique une heuristique par sous-chaîne sur
 l'expression entière (insensible à la casse) :
 
 [cols="2,3", options="header"]
@@ -2338,10 +2352,11 @@ final docName = nameOpt ?? SbomReader().documentName(json) ?? 'converted';
 // puis switch (fmt) { case 'cyclonedx': … case 'csv': … }
 ----
 
-*`_runLicenses(args)`* : génère un rapport de licences AsciiDoc à partir d'un
-SBOM existant.
+*`_runLicenses(args)`* : génère un rapport de licences (AsciiDoc par défaut,
+Markdown, HTML, CSV ou JSON) à partir d'un SBOM existant.
 
-Options : `-i <source>` (obligatoire), `-o <sortie>` (obligatoire), `-n <nom>`
+Options : `-i <source>` (obligatoire), `-o <sortie>` (obligatoire sauf avec
+`-f json`, qui écrit alors sur la sortie standard), `-f <format>`, `-n <nom>`
 (nom du document).
 
 Implémentation : même chargement que `_runConvert` (`SbomReader.loadJson()` +

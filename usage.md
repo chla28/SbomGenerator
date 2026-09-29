@@ -72,7 +72,7 @@ sbom_generator -i <fichier> -I <image-oci> [options]
 sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <fichier>]
 sbom_generator merge <sbom1> <sbom2> ... -o <sortie> [-n <nom>]
 sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
-sbom_generator licenses -i <sbom-source> -o <licences.adoc>
+sbom_generator licenses -i <sbom-source> -o <licences.adoc> [-f asciidoc|markdown|html|csv|json]
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
 sbom_generator scan --image <image> [--per-layer] [options]
@@ -539,6 +539,10 @@ Génère un rapport de conformité des licences au format AsciiDoc, regroupé pa
 ./sbom_generator licenses -i sbom.cdx.json -o licences.adoc
 
 ./sbom_generator licenses -i sbom.spdx.json -o licences.adoc -n "Mon projet"
+
+# Autres formats : markdown, html (autonome), csv, json
+./sbom_generator licenses -i sbom.cdx.json -f html -o licences.html
+./sbom_generator licenses -i sbom.cdx.json -f json    # JSON sur la sortie standard
 ```
 
 Le rapport commence par un résumé (paquets analysés, licences distinctes,
@@ -546,7 +550,10 @@ paquets sous licence copyleft fort/faible, paquets sans licence détectée),
 suivi d'un avertissement listant les identifiants copyleft détectés (GPL,
 AGPL en copyleft fort ; LGPL, MPL, EPL, CDDL, CPL, EUPL en copyleft faible —
 détection heuristique par identifiant SPDX, pas une analyse juridique), puis
-d'une section par licence avec la liste des paquets concernés. Formats
+d'une section par licence avec la liste des paquets concernés. `--format`
+choisit le rendu (`asciidoc` par défaut, `markdown`, `html`, `csv`, `json`) ; le
+JSON (résumé, licences avec catégorie, paquets sans licence) est celui que lit
+l'onglet *Licences* de la GUI. Formats
 source acceptés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD.
 
 ### Validation de SBOM (`validate`)

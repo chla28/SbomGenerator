@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **`licenses --format`** : le rapport de licences peut aussi être produit
+  en Markdown, HTML (autonome), CSV ou JSON (`-f asciidoc|markdown|html|csv|json`,
+  AsciiDoc par défaut). Avec `-f json`, `-o` est facultatif (JSON sur la
+  sortie standard). L'analyse (regroupement, catégories copyleft) est
+  désormais séparée du rendu (`LicenseReportGenerator.analyze` / `render`).
+- **GUI — onglet Licences** : visualise les licences du SBOM sélectionné
+  (vue *Par licence* dépliable ou *Tableau* triable, badges copyleft
+  fort/faible et « sans licence », filtre par licence ou paquet) ; le
+  rapport en bas de page se génère au choix en AsciiDoc, Markdown, HTML,
+  CSV ou JSON. Les données viennent de `licenses -f json` (aucune
+  classification côté GUI).
 - **GUI — localisation français / anglais (début)** : infrastructure
   `gen-l10n` (fichiers ARB `gui/lib/l10n/`, français comme référence,
   pluriels ICU), menu *Langue de l'interface* (Système / Français /

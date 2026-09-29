@@ -2,26 +2,59 @@
 <h2 id="_onglet_licences_sbom">18. Onglet Licences SBOM</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Licences SBOM</strong> génère un rapport de conformité des licences au
-format AsciiDoc, regroupé par licence, à partir d’un fichier SBOM existant.
-Il orchestre la sous-commande <code>sbom-generator licenses</code> en arrière-plan.</p>
+<p>L’onglet <strong>Licences SBOM</strong> affiche les licences contenues dans un fichier SBOM
+existant et permet d’en générer un rapport de conformité (AsciiDoc, Markdown,
+HTML, CSV ou JSON) en bas de page. Il orchestre la sous-commande
+<code>sbom-generator licenses</code> en arrière-plan.</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre>  ┌─ [📄 Choisir un fichier…]  [📂 Fichiers générés]   /chemin/vers/sbom.cdx.json ─┐
   └──────────────────────────────────────────────────────────────────────────────┘
 
-  Sélectionnez un fichier CycloneDX ou SPDX pour générer un rapport de
-  licences AsciiDoc, regroupé par licence, avec signalement des licences
-  copyleft et des paquets sans licence détectée.
-
-  [ Fichier de sortie : licences.adoc ]  [ Nom du document (optionnel) ]  [⚖ Générer]
+  [12 paquet(s)] [5 licence(s)] [2 copyleft fort] [1 sans licence]
+  [🔍 Filtrer par licence ou par paquet…]        [Par licence | Tableau]
+  ▸ Apache-2.0                                                     3
+  ▾ GPL-3.0-or-later  [copyleft fort]                              2
+        bash 5.3.9-3.fc44
+        …
+  ▸ Sans licence détectée  [sans licence]                          1
+  ────────────────────────────────────────────────────────────────────
+  [Format ▾] [ Fichier de sortie : licences.adoc ] [ Nom (optionnel) ] [⚖ Générer]
 
   ✔ Rapport généré → licences.adoc</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sélection_du_fichier_source">18.1. Sélection du fichier source</h3>
+<h3 id="_licences_du_sbom">18.1. Licences du SBOM</h3>
+<div class="paragraph">
+<p>Dès qu’un fichier est sélectionné, ses licences s’affichent :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Une ligne de puces résume le SBOM : nombre de paquets, de licences
+distinctes, de paquets sous copyleft fort (rouge), copyleft faible
+(orange) et sans licence détectée (jaune).</p>
+</li>
+<li>
+<p>La vue <strong>Par licence</strong> liste les licences (avec le nombre de paquets) ; un
+clic déplie les paquets concernés. La vue <strong>Tableau</strong> liste un paquet par
+ligne (paquet, version, licence), triable en cliquant sur un en-tête.</p>
+</li>
+<li>
+<p>Le champ de filtre retient les licences dont l’identifiant contient le
+texte saisi, ou les paquets dont le nom correspond (insensible à la casse).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Le regroupement et la classification copyleft sont ceux du CLI : ce sont
+exactement ceux du rapport généré.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sélection_du_fichier_source">18.2. Sélection du fichier source</h3>
 <div class="paragraph">
 <p>Deux façons de désigner le fichier :</p>
 </div>
@@ -43,12 +76,17 @@ chemin de sortie renseigné.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_fichier_de_sortie_et_nom_du_document_2">18.2. Fichier de sortie et nom du document</h3>
+<h3 id="_fichier_de_sortie_et_nom_du_document_2">18.3. Fichier de sortie et nom du document</h3>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Fichier de sortie</strong> : chemin du rapport AsciiDoc produit (valeur par
-défaut : <code>licences.adoc</code>).</p>
+<p><strong>Format</strong> : AsciiDoc (défaut), Markdown, HTML (autonome), CSV ou JSON.
+L’extension du fichier de sortie suit le format tant qu’elle n’a pas été
+modifiée à la main.</p>
+</li>
+<li>
+<p><strong>Fichier de sortie</strong> : chemin du rapport produit (valeur par défaut :
+<code>licences.adoc</code>).</p>
 </li>
 <li>
 <p><strong>Nom du document</strong> (optionnel) : s’il est renseigné, remplace le nom du
@@ -59,7 +97,7 @@ conservé.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_lancement_et_résultat_2">18.3. Lancement et résultat</h3>
+<h3 id="_lancement_et_résultat_2">18.4. Lancement et résultat</h3>
 <div class="paragraph">
 <p>Le bouton <strong>⚖ Générer</strong> lance <code>sbom-generator licenses</code> sur le fichier
 sélectionné. Le déroulé de la commande (journal) s’affiche sous les champs,
@@ -77,7 +115,8 @@ journal affiché pour le détail de l’erreur.</p>
 </ul>
 </div>
 <div class="paragraph">
-<p>Le rapport produit regroupe les paquets par licence exacte, avec un résumé
+<p>Le rapport (AsciiDoc ; les autres formats reprennent le même contenu)
+regroupe les paquets par licence exacte, avec un résumé
 chiffré en tête (paquets analysés, licences distinctes, paquets sous licence
 copyleft fort/faible, paquets sans licence détectée), un avertissement
 listant les identifiants copyleft détectés (GPL/AGPL en fort ; LGPL, MPL,
@@ -86,7 +125,7 @@ paquets concernés.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_contraintes_2">18.4. Contraintes</h3>
+<h3 id="_contraintes_2">18.5. Contraintes</h3>
 <div class="paragraph">
 <p>Le format source doit être reconnu (CycloneDX, SPDX 2.3 ou SPDX 3.0). La
 classification copyleft est une heuristique de repérage par identifiant

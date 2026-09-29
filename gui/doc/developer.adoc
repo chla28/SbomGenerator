@@ -143,7 +143,7 @@ gui/
 │       ├── sbom_tree_panel.dart      # Onglet Arborescence SBOM — exploration composants
 │       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
 │       ├── sbom_merge_panel.dart     # Onglet Fusion SBOM — fusionne plusieurs SBOM
-│       ├── sbom_licenses_panel.dart  # Onglet Licences SBOM — rapport AsciiDoc via `licenses`
+│       ├── sbom_licenses_panel.dart  # Onglet Licences SBOM — visualisation + rapport via `licenses`
 │       └── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
 ├── doc/
 │   ├── developer.adoc               # Ce document
@@ -158,6 +158,7 @@ gui/
 │   ├── pdf_report_test.dart
 │   ├── sbom_merge_panel_test.dart
 │   ├── sbom_licenses_panel_test.dart
+│   ├── license_report_test.dart
 │   ├── vuln_shared_test.dart
 │   ├── scan_source_test.dart
 │   ├── layer_nav_test.dart
@@ -1433,6 +1434,22 @@ construit sur le même modèle que `SbomMergePanel` (<<sec-merge-panel>>) : pas
 de parsing local du SBOM, délégation complète à `sbom-generator licenses`
 via `SbomRunner`.
 
+Le panneau a deux fonctions :
+
+* *Visualisation* : à la sélection d'un fichier, `_selectFile()` appelle
+  `loadLicensesViaCli()` (`licenses -f json -o <fichier temporaire>`, lu puis
+  supprimé — la sortie standard mêle progression et journal) et parse le
+  résultat en `LicenseReportData` (`models/license_report.dart`). Le paramètre
+  `loader` du widget permet de remplacer ce chargement dans les tests. La GUI
+  ne classifie rien : catégories copyleft et regroupements viennent du CLI.
+  Deux vues (`_View.grouped` : `ExpansionTile` par licence ; `_View.table` :
+  lignes triables par colonne), badges par catégorie, filtre texte
+  (`LicenseReportData.filter`, insensible à la casse, sur la licence ou le
+  paquet).
+* *Rapport* (bas de page) : format au choix (`_ReportFormat` : asciidoc,
+  markdown, html, csv, json → `-f`). `_setFormat()` adapte l'extension du
+  fichier de sortie tant qu'elle correspond à celle du format précédent.
+
 État de `_SbomLicensesPanelState` :
 
 * `String? _inputFile` — chemin du fichier source unique (contrairement à
@@ -1443,7 +1460,7 @@ via `SbomRunner`.
   `SbomMergePanel`
 
 `_runLicenses()` construit les arguments `['licenses', '-i', _inputFile!,
-'-o', outputPath, if (nom) '-n', nom]`. Le bouton *Générer* est actif
+'-f', format, '-o', outputPath, if (nom) '-n', nom]`. Le bouton *Générer* est actif
 uniquement si `_inputFile != null` et `_outputCtrl.text` non vide.
 
 `_sbomFiles` (fichiers proposés dans le menu *Fichiers générés*) filtre

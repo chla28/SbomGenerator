@@ -79,7 +79,7 @@ partie du pipeline sans reconstruire un SBOM depuis les paquets :
 | `diff <a> <b>` | `sbom_diff.dart` | Compare deux SBOM CycloneDX ou SPDX (2.x/3.0) (ajouts/suppressions/mises à jour) |
 | `merge <a> <b> …` | `sbom_merger.dart` | Fusionne plusieurs SBOM CycloneDX ou SPDX 2.x en un seul, déduplication par PURL |
 | `convert -i <a> -f <fmt>` | `sbom_reader.dart` + générateurs | Relit un SBOM existant et le réexporte vers un/plusieurs formats |
-| `licenses -i <a> -o <adoc>` | `sbom_reader.dart` + `license_report_generator.dart` | Rapport AsciiDoc des licences, regroupé par licence, avec alertes copyleft |
+| `licenses -i <a> [-f fmt] -o <fichier>` | `sbom_reader.dart` + `license_report_generator.dart` | Rapport des licences (AsciiDoc, Markdown, HTML, CSV, JSON), regroupé par licence, avec alertes copyleft |
 | `validate <a> [<b>…]` | (inline dans `bin/sbom_generator.dart`) | Vérifie la structure minimale d'un ou plusieurs SBOM |
 | `scan --sbom <a>` | (inline) + `scan_report_generator.dart` + `vuln_enrichment.dart` | Interroge grype/osv-scanner/trivy, filtre par date, enrichit chaque CVE (CISA KEV, EPSS, PoC, exploitabilité CVSS), rend en texte / SARIF / rapport md-adoc-pdf |
 | `cra --sbom <a>` | `cra_report.dart` (+ `sbom_reader.dart`, `vuln_enrichment.dart`, `scan_report_generator.dart` pour le PDF) | Rapport de conformité Cyber Resilience Act (UE 2024/2847) — **sous-ensemble automatiquement vérifiable uniquement** : format/complétude du SBOM (BSI TR-03183-2, NTIA 2021, couverture des dépendances), inventaire + correctifs des vulnérabilités connues (via `--scan`), alerte art. 14 sur les CVE au catalogue CISA KEV. Sortie json / asciidoc / pdf. Exit 2 si point bloquant |
@@ -957,10 +957,23 @@ infère `packageType` via `_purlToType(purl)` (préfixe `pkg:rpm/`,
 ## `lib/license_report_generator.dart` — Rapport de licences (sous-commande `licenses`)
 
 ```dart
+enum LicenseReportFormat { asciidoc, markdown, html, csv, json }   // .cliName, .extension, parse()
+
 class LicenseReportGenerator {
-  Future<void> writeToFile(List<Package> packages, String outputPath, {String? documentName});
+  LicenseReport analyze(List<Package> packages, {String? documentName});   // regroupement + compteurs copyleft
+  String render(List<Package> packages, {String? documentName, LicenseReportFormat format});
+  Future<void> writeToFile(List<Package> packages, String outputPath,
+      {String? documentName, LicenseReportFormat format});
+  static LicenseCategory classify(String license);
 }
 ```
+
+`analyze` produit un `LicenseReport` (groupes `LicenseGroup` triés, paquets sans
+licence, compteurs et identifiants copyleft) indépendant du format ; chaque
+format n'est qu'un rendu de ce modèle. Le JSON (`-f json`) est le contrat lu
+par la GUI (`gui/lib/models/license_report.dart`) : `summary`, `licenses[]`
+(`license`, `category` = `permissive|weak-copyleft|strong-copyleft`, `packages[]`),
+`unknown[]`.
 
 Regroupe les paquets par `pkg.license` **exacte** (clé = chaîne telle que
 présente dans le SBOM source, y compris les expressions composées `A AND B`
@@ -968,7 +981,7 @@ fréquentes sur les paquets Debian/RPM) et écrit un rapport AsciiDoc : résumé
 chiffré, avertissement copyleft, section détaillée par licence, section des
 paquets sans licence détectée.
 
-`_classify(license)` : heuristique par sous-chaîne sur l'expression
+`classify(license)` : heuristique par sous-chaîne sur l'expression
 (insensible à la casse) — `AGPL` ou `GPL` non précédé d'une lettre (regex
 `(?<![A-Z])GPL`, pour ne pas confondre avec `LGPL`) → `strongCopyleft` ;
 `LGPL`/`MPL`/`EPL`/`CDDL`/`CPL`/`EUPL` → `weakCopyleft` ; sinon `permissive`
@@ -1136,7 +1149,8 @@ if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     r
   valides, `1` sinon (fichier introuvable ou JSON illisible compte comme
   invalide sans interrompre la vérification des autres fichiers).
 - **`_runLicenses(args)`** : `-i <source>` (obligatoire), `-o <sortie>`
-  (obligatoire), `-n <nom>` optionnel. Même chargement que `_runConvert`
+  (obligatoire sauf avec `-f json`, qui écrit alors sur stdout), `-f <format>`
+  (`asciidoc` par défaut), `-n <nom>` optionnel. Même chargement que `_runConvert`
   (`SbomReader.loadJson()` + `SbomReader().read(json)`), puis délègue tout le
   regroupement/formatage à `LicenseReportGenerator().writeToFile()`.
 
@@ -1864,7 +1878,7 @@ Exécutés automatiquement par `.github/workflows/ci.yml` (`dart analyze
 | `sbom_reader_test.dart` | détection de format, relecture CycloneDX |
 | `sbom_diff_test.dart` | clé purl/name:type, CycloneDX/SPDX 2.3/SPDX 3.0, comparaison inter-format |
 | `sbom_merger_test.dart` | dédup CycloneDX (purl/bom-ref) et SPDX 2.3 (purl/SPDXID), fusion des relations |
-| `license_report_generator_test.dart` | regroupement par licence, classification copyleft fort/faible, découpage des expressions composées, paquets sans licence |
+| `license_report_generator_test.dart` | regroupement par licence, classification copyleft fort/faible, découpage des expressions composées, paquets sans licence, formats markdown/html/csv/json |
 
 ### Suite d'intégration (`test/integration/`)
 
