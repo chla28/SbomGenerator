@@ -1247,7 +1247,7 @@ bleu-ardoise, en-têtes de tableau foncés, badges de sévérité colorés
 (libellés français : CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE), pied de page
 avec titre du rapport et pagination « Page X / Y ». Le rapport du *tableau
 de bord* (bouton d'export de sa carte de synthèse) suit la même charte et
-ajoute une section *« Détail des CVE prioritaires »*.
+ajoute une section *« Détail des CVE »*.
 
 *Filtres par sévérité* : cliquez sur un ou plusieurs badges pour n'afficher que
 les vulnérabilités du niveau correspondant. Le bouton *Tout voir* efface les
@@ -2105,9 +2105,9 @@ rapport reprenant l'intégralité de la vue affichée :
   présence par outil, et colonnes KEV / EPSS si l'enrichissement a tourné),
   dans le *même ordre que celui affiché à l'écran*, avec les CVE préfixés
   distro déjà normalisés (voir <<sec-pourquoi-ecarts-scanners>>) ;
-* une section *« Détail des CVE prioritaires »* : un bloc par CVE au
-  catalogue CISA KEV, ou dont l'EPSS est ≥ 10 %, ou de sévérité Critical /
-  High — avec paquet, versions, sévérité et dates par scanner, et toute
+* une section *« Détail des CVE »* : un bloc par CVE retenue par le seuil
+  de sévérité du rapport (toutes avec « All » ; les CVE au catalogue CISA
+  KEV sont toujours incluses) — avec paquet, versions, sévérité et dates par scanner, et toute
   l'information d'exploitabilité (KEV, EPSS, CVSS, PoC, liens). Reprend le
   contenu du panneau de détail dépliable à l'écran.
 

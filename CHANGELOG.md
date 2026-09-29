@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **GUI — rapport du tableau de bord** : la section « Détail des CVE » ne
+  suivait pas le seuil de sévérité choisi (elle restait limitée à
+  KEV / EPSS ≥ 10 % / Critical-High, même avec « All » ou « ≥ Medium »). Elle
+  reprend désormais toutes les CVE retenues par le seuil et s'intitule
+  « Détail des CVE » (ex-« Détail des CVE prioritaires »).
+
 ## [1.5.15] - 2026-09-29
 
 ### Added

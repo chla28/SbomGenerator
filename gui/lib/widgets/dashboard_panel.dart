@@ -765,20 +765,18 @@ Future<String> _dashboardReportAdoc({
     buf.writeln();
   }
 
-  // ── Détail des CVE prioritaires ──
-  bool prioritised(_CrossRowData r) {
-    final e = ex(r.id);
-    return e.inKev ||
-        (e.epssScore ?? 0) >= 0.10 ||
-        const {'critical', 'high'}.contains(r.severity.toLowerCase());
-  }
-
-  final detailed = rows.where(prioritised).toList();
+  // ── Détail des CVE ──
+  // `rows` est déjà filtré par le seuil du rapport (filterForReport : pire
+  // sévérité atteignant le seuil, ou CISA KEV) : le détail les reprend toutes
+  // plutôt que d'appliquer un second filtre indépendant du menu.
+  final detailed = rows;
   if (detailed.isNotEmpty) {
-    buf.writeln('== Détail des CVE prioritaires');
+    buf.writeln('== Détail des CVE');
     buf.writeln();
-    buf.writeln('${detailed.length} CVE retenue(s) : au catalogue CISA KEV, '
-        'ou EPSS >= 10 %, ou sévérité Critical / High.');
+    buf.writeln(threshold == ReportSeverityThreshold.all
+        ? '${detailed.length} CVE.'
+        : '${detailed.length} CVE retenue(s) : sévérité ${threshold.label} '
+            'ou au catalogue CISA KEV.');
     buf.writeln();
     for (final r in detailed) {
       final d = _crossCveDetail(r.id, grype, osv, trivy, exploitById);

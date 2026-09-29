@@ -511,4 +511,35 @@ void main() {
     expect(all, contains('CVE-2026-0003'));
     expect(all, contains('| *Total* | *3*'));
   });
+
+  test('« Détail des CVE » suit le seuil du rapport (et pas seulement ≥ High)',
+      () async {
+    final grype = [
+      _g('CVE-2026-0001', 'Critical'),
+      _g('CVE-2026-0002', 'High'),
+      _g('CVE-2026-0003', 'Medium'),
+      _g('CVE-2026-0004', 'Low'),
+    ];
+    // Section de détail seule (la comparaison inter-scanners la précède).
+    Future<String> detail(ReportSeverityThreshold t) async {
+      final adoc = await dashboardReportAdoc(
+          grype: grype, osv: null, trivy: null, threshold: t);
+      final i = adoc.indexOf('== Détail des CVE\n');
+      expect(i, isNonNegative, reason: 'section absente pour ${t.name}');
+      return adoc.substring(i);
+    }
+
+    bool has(String d, int n) => d.contains('=== CVE-2026-000$n');
+
+    final all = await detail(ReportSeverityThreshold.all);
+    expect([for (var n = 1; n <= 4; n++) has(all, n)], everyElement(isTrue));
+
+    final medium = await detail(ReportSeverityThreshold.medium);
+    expect([for (var n = 1; n <= 4; n++) has(medium, n)],
+        [true, true, true, false]);
+
+    final high = await detail(ReportSeverityThreshold.high);
+    expect([for (var n = 1; n <= 4; n++) has(high, n)],
+        [true, true, false, false]);
+  });
 }

@@ -1268,9 +1268,10 @@ AsciiDoc : `== Résumé global`, `== Outils` (voir <<sec-pdf-report>>),
 `DashboardPanel._countByKey`), `== Comparaison inter-scanners` — `crossRows`
 trié par `_sortCrossRows` avec la colonne de tri **active à l'écran**
 (`crossSortCol`/`crossSortAsc`), colonnes KEV / EPSS ajoutées si
-`exploitById` non vide —, puis `== Détail des CVE prioritaires` : un bloc
-`=== CVE-xxxx` par CVE au catalogue CISA KEV, ou EPSS >= 10 %, ou de sévérité
-Critical/High, rendu par `CveDetail.toAdocRows(adocEscape)`
+`exploitById` non vide —, puis `== Détail des CVE` : un bloc
+`=== CVE-xxxx` par ligne de la comparaison (déjà filtrée par le seuil du
+rapport via `filterForReport`, KEV toujours incluses — pas de second
+filtre), rendu par `CveDetail.toAdocRows(adocEscape)`
 (<<sec-cve-detail-widget>>). Suit ensuite le même patron que
 `_VulnTableViewState._exportAsciiDoc()` : écriture du `.adoc` via
 `FilePicker.saveFile`, conversion via `runAsciidoctorPdf`, retour `SnackBar`.
