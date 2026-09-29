@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.15] - 2026-09-29
+
 ### Added
 - **`licenses --format`** : le rapport de licences peut aussi être produit
   en Markdown, HTML (autonome), CSV ou JSON (`-f asciidoc|markdown|html|csv|json`,

@@ -738,7 +738,7 @@ cvd_policy_url: "https://acme.example/security/policy"
 | Champ | Contenu |
 |-------|---------|
 | Timestamp | Date/heure de génération (UTC ISO 8601) |
-| Outil | `sbom_generator 1.5.14` |
+| Outil | `sbom_generator 1.5.15` |
 | Auteur | Fixé à `sbom_generator` (non configurable) |
 | Supplier | Fixé à `local` (non configurable) |
 | Nom du composant racine | Configurable via `--name` (défaut : `Package Set`) |
