@@ -13,7 +13,7 @@ import 'dart:io';
 // Unique endroit à mettre à jour côté GUI lors d'un bump de version (avec
 // gui/pubspec.yaml) — home_screen.dart (À propos) et les exports PDF s'y
 // réfèrent tous les deux, au lieu de dupliquer le littéral.
-const String kGuiVersion = '1.5.16';
+const String kGuiVersion = '1.6.0';
 
 // ─── Thème asciidoctor-pdf ──────────────────────────────────────────────────
 //

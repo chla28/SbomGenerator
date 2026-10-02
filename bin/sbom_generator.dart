@@ -36,7 +36,7 @@ import 'package:sbom_generator/license_report_generator.dart';
 import 'package:sbom_generator/vuln_enrichment.dart';
 import 'package:sbom_generator/cra_report.dart';
 
-const _version = '1.5.16';
+const _version = '1.6.0';
 
 const _validFormats = {'cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'};
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
