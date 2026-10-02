@@ -73,4 +73,43 @@ void main() {
       expect(restored.layerMode, 'rootfs');
     });
   });
+  group('SbomConfig.toArgs — --depth', () {
+    test('profondeur 0 (défaut) : aucune option', () {
+      final args = SbomConfig(inputFile: 'app.rpm').toArgs();
+      expect(args, isNot(contains('--depth')));
+      expect(args, isNot(contains('--no-nested-files')));
+    });
+
+    test('émet --depth N avec une entrée fichier', () {
+      final c = SbomConfig(inputFile: 'app.rpm', nestedDepth: '2');
+      expect(c.toArgs(), containsAllInOrder(['--input', 'app.rpm']));
+      expect(c.toArgs(), containsAllInOrder(['--depth', '2']));
+      expect(c.toArgs(), isNot(contains('--no-nested-files')));
+    });
+
+    test('all et --no-nested-files', () {
+      final c = SbomConfig(
+          inputFile: 'app.rpm', nestedDepth: 'all', nestedFiles: false);
+      expect(c.toArgs(), containsAllInOrder(['--depth', 'all']));
+      expect(c.toArgs(), contains('--no-nested-files'));
+    });
+
+    test('ignoré sans entrée fichier (image ou binaire)', () {
+      expect(
+          SbomConfig(imageRef: 'nginx:latest', nestedDepth: '2').toArgs(),
+          isNot(contains('--depth')));
+      expect(SbomConfig(binaryPath: '/bin/x', nestedDepth: '2').toArgs(),
+          isNot(contains('--depth')));
+    });
+
+    test('round-trip toJson/fromJson ; anciens profils → défauts', () {
+      final c = SbomConfig(nestedDepth: '3', nestedFiles: false);
+      final restored = SbomConfig.fromJson(c.toJson());
+      expect(restored.nestedDepth, '3');
+      expect(restored.nestedFiles, isFalse);
+      final legacy = SbomConfig.fromJson(<String, dynamic>{});
+      expect(legacy.nestedDepth, '0');
+      expect(legacy.nestedFiles, isTrue);
+    });
+  });
 }

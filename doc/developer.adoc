@@ -1275,6 +1275,60 @@ de la lecture du `MANIFEST.MF` par syft, qui produit des groupIds heuristiques
 non standard (`common/`, `jrt-fs/`, etc.). Ce gap est documenté et accepté.
 ====
 
+[[sec-nested-archive]]
+== `lib/nested_archive.dart` — Descente dans les objets imbriqués (`--depth`)
+
+Pour un objet racine de `--input` (rpm, deb, jar/war/ear, wheel, zip, tar,
+tgz), `NestedExplorer.explore(path, rootPrimaryRef:)` en extrait
+*sélectivement* les objets analysables, les analyse avec les parseurs
+existants, puis descend jusqu'à `maxDepth` (`parseNestedDepth` : entier ≥ 0
+ou `all` → `maxNestedDepth` = 10).
+
+* *Extraction* (`_extractScript`, script Python embarqué exécuté par
+  `python3`) : détection par signature — rpm (lead + deux en-têtes + charge
+  utile cpio newc gz/xz/bz2/zstd, lue sans `rpm2cpio`/`cpio`), deb (archive
+  `ar` → `data.tar.*`), zip/jar/war/whl, tar. Ne retient que les fichiers
+  « analysables » (extensions d'archive/paquet et manifestes hors
+  `META-INF/`). Garde-fous : 4 Gio au total, 2 Gio par fichier, 50 000
+  fichiers ; chemins absolus ou sortant de la destination et liens ignorés ;
+  une limite atteinte tronque l'extraction (avertissement, pas d'erreur).
+  zstd passe par la CLI `zstd` (absente du module standard de Python < 3.14).
+* *Parcours* (`_walk`) : un répertoire temporaire par archive, supprimé après
+  le parcours de ses enfants (espace disque borné par la profondeur). Chaque
+  fichier est typé par `_kindOf` (`archive` : descente possible ;
+  `manifest` : analysé sans descente). Les paquets reçoivent un `sourceRef`
+  *logique* `racine!/chemin!/chemin` via `Package.copyWith(sourceRef:)`
+  (jamais le chemin temporaire).
+* *`NestedObject`* : `location`, `depth`, `packages` (le premier est le
+  composant principal de l'objet — `parseJarFile` renvoie d'abord le jar
+  lui-même, puis les dépendances relocalisées —, `primary`), `parentRef`
+  (`bomRef` du composant principal du conteneur).
+* *Graphe* : `withNestedDependencies` ajoute les arêtes conteneur →
+  composant principal de l'objet → ses autres composants ; un manifeste
+  (sans composant principal) est rattaché au conteneur. `main()` n'en garde
+  que les arêtes dont les deux extrémités survivent à la déduplication.
+* *Annotations* : `nestedFields(pkg)` (`location`, `depth`, vide si
+  `sourceRef` ne contient pas `!/`) est consommé par les générateurs
+  CycloneDX (propriétés `sbom_generator:nested:*`), SPDX 2.3 / 3.0
+  (annotation) et JSON personnalisé (`nested`). Les formats tabulaires
+  (CSV, Markdown, AsciiDoc, HTML) ne portent pas la colonne.
+* *Fichiers par objet* : après le global, `main()` écrit un SBOM par
+  `NestedObject` (`nestedFileBase` → `<base>.nested-NN-<slug>`, `writeAll(…,
+  docNameOverride:)`) sauf `--no-nested-files`. Surcharges licence/fournisseur
+  et signature cosign s'y appliquent comme aux SBOM de couche.
+* *Scan* : `scan --package` relance le CLI (`_runSelf`) avec
+  `-i <fichier> --depth N --no-nested-files -f cyclonedx`, puis
+  `NestedSbomIndex.load` (`nom@version` → `location`) et `attributeNested`
+  posent la clé `container` sur chaque finding (repli sur le nom seul s'il est
+  univoque) ; `_printScanResults` ajoute la colonne `OBJET`. Rapports et SARIF
+  n'exploitent pas `container`.
+* *Validation CLI* : `--depth` invalide → erreur ; `--depth > 0` sans
+  `--input` → erreur ; `scan --depth` sans `--package` → erreur ; `--package`
+  exclusif de `--sbom`/`--image`.
+* Tests : `test/unit/nested_archive_test.dart` (unitaires),
+  `test/integration/nested_depth_test.dart` (tgz → jar → jar + lockfile,
+  fixtures fabriquées avec `python3`).
+
 [[sec-image-layers]]
 == `lib/image_layers.dart` — Analyse par couche (`--per-layer`)
 

@@ -86,6 +86,29 @@ void main() {
     );
   });
 
+  test('équivalent sbom-generator scan --package', () {
+    expect(
+      sbomGeneratorScanArgs(
+        scanner: 'grype',
+        target: 'app.rpm',
+        useImage: false,
+        usePackage: true,
+        packageDepth: '2',
+        enrichOnline: false,
+      ),
+      [
+        'scan', '--package', 'app.rpm', '--depth', '2', '--scanner', 'grype',
+        '--no-enrich',
+      ],
+    );
+    // Profondeur 0 : pas de --depth.
+    expect(
+      sbomGeneratorScanArgs(
+          scanner: 'osv', target: 'a.tgz', useImage: false, usePackage: true),
+      ['scan', '--package', 'a.tgz', '--scanner', 'osv'],
+    );
+  });
+
   test('séquence de l\'analyse par couche', () {
     String seq(LayerScanMode mode) => layeredCliSequence(
           cliBinary: 'sbom-generator',

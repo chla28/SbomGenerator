@@ -94,7 +94,8 @@ class JarParser {
     // Hash du .jar lui-même — appliqué uniquement au composant qui décrit le
     // jar, pas aux dépendances relocalisées d'un uber-jar.
     final ownHashes = hashLocalFile(path);
-    final basename = path.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
+    final basename =
+        path.split('/').last.replaceAll(RegExp(r'\.(jar|war|ear)$'), '');
     final match = _versionSep.firstMatch(basename);
     final prefix = match != null ? basename.substring(0, match.start) : null;
 

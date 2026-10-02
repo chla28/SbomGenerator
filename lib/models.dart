@@ -95,8 +95,9 @@ abstract class Package {
   String get packageType;
 
   /// Copie du paquet avec les champs indiqués remplacés (les autres inchangés).
-  /// Utilisé pour appliquer les overrides de licence et le repli fournisseur.
-  Package copyWith({String? license, String? vendor});
+  /// Utilisé pour appliquer les overrides de licence, le repli fournisseur et
+  /// la réécriture de [sourceRef] des objets imbriqués (`--depth`).
+  Package copyWith({String? license, String? vendor, String? sourceRef});
 }
 
 // ── RPM package ──────────────────────────────────────────────────────────────
@@ -179,7 +180,8 @@ class RpmPackage extends Package {
       'SPDXRef-${_safeId(name)}-${_safeId(version)}-${_safeId(release)}';
 
   @override
-  RpmPackage copyWith({String? license, String? vendor}) => RpmPackage(
+  RpmPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
+      RpmPackage(
         name: name,
         version: version,
         release: release,
@@ -195,7 +197,7 @@ class RpmPackage extends Package {
         hashes: hashes,
         headerSha256: headerSha256,
         sourceRpm: sourceRpm,
-        sourceRef: sourceRef,
+        sourceRef: sourceRef ?? this.sourceRef,
       );
 
   @override
@@ -318,7 +320,8 @@ class WheelPackage extends Package {
   }
 
   @override
-  WheelPackage copyWith({String? license, String? vendor}) => WheelPackage(
+  WheelPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
+      WheelPackage(
         name: name,
         version: version,
         license: license ?? this.license,
@@ -326,7 +329,7 @@ class WheelPackage extends Package {
         summary: summary,
         vendor: vendor ?? this.vendor,
         arch: arch,
-        sourceRef: sourceRef,
+        sourceRef: sourceRef ?? this.sourceRef,
         hashes: hashes,
         requires: requires,
         provides: provides,
@@ -400,7 +403,8 @@ class DebPackage extends Package {
   String get spdxId => 'SPDXRef-deb-${_safeId(name)}-${_safeId(version)}';
 
   @override
-  DebPackage copyWith({String? license, String? vendor}) => DebPackage(
+  DebPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
+      DebPackage(
         name: name,
         version: version,
         arch: arch,
@@ -408,7 +412,7 @@ class DebPackage extends Package {
         vendor: vendor ?? this.vendor,
         url: url,
         summary: summary,
-        sourceRef: sourceRef,
+        sourceRef: sourceRef ?? this.sourceRef,
         hashes: hashes,
         requires: requires,
         provides: provides,
@@ -509,7 +513,8 @@ class OciPackage extends Package {
       'SPDXRef-oci-${_safeId(name)}-${_safeId(version)}';
 
   @override
-  OciPackage copyWith({String? license, String? vendor}) => OciPackage(
+  OciPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
+      OciPackage(
         name: name,
         version: version,
         license: license ?? this.license,
@@ -517,7 +522,7 @@ class OciPackage extends Package {
         url: url,
         summary: summary,
         arch: arch,
-        sourceRef: sourceRef,
+        sourceRef: sourceRef ?? this.sourceRef,
         imageRef: imageRef,
         hashes: hashes,
         requires: requires,

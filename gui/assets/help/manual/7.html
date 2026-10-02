@@ -70,8 +70,8 @@ réseau, seule la version installée est affichée, sans comparaison.
 <div class="sect2">
 <h3 id="sec-source-scan">8.2. Sélection de la source à analyser</h3>
 <div class="paragraph">
-<p>Une bascule <strong>Fichier SBOM / Image de conteneur</strong> en haut du panneau permet de
-choisir ce que grype analyse. Ce choix, ainsi que le champ associé, est commun
+<p>Une bascule <strong>Fichier SBOM / Image de conteneur / Paquet / archive</strong> en haut du
+panneau permet de choisir ce que grype analyse. Ce choix, ainsi que le champ associé, est commun
 aux trois onglets de scan (Grype, OSV-Scanner, Trivy) — voir aussi
 <a href="#sec-onglet-trivy-source">Sélection de la source à analyser</a> et <a href="#sec-onglet-osv-source">Sélection de la source à analyser</a>.</p>
 </div>
@@ -122,6 +122,33 @@ via le second bouton dédié.</p>
 plateforme cible sur une image multi-architecture (ex. <code>linux/arm64</code>).
 Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.</p>
 </div>
+<div id="sec-scan-paquet" class="paragraph">
+<p><strong>Paquet / archive</strong> : un fichier local — <code>.rpm</code>, <code>.deb</code>, <code>.tar</code> / <code>.tar.gz</code> /
+<code>.tgz</code>, <code>.zip</code>, <code>.jar</code> / <code>.war</code> / <code>.ear</code>, <code>.whl</code> — est analysé directement,
+sans passer par un fichier SBOM. L’application lance d’abord
+<code>sbom-generator --input &lt;fichier&gt; --depth N</code> (voir <a href="#sec-depth">Profondeur de descente (<code>--depth</code>)</a>) dans un
+répertoire temporaire, puis le scanner analyse le SBOM CycloneDX produit,
+exactement comme un fichier SBOM : les trois onglets (Grype, OSV-Scanner,
+Trivy) reçoivent donc les mêmes composants. Le sélecteur <strong>Profondeur</strong>
+(0 — objet seul, 1 à 3 niveaux, Illimitée) choisit jusqu’où descendre dans les
+objets contenus (jars d’un RPM, paquets d’une archive…). Le SBOM généré est
+réutilisé par les onglets tant que le fichier et la profondeur ne changent pas.
+L’en-tête des rapports exportés indique « paquet &lt;nom&gt; (profondeur N) ».</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Les CVE s’affichent par paquet vulnérable (<code>nom@version</code>). Pour savoir
+quel objet imbriqué le contient, utiliser la commande <strong>Équivalent
+sbom-generator scan --package</strong> du bouton <strong>CLI Commande</strong> (colonne <code>OBJET</code>).
+</td>
+</tr>
+</tbody></table>
+</div>
 </div>
 <div class="sect2">
 <h3 id="sec-cli-commande">8.3. Ligne de commande (bouton <strong>CLI Commande</strong>)</h3>
@@ -157,8 +184,14 @@ généré par syft et non l’image directement.</p>
 </ul>
 </div>
 <div class="paragraph">
+<p>En source <strong>Paquet / archive</strong>, le popup affiche en plus la génération du SBOM
+(<code>sbom-generator --input … --depth N</code>, SBOM écrit dans <code>/tmp/sbom-paquet/</code>)
+avant la commande du scanner, et l’équivalent est <code>sbom-generator scan
+--package … --depth N</code>.</p>
+</div>
+<div class="paragraph">
 <p>Tant que la cible n’est pas renseignée, elle apparaît sous la forme
-<code>&lt;sbom.cdx.json&gt;</code> ou <code>&lt;image&gt;</code>.</p>
+<code>&lt;sbom.cdx.json&gt;</code>, <code>&lt;image&gt;</code> ou <code>&lt;paquet&gt;</code>.</p>
 </div>
 </div>
 <div class="sect2">

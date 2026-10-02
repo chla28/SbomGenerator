@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'hash_utils.dart' show spdx2Alg;
 import 'image_layers.dart';
+import 'nested_archive.dart';
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -187,6 +188,8 @@ class SpdxGenerator {
       _annotationComment(pkg),
       for (final e in (layers?.componentFields(pkg) ?? const {}).entries)
         '$layerPropertyPrefix${e.key}=${e.value}',
+      for (final e in nestedFields(pkg).entries)
+        '$nestedPropertyPrefix${e.key}=${e.value}',
     ].where((c) => c.isNotEmpty).join('; ');
     if (comment.isNotEmpty) {
       spdxPkg['annotations'] = [

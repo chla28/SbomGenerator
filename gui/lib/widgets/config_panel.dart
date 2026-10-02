@@ -81,6 +81,8 @@ class _ConfigPanelState extends State<ConfigPanel> {
     c.binaryPath = loaded.binaryPath;
     c.perLayer = loaded.perLayer;
     c.layerMode = loaded.layerMode;
+    c.nestedDepth = loaded.nestedDepth;
+    c.nestedFiles = loaded.nestedFiles;
     _outputCtrl.text = c.outputBase;
     _nameCtrl.text = c.documentName;
     _rpmDirCtrl.text = c.rpmDir;
@@ -303,6 +305,14 @@ class _ConfigPanelState extends State<ConfigPanel> {
                               .withValues(alpha: 0.45),
                           fontStyle: FontStyle.italic,
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      _NestedDepthOptions(
+                        config: widget.config,
+                        onChanged: () {
+                          _sync();
+                          setState(() {});
+                        },
                       ),
 
                       // ── Séparateur OU ──
@@ -1341,6 +1351,96 @@ class _BinaryField extends StatelessWidget {
 }
 
 // ─── Sélecteur d'outil OCI ────────────────────────────────────────────────────
+
+/// Option --depth (descente dans les objets imbriqués de l'entrée : jars d'un
+/// RPM, paquets d'une archive…) et --no-nested-files, affichées sous le champ
+/// d'entrée.
+class _NestedDepthOptions extends StatelessWidget {
+  final SbomConfig config;
+  final VoidCallback onChanged;
+
+  const _NestedDepthOptions({required this.config, required this.onChanged});
+
+  static String _label(String d) => switch (d) {
+        '0' => '0 — objet seul',
+        'all' => 'Illimitée',
+        '1' => '1 niveau',
+        _ => '$d niveaux',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = TextStyle(fontSize: 12, color: theme.colorScheme.onSurface);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.account_tree_outlined,
+                size: 14, color: theme.colorScheme.secondary),
+            const SizedBox(width: 6),
+            Text('Profondeur (--depth)', style: style),
+            const SizedBox(width: 4),
+            const HelpIcon(
+              'Descend dans les objets contenus dans l\'entrée : par exemple '
+              'les jars d\'un RPM, les paquets ou archives d\'un tar.gz, les '
+              'jars d\'un fat jar.\n'
+              '• 0 : l\'objet seul (défaut)\n'
+              '• N : N niveaux (1 = objets directs, 2 = ce qu\'ils '
+              'contiennent…)\n'
+              '• Illimitée : tous les niveaux (plafonnés à 10)\n'
+              'Les manifestes rencontrés (package-lock.json, go.sum, '
+              'pom.xml…) sont analysés. Le SBOM global fusionne tous les '
+              'composants (propriétés location/depth, dépendances parent → '
+              'enfant). Extraction bornée en taille.',
+            ),
+            const SizedBox(width: 12),
+            DropdownButton<String>(
+              value: config.nestedDepth,
+              isDense: true,
+              items: [
+                for (final d in allNestedDepths)
+                  DropdownMenuItem(
+                      value: d, child: Text(_label(d), style: style)),
+              ],
+              onChanged: (v) {
+                config.nestedDepth = v ?? '0';
+                onChanged();
+              },
+            ),
+          ],
+        ),
+        if (config.nestedDepth != '0')
+          Row(
+            children: [
+              SizedBox(
+                height: 24,
+                width: 24,
+                child: Checkbox(
+                  value: config.nestedFiles,
+                  onChanged: (v) {
+                    config.nestedFiles = v ?? true;
+                    onChanged();
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text('Un SBOM par objet imbriqué', style: style),
+              ),
+              const SizedBox(width: 4),
+              const HelpIcon(
+                'En plus du SBOM fusionné, écrit un SBOM par objet imbriqué '
+                '(<sortie>.nested-NN-<objet>.<ext>, dans chaque format '
+                'coché). Décocher = --no-nested-files : fusionné seulement.',
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
 
 /// Option --per-layer (un SBOM par couche de l'image) et sa méthode de calcul
 /// (--layer-mode), affichées sous le backend OCI.

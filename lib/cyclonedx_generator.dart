@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'image_layers.dart';
+import 'nested_archive.dart';
 import 'license_normalizer.dart';
 import 'models.dart';
 
@@ -497,7 +498,8 @@ class CycloneDxGenerator {
       });
     }
 
-    if (pkg.sourceRef.endsWith('.rpm') || pkg.sourceRef.endsWith('.whl')) {
+    if (!isNestedRef(pkg.sourceRef) &&
+        (pkg.sourceRef.endsWith('.rpm') || pkg.sourceRef.endsWith('.whl'))) {
       externalRefs.add({
         'type': 'distribution',
         'url': Uri.file(pkg.sourceRef).toString(),
@@ -543,6 +545,11 @@ class CycloneDxGenerator {
     // Couche d'origine (SBOM global) ou nature du changement (SBOM de couche).
     layers?.componentFields(pkg).forEach((k, v) {
       properties.add({'name': '$layerPropertyPrefix$k', 'value': v});
+    });
+
+    // Composant trouvé dans un objet imbriqué (--depth) : emplacement logique.
+    nestedFields(pkg).forEach((k, v) {
+      properties.add({'name': '$nestedPropertyPrefix$k', 'value': v});
     });
 
     if (properties.isNotEmpty) {

@@ -15,6 +15,7 @@ import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
 import '../services/layer_scan_service.dart' show LayerScanStep,
     LayerScanPreparing, LayerScanScanningImage, LayerScanScanningLayer;
+import '../services/package_scan_service.dart' show packageScanDepths;
 import '../services/scan_enrichment.dart';
 import 'cve_detail.dart';
 import 'help_icon.dart';
@@ -287,8 +288,10 @@ class _SplitPickButtonState extends State<SplitPickButton> {
 
 /// Source choisie pour l'analyse : un fichier SBOM déjà généré, ou une image
 /// de conteneur (registre, archive locale, ou répertoire OCI layout) scannée
-/// directement par l'outil.
-enum ScanSourceKind { sbomFile, image }
+/// directement par l'outil, ou un paquet/une archive local (rpm, deb, tgz,
+/// jar…) dont le SBOM est d'abord généré (avec descente dans les objets
+/// imbriqués, voir [PackageScanService]) puis scanné.
+enum ScanSourceKind { sbomFile, image, package }
 
 /// Heuristique pour distinguer un chemin local (archive ou répertoire OCI
 /// layout) d'une référence de registre (ex. `nginx:latest`,
@@ -328,6 +331,11 @@ class ScanSourceToggle extends StatelessWidget {
           icon: const Icon(Icons.inventory_2_outlined, size: 16),
           label: Text(context.l10n.scanSourceImage),
         ),
+        ButtonSegment(
+          value: ScanSourceKind.package,
+          icon: const Icon(Icons.folder_zip_outlined, size: 16),
+          label: Text(context.l10n.scanSourcePackage),
+        ),
       ],
       selected: {kind},
       onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
@@ -335,6 +343,90 @@ class ScanSourceToggle extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
+    );
+  }
+}
+
+/// Champ « Paquet / archive » (source [ScanSourceKind.package]) et sélecteur
+/// de profondeur de descente (`--depth`).
+class PackageSourceField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool enabled;
+  final String depth;
+  final ValueChanged<String> onDepthChanged;
+  final VoidCallback onPick;
+
+  const PackageSourceField({
+    super.key,
+    required this.controller,
+    required this.enabled,
+    required this.depth,
+    required this.onDepthChanged,
+    required this.onPick,
+  });
+
+  static String depthLabel(AppLocalizations l10n, String depth) =>
+      switch (depth) {
+        '0' => l10n.scanPackageDepthNone,
+        'all' => l10n.scanPackageDepthAll,
+        _ => l10n.scanPackageDepthLevels(int.tryParse(depth) ?? 0),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                enabled: enabled,
+                decoration: InputDecoration(
+                  label: HelpLabel(
+                      l10n.scanSourcePackage, l10n.scanSourcePackageHelp),
+                  hintText: l10n.scanSourcePackageHint,
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+                style:
+                    const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: enabled ? onPick : null,
+              icon: const Icon(Icons.folder_open, size: 16),
+              label: Text(l10n.commonBrowse),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 260,
+          child: DropdownButtonFormField<String>(
+            initialValue: depth,
+            isDense: true,
+            decoration: InputDecoration(
+              label: HelpLabel(
+                  l10n.scanPackageDepthLabel, l10n.scanPackageDepthHelp),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              for (final d in packageScanDepths)
+                DropdownMenuItem(
+                  value: d,
+                  child: Text(depthLabel(l10n, d),
+                      style: const TextStyle(fontSize: 13)),
+                ),
+            ],
+            onChanged: enabled ? (v) => onDepthChanged(v ?? '0') : null,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -429,12 +521,15 @@ List<String> sbomGeneratorScanArgs({
   LayerScanSettings layers = const LayerScanSettings(),
   CveDateFilter dateFilter = CveDateFilter.empty,
   bool enrichOnline = true,
+  bool usePackage = false,
+  String packageDepth = '0',
 }) {
   String day(DateTime d) => d.toIso8601String().substring(0, 10);
   return [
     'scan',
-    useImage ? '--image' : '--sbom',
+    usePackage ? '--package' : (useImage ? '--image' : '--sbom'),
     target,
+    if (usePackage && packageDepth != '0') ...['--depth', packageDepth],
     '--scanner',
     scanner,
     if (useImage && layers.enabled) ...[
@@ -593,6 +688,10 @@ String? equivalentScanNote(
 /// Répertoire fictif affiché pour le jeu de SBOM par couche dans l'aperçu
 /// « CLI Commande » (l'application utilise un répertoire temporaire).
 const cliLayerDir = '/tmp/sbom-couches';
+
+/// Répertoire fictif du SBOM généré pour un paquet/une archive dans l'aperçu
+/// « CLI Commande » (l'application utilise un répertoire temporaire).
+const cliPackageSbom = '/tmp/sbom-paquet/package.cdx.json';
 
 /// Commandes réellement lancées par l'analyse par couche : préparation du
 /// jeu de SBOM par [cliBinary], puis le scan de l'image ([imageScan]) ou

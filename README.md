@@ -55,6 +55,17 @@ fonctionne aussi (même mécanisme, syft détecte lui-même une source fichier
 locale) — `--binary` documente l'intention et refuse un `--oci-tool` autre
 que `syft`.
 
+**Descente dans les objets imbriqués (`--depth`)** — avec `--input`, descend
+dans les objets contenus dans l'entrée : jars d'un RPM/deb, paquets et jars
+d'une archive tar/tgz/zip, jars d'un fat jar (`BOOT-INF/lib`, `WEB-INF/lib`),
+et manifestes rencontrés (`package-lock.json`, `go.sum`, `pom.xml`…).
+`--depth 0` (défaut) analyse l'objet seul ; `N` descend de N niveaux ; `all`
+est sans limite (plafonné à 10). Le SBOM fusionné contient l'objet **et** tout
+ce qu'il contient (propriétés `sbom_generator:nested:location` / `depth`,
+dépendances parent → enfant), et un SBOM par objet imbriqué est écrit à côté
+de `-o` : `<base>.nested-NN-<objet>.<ext>` (`--no-nested-files` pour s'en
+passer). L'extraction est bornée (taille, nombre de fichiers).
+
 **Un SBOM par couche (`--per-layer`)** — avec `--image`, produit en plus du
 SBOM global un SBOM par couche de l'image, dans chaque format demandé, à
 côté de `-o` : `<base>.layer-NN-<digest12>.<ext>`. Le SBOM d'une couche
@@ -163,6 +174,7 @@ sbom_generator convert -i <sbom-source> -f <format> -o <sortie>
 sbom_generator validate <sbom1> [<sbom2> ...] [--strict]
 sbom_generator scan --sbom <fichier> [options]
 sbom_generator scan --image <image> [--per-layer] [options]
+sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <fichier> [options]
 
 Options :
@@ -177,6 +189,10 @@ Options :
       --layer-mode         Méthode de --per-layer : metadata (défaut, syft/trivy)
                            | rootfs (réanalyse après chaque couche ; forcé pour
                            skopeo et cdxgen)
+      --depth              Profondeur de descente dans les objets imbriqués de
+                           --input : 0 (défaut, l'objet seul) | N niveaux | all
+      --no-nested-files    Avec --depth : pas de SBOM par objet imbriqué
+                           (<base>.nested-NN-<objet>.<ext>), fusionné seul
   -o, --output             Fichier de sortie (défaut : sbom.json)
                            Avec plusieurs formats, utilisé comme base de nom
   -f, --format             Format(s), virgule-séparés :
@@ -239,6 +255,10 @@ sbom_generator scan --sbom sbom.cdx.json --no-enrich   # hors-ligne (CI)
 # « Priorisation par risque » et propriétés kev/epss/poc en SARIF
 sbom_generator scan --sbom sbom.cdx.json --scanner all -f pdf -o scan-report.pdf
 
+# Scanner directement un RPM et les jars qu'il contient (2 niveaux) : le SBOM
+# est généré (--depth) puis scanné ; chaque CVE indique l'objet qui la contient
+sbom_generator scan --package app-1.0-1.x86_64.rpm --depth 2 --scanner all
+
 # CVE par couche d'une image (SBOM par couche générés à la volée) :
 # rattachement à la couche d'origine du paquet, ou scan de chaque couche
 sbom_generator scan --image ./app.tar --per-layer --scanner all
@@ -290,6 +310,10 @@ sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si no
 
 # Combiner une image OCI et une liste de paquets supplémentaires
 ./sbom_generator -I nginx:latest -i extra_pkgs.txt -o sbom.cdx.json
+
+# Un RPM et les jars qu'il contient : SBOM fusionné + un SBOM par jar
+./sbom_generator -i app-1.0-1.x86_64.rpm --depth 1 -o out/app.cdx.json
+# → out/app.cdx.json, out/app.nested-01-<jar>.cdx.json, …
 
 # Un SBOM par couche de l'image (delta de chaque couche), en plus du global
 ./sbom_generator -I ./app.tar --per-layer -f cyclonedx,html -o out/app
