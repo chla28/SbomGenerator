@@ -895,6 +895,90 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Couche {index}/{total}…'**
   String layerScanStepLayer(int index, int total);
+
+  /// Bascule de source d'analyse : paquet ou archive locale (aussi libellé du champ).
+  ///
+  /// In fr, this message translates to:
+  /// **'Paquet / archive'**
+  String get scanSourcePackage;
+
+  /// Exemple affiché dans le champ de paquet/archive.
+  ///
+  /// In fr, this message translates to:
+  /// **'chemin/vers/app.rpm, release.tar.gz, app.jar…'**
+  String get scanSourcePackageHint;
+
+  /// Aide du champ paquet/archive.
+  ///
+  /// In fr, this message translates to:
+  /// **'Paquet ou archive local (rpm, deb, tar/tgz, zip, jar/war/ear,\nwheel) analysé directement : le SBOM est d\'abord généré\npar sbom-generator (--input … --depth N) puis scanné.\nAvec une profondeur > 0, les jars, paquets et archives\ncontenus (ex. les jars d\'un RPM) sont aussi analysés.'**
+  String get scanSourcePackageHelp;
+
+  /// Libellé du sélecteur de profondeur de descente (--depth).
+  ///
+  /// In fr, this message translates to:
+  /// **'Profondeur'**
+  String get scanPackageDepthLabel;
+
+  /// Aide du sélecteur de profondeur.
+  ///
+  /// In fr, this message translates to:
+  /// **'Niveaux d\'objets imbriqués dans lesquels descendre :\n• 0 : l\'objet seul\n• N : N niveaux (1 = jars/paquets/archives contenus\n  dans l\'objet, 2 = ce que ceux-ci contiennent…)\n• Illimitée : tous les niveaux (plafonnés à 10)\nLes manifestes rencontrés (package-lock.json, go.sum,\npom.xml…) sont analysés. Extraction bornée en taille.'**
+  String get scanPackageDepthHelp;
+
+  /// Valeur de profondeur 0.
+  ///
+  /// In fr, this message translates to:
+  /// **'0 — objet seul'**
+  String get scanPackageDepthNone;
+
+  /// Valeur de profondeur « all ».
+  ///
+  /// In fr, this message translates to:
+  /// **'Illimitée'**
+  String get scanPackageDepthAll;
+
+  /// Valeur de profondeur N (N ≥ 1).
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, one{1 niveau} other{{count} niveaux}}'**
+  String scanPackageDepthLevels(int count);
+
+  /// Erreur : aucun paquet/archive saisi.
+  ///
+  /// In fr, this message translates to:
+  /// **'Veuillez sélectionner un paquet ou une archive.'**
+  String get scanSourceMissingPackage;
+
+  /// Titre du sélecteur de paquet/archive.
+  ///
+  /// In fr, this message translates to:
+  /// **'Choisir un paquet ou une archive'**
+  String get scanPickPackageTitle;
+
+  /// État affiché pendant la génération du SBOM du paquet avant son scan.
+  ///
+  /// In fr, this message translates to:
+  /// **'Génération du SBOM du paquet…'**
+  String get scanPackagePreparing;
+
+  /// Erreur : sbom-generator a échoué sur le paquet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Génération du SBOM impossible : {error}'**
+  String scanPackageFailed(String error);
+
+  /// Titre de la section CLI : génération du SBOM d'un paquet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Génération du SBOM du paquet (étape préalable)'**
+  String get cliCommandPackagePrepare;
+
+  /// Remarque : SBOM de paquet temporaire.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le SBOM est généré dans un répertoire temporaire ; chaque CVE est rattachée à l\'objet qui contient le paquet vulnérable (colonne OBJET) dans l\'équivalent sbom-generator scan.'**
+  String get cliCommandPackageNote;
 }
 
 class _AppLocalizationsDelegate

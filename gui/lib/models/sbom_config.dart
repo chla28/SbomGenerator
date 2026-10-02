@@ -37,6 +37,10 @@ const ociToolLabels = {
 /// d'origine de chaque paquet) ; les autres n'acceptent que `rootfs`.
 const metadataLayerTools = {'syft', 'trivy'};
 
+/// Profondeurs de descente acceptées par --depth (0 = l'objet seul, N
+/// niveaux, `all` = sans limite).
+const allNestedDepths = ['0', '1', '2', '3', 'all'];
+
 /// Versions CycloneDX supportées par --cyclonedx-version.
 const allCycloneDxVersions = ['1.6', '1.7'];
 
@@ -76,6 +80,15 @@ class SbomConfig {
   /// [effectiveLayerMode] pour la valeur réellement transmise.
   String layerMode;
 
+  /// Profondeur de descente dans les objets imbriqués de [inputFile]
+  /// (--depth) : '0' (défaut, l'objet seul), '1'…'3' ou 'all'. Sans effet
+  /// pour une image ou un binaire.
+  String nestedDepth;
+
+  /// Avec une profondeur > 0 : un SBOM par objet imbriqué en plus du SBOM
+  /// fusionné (désactivé : --no-nested-files).
+  bool nestedFiles;
+
   SbomConfig({
     this.inputFile = '',
     this.outputBase = 'sbom',
@@ -94,6 +107,8 @@ class SbomConfig {
     this.cycloneDxVersion = '1.6',
     this.perLayer = false,
     this.layerMode = 'metadata',
+    this.nestedDepth = '0',
+    this.nestedFiles = true,
   }) : formats = formats ?? {'cyclonedx'};
 
   Map<String, dynamic> toJson() => {
@@ -112,6 +127,8 @@ class SbomConfig {
     'cycloneDxVersion': cycloneDxVersion,
     'perLayer': perLayer,
     'layerMode': layerMode,
+    'nestedDepth': nestedDepth,
+    'nestedFiles': nestedFiles,
   };
 
   factory SbomConfig.fromJson(Map<String, dynamic> j) => SbomConfig(
@@ -130,6 +147,8 @@ class SbomConfig {
     cycloneDxVersion: j['cycloneDxVersion'] as String? ?? '1.6',
     perLayer: j['perLayer'] as bool? ?? false,
     layerMode: j['layerMode'] as String? ?? 'metadata',
+    nestedDepth: j['nestedDepth'] as String? ?? '0',
+    nestedFiles: j['nestedFiles'] as bool? ?? true,
   );
 
   /// Mode --layer-mode transmis au CLI : 'rootfs' pour les backends qui
@@ -140,7 +159,14 @@ class SbomConfig {
 
   List<String> toArgs() {
     final args = <String>[];
-    if (inputFile.isNotEmpty) args.addAll(['--input', inputFile]);
+    if (inputFile.isNotEmpty) {
+      args.addAll(['--input', inputFile]);
+      // --depth s'applique aux objets de --input (le CLI le refuse sans lui).
+      if (nestedDepth != '0') {
+        args.addAll(['--depth', nestedDepth]);
+        if (!nestedFiles) args.add('--no-nested-files');
+      }
+    }
     if (binaryPath.isNotEmpty) {
       // --binary est exclusif de --image côté CLI et force --oci-tool syft :
       // pas de --oci-tool ici, la valeur choisie par l'utilisateur (ociTool)

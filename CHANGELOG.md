@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **`--depth` : descente dans les objets imbriqués** (CLI et GUI) — avec
+  `--input`, un RPM/deb, une archive tar/tgz/zip, un jar/war/ear ou une wheel
+  est ouvert et ce qu'il contient est analysé à son tour : jars d'un RPM,
+  paquets et jars d'une archive, jars d'un fat jar, manifestes rencontrés
+  (`package-lock.json`, `go.sum`, `pom.xml`…). `--depth 0` (défaut : l'objet
+  seul), `N` niveaux, `all` (plafonné à 10). Le SBOM fusionné contient
+  l'objet et son contenu (propriétés `sbom_generator:nested:location` /
+  `depth`, annotations SPDX, champ `nested` du JSON, arêtes de dépendance
+  conteneur → contenu) ; un SBOM par objet imbriqué est écrit à côté de `-o`
+  (`<base>.nested-NN-<objet>.<ext>`, `--no-nested-files` pour s'en passer).
+  Extraction sélective par script Python embarqué (rpm, deb, zip, tar — sans
+  `rpm2cpio`/`cpio`/`dpkg-deb`), bornée en taille et en nombre de fichiers
+  (`lib/nested_archive.dart`). `.war` / `.ear` sont désormais reconnus comme
+  les `.jar`. GUI : sélecteur *Profondeur* et case *Un SBOM par objet
+  imbriqué* sous le champ d'entrée.
+- **`scan --package <fichier> [--depth N]`** : scanne directement un RPM, deb,
+  tgz, zip, jar… (SBOM généré avec la profondeur demandée, puis soumis à
+  Grype / OSV-Scanner / Trivy) ; chaque CVE est rattachée à l'objet qui
+  contient le paquet vulnérable (colonne `OBJET`, clé interne `container`),
+  y compris avec `--sbom` sur un SBOM produit par `--depth`. GUI : nouvelle
+  source *Paquet / archive* (avec profondeur) dans les trois onglets de scan.
+
+### Changed
+- `scan` : l'erreur de sélection de source cite désormais `--package` en plus
+  de `--sbom` et `--image` (« exactement l'un des trois »).
+- `Package.copyWith` accepte `sourceRef` (utilisé pour les chemins logiques
+  des objets imbriqués).
+
 ## [1.5.16] - 2026-09-29
 
 ### Fixed

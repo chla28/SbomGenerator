@@ -548,4 +548,62 @@ class AppLocalizationsFr extends AppLocalizations {
   String layerScanStepLayer(int index, int total) {
     return 'Couche $index/$total…';
   }
+
+  @override
+  String get scanSourcePackage => 'Paquet / archive';
+
+  @override
+  String get scanSourcePackageHint =>
+      'chemin/vers/app.rpm, release.tar.gz, app.jar…';
+
+  @override
+  String get scanSourcePackageHelp =>
+      'Paquet ou archive local (rpm, deb, tar/tgz, zip, jar/war/ear,\nwheel) analysé directement : le SBOM est d\'abord généré\npar sbom-generator (--input … --depth N) puis scanné.\nAvec une profondeur > 0, les jars, paquets et archives\ncontenus (ex. les jars d\'un RPM) sont aussi analysés.';
+
+  @override
+  String get scanPackageDepthLabel => 'Profondeur';
+
+  @override
+  String get scanPackageDepthHelp =>
+      'Niveaux d\'objets imbriqués dans lesquels descendre :\n• 0 : l\'objet seul\n• N : N niveaux (1 = jars/paquets/archives contenus\n  dans l\'objet, 2 = ce que ceux-ci contiennent…)\n• Illimitée : tous les niveaux (plafonnés à 10)\nLes manifestes rencontrés (package-lock.json, go.sum,\npom.xml…) sont analysés. Extraction bornée en taille.';
+
+  @override
+  String get scanPackageDepthNone => '0 — objet seul';
+
+  @override
+  String get scanPackageDepthAll => 'Illimitée';
+
+  @override
+  String scanPackageDepthLevels(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count niveaux',
+      one: '1 niveau',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get scanSourceMissingPackage =>
+      'Veuillez sélectionner un paquet ou une archive.';
+
+  @override
+  String get scanPickPackageTitle => 'Choisir un paquet ou une archive';
+
+  @override
+  String get scanPackagePreparing => 'Génération du SBOM du paquet…';
+
+  @override
+  String scanPackageFailed(String error) {
+    return 'Génération du SBOM impossible : $error';
+  }
+
+  @override
+  String get cliCommandPackagePrepare =>
+      'Génération du SBOM du paquet (étape préalable)';
+
+  @override
+  String get cliCommandPackageNote =>
+      'Le SBOM est généré dans un répertoire temporaire ; chaque CVE est rattachée à l\'objet qui contient le paquet vulnérable (colonne OBJET) dans l\'équivalent sbom-generator scan.';
 }

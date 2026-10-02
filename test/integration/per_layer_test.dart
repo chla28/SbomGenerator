@@ -187,7 +187,7 @@ void main() {
     test('--sbom et --image exclusifs', () async {
       final r = await _cli(['scan', '--sbom', 'a.json', '--image', 'x.tar']);
       expect(r.exitCode, 1);
-      expect(r.stderr, contains('exactement l\'un des deux'));
+      expect(r.stderr, contains('exactement l\'un des trois'));
     });
 
     test('--layer-mode sans --image', () async {

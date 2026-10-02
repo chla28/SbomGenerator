@@ -448,6 +448,33 @@ filtré aux composants porteurs d'un PURL d'écosystème réel
 |`cdxgen` dans le PATH (requiert Node.js)
 |===
 
+[[sec-depth]]
+==== Profondeur de descente (`--depth`)
+
+Sous le champ d'entrée, le sélecteur *Profondeur* permet de descendre dans les
+objets contenus dans l'entrée : par exemple les jars d'un RPM, les paquets et
+jars d'une archive `.tar.gz` / `.zip`, les jars d'un fat jar, ainsi que les
+manifestes rencontrés (`package-lock.json`, `go.sum`, `pom.xml`…).
+
+[cols="1,3"]
+|===
+|*0 — objet seul* |Comportement par défaut : l'entrée n'est pas ouverte
+|*1 niveau, 2, 3* |Descend de N niveaux (1 = objets directs de l'entrée, 2 = ce que ceux-ci contiennent…)
+|*Illimitée* |Tous les niveaux (plafonnés à 10)
+|===
+
+Le SBOM généré fusionne l'objet et tout ce qu'il contient : chaque composant
+imbriqué porte son emplacement (`sbom_generator:nested:location`) et sa
+profondeur, et le graphe de dépendances relie le conteneur à son contenu. Dès
+que la profondeur est supérieure à 0, la case *Un SBOM par objet imbriqué*
+écrit en plus un SBOM par jar/paquet/archive (`<sortie>.nested-NN-<objet>.<ext>`)
+; ces fichiers apparaissent dans la liste des fichiers produits, après le SBOM
+global. Décocher la case ajoute `--no-nested-files`.
+
+NOTE: La profondeur ne s'applique qu'à une entrée *Fichier / dossier* (pas à
+une image ni à un binaire). L'extraction est bornée en taille et nécessite
+`python3` ; l'analyse d'un `.rpm` imbriqué nécessite `rpm`.
+
 [[sec-per-layer]]
 ==== Un SBOM par couche (`--per-layer`)
 
@@ -940,8 +967,8 @@ réseau, seule la version installée est affichée, sans comparaison.
 [[sec-source-scan]]
 === Sélection de la source à analyser
 
-Une bascule *Fichier SBOM / Image de conteneur* en haut du panneau permet de
-choisir ce que grype analyse. Ce choix, ainsi que le champ associé, est commun
+Une bascule *Fichier SBOM / Image de conteneur / Paquet / archive* en haut du
+panneau permet de choisir ce que grype analyse. Ce choix, ainsi que le champ associé, est commun
 aux trois onglets de scan (Grype, OSV-Scanner, Trivy) — voir aussi
 <<sec-onglet-trivy-source>> et <<sec-onglet-osv-source>>.
 
@@ -970,6 +997,23 @@ Un champ optionnel *Plateforme* apparaît en mode image, pour forcer la
 plateforme cible sur une image multi-architecture (ex. `linux/arm64`).
 Laissé vide, grype détecte automatiquement la plateforme la plus adaptée.
 
+[[sec-scan-paquet]]
+*Paquet / archive* : un fichier local — `.rpm`, `.deb`, `.tar` / `.tar.gz` /
+`.tgz`, `.zip`, `.jar` / `.war` / `.ear`, `.whl` — est analysé directement,
+sans passer par un fichier SBOM. L'application lance d'abord
+`sbom-generator --input <fichier> --depth N` (voir <<sec-depth>>) dans un
+répertoire temporaire, puis le scanner analyse le SBOM CycloneDX produit,
+exactement comme un fichier SBOM : les trois onglets (Grype, OSV-Scanner,
+Trivy) reçoivent donc les mêmes composants. Le sélecteur *Profondeur*
+(0 — objet seul, 1 à 3 niveaux, Illimitée) choisit jusqu'où descendre dans les
+objets contenus (jars d'un RPM, paquets d'une archive…). Le SBOM généré est
+réutilisé par les onglets tant que le fichier et la profondeur ne changent pas.
+L'en-tête des rapports exportés indique « paquet <nom> (profondeur N) ».
+
+NOTE: Les CVE s'affichent par paquet vulnérable (`nom@version`). Pour savoir
+quel objet imbriqué le contient, utiliser la commande *Équivalent
+sbom-generator scan --package* du bouton *CLI Commande* (colonne `OBJET`).
+
 [[sec-cli-commande]]
 === Ligne de commande (bouton *CLI Commande*)
 
@@ -996,8 +1040,13 @@ paramétrage courant de l'onglet, chacune avec un bouton *Copier* :
   rappelle qu'avec `--image`, `sbom-generator scan` analyse le SBOM
   généré par syft et non l'image directement.
 
+En source *Paquet / archive*, le popup affiche en plus la génération du SBOM
+(`sbom-generator --input … --depth N`, SBOM écrit dans `/tmp/sbom-paquet/`)
+avant la commande du scanner, et l'équivalent est `sbom-generator scan
+--package … --depth N`.
+
 Tant que la cible n'est pas renseignée, elle apparaît sous la forme
-`<sbom.cdx.json>` ou `<image>`.
+`<sbom.cdx.json>`, `<image>` ou `<paquet>`.
 
 [[sec-scan-couches]]
 === Analyse par couche (source « Image de conteneur »)

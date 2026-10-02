@@ -729,5 +729,71 @@
         "type": "int"
       }
     }
+  },
+  "scanSourcePackage": "Paquet / archive",
+  "@scanSourcePackage": {
+    "description": "Bascule de source d'analyse : paquet ou archive locale (aussi libellé du champ)."
+  },
+  "scanSourcePackageHint": "chemin/vers/app.rpm, release.tar.gz, app.jar…",
+  "@scanSourcePackageHint": {
+    "description": "Exemple affiché dans le champ de paquet/archive."
+  },
+  "scanSourcePackageHelp": "Paquet ou archive local (rpm, deb, tar/tgz, zip, jar/war/ear,\nwheel) analysé directement : le SBOM est d'abord généré\npar sbom-generator (--input … --depth N) puis scanné.\nAvec une profondeur > 0, les jars, paquets et archives\ncontenus (ex. les jars d'un RPM) sont aussi analysés.",
+  "@scanSourcePackageHelp": {
+    "description": "Aide du champ paquet/archive."
+  },
+  "scanPackageDepthLabel": "Profondeur",
+  "@scanPackageDepthLabel": {
+    "description": "Libellé du sélecteur de profondeur de descente (--depth)."
+  },
+  "scanPackageDepthHelp": "Niveaux d'objets imbriqués dans lesquels descendre :\n• 0 : l'objet seul\n• N : N niveaux (1 = jars/paquets/archives contenus\n  dans l'objet, 2 = ce que ceux-ci contiennent…)\n• Illimitée : tous les niveaux (plafonnés à 10)\nLes manifestes rencontrés (package-lock.json, go.sum,\npom.xml…) sont analysés. Extraction bornée en taille.",
+  "@scanPackageDepthHelp": {
+    "description": "Aide du sélecteur de profondeur."
+  },
+  "scanPackageDepthNone": "0 — objet seul",
+  "@scanPackageDepthNone": {
+    "description": "Valeur de profondeur 0."
+  },
+  "scanPackageDepthAll": "Illimitée",
+  "@scanPackageDepthAll": {
+    "description": "Valeur de profondeur « all »."
+  },
+  "scanPackageDepthLevels": "{count, plural, one{1 niveau} other{{count} niveaux}}",
+  "@scanPackageDepthLevels": {
+    "description": "Valeur de profondeur N (N ≥ 1).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "scanSourceMissingPackage": "Veuillez sélectionner un paquet ou une archive.",
+  "@scanSourceMissingPackage": {
+    "description": "Erreur : aucun paquet/archive saisi."
+  },
+  "scanPickPackageTitle": "Choisir un paquet ou une archive",
+  "@scanPickPackageTitle": {
+    "description": "Titre du sélecteur de paquet/archive."
+  },
+  "scanPackagePreparing": "Génération du SBOM du paquet…",
+  "@scanPackagePreparing": {
+    "description": "État affiché pendant la génération du SBOM du paquet avant son scan."
+  },
+  "scanPackageFailed": "Génération du SBOM impossible : {error}",
+  "@scanPackageFailed": {
+    "description": "Erreur : sbom-generator a échoué sur le paquet.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "cliCommandPackagePrepare": "Génération du SBOM du paquet (étape préalable)",
+  "@cliCommandPackagePrepare": {
+    "description": "Titre de la section CLI : génération du SBOM d'un paquet."
+  },
+  "cliCommandPackageNote": "Le SBOM est généré dans un répertoire temporaire ; chaque CVE est rattachée à l'objet qui contient le paquet vulnérable (colonne OBJET) dans l'équivalent sbom-generator scan.",
+  "@cliCommandPackageNote": {
+    "description": "Remarque : SBOM de paquet temporaire."
   }
 }

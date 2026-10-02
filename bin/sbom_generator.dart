@@ -18,6 +18,7 @@ import 'package:sbom_generator/markdown_generator.dart';
 import 'package:sbom_generator/asciidoc_generator.dart';
 import 'package:sbom_generator/html_generator.dart';
 import 'package:sbom_generator/oci_parser.dart';
+import 'package:sbom_generator/nested_archive.dart';
 import 'package:sbom_generator/image_layers.dart';
 import 'package:sbom_generator/layer_scan.dart';
 import 'package:sbom_generator/sbom_diff.dart';
@@ -164,6 +165,28 @@ Future<void> main(List<String> arguments) async {
           '  rootfs    couches appliquées une à une et rootfs réanalysé\n'
           '            après chacune — ajouts, modifications, suppressions\n'
           '            (défaut forcé pour skopeo et cdxgen)',
+    )
+    ..addOption(
+      'depth',
+      defaultsTo: '0',
+      help: 'Profondeur de descente dans les objets imbriqués de --input :\n'
+          '  0     l\'objet seul (défaut)\n'
+          '  N     N niveaux (1 = jars/paquets/archives contenus dans un\n'
+          '        rpm, deb, tar, zip, jar/war/ear, wheel ; 2 = ce que\n'
+          '        contiennent ces derniers…)\n'
+          '  all   sans limite (plafonné à $maxNestedDepth niveaux)\n'
+          'Les composants trouvés sont ajoutés au SBOM de l\'objet\n'
+          '(propriétés location/depth, arêtes de dépendance parent → enfant)\n'
+          'et un SBOM par objet imbriqué est écrit à côté de -o\n'
+          '(<base>.nested-NN-<objet>.<ext>, voir --no-nested-files).\n'
+          'Les manifestes rencontrés (package-lock.json, go.sum, pom.xml…)\n'
+          'sont analysés. Extraction bornée (taille, nombre de fichiers).',
+    )
+    ..addFlag(
+      'nested-files',
+      defaultsTo: true,
+      help: 'Avec --depth : écrire un SBOM par objet imbriqué en plus du SBOM\n'
+          'fusionné. --no-nested-files : fusionné seulement.',
     )
     ..addOption(
       'output',
@@ -424,6 +447,19 @@ Future<void> main(List<String> arguments) async {
           '(copie locale des couches).');
       exit(1);
     }
+  }
+
+  // Validation --depth
+  final nestedDepth = parseNestedDepth(args['depth'] as String);
+  if (nestedDepth == null) {
+    _err('--depth attend un entier ≥ 0 ou "all" (reçu "${args['depth']}").');
+    exit(1);
+  }
+  final nestedFiles = args['nested-files'] as bool;
+  if (nestedDepth > 0 && inputPath == null) {
+    _err('--depth s\'applique aux objets de --input (rpm, deb, tar, zip, '
+        'jar…) ; pour une image, voir --per-layer.');
+    exit(1);
   }
 
   // Load license overrides
@@ -830,6 +866,47 @@ Future<void> main(List<String> arguments) async {
     }
   }
   final failed = failedRefs.length;
+
+  // --- Descente dans les objets imbriqués (--depth) ---
+  final nestedObjects = <NestedObject>[];
+  var nestedCount = 0;
+  if (nestedDepth > 0) {
+    final explorer = NestedExplorer(
+      maxDepth: nestedDepth,
+      sdkVersions: sdkVersions,
+      pubCache: pubCacheDir,
+      flutterRoot: flutterRootDir,
+      onProgress: verbose ? (l) => print('  ↳ $l') : null,
+    );
+    final roots = <(String, String?)>[
+      for (var i = 0; i < mainRefs.length; i++)
+        if (rawResults[i].isNotEmpty &&
+            NestedExplorer.isExplorable(mainRefs[i]) &&
+            File(mainRefs[i]).existsSync())
+          (mainRefs[i], rawResults[i].first.bomRef),
+    ];
+    if (roots.isEmpty) {
+      stderr.writeln('--depth : aucun objet de --input dans lequel descendre '
+          '(rpm, deb, tar, zip, jar, wheel).');
+    } else {
+      print('Descente dans ${roots.length} objet(s) (profondeur '
+          '${nestedDepth == maxNestedDepth ? 'max' : nestedDepth})…');
+    }
+    for (final (path, primaryRef) in roots) {
+      final res = await explorer.explore(path, rootPrimaryRef: primaryRef);
+      nestedObjects.addAll(res.objects);
+      for (final w in res.warnings) {
+        stderr.writeln('⚠  $w');
+      }
+    }
+    nestedCount = nestedObjects.fold<int>(0, (n, o) => n + o.packages.length);
+    print('$nestedCount composant(s) trouvé(s) dans '
+        '${nestedObjects.length} objet(s) imbriqué(s).');
+    for (final o in nestedObjects) {
+      packages.addAll(o.packages);
+    }
+  }
+
   packages.addAll(preloadedPackages);
   packages.addAll(ociPackages);
 
@@ -873,10 +950,23 @@ Future<void> main(List<String> arguments) async {
         .single);
   }
 
+  // Mêmes surcharges (licence, fournisseur) sur les SBOM d'objets imbriqués.
+  final nestedJobs = <({List<Package> pkgs, String location})>[];
+  for (final o in nestedObjects) {
+    var pkgs = o.packages;
+    if (licenseOverrides.isNotEmpty) {
+      pkgs = _applyLicenseOverrides(pkgs, licenseOverrides);
+    }
+    if (supplierFallback.isNotEmpty) {
+      pkgs = _applySupplierFallback(pkgs, supplierFallback);
+    }
+    nestedJobs.add((pkgs: pkgs, location: o.location));
+  }
+
   final failedNote = failed > 0 ? '  ($failed échec(s))' : '';
   final dupeNote = dupes > 0 ? '  ($dupes doublon(s) supprimé(s))' : '';
   print(
-      'Analysés : ${uniquePackages.length}/$total paquet(s).$failedNote$dupeNote');
+      'Analysés : ${uniquePackages.length}/${total + nestedCount} paquet(s).$failedNote$dupeNote');
 
   // --- Error report ---
   if (failedRefs.isNotEmpty) {
@@ -899,6 +989,19 @@ Future<void> main(List<String> arguments) async {
   if (formats.any((f) => f != 'markdown' && f != 'asciidoc' && f != 'html')) {
     print('Resolving dependencies…');
     dependencies.addAll(rpmParser.buildDependencies(uniquePackages));
+    if (nestedObjects.isNotEmpty) {
+      final known = {for (final p in uniquePackages) p.bomRef};
+      final withNested = withNestedDependencies(dependencies, nestedObjects);
+      dependencies
+        ..clear()
+        ..addAll([
+          for (final d in withNested)
+            if (known.contains(d.sourceRef))
+              PackageDependency(
+                  sourceRef: d.sourceRef,
+                  dependsOn: d.dependsOn.where(known.contains).toList()),
+        ]);
+    }
     final relCount =
         dependencies.fold<int>(0, (sum, d) => sum + d.dependsOn.length);
     print('Found $relCount intra-list dependency relationship(s).');
@@ -923,7 +1026,9 @@ Future<void> main(List<String> arguments) async {
     String Function(String fmt) pathFor, {
     LayerAnnotations? layers,
     String label = 'SBOM',
+    String? docNameOverride,
   }) async {
+    final effDocName = docNameOverride ?? docName;
     for (final fmt in formats) {
       final outPath = pathFor(fmt);
       print('Generating $label ($fmt)…');
@@ -931,7 +1036,7 @@ Future<void> main(List<String> arguments) async {
         switch (fmt) {
           case 'cyclonedx':
             await CycloneDxGenerator().writeToFile(pkgs, deps, outPath,
-                documentName: docName,
+                documentName: effDocName,
                 specVersion: cycloneDxVersion,
                 tlp: tlp,
                 citationSource: citationSource,
@@ -941,31 +1046,31 @@ Future<void> main(List<String> arguments) async {
                 layers: layers);
           case 'spdx':
             await SpdxGenerator().writeToFile(pkgs, deps, outPath,
-                documentName: docName,
+                documentName: effDocName,
                 osInfo: ociOs,
                 sdkTools: sdkVersions,
                 layers: layers);
           case 'spdx3':
             await Spdx3Generator().writeToFile(pkgs, deps, outPath,
-                documentName: docName,
+                documentName: effDocName,
                 osInfo: ociOs,
                 sdkTools: sdkVersions,
                 layers: layers);
           case 'json':
             await SimpleJsonGenerator().writeToFile(pkgs, deps, outPath,
-                documentName: docName, layers: layers);
+                documentName: effDocName, layers: layers);
           case 'markdown':
             await MarkdownGenerator().writeToFile(pkgs, outPath,
-                documentName: docName, layers: layers);
+                documentName: effDocName, layers: layers);
           case 'asciidoc':
             await AsciidocGenerator().writeToFile(pkgs, outPath,
-                documentName: docName, layers: layers);
+                documentName: effDocName, layers: layers);
           case 'html':
             await HtmlGenerator().writeToFile(pkgs, outPath,
-                documentName: docName, layers: layers);
+                documentName: effDocName, layers: layers);
           case 'csv':
             await CsvGenerator().writeToFile(pkgs, outPath,
-                documentName: docName, layers: layers);
+                documentName: effDocName, layers: layers);
         }
       } catch (e, st) {
         _err('Failed to write $label ($fmt): $e');
@@ -1052,6 +1157,25 @@ Future<void> main(List<String> arguments) async {
     layerPrimaryPaths.add('${job.fileBase}${_formatExtension(formats.first)}');
   }
 
+  // --depth : un SBOM par objet imbriqué (après le global, comme --per-layer).
+  final nestedPrimaryPaths = <String>[];
+  if (nestedFiles) {
+    final nestedBase = _basePath(outputPath);
+    for (var i = 0; i < nestedJobs.length; i++) {
+      final job = nestedJobs[i];
+      final fileBase =
+          nestedFileBase(nestedBase, i + 1, nestedJobs.length, job.location);
+      await writeAll(
+        job.pkgs,
+        needsDeps ? rpmParser.buildDependencies(job.pkgs) : const [],
+        (fmt) => '$fileBase${_formatExtension(fmt)}',
+        label: 'SBOM objet imbriqué ${i + 1}/${nestedJobs.length}',
+        docNameOverride: '${docName ?? 'Package Set SBOM'} — ${job.location}',
+      );
+      nestedPrimaryPaths.add('$fileBase${_formatExtension(formats.first)}');
+    }
+  }
+
   // ── Vérification des politiques ──────────────────────────────────────────
   final checker = PolicyChecker();
   int policyFailures = 0;
@@ -1096,7 +1220,7 @@ Future<void> main(List<String> arguments) async {
         ? outputPath
         : '${_basePath(outputPath)}${_formatExtension(formats.first)}';
     await _signWithCosign(primaryOut, verbose: verbose);
-    for (final p in layerPrimaryPaths) {
+    for (final p in [...layerPrimaryPaths, ...nestedPrimaryPaths]) {
       await _signWithCosign(p, verbose: verbose);
     }
   }
@@ -1262,7 +1386,8 @@ Future<void> _signWithCosign(String sbomPath, {bool verbose = false}) async {
 bool _isTar(String ref) =>
     ref.endsWith('.tar') || ref.endsWith('.tar.gz') || ref.endsWith('.tgz');
 
-bool _isJar(String ref) => ref.endsWith('.jar');
+bool _isJar(String ref) =>
+    ref.endsWith('.jar') || ref.endsWith('.war') || ref.endsWith('.ear');
 
 /// True si --input pointe directement vers une archive/un paquet unique
 /// plutôt que vers un fichier liste (une référence par ligne).
@@ -1458,6 +1583,18 @@ Future<void> _runScan(List<String> arguments) async {
             'layout) : son SBOM CycloneDX est d\'abord généré (via\n'
             '--oci-tool) dans un répertoire temporaire, puis scanné.\n'
             'Exclusif de --sbom.')
+    ..addOption('package',
+        abbr: 'p',
+        help: 'Paquet ou archive local à analyser directement (rpm, deb,\n'
+            'tar/tgz, zip, jar/war/ear, wheel) : son SBOM CycloneDX est\n'
+            'd\'abord généré (voir --depth) dans un répertoire temporaire,\n'
+            'puis scanné. Exclusif de --sbom et --image.')
+    ..addOption('depth',
+        defaultsTo: '0',
+        help: 'Avec --package : profondeur de descente dans les objets\n'
+            'imbriqués (0 = l\'objet seul, N niveaux, all = sans limite),\n'
+            'comme --depth de la génération. Chaque CVE est rattachée à\n'
+            'l\'objet qui contient le paquet vulnérable (colonne OBJET).')
     ..addOption('oci-tool',
         defaultsTo: 'syft',
         allowed: _validOciTools,
@@ -1568,11 +1705,35 @@ Future<void> _runScan(List<String> arguments) async {
   }
 
   final imageRef = args['image'] as String?;
-  if ((args['sbom'] == null) == (imageRef == null)) {
-    stderr.writeln('scan: indiquer --sbom <fichier> ou --image <image> '
-        '(exactement l\'un des deux).');
+  final packageRef = args['package'] as String?;
+  if ([args['sbom'], imageRef, packageRef].where((v) => v != null).length !=
+      1) {
+    stderr.writeln('scan: indiquer --sbom <fichier>, --image <image> ou '
+        '--package <fichier> (exactement l\'un des trois).');
     _printScanUsage(parser);
     exit(1);
+  }
+  final scanDepthRaw = args['depth'] as String;
+  final scanDepth = parseNestedDepth(scanDepthRaw);
+  if (scanDepth == null) {
+    stderr.writeln('scan: --depth attend un entier ≥ 0 ou "all" '
+        '(reçu "$scanDepthRaw").');
+    exit(1);
+  }
+  if (args.wasParsed('depth') && packageRef == null) {
+    stderr.writeln('scan: --depth nécessite --package.');
+    exit(1);
+  }
+  if (packageRef != null) {
+    if (args['per-layer'] as bool) {
+      stderr.writeln('scan: --per-layer ne s\'applique qu\'aux images '
+          '(--image / --sbom d\'un jeu par couche).');
+      exit(1);
+    }
+    if (!File(packageRef).existsSync()) {
+      stderr.writeln('scan: fichier introuvable : $packageRef');
+      exit(1);
+    }
   }
   final perLayer = args['per-layer'] as bool;
   final layerScan = args['layer-scan'] as String;
@@ -1619,7 +1780,9 @@ Future<void> _runScan(List<String> arguments) async {
     stderr.writeln('scan: format invalide "$format". Valides : ${_validScanFormats.join(', ')}');
     exit(1);
   }
-  if (imageRef == null && !await File(sbomFile).exists()) {
+  if (imageRef == null &&
+      packageRef == null &&
+      !await File(sbomFile).exists()) {
     stderr.writeln('scan: fichier SBOM introuvable : $sbomFile');
     exit(1);
   }
@@ -1668,6 +1831,25 @@ Future<void> _runScan(List<String> arguments) async {
     exit(code);
   }
 
+  if (packageRef != null) {
+    tmpDir = await Directory.systemTemp.createTemp('sbom_scan_');
+    sbomFile = '${tmpDir.path}/package.cdx.json';
+    stderr.writeln('Génération du SBOM de $packageRef'
+        '${scanDepth > 0 ? ' (profondeur ${scanDepth == maxNestedDepth ? 'max' : scanDepth})' : ''}…');
+    final code = await _runSelf([
+      '-i', packageRef,
+      '--depth', '$scanDepth',
+      '--no-nested-files',
+      '-f', 'cyclonedx',
+      '-o', sbomFile,
+    ]);
+    if (code != 0 || !File(sbomFile).existsSync()) {
+      stderr.writeln('scan: échec de la génération du SBOM de $packageRef '
+          '(code $code).');
+      await quit(1);
+    }
+  }
+
   if (imageRef != null) {
     tmpDir = await Directory.systemTemp.createTemp('sbom_scan_');
     sbomFile = '${tmpDir.path}/image.cdx.json';
@@ -1697,6 +1879,11 @@ Future<void> _runScan(List<String> arguments) async {
     }
   }
 
+  // Rattachement des CVE aux objets imbriqués (SBOM produit avec --depth).
+  final nestedIndex =
+      imageRef == null && !perLayer ? NestedSbomIndex.load(sbomFile) : null;
+  final rootLabel = (packageRef ?? sbomFile).split('/').last;
+
   final resultsByScanner = <String, List<Map<String, dynamic>>>{};
   for (final s in scanners) {
     List<Map<String, dynamic>>? vulns;
@@ -1724,6 +1911,9 @@ Future<void> _runScan(List<String> arguments) async {
       }
     }
     if (vulns == null) continue;
+    if (nestedIndex != null && !nestedIndex.isEmpty) {
+      attributeNested(vulns, nestedIndex, rootLabel);
+    }
     resultsByScanner[s] =
         _filterByDate(vulns, dateField, after, before, includeUndated);
   }
@@ -1760,7 +1950,7 @@ Future<void> _runScan(List<String> arguments) async {
 
   if (format == 'sarif') {
     final sarif = _buildSarifReport(
-        resultsByScanner, imageRef ?? sbomFile, exploitById);
+        resultsByScanner, imageRef ?? packageRef ?? sbomFile, exploitById);
     final json = const JsonEncoder.withIndent('  ').convert(sarif);
     if (outputPath != null) {
       await File(outputPath).writeAsString(json);
@@ -1777,7 +1967,9 @@ Future<void> _runScan(List<String> arguments) async {
       await quit(1);
     }
     final gen = ScanReportGenerator(
-      sbomPath: imageRef != null ? 'image $imageRef' : sbomFile,
+      sbomPath: imageRef != null
+          ? 'image $imageRef'
+          : (packageRef != null ? 'paquet $packageRef' : sbomFile),
       layers: layerSet?.layers ?? const [],
       layerScanMode: layerSet != null ? layerScan : null,
       resultsByScanner: resultsByScanner,
@@ -2341,11 +2533,13 @@ void _printScanResults(
 
   const w0 = 10, w1 = 20, w2 = 30, w3 = 4, w4 = 10;
   final withLayer = vulns.any((v) => v['layer'] != null);
+  final withContainer = vulns.any((v) => v['container'] != null);
   stdout.writeln('${'SÉVÉRITÉ'.padRight(w0)}  ${'CVE / ID'.padRight(w1)}  '
       '${'PAQUET'.padRight(w2)}  ${'KEV'.padRight(w3)}  ${'EPSS'.padRight(w4)}  '
-      '${withLayer ? 'PoC  COUCHE' : 'PoC'}');
+      '${withLayer ? 'PoC  COUCHE' : 'PoC'}${withContainer ? '  OBJET' : ''}');
   stdout.writeln('${'-' * w0}  ${'-' * w1}  ${'-' * w2}  ${'-' * w3}  '
-      '${'-' * w4}  ---${withLayer ? '  ------' : ''}');
+      '${'-' * w4}  ---${withLayer ? '  ------' : ''}'
+      '${withContainer ? '  -----' : ''}');
   for (final v in vulns) {
     final e = ex(v);
     final sev = (v['severity'] as String).padRight(w0);
@@ -2361,9 +2555,10 @@ void _printScanResults(
         ? '✓${e.pocCount}'
         : (e.pocKnown ? '✓' : (e.hasAnySignal || e.cvssVector != null ? '—' : '?'));
     final layer = withLayer ? '  ${poc.padRight(3)}  ${v['layer'] ?? '?'}' : '';
+    final container = withContainer ? '  ${v['container'] ?? '?'}' : '';
     stdout.writeln(withLayer
-        ? '$sev  $id  $pkg  $kev  $epss$layer'
-        : '$sev  $id  $pkg  $kev  $epss  $poc');
+        ? '$sev  $id  $pkg  $kev  $epss$layer$container'
+        : '$sev  $id  $pkg  $kev  $epss  $poc$container');
   }
 }
 
@@ -2379,6 +2574,7 @@ sbom_generator scan – Analyser les CVE d'un fichier SBOM avec filtre par date.
 Usage:
   sbom-generator scan --sbom <fichier.cdx.json> [options]
   sbom-generator scan --image <image> [--per-layer] [options]
+  sbom-generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 
 ${parser.usage}
 
@@ -2422,6 +2618,13 @@ Exemples:
 
   # À partir d'un jeu déjà produit par sbom-generator --per-layer
   sbom-generator scan --sbom out/app.cdx.json --per-layer
+
+  # Scanner directement un RPM et les jars qu'il contient (2 niveaux) ;
+  # chaque CVE indique l'objet (rpm, jar…) qui contient le paquet vulnérable
+  sbom-generator scan --package app-1.0-1.x86_64.rpm --depth 2 --scanner all
+
+  # Archive : tout ce qu'elle contient, sans limite de profondeur
+  sbom-generator scan --package release.tar.gz --depth all
 
 Enrichissement : chaque CVE est complétée par CISA KEV (exploitée dans la
 nature), EPSS (probabilité d'exploitation à 30 jours), un signal PoC public

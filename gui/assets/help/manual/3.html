@@ -236,7 +236,59 @@ filtré aux composants porteurs d’un PURL d’écosystème réel</p></td>
 </table>
 </div>
 <div class="sect3">
-<h4 id="sec-per-layer">4.2.3. Un SBOM par couche (<code>--per-layer</code>)</h4>
+<h4 id="sec-depth">4.2.3. Profondeur de descente (<code>--depth</code>)</h4>
+<div class="paragraph">
+<p>Sous le champ d’entrée, le sélecteur <strong>Profondeur</strong> permet de descendre dans les
+objets contenus dans l’entrée : par exemple les jars d’un RPM, les paquets et
+jars d’une archive <code>.tar.gz</code> / <code>.zip</code>, les jars d’un fat jar, ainsi que les
+manifestes rencontrés (<code>package-lock.json</code>, <code>go.sum</code>, <code>pom.xml</code>…).</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>0 — objet seul</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Comportement par défaut : l’entrée n’est pas ouverte</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>1 niveau, 2, 3</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Descend de N niveaux (1 = objets directs de l’entrée, 2 = ce que ceux-ci contiennent…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Illimitée</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Tous les niveaux (plafonnés à 10)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Le SBOM généré fusionne l’objet et tout ce qu’il contient : chaque composant
+imbriqué porte son emplacement (<code>sbom_generator:nested:location</code>) et sa
+profondeur, et le graphe de dépendances relie le conteneur à son contenu. Dès
+que la profondeur est supérieure à 0, la case <strong>Un SBOM par objet imbriqué</strong>
+écrit en plus un SBOM par jar/paquet/archive (<code>&lt;sortie&gt;.nested-NN-&lt;objet&gt;.&lt;ext&gt;</code>)
+; ces fichiers apparaissent dans la liste des fichiers produits, après le SBOM
+global. Décocher la case ajoute <code>--no-nested-files</code>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+La profondeur ne s’applique qu’à une entrée <strong>Fichier / dossier</strong> (pas à
+une image ni à un binaire). L’extraction est bornée en taille et nécessite
+<code>python3</code> ; l’analyse d’un <code>.rpm</code> imbriqué nécessite <code>rpm</code>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="sec-per-layer">4.2.4. Un SBOM par couche (<code>--per-layer</code>)</h4>
 <div class="paragraph">
 <p>Case à cocher visible sous le backend OCI, uniquement pour une <strong>Image OCI</strong>
 (un binaire autonome n’a pas de couches). Une fois cochée, la génération
@@ -289,7 +341,7 @@ toujours le premier fichier produit : c’est lui que les autres onglets
 </div>
 </div>
 <div class="sect3">
-<h4 id="_binaire_autonome_binary">4.2.4. Binaire autonome (<code>--binary</code>)</h4>
+<h4 id="_binaire_autonome_binary">4.2.5. Binaire autonome (<code>--binary</code>)</h4>
 <div class="paragraph">
 <p>Champ séparé, sous un second séparateur « OU » : exécutable local à
 analyser directement (pas une image de conteneur) — par exemple un binaire

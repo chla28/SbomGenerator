@@ -99,4 +99,36 @@ void main() {
             "scan --sbom '/tmp/mon sbom.cdx.json' --scanner grype"),
         findsOneWidget);
   });
+
+  testWidgets(
+      'GrypePanel : source « Paquet / archive » → champ paquet, profondeur et '
+      'commandes CLI', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: GrypePanel(outputFiles: <OutputFile>[]),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Paquet / archive'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('chemin/vers/sbom.cdx.json'), findsNothing);
+    expect(find.text('Profondeur'), findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Paquet / archive'), '/tmp/app.rpm');
+    await tester.tap(find.text('CLI Commande'));
+    await tester.pumpAndSettle();
+
+    // Génération du SBOM puis scan du SBOM produit.
+    expect(find.textContaining('--input /tmp/app.rpm --depth 0'),
+        findsOneWidget);
+    expect(find.textContaining('scan --package /tmp/app.rpm --scanner grype'),
+        findsOneWidget);
+  });
 }

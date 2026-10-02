@@ -10,6 +10,7 @@ import '../l10n/l10n.dart';
 import '../models/layer_scan.dart';
 import '../services/layer_scan_service.dart';
 import '../services/osv_runner.dart';
+import '../services/package_scan_service.dart';
 import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
 import '../services/version_service.dart';
@@ -214,6 +215,8 @@ class _OsvPanelState extends State<OsvPanel>
   final _runner = OsvRunner();
   final _fileCtrl = TextEditingController();
   final _imageCtrl = TextEditingController();
+  final _packageCtrl = TextEditingController();
+  String _packageDepth = '0';
   final _configCtrl = TextEditingController();
   late final TabController _resultTabs;
 
@@ -288,6 +291,7 @@ class _OsvPanelState extends State<OsvPanel>
     _runner.kill();
     _fileCtrl.dispose();
     _imageCtrl.dispose();
+    _packageCtrl.dispose();
     _configCtrl.dispose();
     _resultTabs.dispose();
     super.dispose();
@@ -339,7 +343,21 @@ class _OsvPanelState extends State<OsvPanel>
     }
   }
 
+  Future<void> _pickPackage() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.any,
+      dialogTitle: context.l10n.scanPickPackageTitle,
+    );
+    if (result?.files.single.path != null) {
+      setState(() => _packageCtrl.text = result!.files.single.path!);
+    }
+  }
+
   void _analyze() {
+    if (_sourceKind == ScanSourceKind.package) {
+      _analyzePackage();
+      return;
+    }
     final useImage = _sourceKind == ScanSourceKind.image;
     final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
     if (target.isEmpty) {
@@ -360,6 +378,57 @@ class _OsvPanelState extends State<OsvPanel>
     final targetLabel = useImage
         ? 'image « $target »'
         : 'SBOM ${target.split(RegExp(r'[/\\]')).last}';
+    _launch(target, useImage, targetLabel);
+  }
+
+  /// Analyse d'un paquet/archive local : génère d'abord son SBOM (avec la
+  /// profondeur choisie, voir [PackageScanService]) puis le scanne comme un
+  /// fichier SBOM.
+  Future<void> _analyzePackage() async {
+    final l10n = context.l10n;
+    final pkg = _packageCtrl.text.trim();
+    if (pkg.isEmpty) {
+      setState(() => _error = l10n.scanSourceMissingPackage);
+      return;
+    }
+    if (!File(pkg).existsSync()) {
+      setState(() => _error = l10n.commonFileNotFound(pkg));
+      return;
+    }
+    final depth = _packageDepth;
+    final name = pkg.split(RegExp(r'[/\\]')).last;
+    final label = depth == '0'
+        ? 'paquet « $name »'
+        : 'paquet « $name » (profondeur $depth)';
+    setState(() {
+      _isRunning = true;
+      _vulns = [];
+      _jsonOutput = '';
+      _error = null;
+      _parseFailed = false;
+      _exitCode = null;
+      _layerScan = null;
+      _status = l10n.scanPackagePreparing;
+    });
+    final String sbom;
+    try {
+      sbom = await PackageScanService.prepare(pkg, depth);
+    } catch (e) {
+      // Arrêt demandé pendant la génération : rien à afficher.
+      if (!mounted || !_isRunning) return;
+      setState(() {
+        _isRunning = false;
+        _status = null;
+        _exitCode = 1;
+        _error = l10n.scanPackageFailed('$e');
+      });
+      return;
+    }
+    if (!mounted || !_isRunning) return;
+    _launch(sbom, false, label);
+  }
+
+  void _launch(String target, bool useImage, String targetLabel) {
     widget.onScanTargetChanged?.call(targetLabel);
 
     setState(() {
@@ -436,8 +505,26 @@ class _OsvPanelState extends State<OsvPanel>
 
   /// Commandes du popup « CLI Commande » pour le paramétrage courant.
   List<CliCommandSection> _cliSections() {
+    if (_sourceKind != ScanSourceKind.package) return _scanCliSections();
+    final raw = _packageCtrl.text.trim();
+    final pkg = raw.isNotEmpty ? raw : '<paquet>';
+    final l10n = context.l10n;
+    return [
+      CliCommandSection(
+        l10n.cliCommandPackagePrepare,
+        shellCommand(SettingsService.cliBinary,
+            PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom)),
+        note: l10n.cliCommandPackageNote,
+      ),
+      ..._scanCliSections(sbomTarget: cliPackageSbom, packageTarget: pkg),
+    ];
+  }
+
+  List<CliCommandSection> _scanCliSections(
+      {String? sbomTarget, String? packageTarget}) {
     final useImage = _sourceKind == ScanSourceKind.image;
-    final raw = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    final raw = sbomTarget ??
+        (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
     final target =
         raw.isNotEmpty ? raw : (useImage ? '<image.tar>' : '<sbom.cdx.json>');
     final config =
@@ -470,8 +557,10 @@ class _OsvPanelState extends State<OsvPanel>
           SettingsService.cliBinary,
           sbomGeneratorScanArgs(
             scanner: 'osv',
-            target: target,
+            target: packageTarget ?? target,
             useImage: useImage,
+            usePackage: packageTarget != null,
+            packageDepth: _packageDepth,
             layers: _layerSettings,
             dateFilter: widget.dateFilter,
             enrichOnline: _enrichOnline,
@@ -562,6 +651,7 @@ class _OsvPanelState extends State<OsvPanel>
   void _stop() {
     _layeredCancelled = true;
     LayerScanService.kill();
+    PackageScanService.kill();
     _runner.kill();
     setState(() => _isRunning = false);
   }
@@ -577,6 +667,10 @@ class _OsvPanelState extends State<OsvPanel>
           fileCtrl: _fileCtrl,
           imageCtrl: _imageCtrl,
           sourceKind: _sourceKind,
+          packageCtrl: _packageCtrl,
+          packageDepth: _packageDepth,
+          onPackageDepthChanged: (d) => setState(() => _packageDepth = d),
+          onPickPackage: _pickPackage,
           onSourceKindChanged: (k) => setState(() => _sourceKind = k),
           layerSettings: _layerSettings,
           onLayerSettingsChanged: (v) => setState(() => _layerSettings = v),
@@ -693,6 +787,10 @@ class _ConfigSection extends StatelessWidget {
   final TextEditingController fileCtrl;
   final TextEditingController imageCtrl;
   final ScanSourceKind sourceKind;
+  final TextEditingController packageCtrl;
+  final String packageDepth;
+  final ValueChanged<String> onPackageDepthChanged;
+  final VoidCallback onPickPackage;
   final ValueChanged<ScanSourceKind> onSourceKindChanged;
   final LayerScanSettings layerSettings;
   final ValueChanged<LayerScanSettings> onLayerSettingsChanged;
@@ -712,6 +810,10 @@ class _ConfigSection extends StatelessWidget {
     required this.fileCtrl,
     required this.imageCtrl,
     required this.sourceKind,
+    required this.packageCtrl,
+    required this.packageDepth,
+    required this.onPackageDepthChanged,
+    required this.onPickPackage,
     required this.onSourceKindChanged,
     required this.layerSettings,
     required this.onLayerSettingsChanged,
@@ -780,6 +882,14 @@ class _ConfigSection extends StatelessWidget {
                   onPickAll: onPickSbomAll,
                 ),
               ],
+            )
+          else if (sourceKind == ScanSourceKind.package)
+            PackageSourceField(
+              controller: packageCtrl,
+              enabled: !isRunning,
+              depth: packageDepth,
+              onDepthChanged: onPackageDepthChanged,
+              onPick: onPickPackage,
             )
           else ...[
             ImageRefField(

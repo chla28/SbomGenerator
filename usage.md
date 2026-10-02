@@ -76,6 +76,7 @@ sbom_generator licenses -i <sbom-source> -o <licences.adoc> [-f asciidoc|markdow
 sbom_generator validate <sbom1> [<sbom2> ...]
 sbom_generator scan --sbom <fichier> [options]
 sbom_generator scan --image <image> [--per-layer] [options]
+sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <fichier> [options]
 ```
 
@@ -87,6 +88,8 @@ sbom_generator cra --sbom <fichier> [options]
 | `--image <référence>` | `-I` | *(requis si pas de `--input`)* | Image OCI à analyser : `nginx:latest`, `/path/image.tar`, `/path/image.tar.gz`, `/path/image.tgz`, `/path/oci_dir/` |
 | `--binary <fichier>` | `-b` | — | Binaire local à analyser directement (ex. exécutable Go lié statiquement) ; force `--oci-tool syft` |
 | `--oci-tool <outil>` | — | `syft` | Backend d'analyse OCI : `syft` (défaut), `trivy`, `skopeo` |
+| `--depth <N\|all>` | — | `0` | Profondeur de descente dans les objets imbriqués de `--input` (jars d'un RPM, paquets d'une archive…) : `0` = l'objet seul, `N` niveaux, `all` = sans limite (plafonné à 10) — voir [Descente dans les objets imbriqués](#descente-dans-les-objets-imbriqués---depth) |
+| `--no-nested-files` | — | — | Avec `--depth` : ne pas écrire un SBOM par objet imbriqué (SBOM fusionné seulement) |
 | `--per-layer` | — | — | Avec `--image` : un SBOM par couche de l'image en plus du global (`<base>.layer-NN-<digest12>.<ext>`, delta de la couche) — voir [SBOM par couche](#un-sbom-par-couche-de-limage---per-layer) |
 | `--layer-mode <mode>` | — | `metadata` | Méthode de `--per-layer` : `metadata` (couche d'origine indiquée par syft/trivy) ou `rootfs` (réanalyse après chaque couche ; forcé pour `skopeo` et `cdxgen`) |
 | `--output <fichier>` | `-o` | `sbom.json` | Fichier SBOM de sortie (chemin de base si multi-format) |
@@ -357,6 +360,64 @@ Portée réelle :
   pas** être retrouvée après coup — il faudrait tracer les dépendances au
   moment du build.
 
+### Descente dans les objets imbriqués (`--depth`)
+
+Sans `--depth`, seul l'objet désigné par `--input` est décrit (un RPM → un
+composant). Avec `--depth`, l'outil en extrait ce qui est analysable et le
+décrit à son tour :
+
+```bash
+# Un RPM et les jars qu'il contient
+./sbom_generator -i app-1.0-1.x86_64.rpm --depth 1 -o out/app.cdx.json
+# → out/app.cdx.json                      SBOM fusionné (RPM + jars)
+#   out/app.nested-01-foo-1.2.3.jar.cdx.json   un SBOM par objet imbriqué
+#   out/app.nested-02-bar-2.0.jar.cdx.json …
+
+# Archive : tous les niveaux, SBOM fusionné seulement
+./sbom_generator -i release.tar.gz --depth all --no-nested-files -o out/release.cdx.json
+
+# Dossier : chaque archive/paquet trouvé est exploré
+./sbom_generator -i ./livrables --depth 2 -f cyclonedx,csv -o out/livrables
+```
+
+| Profondeur | Contenu |
+|---|---|
+| `0` *(défaut)* | l'objet seul (comportement historique) |
+| `N` | N niveaux : 1 = objets directs de l'entrée, 2 = ce que ceux-ci contiennent… |
+| `all` | tous les niveaux, plafonnés à 10 (garde-fou contre les archives auto-référentes) |
+
+Objets traversés : **rpm**, **deb**, **tar/tgz/tar.gz**, **zip**, **jar/war/ear**
+(fat jars : `BOOT-INF/lib`, `WEB-INF/lib`…), **wheel**, et les manifestes
+`requirements.txt`, `package-lock.json`, `yarn.lock`, `go.sum`, `go.mod`,
+`pom.xml`, `pubspec.lock`/`pubspec.yaml` (hors `META-INF/`). Les paquets, jars
+et archives sont analysés par leur parseur habituel puis la descente continue ;
+les manifestes ne sont pas explorés plus avant. L'extraction (script Python
+embarqué, `python3` requis ; ni `rpm2cpio` ni `cpio` ni `dpkg-deb`) ne retient
+que les fichiers analysables et est bornée : 4 Gio décompressés, 2 Gio par
+fichier, 50 000 fichiers par archive ; chemins absolus, `..` et liens sont
+ignorés. Une limite atteinte est signalée et tronque l'extraction de cette
+archive. L'analyse d'un `.rpm` imbriqué nécessite `rpm`, celle d'un `.deb`
+`dpkg-deb` (comme pour une entrée directe).
+
+Le **SBOM fusionné** contient l'objet racine et tous les composants trouvés,
+dédupliqués par `bom-ref` :
+
+- chaque composant imbriqué porte `sbom_generator:nested:location` (chemin
+  logique `app.rpm!/usr/share/java/foo.jar!/BOOT-INF/lib/baz.jar`, jamais un
+  chemin temporaire) et `sbom_generator:nested:depth` (propriétés CycloneDX ;
+  même contenu en annotation SPDX 2.3 / 3.0 et dans le champ `nested` du JSON
+  personnalisé) ;
+- le graphe de dépendances contient les arêtes de contenance : composant du
+  conteneur → composant de l'objet imbriqué → dépendances relocalisées
+  d'un uber-jar ; un manifeste est rattaché directement à son conteneur.
+
+Un **SBOM par objet imbriqué** (jar, paquet, archive, manifeste) est écrit
+dans chaque format demandé, à côté de `-o` : `<base>.nested-NN-<objet>.<ext>`
+(numérotation dans l'ordre de découverte, nom de l'objet assaini). Le
+fusionné est écrit en premier. `--no-nested-files` ne garde que le fusionné.
+`--depth` exige `--input` ; il ne s'applique pas aux images (voir
+`--per-layer`).
+
 ### Un SBOM par couche de l'image (`--per-layer`)
 
 ```bash
@@ -619,6 +680,29 @@ avec `--sort risk`. L'absence d'un scanner demandé est signalée sans faire
 échouer les autres. Codes de retour (`text` / `sarif`) : `0` = aucune
 vulnérabilité dans la plage demandée, `1` = au moins une trouvée (ou erreur
 de scanner) ; les formats rapport renvoient `0` dès qu'un fichier est écrit.
+
+**Paquet ou archive scanné directement (`--package`, `--depth`)** : génère le
+SBOM d'un fichier local (rpm, deb, tar/tgz, zip, jar/war/ear, wheel) — avec
+descente dans les objets imbriqués — puis le soumet aux scanners, dans un
+répertoire temporaire supprimé en fin d'exécution (même mécanisme que
+`--image`). Exclusif de `--sbom` et `--image`.
+
+```bash
+# Un RPM et les jars qu'il contient (2 niveaux), les trois scanners
+./sbom_generator scan --package app-1.0-1.x86_64.rpm --depth 2 --scanner all
+
+# Une archive : tous les niveaux, rapport PDF
+./sbom_generator scan --package release.tar.gz --depth all --scanner all \
+  -f pdf -o release-cve.pdf
+```
+
+Les trois scanners reçoivent le même SBOM CycloneDX, donc les mêmes
+composants. Chaque CVE est rattachée à l'objet qui contient le paquet
+vulnérable : colonne `OBJET` de la sortie texte (chemin logique
+`app.rpm!/…/foo.jar`, ou le nom du fichier pour un composant de premier
+niveau) et clé `container` interne ; l'attribution fonctionne aussi avec
+`--sbom` sur un SBOM produit par `--depth`. Les rapports
+markdown/asciidoc/pdf et le SARIF ne portent pas cette colonne.
 
 **Vulnérabilités par couche d'image (`--per-layer`)** : rattache chaque CVE
 à la couche de l'image qui apporte le paquet vulnérable.

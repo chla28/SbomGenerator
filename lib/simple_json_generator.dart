@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'image_layers.dart';
+import 'nested_archive.dart';
 import 'models.dart';
 
 /// Generates a human-friendly, custom JSON SBOM.
@@ -52,6 +53,8 @@ class SimpleJsonGenerator {
 
       final layerFields = layers?.componentFields(pkg) ?? const {};
       if (layerFields.isNotEmpty) base['layer'] = layerFields;
+      final nested = nestedFields(pkg);
+      if (nested.isNotEmpty) base['nested'] = nested;
 
       return base;
     }).toList();
