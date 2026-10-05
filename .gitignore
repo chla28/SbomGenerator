@@ -5,6 +5,7 @@ dist/
 build/
 .dart_tool/
 tmp/
+Specifications/
 
 # Fixture d'intégration téléchargée localement (~450 Mo) pour
 # test/integration/oci_skopeo_test.dart — jamais commitée.
