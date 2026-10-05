@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-05
+
 ### Added
 - **Copies d'écran de la GUI dans les README** (`doc/screenshots/`, français et anglais), générées par `gui/test/screenshot_test.dart` ; sections « Interface graphique » des README.
 
