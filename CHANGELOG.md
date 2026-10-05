@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Packaging** : la licence du paquet RPM est `LGPL-3.0-only` (elle indiquait `MIT`), `LICENSE` et `COPYING` sont livrés dans l'archive et les RPM (`%license`) ; descriptions du RPM et de `pubspec.yaml` mises à jour ; suppression du fichier de test visuel jetable `gui/test/_visual_check_vuln_table.dart`.
+
 ## [1.6.3] - 2026-10-05
 
 ### Added

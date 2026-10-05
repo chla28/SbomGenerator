@@ -1,8 +1,8 @@
 Name:           sbom-generator
 Version:        %{version}
 Release:        1%{?dist}
-Summary:        Générateur de SBOM (CycloneDX / SPDX) depuis des listes de paquets
-License:        MIT
+Summary:        Générateur de SBOM (CycloneDX / SPDX) depuis des paquets, archives, images et binaires
+License:        LGPL-3.0-only
 Source0:        sbom_generator-%{version}-linux-%{_arch}.tar.gz
 BuildArch:      %{_arch}
 ExclusiveArch:  x86_64 aarch64
@@ -14,7 +14,10 @@ ExclusiveArch:  x86_64 aarch64
 
 %description
 Génère des Software Bill of Materials (SBOM) aux formats CycloneDX et SPDX 2.3/3.0
-depuis des listes de paquets RPM, Python, DEB ou archives tar.
+(ainsi que JSON, Markdown, AsciiDoc, HTML et CSV) depuis des paquets RPM, DEB,
+Python, Java, Go, npm, Maven ou Dart, des archives, des images de conteneur ou
+des binaires. Compare, fusionne, convertit et valide des SBOM, recherche leurs
+vulnérabilités connues et produit un rapport de conformité CRA.
 Le binaire CLI est autonome (pas de runtime Dart requis).
 
 # ── Sous-package GUI ─────────────────────────────────────────────────────────
@@ -73,9 +76,11 @@ install -Dm644 gui/sbom_generator.desktop \
 # ── Listes de fichiers ───────────────────────────────────────────────────────
 
 %files
+%license LICENSE COPYING
 %{_bindir}/sbom-generator
 
 %files gui
+%license LICENSE COPYING
 %{_bindir}/sbom-generator-gui
 %{_libdir}/sbom_generator/
 %{_datadir}/icons/hicolor/scalable/apps/sbom_generator.svg

@@ -188,6 +188,10 @@ cp "${SCRIPT_DIR}/uninstall.sh" "${DIST_DIR}/"
 chmod +x "${DIST_DIR}/install.sh" "${DIST_DIR}/uninstall.sh"
 echo "  ✓ install.sh / uninstall.sh"
 
+# Licence (LGPL v3 + texte de la GPL v3 qu'elle incorpore)
+cp "${PROJECT_DIR}/LICENSE" "${PROJECT_DIR}/COPYING" "${DIST_DIR}/"
+echo "  ✓ LICENSE / COPYING"
+
 # SBOM (CycloneDX) : dépendances runtime distro du GUI, alignées sur les
 # `Requires` du sous-paquet gui dans sbom_generator.spec (branche moderne
 # gtk4/libsecret — Fedora 44, RHEL 9/10, les seules cibles couvertes par
