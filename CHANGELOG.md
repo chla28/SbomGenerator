@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-05
+
+### Added
+- **Licence LGPL v3** (`LGPL-3.0-only`) : `LICENSE` (LGPL) et `COPYING` (GPL) ; sections *Licence* des README ; ajout de `SECURITY.md`. Retrait des fichiers de travail (`dialogue.txt`, `prompt.txt`, `licences.adoc`) et des deux wheels tierces de `example/3PP/python3`.
+
 ## [1.6.1] - 2026-10-05
 
 ### Added
@@ -30,7 +35,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `README.en.md`, `doc/usage.en.adoc`, `doc/developer.en.adoc`,
   `gui/doc/user.en.adoc`, `gui/doc/developer.en.adoc`, `gui/README.en.md`,
   `CHANGELOG.en.md`.
-- **Licence LGPL v3** (`LGPL-3.0-only`) : `LICENSE` (LGPL) et `COPYING` (GPL) ; sections *Licence* des README ; ajout de `SECURITY.md`. Retrait des fichiers de travail (`dialogue.txt`, `prompt.txt`, `licences.adoc`) et des deux wheels tierces de `example/3PP/python3`.
 
 ### Changed
 - **Rapport JSON de `cra`** : la table `ntiaMinimumElements` est désormais
