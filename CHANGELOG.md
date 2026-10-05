@@ -4,7 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+🇫🇷 **Français** · 🇬🇧 [English](CHANGELOG.en.md)
+
 ## [Unreleased]
+
+### Added
+- **Projet bilingue FR / EN.** Les messages du CLI, l'aide `--help` et les
+  rapports lisibles (synthèse `scan` Markdown/AsciiDoc/PDF, rapport `cra`,
+  rapport `licenses`, tableaux HTML/Markdown/AsciiDoc) existent en français et
+  en anglais. Langue choisie par `--lang fr|en` (accepté partout, sous-commandes
+  comprises), puis la variable `SBOM_LANG`, puis `LC_ALL` / `LC_MESSAGES` /
+  `LANG` ; français par défaut (`lib/i18n.dart`, `tr(fr, en)`). Jamais
+  traduits : le contenu des SBOM (noms et valeurs de propriétés, descriptions de
+  couches), les clés JSON, les identifiants SARIF et la ligne
+  `SBOM written → …` lue par la GUI. La GUI transmet sa propre langue au CLI
+  qu'elle lance (`SBOM_LANG`).
+- **GUI entièrement localisée (français / anglais)** : tous les écrans,
+  les rapports exportés (AsciiDoc/PDF/CSV côté GUI), les messages de service et
+  l'aide en ligne (`assets/help/manual_en/`, générée depuis
+  `gui/doc/user.en.adoc` par `tool/generate_help.dart`) suivent le réglage
+  *Langue de l'interface* ; le manuel s'ouvre dans la langue effective.
+- Documentation en anglais, tenue à jour en parallèle du français :
+  `README.en.md`, `doc/usage.en.adoc`, `doc/developer.en.adoc`,
+  `gui/doc/user.en.adoc`, `gui/doc/developer.en.adoc`, `gui/README.en.md`,
+  `CHANGELOG.en.md`.
+
+### Changed
+- **Rapport JSON de `cra`** : la table `ntiaMinimumElements` est désormais
+  indexée par des identifiants stables (`supplierName`, `componentName`,
+  `componentVersion`, `otherUniqueIdentifiers`, `dependencyRelationship`,
+  `sbomAuthor`, `timestamp`) au lieu de libellés français, et chaque entrée de
+  `fieldChecks[]` gagne un `id` stable (`name`, `version`, `supplier`,
+  `identifier`, `hash`, `license`) à côté du libellé `field` (désormais
+  traduit).
+- Messages du CLI qui mêlaient français et anglais (avertissements des
+  parseurs, erreurs) harmonisés : chaque message existe dans les deux langues.
+- Documentation : l'AsciiDoc (`doc/usage.adoc`, `doc/developer.adoc`) est la
+  seule référence ; les doublons `usage.md` et `develop.md` sont supprimés.
 
 ## [1.6.0] - 2026-10-02
 

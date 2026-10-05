@@ -1,0 +1,4213 @@
+= sbom_generator — Developer documentation
+:toc: left
+:toc-title: Contents
+:toclevels: 3
+:sectnums:
+:icons: font
+:source-highlighter: rouge
+:rouge-style: monokai
+:docdate: 2026-06-30
+:lang: en
+
+🇫🇷 link:developer.adoc[Français] · 🇬🇧 *English*
+
+This document explains the internal workings of the code for a quick start.
+
+== General architecture
+
+The program follows a concurrent pipeline:
+
+....
+Input file (.txt)                 OCI image (--image)
+        │                                  │
+        ├─ .txt lines ──► RequirementsParser (pure Dart, pre-expansion)
+        ├─ go.sum/go.mod ─► GoParser        (pure Dart, pre-expansion)
+        ├─ package-lock  ─► NpmParser       (pure Dart, pre-expansion)
+        ├─ yarn.lock     ─► YarnParser      (pure Dart, pre-expansion)
+        ├─ pom.xml       ─► MavenParser     (pure Dart, pre-expansion)
+        ├─ pubspec.lock  ─► PubspecParser   (pure Dart, pre-expansion)
+        ├─ pubspec.yaml  ─► PubspecParser   (pure Dart, pre-expansion)
+        │                                  │
+        ▼                                  ▼
+┌────────────────────────────────────────────────────────────┐
+│  bin/sbom_generator.dart                                   │
+│  (main + _Semaphore + _printProgress)                      │
+│  1. CLI reading + validation (--input and/or --image)      │
+│  2. Manifest pre-expansion (requirements, go, npm…)        │
+│  3. OCI analysis if --image (syft/trivy/skopeo/cdxgen)     │
+│     + --per-layer: per-layer delta (image_layers.dart)     │
+│  4. Type detection by extension                            │
+│  5. Concurrent dispatch (--concurrency N)                  │
+│  6. Deduplication by bomRef                                │
+│  7. Subcommands: diff, merge, convert, validate            │
+└──┬──────┬──────┬──────┬──────┬──────────────────┬──────────┘
+   │      │      │      │      │                  │
+   ▼      ▼      ▼      ▼      ▼                  ▼
+  Rpm   Wheel   Tar   Zip   Deb                 Oci
+Parser Parser Parser Parser Parser             Parser
+               └──┬───┘
+                  ▼
+          archive_helpers.dart
+    (parseArchiveFilename, identifyArchiveLicense)
+
+              │  List<Package>  (RpmPackage | WheelPackage | DebPackage | OciPackage)
+              ▼
+   RpmParser.buildDependencies()
+              │  List<PackageDependency>
+              ▼
+       LicenseNormalizer ◄─── imported by all generators
+              │
+              ▼
+   PolicyChecker ◄── --deny-license, --min-quality-score
+   SbomDiffer  ◄── diff subcommand
+   SbomMerger  ◄── merge subcommand
+   SbomReader  ◄── convert subcommand (source SBOM → List<Package>)
+   LicenseReportGenerator ◄── licenses subcommand (AsciiDoc/Markdown/HTML/CSV/JSON report)
+              │
+              ▼
+┌─────────────────────────────────────────────┐
+│  cyclonedx_generator.dart                   │
+│  spdx_generator.dart              (chosen   │
+│  spdx3_generator.dart              by -f)   │
+│  simple_json_generator.dart                 │
+│  markdown_generator.dart                    │
+│  asciidoc_generator.dart                    │
+│  html_generator.dart                        │
+│  csv_generator.dart                         │
+└─────────────────────────────────────────────┘
+              │
+              ▼
+   SBOM file (.json / .jsonld / .md / .adoc / .html / .csv)
+....
+
+All generators work on `List<Package>` — the abstract class common
+to `RpmPackage`, `WheelPackage`, `DebPackage` and `OciPackage`.
+`WheelPackage` is also reused for Go, npm, yarn, Maven and
+Dart/Flutter (`packageType='pub'`) via the `packageType` field.
+
+[[sec-i18n]]
+== `lib/i18n.dart` — FR / EN localisation of messages
+
+Every text meant for a human (console messages, `--help`, errors, readable
+reports) exists in French and English. There is no key catalog: each message
+is written inline with its two versions, as close as possible to where it is
+used.
+
+[source,dart]
+----
+import 'i18n.dart';
+
+stderr.writeln(tr('Fichier introuvable : $path', 'File not found: $path'));
+----
+
+[cols="1,3", options="header"]
+|===
+|Member |Role
+
+|`enum Lang { fr, en }`
+|Supported languages.
+
+|`currentLang` (getter/setter)
+|Current language of messages (French by default). Set once at startup by
+`initLang`; unit tests set it directly.
+
+|`tr(fr, en)`
+|Returns one or the other text according to `currentLang`.
+
+|`plural(n, frOne, frMany, enOne, enMany)`
+|Simple plural (in French 0 and 1 are singular, in English only 1 is).
+
+|`langFromLocale(code)`
+|`fr_FR.UTF-8` → `Lang.fr`, `en_US` → `Lang.en`, `C` / `POSIX` / unknown → `null`.
+
+|`stripLangArg(args, onValue)`
+|Removes `--lang <v>` / `--lang=<v>` from an argument list, wherever it is.
+
+|`initLang(args, {env})`
+|Priority `--lang` > `SBOM_LANG` > `LC_ALL` > `LC_MESSAGES` > `LANG` > French.
+Returns the arguments without `--lang`. An invalid value stops the program
+(exit code 1).
+|===
+
+`main()` calls `initLang` first, *before* the subcommand dispatch, so that
+`--lang` works anywhere (`sbom_generator scan --lang en …`); the `--lang`
+option is also declared in the `ArgParser` of the main command, but only to
+appear in `--help` (the real parsing is done by `initLang`).
+
+Rules for adding or changing a message:
+
+* write the French and English text together (`tr('…', '…')`), keeping
+  interpolations identical (`$path`, `${x.length}`); no concatenation of
+  translated fragments — one `tr()` per complete sentence;
+* *never translate* a text read by a program: the `SBOM written → …` line (parsed by
+  the GUI, `sbom_runner.dart`), property names and values (`sbom_generator:*`),
+  JSON keys, SARIF identifiers, and texts embedded in SBOMs that the GUI parses
+  (layer description, see `gui/lib/models/layer_nav.dart`). The CRA JSON
+  report is keyed by stable identifiers (`id`), whereas the labels (`field`,
+  verdict, blockers) are translated;
+* integration tests that run the CLI and check a message pass `--lang fr`
+  (`'bin/sbom_generator.dart', '--lang', 'fr', …`) so as not to depend on the
+  locale of the machine; unit tests set `currentLang` and restore it in
+  `tearDown` (`test/unit/i18n_test.dart`, `test/unit/i18n_reports_test.dart`).
+
+[[sec-models]]
+== `lib/models.dart` — Type hierarchy
+
+=== Abstract class `Package`
+
+Interface common to all package types. All generators and
+`buildDependencies` work exclusively with this interface.
+
+[source,dart]
+----
+abstract class Package {
+  // Common fields
+  String get name;
+  String get version;
+  String get license;
+  String get url;
+  String get summary;
+  String get vendor;
+  String get arch;
+  String get sourceRef;
+  List<PackageHash> get hashes;   // artifact hashes (often empty)
+  List<String> get requires;
+  List<String> get provides;
+
+  // Computed identifiers
+  String get fullVersion;   // displayable version
+  String get purl;          // Package URL (purl-spec)
+  String get bomRef;        // unique CycloneDX identifier
+  String get spdxId;        // SPDX identifier (SPDXRef-…)
+  String get packageType;   // 'rpm' | 'pypi' | 'source' | 'deb'
+}
+----
+
+The library utility function `_safeId(String s)` replaces any
+character outside `[a-zA-Z0-9._-]` with `-`. It is used in the
+`bomRef` and `spdxId` implementations of all package types.
+
+=== Cryptographic hashes — `PackageHash` and `lib/hash_utils.dart`
+
+`PackageHash(alg, content)`: `alg` in CycloneDX format (`SHA-256`,
+`SHA-512`, `SHA-1`, `MD5`, `SHA3-256`…), `content` lowercase hexadecimal.
+`lib/hash_utils.dart` centralises the collection and accepts **only the
+hexadecimal digest of a real artifact** (right length for the algorithm):
+
+* `normalizeHashAlg` / `packageHash` — algorithm whitelist,
+  hex validation; rejects `h1`, `Q1…`, `sha224`, truncated values;
+* `packageHashFromDigestString` — `"<algo>:<hex>"` (Trivy's `Digest` field);
+* `packageHashFromSri` — Subresource Integrity `"sha512-<base64>"`
+  (npm/yarn) → hexadecimal;
+* `hashesFromSyftMetadata` — `metadata.archiveDigests` / `digests` / `digest`
+  of a Syft artifact;
+* `hashesFromCycloneDx` — `hashes` array of a cdxgen component;
+* `hashLocalFile` — SHA-256 + SHA-512 of a local file (`package:crypto`);
+* `spdx2Alg` / `spdx3Alg` — conversion of the labels to `SHA256` /
+  `sha256` / `sha3_256`.
+
+Populated by: `npm_parser`, `yarn_parser` (v1), `pubspec_parser`,
+`deb_parser` / `jar_parser` / `wheel_parser` (direct file input),
+`rpm_parser` (`.rpm` file → SHA-256/512; installed package → `%{SIGMD5}`
+as `MD5`), `oci_parser` (Syft, Trivy, cdxgen paths). `RpmPackage` also carries
+`headerSha256` (`%{SHA256HEADER}` — hash of the RPM *header*, not of the
+`.rpm` file), emitted as the `rpm:header-sha256` property/annotation.
+
+Emitted by the three generators (CycloneDX `hashes`, SPDX 2.3 `checksums`,
+SPDX 3.0 `verifiedUsing`) and re-read by `sbom_reader` during a `convert`.
+
+NOTE: For an SBOM coming from an *OCI image*, most system packages
+remain without a hash (installed in the image, no artifact to hash;
+neither Syft nor Trivy systematically reconstructs the `Digest`). The
+"RPM list" path queries `%{SIGMD5}` directly and therefore covers all
+installed packages.
+
+=== Class `OsInfo` (outside the `Package` hierarchy)
+
+[source,dart]
+----
+class OsInfo {
+  final String id;          // e.g. 'redhat', 'debian', 'alpine'
+  final String version;     // e.g. '9.6', '13.5'
+  final String? prettyName; // e.g. 'Red Hat Enterprise Linux 9.6 (Plow)'
+  final String? cpe;
+}
+----
+
+Base OS of a container image, extracted by `OciParser.parseImage()`
+(see <<sec-oci-parser>>) when `--image` uses the syft or trivy backend.
+Used to generate a dedicated component in CycloneDX/SPDX SBOMs — see
+<<sec-osinfo-oci-parser>>.
+
+=== `RpmPackage extends Package`
+
+Represents an RPM package after querying. Additional (RPM-specific) fields:
+
+[cols="1,2,2", options="header"]
+|===
+|Field |RPM source |Example
+
+|`release`
+|`%{RELEASE}`
+|`6.el9`
+
+|`epoch`
+|`%{EPOCH}`
+|`1` or `(none)`
+
+|`buildTime`
+|`%{BUILDTIME}`
+|Unix timestamp
+
+|`sourceRpm`
+|`%{SOURCERPM}`
+|`bash-5.1.8-6.el9.src.rpm`
+|===
+
+Computed identifiers:
+
+[cols="1,2", options="header"]
+|===
+|Getter |Example
+
+|`fullVersion`
+|`5.1.8-6.el9` or `1:5.1.8-6.el9` (epoch if non-zero)
+
+|`purl`
+|`pkg:rpm/bash@5.1.8-6.el9?arch=x86_64`
+
+|`bomRef`
+|`pkg-bash-5.1.8-6.el9-x86_64`
+
+|`spdxId`
+|`SPDXRef-bash-5.1.8-6.el9`
+
+|`packageType`
+|`'rpm'`
+|===
+
+[WARNING]
+====
+The `bomRef` includes version AND release. Two `.rpm` files of the same package
+from different repositories produce the same `bomRef`. The deduplication
+in `main()` handles this case.
+====
+
+=== `WheelPackage extends Package`
+
+Represents a Python package (wheel) or a source archive.
+The behaviour depends on `packageType`:
+
+[cols="1,1,1,1,1", options="header"]
+|===
+|`packageType` |Source |PURL |bomRef prefix |spdxId prefix
+
+|`'pypi'`
+|`.whl` wheel or Python sdist (PKG-INFO present)
+|`pkg:pypi/<name>@<ver>`
+|`pkg-pypi-`
+|`SPDXRef-pypi-`
+
+|`'source'`
+|generic archive without Python metadata
+|`pkg:generic/<name>@<ver>`
+|`pkg-src-`
+|`SPDXRef-src-`
+
+|`'golang'`
+|`go.sum` or `go.mod` (via `GoParser`)
+|`pkg:golang/<module-path>@<ver>` (slashes not encoded)
+|`pkg-golang-`
+|`SPDXRef-golang-`
+
+|`'npm'`
+|`package-lock.json` or `yarn.lock` (via `NpmParser` / `YarnParser`)
+|`pkg:npm/<name>@<ver>`
+|`pkg-npm-`
+|`SPDXRef-npm-`
+
+|`'maven'`
+|`pom.xml` (via `MavenParser`) — name = `groupId:artifactId`
+|`pkg:maven/<groupId>/<artifactId>@<ver>`
+|`pkg-maven-`
+|`SPDXRef-maven-`
+
+|`'pub'`
+|`pubspec.lock` or `pubspec.yaml` (via `PubspecParser`)
+|`pkg:pub/<name>@<ver>`
+|`pkg-pub-`
+|`SPDXRef-pub-`
+
+|`'cargo'`
+|OCI / Rust lockfiles
+|`pkg:cargo/<name>@<ver>`
+|`pkg-src-`
+|`SPDXRef-src-`
+|===
+
+The Python name is normalised according to PEP 503 in the PURL (`_normalizePyName`:
+lowercase, `[-_.]+ → -`).
+
+[NOTE]
+====
+Go module paths contain `/` characters that *must not* be
+encoded as `%2F` in a PURL (Go PURL spec). The `purl` getter of `WheelPackage`
+handles this case specially: `pkg:golang/$gn@$v` (without `Uri.encodeComponent`).
+====
+
+The `arch` field contains the wheel's platform tag (e.g. `any`, `linux_x86_64`)
+or the architecture detected from the file name for generic archives.
+
+=== `DebPackage extends Package`
+
+Represents a Debian package extracted by `dpkg-deb -f`. Additional fields:
+
+[cols="1,2,2", options="header"]
+|===
+|Field |Control source |Example
+
+|`arch`
+|`Architecture`
+|`amd64`
+
+|`vendor`
+|`Maintainer`
+|`Ubuntu Developers`
+
+|`url`
+|`Homepage`
+|`https://…`
+
+|`summary`
+|first line of `Description`
+|`OpenSSL shared library`
+
+|`requires`
+|`Depends` + `Pre-Depends` (comma/pipe split, constraints removed)
+|`["libc6", "libssl3"]`
+
+|`provides`
+|`Provides`
+|`["libssl3"]`
+|===
+
+Computed identifiers:
+
+[cols="1,2", options="header"]
+|===
+|Getter |Example
+
+|`purl`
+|`pkg:deb/libssl3@3.0.1?arch=amd64`
+
+|`bomRef`
+|`pkg-deb-libssl3-3.0.1-amd64`
+
+|`spdxId`
+|`SPDXRef-deb-libssl3-3.0.1`
+
+|`packageType`
+|`'deb'`
+|===
+
+=== `OciPackage extends Package`
+
+Represents a package extracted from an OCI image by `OciParser`.
+The `packageType` field reflects the ecosystem detected by the analysis tool:
+
+[cols="1,2", options="header"]
+|===
+|`packageType` |Ecosystem
+
+|`'rpm'`
+|RPM package (Red Hat / Fedora image)
+
+|`'deb'`
+|Debian package (Ubuntu / Debian image)
+
+|`'apk'`
+|APK package (Alpine image)
+
+|`'pypi'`
+|Python package
+
+|`'npm'`
+|Node.js package
+
+|`'go'`
+|Go module
+
+|`'java'`
+|Java archive (JAR/Maven)
+
+|`'nuget'`
+|.NET package
+
+|`'cargo'`
+|Rust crate
+
+|`'generic'`
+|Any other type
+|===
+
+Additional `purlOverride` field: PURL provided directly by the analysis tool
+(syft/trivy); if non-empty, used as-is without reconstruction.
+
+Computed identifiers:
+
+[cols="1,2", options="header"]
+|===
+|Getter |Example
+
+|`purl`
+|`purlOverride` if non-empty, otherwise built according to `packageType`
+(`pkg:rpm/<name>@<ver>?arch=<arch>`, `pkg:apk/alpine/<name>@<ver>`, etc.)
+
+|`bomRef`
+|`pkg-oci-<type>-<name>-<version>`
+
+|`spdxId`
+|`SPDXRef-oci-<name>-<version>`
+
+|`fullVersion`
+|raw `version` (no release nor epoch)
+|===
+
+The `imageRef` field keeps the original OCI reference (registry, tar path,
+or layout directory) for traceability.
+
+=== `PackageDependency`
+
+Simple structure linking a source `bomRef` to the list of target `bomRef`s it
+depends on.
+
+[source,dart]
+----
+class PackageDependency {
+  final String sourceRef;      // bomRef of the source package
+  final List<String> dependsOn; // list of bomRefs of the dependencies
+}
+----
+
+=== `generateUuidV4()`
+
+Free function generating an RFC 4122 UUID v4 via `Random.secure()`.
+Used in all generators for `serialNumber` / `documentNamespace`.
+
+== `lib/rpm_parser.dart` — RPM queries
+
+=== `_queryFormat` constant
+
+[source,dart]
+----
+static const _queryFormat =
+    r'%{NAME}|%{VERSION}|%{RELEASE}|%{ARCH}|%{EPOCH}|%{LICENSE}|%{VENDOR}|%{URL}|%{BUILDTIME}|%{SHA256HEADER}|%{SOURCERPM}|%{SIGMD5}|%{SUMMARY}\n';
+----
+
+`SUMMARY` is last because it may contain `|`. The parser rejoins all
+fragments ≥ index 12 in case of an excess split.
+
+Hashes:
+
+* `%{SHA256HEADER}` → `RpmPackage.headerSha256`, emitted as the
+  `rpm:header-sha256` property (hash of the *header*, not of the file);
+* `packageRef` = `.rpm` file → `hashLocalFile`: SHA-256 + SHA-512 of the
+  file;
+* otherwise (installed package) → `%{SIGMD5}` (RPM "pkgid": MD5 of header +
+  payload), validated by `packageHash('MD5', …)` → `MD5` hash.
+
+=== `parsePackage(String packageRef)`
+
+The three `rpm` calls are launched *in parallel* via `Future.wait`:
+
+[source,dart]
+----
+final results = await Future.wait([
+  Process.run('rpm', [qFlag, '--queryformat', _queryFormat, packageRef]),
+  Process.run('rpm', [qFlag, '--requires', packageRef]),
+  Process.run('rpm', [qFlag, '--provides', packageRef]),
+]);
+----
+
+. `rpm -q[p] --queryformat ...` → 13 metadata fields
+. `rpm -q[p] --requires` → list of required capabilities (parsed by `_parseCapabilities`)
+. `rpm -q[p] --provides` → list of provided capabilities (parsed by `_parseCapabilities`)
+
+Returns `null` with a warning on `stderr` if the first call fails.
+
+=== `_parseCapabilities(ProcessResult result)` _(new)_
+
+Synchronous method replacing the former asynchronous `_queryCapabilities`.
+Takes an already available `ProcessResult` and returns `List<String>` (empty if `exitCode != 0`).
+
+=== `buildDependencies(List<Package> packages)`
+
+Accepts a mixed RPM + Python list. The algorithm works in two passes.
+
+*Pass 1 — building `providesMap`*
+
+....
+providesMap : capability name → bomRef
+....
+
+For each package: the package `name` + each `provides` entry are
+added. Python packages include their normalised name in `provides`, which
+allows intra-Python resolution.
+
+*Pass 2 — resolving `requires`*
+
+Each `requires` entry is normalised via `_capabilityName()` then looked up
+in `providesMap`. A dependency is only added if the target is in the
+list (`knownRefs`).
+
+=== `_capabilityName(String capability)`
+
+[source,dart]
+----
+return capability.split(RegExp(r'\s+[<>=!]'))[0].trim();
+----
+
+[cols="2,1", options="header"]
+|===
+|Input |Output
+
+|`bash >= 4.1`
+|`bash`
+
+|`python3dist(lxml) >= 3.0`
+|`python3dist(lxml)`
+
+|`libc.so.6(GLIBC_2.17)(64bit)`
+|`libc.so.6(GLIBC_2.17)(64bit)`
+
+|`/bin/sh`
+|`/bin/sh`
+
+|`requests` (Python, already normalised)
+|`requests`
+|===
+
+== `lib/wheel_parser.dart` — Reading Python wheels
+
+=== How it works
+
+The wheel is a ZIP containing a `{name}-{version}.dist-info/METADATA` directory.
+The class uses `python3 zipfile` to extract this file without unzipping the
+whole archive.
+
+[source,python]
+----
+z = zipfile.ZipFile(sys.argv[1])
+name = next(x for x in z.namelist() if x.endswith('/METADATA'))
+sys.stdout.buffer.write(z.read(name))
+----
+
+=== `parseWheelFile(String path)`
+
+Calls python3, gets the METADATA text, delegates to `_buildPackage()`.
+
+=== `parseMetadataText(String sourceRef, String text, {String packageType})`
+
+*Public extension point* used by `TarParser` to reuse the RFC 822 parser
+without duplicating code. Makes it possible to build a `WheelPackage` from
+an already extracted text.
+
+=== RFC 822 parsing (`_parseRfc822`)
+
+Returns `Map<String, List<String>>`: lowercase key → list of values.
+Continuation lines (indented) are concatenated.
+
+=== Extraction of key fields
+
+[cols="1,1,2", options="header"]
+|===
+|METADATA field |Priority |Fallback
+
+|License
+|`License-Expression` (PEP 639)
+|`License` → classifiers `License :: OSI Approved :: …`
+
+|URL
+|`Project-URL: Homepage, …`
+|`Home-page`
+
+|Vendor
+|`Author-email` (strip `<addr>`)
+|`Author` → `Maintainer`
+
+|Arch
+|last `-` segment before `.whl`
+|`any`
+
+|Requires
+|`Requires-Dist` (strip constraints and markers)
+|—
+|===
+
+=== Normalisation of `Requires-Dist`
+
+[source,dart]
+----
+// "requests (>=2.0) ; extra == 'test'" → "requests"
+var s = req.split(';').first.trim();
+s = s.split(RegExp(r'[\s(]')).first.trim();
+return _normalizePyName(s);  // lowercase + [-_.]+ → -
+----
+
+=== Python dependency resolution
+
+`WheelPackage.provides = [normalizedName]` (PEP 503 normalised name).
+`buildDependencies` also adds `pkg.name` to `providesMap`, covering both
+the raw name and the normalised name.
+
+== `lib/tar_parser.dart` — Reading tar archives
+
+=== Embedded Python script
+
+The script is run via `python3 -c` and returns a JSON object on stdout:
+
+[source,json]
+----
+{"type": "python", "content": "<RFC 822 text>"}
+----
+
+or
+
+[source,json]
+----
+{"type": "generic", "licenseFile": "LICENSE", "license": "<2 KB of the file>"}
+----
+
+*Detection logic* (in this order):
+
+. Looks for `*.dist-info/METADATA` or `**/PKG-INFO` → type `python`
+. Looks for `LICENSE`, `COPYING`, `LICENSE-*`, `LICENCE`, `COPYING.*` at depth ≤ 2
+  → type `generic` with the content of the first file found (sorted by depth then length)
+
+=== Python sdist case
+
+If `type == 'python'`: delegates to `WheelParser().parseMetadataText(path, content)`
+→ returns a `WheelPackage` with `packageType='pypi'`.
+
+=== Generic archive case
+
+If `type == 'generic'`: delegates to `buildGenericArchivePackage()` (from `archive_helpers.dart`):
+
+. Analyses the file name via `parseArchiveFilename()`
+. Identifies the license via `identifyArchiveLicense()`
+. Returns a `WheelPackage` with `packageType='source'`
+
+[NOTE]
+====
+These functions are now in `lib/archive_helpers.dart` (shared with
+`ZipParser`). The logic is identical to the former private implementation of `TarParser`.
+====
+
+=== File name parsing (`parseArchiveFilename` in archive_helpers)
+
+*Algorithm:*
+
+. Remove the extension (`.tar.gz`, `.tgz`, `.tar`)
+. Split on `-`
+. Find the index of the first segment matching `^\d+\.\d+` (semantic version)
+. *Name* = segments before the version, minus the platform keywords
+. *Version* = the version segment
+. *Arch* = first segment recognised as an architecture
+
+*Keywords filtered out of the name* (`_isPlatformSegment`):
+
+* OS: `linux`, `windows`, `darwin`, `macos`, `win`, `osx`
+* Arch: `x86_64`, `x64`, `amd64`, `arm64`, `aarch64`, `i386`, `i686`
+* Misc: `systemd`, `community`, `enterprise`
+* Distros (regex): `rhel8`, `rhel88`, `el9`, `fc40`, `centos7`, `ubuntu22`, …
+
+*Results on the 3PP archives:*
+
+[cols="2,1,1,1", options="header"]
+|===
+|File |name |version |arch
+
+|`apache-tomcat-10.1.44.tar.gz`
+|`apache-tomcat`
+|`10.1.44`
+|`any`
+
+|`mariadb-11.4.8-linux-systemd-x86_64.tar.gz`
+|`mariadb`
+|`11.4.8`
+|`x86_64`
+
+|`mongodb-linux-x86_64-rhel8-8.0.12.tgz`
+|`mongodb`
+|`8.0.12`
+|`x86_64`
+
+|`mongodb-database-tools-rhel88-x86_64-100.13.0.tgz`
+|`mongodb-database-tools`
+|`100.13.0`
+|`x86_64`
+
+|`mongosh-2.5.6-linux-x64.tgz`
+|`mongosh`
+|`2.5.6`
+|`x86_64`
+|===
+
+=== License identification (`identifyArchiveLicense` in archive_helpers)
+
+Works on the first 2,000 characters of the license file.
+Uses two zones:
+
+* *`title`* (first 300 chars) for the GPL/LGPL families — avoids the false positive:
+  GPL-2.0 mentions "GNU Library General Public License" in its body, but
+  not in its title.
+* *`lower`* (2,000 chars) for Apache, MIT, SSPL, MPL, etc.
+
+Recognised licenses: `SSPL-1.0`, `Apache-2.0`, `Apache-1.1`, `GPL-2.0-only`,
+`GPL-3.0-only`, `LGPL-2.0-only`, `LGPL-2.1-only`, `LGPL-3.0-only`, `MPL-2.0`,
+`MPL-1.1`, `MIT`, `ISC`, `BSD-2-Clause`, `BSD-3-Clause`, `EPL-2.0`, `EPL-1.0`,
+`CDDL-1.0`.
+
+[WARNING]
+====
+The GPL-2.0 text contains "use the GNU Library General Public License instead"
+in the "How to Apply" section. Checking only the title (first 300 chars)
+prevents this LGPL false positive.
+====
+
+== `lib/license_normalizer.dart` — Centralised SPDX normalisation
+
+Factorisation of the license normalisation logic that used to be
+buried in `cyclonedx_generator.dart`. Now imported by the three
+generators (CycloneDX 1.6, SPDX 2.3, SPDX 3.0).
+
+=== `LicenseNormalizer` (all methods `static`)
+
+[cols="2,1,2", options="header"]
+|===
+|Method |Returns |Usage
+
+|`toSpdxExpression(String raw)`
+|`String`
+|SPDX expression for SPDX 2.3 / 3.0
+
+|`toCycloneDxLicenses(String raw)`
+|`List<Map<String, dynamic>>`
+|CycloneDX 1.6 `licenses[]` structure
+|===
+
+=== Common algorithm
+
+. Empty / `(none)` case → returns empty
+. Normalisation of boolean operators (`and` → `AND`, `or` → `OR`, `with` → `WITH`)
+  with lookbehind/lookahead `\S` regexes to protect glued tokens
+  (`GPL-2.0-or-later` unaltered)
+. Detection of a compound expression (presence of `AND`/`OR`/`WITH` surrounded by spaces)
+. Token-by-token resolution in `_sortedEntries` (sorted by decreasing length →
+  avoids short matches before long ones)
+. Choice of the CycloneDX field: `expression` (compound); otherwise `id` **if and
+  only if** the token is in `kSpdxLicenseIds` (`lib/spdx_license_ids.dart`)
+  or is a verified target of `_rpmToSpdx`; otherwise `name`. `LicenseRef-*` always goes
+  to `name` (outside the SPDX enumeration of the CycloneDX schema).
+
+[WARNING]
+====
+Never restore the former heuristic "the token contains a hyphen+digit
+→ `id`": it let the `debian/copyright` shortcuts through as `license.id`
+(`GFDL-NIV-1.3`, `BSD-3-clause-Berkeley`, `GPL-2.0-only+-with-link-exception`…),
+producing a CycloneDX SBOM rejected by schema validation (id outside the SPDX
+enumeration). The `id` field is now guarded by
+`_isSpdxLicenseId()` → `isSpdxLicenseId()` (exact, case-sensitive membership
+in `kSpdxLicenseIds`).
+====
+
+`lib/spdx_license_ids.dart` is a frozen snapshot of the SPDX License List 3.x
+(license identifiers + exceptions). A genuinely SPDX id missing from the
+snapshot degrades cleanly to `name` / `LicenseRef-…` (always
+schema-valid) — the list is therefore deliberately broad without aiming
+at exhaustiveness. `curl` is deliberately removed from it: `debian/copyright` uses it
+as a vague name, we keep it as free text.
+
+[TIP]
+====
+`_sortedEntries` is `static final` — computed only once when the
+class is loaded. The old code re-sorted the table on every call of `_normaliseExpressionTokens`.
+====
+
+== `lib/archive_helpers.dart` — Shared archive helpers
+
+Code shared between `TarParser` and `ZipParser` to avoid ~120 lines of duplication.
+
+=== Exports (library-level functions and class)
+
+[cols="2,3", options="header"]
+|===
+|Symbol |Description
+
+|`class ArchiveFilenameInfo`
+|`{String name, version, arch}` — result of file name parsing
+
+|`parseArchiveFilename(String path)`
+|Analyses name/version/arch from the file name (`.tar.gz`, `.tgz`, `.tar`, `.zip` extensions)
+
+|`identifyArchiveLicense(String text)`
+|SPDX heuristic from ≤ 2,000 chars of the license file — same algorithm as
+TarParser's former `_identifyLicense`
+
+|`buildGenericArchivePackage(String path, {...})`
+|Builds a `WheelPackage(packageType='source')` from the filename info + license
+|===
+
+[NOTE]
+====
+These functions are package-level (no `_` prefix) so as to be accessible from
+`tar_parser.dart` and `zip_parser.dart` while remaining internal to the package.
+====
+
+== `lib/zip_parser.dart` — Reading generic ZIP archives
+
+Same logic as `TarParser` but for `.zip` files.
+Uses `python3 zipfile` instead of `tarfile`.
+
+=== `ZipParser`
+
+[source,dart]
+----
+class ZipParser {
+  final _wheelParser = WheelParser();
+  Future<Package?> parseZipFile(String path) async { … }
+}
+----
+
+=== Embedded Python script
+
+The script uses `zipfile.ZipFile` to inspect the content without full extraction:
+
+. Looks for `*.dist-info/METADATA` or `PKG-INFO` → `{"type": "python", "content": "…"}`
+. Looks for a `LICENSE`/`COPYING` file at depth ≤ 2 → `{"type": "generic", "licenseFile": "…", "license": "…"}`
+. Neither → `{"type": "generic", "licenseFile": "", "license": ""}`
+
+=== Python sdist vs generic dispatch
+
+Identical to `TarParser`: `type == 'python'` → `WheelParser.parseMetadataText()`,
+`type == 'generic'` → `buildGenericArchivePackage()`.
+
+== `lib/deb_parser.dart` — Reading Debian packages
+
+=== `DebParser`
+
+[source,dart]
+----
+class DebParser {
+  Future<DebPackage?> parseDebFile(String path) async { … }
+  Map<String, String> _parseControl(String text) { … }
+  List<String> _parseDependsList(String depends) { … }
+}
+----
+
+=== Extraction
+
+[source,bash]
+----
+dpkg-deb -f /opt/pkgs/libssl3_3.0.1_amd64.deb
+----
+
+Returns the content of the `DEBIAN/control` file in RFC 822. Fields read:
+
+[cols="1,2,2", options="header"]
+|===
+|Control field |`DebPackage` field |Notes
+
+|`Package`
+|`name`
+|
+
+|`Version`
+|`version`
+|
+
+|`Architecture`
+|`arch`
+|
+
+|`License` / `X-License`
+|`license`
+|absent from many .deb
+
+|`Maintainer`
+|`vendor`
+|
+
+|`Homepage`
+|`url`
+|
+
+|`Description`
+|`summary`
+|first line only
+
+|`Depends`
+|`requires`
+|comma then pipe split, constraints removed
+
+|—
+|`provides`
+|`[name]` (package name only — the control `Provides` field is not read)
+|===
+
+=== `_parseDependsList`
+
+Splits on `,` then on `|` (alternatives), removes the version constraints
+`(>= …)`, normalises spaces. Example: `"libc6 (>= 2.17) | libc6-amd64"`
+→ `["libc6", "libc6-amd64"]`.
+
+== `lib/jar_parser.dart` — Maven coordinates of a standalone `.jar`
+
+Unlike `MavenParser` (which reads a `pom.xml` manifest), `JarParser` extracts the
+Maven coordinates directly from a binary `.jar` archive, mirroring the logic already
+used for OCI image scanning in `oci_parser.dart` (`_parseMavenJars` below),
+but returns `WheelPackage(packageType: 'maven')` (like `maven_parser.dart`) rather
+than `OciPackage` — no notion of `imageRef` for a local file.
+
+*A `.jar` can produce several packages.* A "shaded"/uber-jar (e.g.
+`netty-common-*.jar`) may embed, in addition to its own `pom.properties`, that of one
+or more relocated dependencies (e.g. `org.jctools:jctools-core`). `parseJarFile`
+therefore returns a *list*: the jar itself as the first element (if its identity could be
+determined), followed by one element per embedded dependency detected — same behaviour as
+syft, which lists each `pom.properties` found separately (with a `virtualPath` such as
+`/netty-common-*.jar:org.jctools:jctools-core`).
+
+=== `JarParser`
+
+[source,dart]
+----
+class JarParser {
+  Future<List<WheelPackage>> parseJarFile(String path) async { … }
+  Future<List<(String, String, String)>> _readAllPomProperties(String path) async { … }
+  Future<(String, String, String)?> _readSinglePomProperties(String path, String entryPath) async { … }
+  Future<String?> _groupIdFromManifest(String path) async { … }
+  bool _looksLikeGroupId(String s) => s.contains('.') && s == s.toLowerCase() && !s.contains(' ');
+}
+----
+
+=== Resolution of own identity + embedded dependencies
+
+. `_readAllPomProperties` lists *all* the
+  `META-INF/maven/<groupId>/<artifactId>/pom.properties` present in
+  the archive (`unzip -l` then one `unzip -p <jar> <exact path>` *per entry*,
+  never a glob concatenating several blocks — see the bug below) and
+  returns one `(groupId, artifactId, version)` per usable entry.
+. Among these entries, the one whose `artifactId` matches the jar's file name
+  (prefix before the first `-<digit>`) is the jar's *own* identity;
+  if there is only one entry in total, it is taken by default.
+  All the *other* entries become additional packages
+  (relocated dependencies).
+. If no entry matches the file name (ambiguous jar, several
+  `pom.properties` with no clear match), the own identity falls back to
+  the naming convention `<groupId>.<artifactId>-<version>.jar` (Quarkus/Red
+  Hat), then to `META-INF/MANIFEST.MF` (`Bundle-SymbolicName`,
+  `Implementation-Vendor-Id`, `Implementation-Title`,
+  `Automatic-Module-Name`, in that order — first occurrence of each
+  key kept, RFC 822 line folding handled, value retained only
+  if `_looksLikeGroupId` accepts it: at least one dot, entirely
+  lowercase — rejects e.g. `javafx.baseEmpty`).
++
+*Discovered by comparison with syft on a real set of 207 jars*: this
+behaviour reproduces it exactly for almost all the cases tested
+(e.g. `caffeine` → `com.github.ben-manes.caffeine` via `Bundle-SymbolicName`,
+`commons-httpclient` → `org.apache` via `Implementation-Vendor-Id`
+taking priority over `Implementation-Title`). The `pom.properties` entries already
+identified as embedded dependencies are still reported even in this case.
+. If the manifest yields nothing usable either, `groupId` takes the
+  value of `artifactId` (`pkg:maven/<artifactId>/<artifactId>@<version>`) —
+  degraded but *not abandoned*.
+. Empty list (+ `stderr` warning) only if neither own identity nor embedded
+  dependency could be determined (no usable `pom.properties`
+  and no recognisable version suffix in the file
+  name).
+
+*Bug fixed, discovered on a real jar* (`netty-common-4.1.100.Final.jar`):
+reading the `pom.properties` through a broad glob
+(`META-INF/maven/*/*/pom.properties`) without discrimination concatenates the
+content of all the entries found, and a naive key=value parsing gets
+overwritten by the second block — the `netty-common` jar came out with the
+`jctools-core` identity! Same cause on `woodstox-core-6.5.1.jar`
+(embeds `isorelax` and `net.java.dev.msv:xsdlib`). Reading each entry
+*individually* (step 1 above) completely eliminates the risk of
+mix-up, while allowing them to be correctly reported as separate packages
+rather than arbitrarily choosing which one to keep.
+
+=== `_knownGroupIdOverrides` — curated mappings (Spring Framework)
+
+Some very widespread libraries (the "core" modules of Spring Framework:
+`spring-core`, `spring-beans`, `spring-webmvc`, …) do not expose their real groupId
+(`org.springframework`) anywhere in the jar itself — neither `pom.properties` nor a reliable
+manifest field: only an `Automatic-Module-Name` such as `spring.core` is present, which
+passes `_looksLikeGroupId` (dot, lowercase) but is a JPMS module name, not the real
+Maven groupId.
+
+*Concrete consequence, not merely cosmetic*: a vulnerability scanner (grype…)
+associates CVEs with the real Maven coordinates. With `pkg:maven/spring.core/spring-core@…`
+instead of `pkg:maven/org.springframework/spring-core@…`, no match is
+found — real unfixed CVEs (e.g. CVE-2025-41249, CVE-2024-38820,
+CVE-2025-22233, all on `org.springframework:spring-core`) remained invisible.
+Detected by comparing a vulnerability scan on our SBOMs vs those of syft.
+
+`_knownGroupIdOverrides` (`Map<String artifactId, String groupId>`) is checked *before*
+the manifest heuristic — it must win against a misleading manifest value.
+Deliberately limited to the ~22 official Spring Framework modules (stable list,
+`org.springframework` groupId only): it is not an attempt to replicate a full
+CPE dictionary like syft's, only to fill this precise gap, with a
+direct security impact. Spring Data/Integration/Retry/Security are not in it: their
+manifest already exposes the real groupId via `Implementation-Vendor-Id`.
+
+Requires `unzip` in the PATH (check in `bin/sbom_generator.dart`,
+`hasJar` → `unzip -v`).
+
+[[sec-oci-parser]]
+== `lib/oci_parser.dart` — OCI image analysis
+
+=== `OciRefType` (enum)
+
+
+[source,dart]
+----
+enum OciRefType { registry, tar, ociLayout, binary }
+----
+
+Automatically detected by `OciParser.detectRefType(String ref)`:
+
+[cols="1,2,2", options="header"]
+|===
+|Value |Detection condition |Example
+
+|`tar`
+|`.tar`, `.tar.gz` or `.tgz` extension
+|`/path/ubuntu.tar`, `/path/image.tar.gz`
+
+|`ociLayout`
+|directory containing `index.json`
+|`/path/oci_dir/`
+
+|`binary`
+|existing local file (tested after `tar`/`ociLayout`)
+|`/usr/local/bin/my-app`
+
+|`registry`
+|(default, none of the above conditions)
+|`nginx:latest`, `ubuntu@sha256:…`
+|===
+
+`binary` was added for `--binary <file>` (see <<sec-option-binary>>):
+without it, a local file path fell into the default `registry` case
+— which already worked *by accident* with syft, but displayed
+a misleading console label ("OCI image (registry)") and was not handled
+anywhere else as a distinct case.
+
+=== `OciParser`
+
+Entry point: `Future<OciParseResult> parseImage(String imageRef, String tool, {bool verbose})`,
+where `OciParseResult = ({List<Package> packages, OsInfo? os})` (Dart 3 record
+— see <<sec-osinfo-oci-parser>>).
+
+Dispatch to one of the four backends according to `tool`:
+
+[cols="1,3", options="header"]
+|===
+|Backend |Mechanism
+
+|`'syft'`
+|`syft <ref> --output json`; reads `artifacts[].{name, version, type, purl, licenses, metadata}`
++ `distro` (base OS)
+
+|`'trivy'`
+|`trivy image --format json --quiet --list-all-pkgs <ref>`;
+reads `Results[].{Type, Packages[]}` + `Metadata.OS` (base OS); retries without `--list-all-pkgs` on old versions
+
+|`'skopeo'`
+|Copy via `skopeo copy` to an OCI layout → extraction of the tar layers →
+detection of the package database (dpkg/status, rpm --root, lib/apk/db/installed);
+`os: null` — does not read `/etc/os-release`
+
+|`'cdxgen'`
+|`cdxgen --type docker --output - --no-progress <ref>`; parses the CycloneDX BOM,
+keeps only the `components[]` whose PURL belongs to a known package ecosystem
+(`_cdxgenPurlEcosystem`), discards the `file` / `cryptographic-asset`
+/ `data` types and `pkg:generic` PURLs. Base OS reconstructed from the
+`distro=` qualifier of system PURLs (`_cdxgenOsInfo`)
+|===
+
+=== Syft backend (`_parseSyft`)
+
+The reference is adapted according to `OciRefType`:
+
+[cols="1,2", options="header"]
+|===
+|Type |Reference passed to syft
+
+|`tar`
+|`docker-archive:<path>`
+
+|`ociLayout`
+|`oci-dir:<path>`
+
+|`registry` / `binary`
+|reference as is
+|===
+
+[[sec-syft-binary]]
+==== Analysing a standalone binary (`OciRefType.binary`, see `--binary`)
+
+`syft <path> --output json` works on a standalone binary because
+*syft itself detects* that an argument matching an existing local file
+is a *file* source (not an image to resolve/pull), and applies its
+binary catalogers to it:
+
+* *Go* — `go-module-binary-cataloger` reads the `buildinfo` metadata
+  embedded in the executable (those of `go version -m`) and recovers the
+  complete list of modules + versions, whether the binary is statically
+  linked or not, even stripped (as long as the build has not
+  explicitly removed this section).
+* *Other languages* — only syft's generic classifier applies: it
+  recognises, by version-string fingerprint, a *fixed* catalog of
+  well-known open source libraries (OpenSSL, zlib, sqlite, busybox…).
+
+No `sbom_generator` code implements this extraction — it is
+entirely delegated to syft; `_parseSyft` only passes the
+path as is here. A statically linked library with no known signature
+nor embedded metadata (home-grown C/C++, Rust without
+`cargo-auditable`) cannot be recovered after the fact.
+
+Syft licenses are `{spdxExpression, value}` objects — `spdxExpression`
+is preferred if non-empty, otherwise `value`. Several licenses are joined by
+`' AND '`.
+
+The component's `vendor`, `arch`, `summary` and `url` are read via
+`_firstNonEmpty(metadata, [...])`: syft cataloguers do not use the
+same case depending on the ecosystem (dpkg/apk expose `architecture` / `maintainer`
+in lowercase, rpm `arch` / `vendor`). The dpkg/apk maintainer is used as the
+component `supplier` failing an rpm `vendor` field — without it, the SBOM
+has no component supplier (sbomqs `comp_with_supplier` metric).
+
+[[sec-syft-source-pkg]]
+==== Source packages (`_syftSourcePackage`)
+
+OSV.dev indexes Debian/Ubuntu advisories by *source* package (`zlib`, `perl`,
+`sqlite3`), not by binary package (`zlib1g`, `perl-base`, `libsqlite3-0`).
+syft only catalogues the binary, adding a PURL qualifier
+`upstream=<source>` — which OSV-Scanner (scalibr) cannot use: on a
+raw syft SBOM, OSV-Scanner therefore matches almost no system package
+(19 CVEs on `haproxy:3.4.4`, against 58 with a cdxgen SBOM).
+
+`_parseSyft` therefore emits, in addition to the binaries, one component per
+distinct source package: `_syftSourcePackage()` reads `metadata.source` / `metadata.sourceVersion`
+of the artifact, derives the source PURL from the normalised binary PURL (replacing
+the name and version, removing `upstream=`), and deduplicates by source
+name. A source is not emitted if a component already bears that name (case
+of binary `perl` + `perl-base`, both of source `perl`).
+
+Corollary: `_syftArtifactToPackage` removes `upstream=` from the binary's PURL
+as soon as `metadata.source` differs from the name. Otherwise Grype would resolve binary→source
+*and* match the explicit source component → same CVE counted twice
+(224 raw matches instead of 80, 68 duplicate CVEs). cdxgen, which
+does not emit `upstream=`, does not double count — we align with it. The set
+of *unique* CVEs reported by Grype is identical before/after (checked):
+only the over-counting of a CVE on each binary of a given source disappears.
+
+[[sec-syft-debian-purl]]
+==== Normalisation of the Debian `distro` qualifier (`_normalizeSyftSystemPurl`)
+
+For Debian, syft fills the `distro` qualifier of system PURLs and the root
+field `distro.versionID` with the *point release* read from
+`/etc/debian_version` (e.g. `debian-13.6`), and not the major `13` carried by
+`VERSION_ID` of `/etc/os-release`. Grype tolerates this form (it only keeps
+the major), but OSV-Scanner in "SBOM scan" mode (scalibr) only links a
+`pkg:deb/debian/...` to the `Debian:13` ecosystem if `distro` is
+`debian-<major>` **or** if `distro_name` carries a known codename — with
+`debian-13.6` it *silently* finds nothing (0 CVEs, no error).
+
+`_normalizeSyftSystemPurl()` therefore brings `distro=debian-X.Y` back to
+`distro=debian-X` and adds `distro_name=<codename>` (taken from
+`distro.versionCodename` provided by syft), aligning with what cdxgen produces.
+`_syftDistroToOsInfo()` applies the same truncation to the major for the
+`operating-system` component. Processing limited to `id == debian`: for
+alpine (`3.20.3`), rhel (`9.6`)… the minor carries information and is left
+intact. Checked on `haproxy:3.4.4` (Debian 13.6): without the fix,
+OSV-Scanner reported 0 CVEs where Grype saw 163 (all `wont-fix` /
+`not-fixed`, no fixed version); with it, the three scanners cross-check.
+
+=== Trivy backend (`_parseTrivy`)
+
+Reads `Results[].Type` (e.g. `debian`, `centos`, `pip`) and normalises it via
+`_normalizeTrivyType()` to the `packageType` ecosystems (`deb`, `rpm`,
+`pypi`, etc.). The PURL is read from `Identifier.PURL` (trivy ≥ 0.38).
+
+`trivy image` (the only mode invoked here) does not support the analysis of a
+standalone binary — passing an `OciRefType.binary` to this backend would transmit
+the path as is (`registry`/`binary` branch of the `switch`) and fail
+on the trivy side. This is why `--binary` (see <<sec-option-binary>>) rejects
+any `--oci-tool` other than `syft`.
+
+[[sec-osinfo-oci-parser]]
+=== `OsInfo` — base OS (`_syftDistroToOsInfo` / `_trivyMetadataToOsInfo` / `_cdxgenOsInfo`)
+
+`OciParser` extracts the image's base OS (see the `OsInfo` class under
+<<sec-models>>) to allow
+`CycloneDxGenerator`/`SpdxGenerator`/`Spdx3Generator` to generate a dedicated
+`operating-system` component in the SBOM. Without it, a consumer
+such as Trivy in `trivy sbom` mode silently ignores the whole class of
+"os-pkgs" vulnerabilities (RPM/DEB/APK system packages), even though each
+package already carries `distro=...` in its own purl — see the CHANGELOG
+for the detail of this bug, discovered on a real Keycloak image (101 `os-pkgs`
+CVEs missing out of 253 when the SBOM was used instead of the direct
+image).
+
+Two undocumented Trivy requirements, empirically isolated by
+bisection on a real SBOM (cf. `pkg/fanal/analyzer/os/release/release.go`
+of the aquasecurity/trivy repository, function `idToOSFamily`, for the
+reference table):
+
+* The `name`/`id` field of the OS component must follow Trivy's internal
+  taxonomy (`redhat`, `oracle`, `alma`…), not the `/etc/os-release` `id` that syft
+  exposes as is (`rhel`, `ol`, `almalinux`…). `_toTrivyOsFamily()` translates
+  via the `_trivyOsFamilyById` table; missing identifiers (`debian`,
+  `ubuntu`…) are already identical to the expected Trivy family and pass
+  unchanged. The trivy backend does not need this translation:
+  `Metadata.OS.Family` is already in Trivy's internal taxonomy.
+* On the SPDX 2.3 side, the OS package's `SPDXID` must be prefixed
+  `SPDXRef-OperatingSystem-` (not `SPDXRef-Package-`) for Trivy to
+  recognise it — `primaryPackagePurpose: "OPERATING-SYSTEM"` alone is not
+  enough, empirically checked (see <<sec-spdx-generator>>).
+
+`os: null` when syft/trivy detected no OS base (`scratch`
+or distroless image), or for the skopeo backend (never covered, see above).
+
+The cdxgen backend does not emit an `operating-system` component: `_cdxgenOsInfo()`
+reconstructs the `OsInfo` from the `distro=` qualifier of a system package PURL
+(e.g. `pkg:deb/debian/adduser@3.134?...&distro=debian-12` →
+`id: debian, version: 12`), splitting the version at the last `-` and
+applying `_toTrivyOsFamily()` to the identifier. `os: null` if no system
+package carries a `distro` qualifier (image without a recognised OS base).
+
+=== cdxgen backend (`_parseCdxgen`)
+
+`cdxgen --type docker` accepts the three `OciRefType`s (registry reference,
+`.tar` archive via absolute path, OCI layout directory). The CycloneDX BOM
+is read on `stdout` (`--output -`) then normalised:
+
+* `_cdxgenComponentToPackage()` discards components of type `file`,
+  `cryptographic-asset`, `data`, `operating-system`, `container`, `platform`,
+  then requires a PURL whose ecosystem prefix is in
+  `_cdxgenPurlEcosystem` (`deb`, `rpm`, `apk`, `pypi`, `npm`, `golang`,
+  `maven`, `gem`, `cargo`, `nuget`, `composer`, `pub`, `hex`, `conan`,
+  `swift`). `pkg:generic` components (cdxgen's file-by-file inventory, APT
+  repositories) are therefore rejected.
+* cdxgen's PURL is kept as is in `purlOverride` (it includes
+  `distro=`/`arch=`, needed by grype).
+* For a `pkg:maven` component, `group` + `name` are recombined as
+  `groupId:artifactId` (internal convention of `WheelPackage`/`OciPackage`).
+* Licenses in CycloneDX format (`[{expression}]` or `[{license:{id|name}}]`).
+
+=== Skopeo backend (`_parseSkopeo`)
+
+*Phases:*
+
+. `skopeo copy <src> oci:<tmpDir>:image` (unless `ociLayout` is already present)
+. `_extractOciLayers()`: reads `index.json` → first manifest → list of
+  layers → sequential `tar --extract` into `rootfs/`
+. Detection of the installed package database:
+  ** `var/lib/dpkg/status` → `_parseDpkgStatus()` (RFC 822 line by line)
+  ** `var/lib/rpm` → `_parseRpmRoot()` (`rpm --root <dir> -qa --queryformat …`)
+  ** `lib/apk/db/installed` → `_parseApkInstalled()` (APK key:value format)
+. Detection of application packages in the rootfs:
+  ** `_parseMavenJars(rootDir)`: looks for `*.jar` throughout the rootfs, extracts
+     `META-INF/maven/*/*/pom.properties` via `unzip -p`, rebuilds the PURL
+     `pkg:maven/<groupId>/<artifactId>@<version>`. Fallback: file name parsing
+     with the Quarkus/Red Hat convention (`<groupId>.<artifactId>-<ver>.jar`).
+     Deduplication by `groupId:artifactId:version`.
+  ** `_parsePythonPackages(rootDir)`: looks for `*.dist-info/METADATA` and
+     `*.egg-info/PKG-INFO` via `find`, parses the RFC 822 headers up to the
+     first blank line. Fields extracted: `Name`, `Version`, `Summary`,
+     `License`, `Home-page`. PURL `pkg:pypi/<name>@<version>`.
+  ** `_parseNpmPackages(rootDir)`: looks for `node_modules/*/package.json`
+     (first level only, ignores nested `node_modules`). Skips
+     packages with `"private": true`. PURL `pkg:npm/<name>@<version>`.
+. Deletion of the temporary directory (`chmod -R u+rwX` before `rm -rf`
+  for files with restrictive permissions in some layers)
+
+[NOTE]
+====
+Only packages with `installed` status in `dpkg/status` are included.
+The `gpg-pubkey` entries of the RPM registry are ignored.
+The 44 packages that syft finds in addition to skopeo (for Keycloak 26) come
+from syft's reading of `MANIFEST.MF`, which produces non-standard heuristic
+groupIds (`common/`, `jrt-fs/`, etc.). This gap is documented and accepted.
+====
+
+[[sec-nested-archive]]
+== `lib/nested_archive.dart` — Descending into nested objects (`--depth`)
+
+For a root object of `--input` (rpm, deb, jar/war/ear, wheel, zip, tar,
+tgz), `NestedExplorer.explore(path, rootPrimaryRef:)` *selectively* extracts
+the analysable objects from it, analyses them with the existing parsers,
+then descends down to `maxDepth` (`parseNestedDepth`: integer ≥ 0
+or `all` → `maxNestedDepth` = 10).
+
+* *Extraction* (`_extractScript`, embedded Python script run by
+  `python3`): detection by signature — rpm (lead + two headers + cpio newc
+  gz/xz/bz2/zstd payload, read without `rpm2cpio`/`cpio`), deb (`ar` archive
+  → `data.tar.*`), zip/jar/war/whl, tar. Only keeps
+  "analysable" files (archive/package extensions and manifests outside
+  `META-INF/`). Safeguards: 4 GiB in total, 2 GiB per file, 50,000
+  files; absolute paths or paths leaving the destination and links ignored;
+  a limit being reached truncates the extraction (warning, not an error).
+  zstd goes through the `zstd` CLI (absent from Python's standard module < 3.14).
+* *Traversal* (`_walk`): one temporary directory per archive, deleted after
+  its children have been traversed (disk space bounded by the depth). Each
+  file is typed by `_kindOf` (`archive`: descent possible;
+  `manifest`: analysed without descent). Packages receive a *logical*
+  `sourceRef` `root!/path!/path` via `Package.copyWith(sourceRef:)`
+  (never the temporary path).
+* *`NestedObject`*: `location`, `depth`, `packages` (the first is the
+  object's main component — `parseJarFile` returns the jar itself first,
+  then the relocated dependencies —, `primary`), `parentRef`
+  (`bomRef` of the container's main component).
+* *Graph*: `withNestedDependencies` adds the edges container →
+  object's main component → its other components; a manifest
+  (without a main component) is attached to the container. `main()` keeps
+  only the edges whose two ends survive the deduplication.
+* *Annotations*: `nestedFields(pkg)` (`location`, `depth`, empty if
+  `sourceRef` does not contain `!/`) is consumed by the CycloneDX
+  generators (`sbom_generator:nested:*` properties), SPDX 2.3 / 3.0
+  (annotation) and custom JSON (`nested`). The tabular formats
+  (CSV, Markdown, AsciiDoc, HTML) do not carry the column.
+* *Per-object files*: after the global one, `main()` writes one SBOM per
+  `NestedObject` (`nestedFileBase` → `<base>.nested-NN-<slug>`, `writeAll(…,
+  docNameOverride:)`) unless `--no-nested-files`. License/supplier overrides
+  and cosign signature apply to them as to layer SBOMs.
+* *Scan*: `scan --package` relaunches the CLI (`_runSelf`) with
+  `-i <file> --depth N --no-nested-files -f cyclonedx`, then
+  `NestedSbomIndex.load` (`name@version` → `location`) and `attributeNested`
+  set the `container` key on each finding (falling back to the name alone if it is
+  unambiguous); `_printScanResults` adds the `OBJECT` column. Reports and SARIF
+  do not use `container`.
+* *CLI validation*: invalid `--depth` → error; `--depth > 0` without
+  `--input` → error; `scan --depth` without `--package` → error; `--package`
+  mutually exclusive with `--sbom`/`--image`.
+* Tests: `test/unit/nested_archive_test.dart` (unit),
+  `test/integration/nested_depth_test.dart` (tgz → jar → jar + lockfile,
+  fixtures built with `python3`).
+
+[[sec-image-layers]]
+== `lib/image_layers.dart` — Per-layer analysis (`--per-layer`)
+
+Produces, for a container image, the *delta* of each layer (added,
+modified, removed components) and the annotations that the generators
+add to the global SBOM and the layer SBOMs. Backend-independent:
+the analysis of a rootfs state is injected (`scan`), and the attribution by
+metadata is provided by `OciParser`.
+
+=== Model
+
+[cols="1,3",options="header"]
+|===
+|Type |Role
+
+|`ImageLayer`
+|layer: `index` (1 = base), `diffId` (`sha256:…` of the uncompressed tar), `blobPath` (tar on disk, rootfs mode), `createdBy`/`created` (config `history[]`, `empty_layer` entries ignored)
+
+|`LayerDelta`
+|`added`, `modified` (`PackageChange = (before, after)`), `removed`; `packages` = components described by the layer SBOM; `map(f)` to apply license / supplier overrides
+
+|`LayerAnalysis`
+|`mode`, `layers`, `deltas`; `origins()` → `bomRef` → `LayerOrigin` (introducing layer, modifying layers) for the final state
+
+|`LayerSummary`
+|summary of a layer (counters, `fileBase`, `documentUuid`) — serialised as JSON in the global SBOM
+
+|`LayerAnnotations`
+|what the generators receive (`layers:` parameter of each `generate`/`writeToFile`): `forLayer` (described layer, change per `bomRef`, previous version, removed ones, link to the global one) or `forGlobal` (originating layer per `bomRef`, layer summary). `documentUuid` fixes the CycloneDX serial number / the SPDX namespace, for cross-links
+|===
+
+=== Reading the layers
+
+- `readDockerArchiveLayers(dir)`: extracted `docker save`/`podman save` archive
+  (`manifest.json` → `Config` + `Layers[]`).
+- `readOciLayoutLayers(dir)`: `index.json` → (nested index, `linux/amd64`
+  manifest preferably) → config + `layers[]` (`blobs/sha256/…`).
+- Without usable `diff_ids`, the digest is deduced from the file name.
+
+=== `rootfs` mode: `analyzeRootfsLayers`
+
+For each layer: `tar -xf` into a temporary directory (compression
+detected by tar; entries that cannot be created without privileges ignored),
+`chmod -R u+rwX`, then *`mergeLayerDir`* onto the cumulative rootfs, then
+`scan(rootDir)` and `diffPackages(previous, current)`.
+
+`mergeLayerDir` applies overlayfs semantics: `.wh.<name>` removes the lower
+entry, `.wh..wh..opq` empties the directory, a directory merges recursively,
+any other entry replaces. Entries are *moved* (`rename`) and the descent *never* goes
+through a symbolic link — unlike successive `tar -x` into the same directory
+(the historical `skopeo` backend), a malicious layer (`x -> /` then
+`x/…`) cannot write anything outside the rootfs (case covered by
+`test/unit/image_layers_test.dart`).
+
+`diffPackages` first matches by `bomRef` (component present on both
+sides: "modified" if PURL, license, supplier or hashes differ),
+then the leftovers by logical identity `type|name|arch` when it is
+unambiguous on both sides — a version bump becomes "modified" rather than
+removal + addition. Several versions of the same name (nested `node_modules`)
+are not paired.
+
+=== `metadata` mode: `metadataLayerAnalysis`
+
+Distributes the packages of the usual analysis according to `layerOf` (`bomRef` →
+layer index) provided by `OciParser.layerAttribution`; only additions
+are known. A package with no known layer appears in no layer SBOM
+(console warning).
+
+=== `OciParser` side
+
+[cols="1,3",options="header"]
+|===
+|Method |Role
+
+|`layerAttribution(ref, tool)`
+|trivy: `Results[].Packages[].Layer.DiffID`, layers from `Metadata.DiffIDs` + `Metadata.ImageConfig.history`. syft: second `--scope all-layers` analysis; each artifact carries the `locations[].layerID` where syft saw it, the lowest layer is kept (the derived source package inherits that of its binary); layers from `source.metadata.layers[].digest`, history from `source.metadata.config` (base64). The usual "squashed" analysis is not suitable: it attaches all system packages to the last layer that rewrote the rpm/dpkg/apk database
+
+|`rootfsLayerAnalysis(ref, tool)`
+|`_materializeLayers` (tar archive — docker-archive or oci-archive —, OCI layout, or registry copied via `_copyToOciLayout`), then `analyzeRootfsLayers` with `scanRootfs`
+
+|`scanRootfs(dir, tool, ref)`
+|syft `dir:<dir> --base-path <dir> --override-default-catalogers image` (same "installed packages" catalogers as for an image; absolute links resolved under `dir`); trivy `rootfs`; skopeo `_scanExtractedRootfs` (dpkg/RPM/APK/Maven/Python/npm); cdxgen `--type rootfs`
+
+|`_copyToOciLayout(ref, dest)`
+|`skopeo copy` to `oci:<dest>:image`; for a registry reference, falls back to `containers-storage:` (podman) then `docker-daemon:` (locally built images)
+|===
+
+== `lib/sbom_diff.dart` — SBOM comparison
+
+=== `SbomDiffer`
+
+Main class. `diff()`, `printDiff()` and `toJson()` are instance
+methods; only `loadFile()` is static:
+
+[cols="2,2,2", options="header"]
+|===
+|Method |Input |Output
+
+|`diff(Map a, Map b)`
+|Two parsed JSON SBOMs (CycloneDX, SPDX 2.3 or SPDX 3.0 JSON-LD, independently detected for each file)
+|`SbomDiffResult`
+
+|`printDiff(result)`
+|`SbomDiffResult`
+|Coloured ANSI output on stdout (green=addition, red=removal, yellow=update)
+
+|`toJson(result)`
+|`SbomDiffResult`
+|`Map<String, dynamic>` with a `summary` section
+
+|`loadFile(path)` _(static)_
+|File path
+|`Future<Map<String, dynamic>>`
+|===
+
+=== `SbomDiffResult`
+
+[source,dart]
+----
+class SbomDiffResult {
+  final List<SbomComponent> added;
+  final List<SbomComponent> removed;
+  final List<SbomComponentUpdate> updated;
+}
+----
+
+=== Comparison algorithm
+
+. `_indexComponents()` detects the format of each file independently
+  (`spdxVersion` present → `_indexSpdxComponents()`, `@graph` present →
+  `_indexSpdx3Components()`, otherwise `_indexCycloneDxComponents()`) and produces
+  a `Map<String, SbomComponent>` indexed by `_componentKey()`.
+. `_componentKey()`: `purl.substring(0, purl.lastIndexOf('@'))` if the PURL
+  contains an `@`, otherwise `name:type` (key without version) — identical for the
+  three formats, which makes it possible to compare two files in different
+  formats.
+. Index comparison: absent from A = addition, absent from B = removal, present in
+  both with a different version = update.
+
+[NOTE]
+====
+The `diff` subcommand is accessible via `sbom_generator diff <a> <b> [--json] [-o <out>]`.
+The same purl-first key is used on the GUI side (`gui/lib/widgets/sbom_diff_panel.dart`,
+function `_diffKey()`) so that both comparisons produce the same result.
+====
+
+== `lib/sbom_merger.dart` — SBOM merging
+
+=== `SbomMerger`
+
+[source,dart]
+----
+class SbomMerger {
+  Map<String, dynamic> merge(
+    List<Map<String, dynamic>> sboms, {
+    String? documentName,
+  });
+}
+----
+
+`merge()` is an instance method (not static). It detects the format
+of the **first** SBOM provided (`spdxVersion` present → `_mergeSpdx()`, otherwise
+`_mergeCycloneDx()`) and merges all the files according to that same
+structure; the resulting document is produced in that same format.
+
+=== Merge algorithm — CycloneDX (`_mergeCycloneDx`)
+
+. First SBOM as the base (preserves `metadata`).
+. Traversal of all the following SBOMs:
+  - Deduplication of `components` by `purl` (then by `bom-ref` if the PURL is absent).
+  - Deduplication of `dependencies` by `ref`.
+  - Deduplication of `citations` and `definitions.patents` (CycloneDX 1.7) by `bom-ref`.
+. New UUID v4 `serialNumber` generated via `_generateUuid()`.
+. `documentName` overrides `metadata.component.name` if provided.
+
+=== Merge algorithm — SPDX 2.3 (`_mergeSpdx`)
+
+. First SBOM as the base (preserves `dataLicense`, `creationInfo.licenseListVersion`).
+. Deduplication of `packages` by PURL (`externalRefs[referenceType=purl]`), then by `SPDXID`.
+. Deduplication of `relationships` by triple `(spdxElementId, relationshipType, relatedSpdxElement)`.
+. New `documentNamespace` generated via `_generateUuid()`.
+. `documentName` overrides `name` if provided.
+
+[NOTE]
+====
+The source files must all be in the same format as the first
+file provided (CycloneDX or SPDX 2.3); a file in a different format
+is not explicitly rejected — it simply produces an
+incomplete merge, for lack of cross-format validation. The SPDX 3.0
+format (JSON-LD) is not supported as input for `merge`.
+
+The source documents' `SPDXID`s are kept as is in the merged
+`relationships`; for SBOMs generated by this tool they are
+deterministic (name+version via `Package.spdxId`), hence stable across
+documents — a collision remains theoretically possible if an
+external document reuses a generic `SPDXID` for another package.
+====
+
+== `lib/license_report_generator.dart` — License report (`licenses` subcommand)
+
+=== `LicenseReportGenerator`
+
+[source,dart]
+----
+enum LicenseReportFormat { asciidoc, markdown, html, csv, json }
+
+class LicenseReportGenerator {
+  LicenseReport analyze(List<Package> packages, {String? documentName});
+  String render(List<Package> packages,
+      {String? documentName, LicenseReportFormat format});
+  Future<void> writeToFile(
+    List<Package> packages,
+    String outputPath, {
+    String? documentName,
+    LicenseReportFormat format,
+  });
+  static LicenseCategory classify(String license);
+}
+----
+
+`analyze` produces a `LicenseReport` (sorted groups, packages without license,
+counters and copyleft identifiers) independent of the format; each format
+is only a rendering of this model. The JSON (`-f json`) is the contract read by the
+GUI (`gui/lib/models/license_report.dart`): `summary`, `licenses[]`
+(`license`, `category` = `permissive|weak-copyleft|strong-copyleft`,
+`packages[]`) and `unknown[]`.
+
+Groups packages by **exact** `pkg.license` — the string as
+present in the source SBOM, including compound expressions
+(`A AND B AND …`, frequent on Debian/RPM packages whose all
+licenses found in the sources are concatenated) — and writes an
+AsciiDoc report in four parts: numeric summary, copyleft warning, detailed
+section per license, section of packages with no detected license.
+
+=== Copyleft classification
+
+`classify(license)` applies a substring heuristic on the whole
+expression (case-insensitive):
+
+[cols="2,3", options="header"]
+|===
+|Category |Condition
+
+|`strongCopyleft`
+|contains `AGPL`, or `GPL` not preceded by a letter — regex `(?<![A-Z])GPL`, so as not to confuse with `LGPL`
+
+|`weakCopyleft`
+|contains `LGPL`, `MPL`, `EPL`, `CDDL`, `CPL` or `EUPL`
+
+|`permissive`
+|none of the markers above
+
+|`unknown`
+|empty string
+|===
+
+This classification applies to the **whole** expression: a compound expression
+containing a single copyleft token (e.g. `BSD-3-Clause AND
+GPL-2.0-only AND MIT`) classifies the whole group as copyleft — this behaviour
+is intended, the presence of a copyleft component in the mix is enough
+to trigger the warning.
+
+[NOTE]
+====
+`_copyleftTokens(license, target)` splits a compound expression on
+`AND`/`OR` and only keeps the tokens whose *individual* classification
+matches `target`. This step is only used to build the list
+of identifiers of the warning at the top of the report — the grouping by
+section always keeps the complete expression as declared.
+
+Without this step, a real Debian SBOM (licenses systematically
+concatenated) produces a warning listing dozens of entire
+compound strings, unreadable, rather than the individual copyleft identifiers
+actually at issue. Observed when testing the command on a Trivy SBOM
+of 157 nginx/Debian packages: without the splitting, the warning
+fit on a single line of several thousand characters.
+====
+
+The copyleft classification is a spotting heuristic meant to
+draw attention, not a legal analysis.
+
+== `lib/policy_checker.dart` — CI/CD policy checks
+
+=== `PolicyChecker`
+
+[cols="2,2,2", options="header"]
+|===
+|Method |Parameters |Returns
+
+|`checkDenyLicenses`
+|`List<Package> packages, List<String> denyPatterns`
+|`List<LicenseViolation>`
+
+|`runSbomqs`
+|`String sbomPath`
+|`Future<double?>` — score or `null` if sbomqs is absent
+|===
+
+=== `LicenseViolation`
+
+[source,dart]
+----
+class LicenseViolation {
+  final String packageName;
+  final String version;
+  final String license;
+  final String deniedPattern;
+}
+----
+
+=== License matching
+
+`_licenseMatches(license, pattern)`: exact match (case-insensitive)
+or partial match (`license.contains(pattern)`). This means that
+`--deny-license GPL` blocks `GPL-2.0-only`, `GPL-3.0-or-later`, `LGPL-2.1-only`, etc.
+
+=== CLI integration
+
+After generation, if policy flags are present:
+. `checkDenyLicenses` is called on all the unique packages.
+. `runSbomqs` is called if `--min-quality-score` is specified.
+. In case of violation(s), the detail is printed on stderr and the process
+  exits with code `2` (distinct from `1` = analysis error).
+
+== `lib/html_generator.dart` — Interactive HTML report
+
+=== `HtmlGenerator`
+
+[source,dart]
+----
+class HtmlGenerator {
+  Future<void> writeToFile(
+    List<Package> packages,
+    String outputPath, {
+    String? documentName,
+  }) async;
+}
+----
+
+=== Structure of the HTML report
+
+The produced file is *fully standalone*: inline CSS and JavaScript,
+no external dependency nor network required. Its texts follow the current
+language (`tr()`, `<html lang>` attribute included); the "no license" grouping key is
+the localised label (`_unspecified`).
+
+[cols="1,3", options="header"]
+|===
+|Section |Content
+
+|Header
+|Title, generation date, number of components
+
+|Statistics cards
+|Total components, number of ecosystems, distinct licenses, components without license
+
+|Charts (CSS-only)
+|Proportional horizontal bars for the top-10 ecosystems and top-15 licenses
+
+|Filterable table
+|Text search field (name/version/license/PURL) + filter by type, sortable by column
+
+|Footer
+|`sbom_generator` mention
+|===
+
+=== Sorting and filtering (vanilla JavaScript)
+
+* `filterTable()`: filters the list by text and by type, updates the visible counter.
+* `sortTable(col)`: ascending/descending sort by clicking the column header.
+
+=== `_esc(String s)`
+
+Escapes `&`, `<`, `>`, `"` for safe insertion in the HTML.
+
+== `lib/requirements_parser.dart` — Python requirements.txt parsing
+
+*Pure Dart* parser, no subprocess. Returns `List<WheelPackage>`.
+
+=== `RequirementsParser`
+
+[source,dart]
+----
+class RequirementsParser {
+  List<WheelPackage> parseFile(String path) { … }
+  WheelPackage? _parseLine(String raw, String sourceRef) { … }
+}
+----
+
+=== Ignored lines
+
+* Empty or starting with `#`
+* pip directives: `-r`, `-i`, `-e`, `-f`, `-c`
+
+=== Per-line extraction
+
+. Removes environment markers (`;` and what follows)
+. Removes inline comments (`#` and what follows)
+. Removes `[security]` extras (regex `\[.*?\]`)
+. Extracts the version after `==` (pinned) or the first version number otherwise
+. Normalises the name according to PEP 503 (`[-_.]+ → -`, lowercase)
+
+=== Integration in `main()` — manifest pre-expansion
+
+All parsers producing N packages from a single file (1:N cardinality)
+are *pre-expanded before the concurrent loop*:
+
+[source,dart]
+----
+for (final ref in packageRefs) {
+  if (_isRequirements(ref)) {
+    preloadedPackages.addAll(reqParser.parseFile(ref));
+  } else if (_isGoSum(ref)) {
+    preloadedPackages.addAll(goParser.parseGoSum(ref));
+  } else if (_isGoMod(ref)) {
+    preloadedPackages.addAll(goParser.parseGoMod(ref));
+  } else if (_isPackageLock(ref)) {
+    preloadedPackages.addAll(npmParser.parsePackageLock(ref));
+  } else if (_isYarnLock(ref)) {
+    preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
+  } else if (_isPomXml(ref)) {
+    preloadedPackages.addAll(mavenParser.parsePomXml(ref));
+  } else if (_isPubspecLock(ref)) {
+    preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref));
+  } else if (_isPubspecYaml(ref)) {
+    preloadedPackages.addAll(pubspecParser.parsePubspecYaml(ref));
+  } else {
+    filteredRefs.add(ref);
+  }
+}
+// … Future.wait loop over filteredRefs …
+packages.addAll(preloadedPackages);
+----
+
+Detection helpers:
+
+[source,dart]
+----
+bool _isRequirements(String r) => r.endsWith('.txt') && !r.endsWith('.whl');
+bool _isGoSum(String r)        => r.endsWith('go.sum');
+bool _isGoMod(String r)        => r.endsWith('go.mod');
+bool _isPackageLock(String r)  => r.endsWith('package-lock.json');
+bool _isYarnLock(String r)     => r.endsWith('yarn.lock');
+bool _isPomXml(String r)       => r.endsWith('pom.xml');
+bool _isPubspecLock(String r)  => r.endsWith('pubspec.lock');
+bool _isPubspecYaml(String r)  => r.endsWith('pubspec.yaml');
+----
+
+[NOTE]
+====
+*Why pre-expansion?* The concurrent loop produces `Future<Package?>`
+(1 ref → 0 or 1 package). A manifest file may contain N packages
+(1:N cardinality), incompatible with this model.
+====
+
+== `lib/go_parser.dart` — Go modules
+
+Pure Dart parser for `go.sum` and `go.mod`. Uses `WheelPackage` with
+`packageType: 'golang'`.
+
+=== `parseGoSum(String path)`
+
+`go.sum` format: a `module version hash` or `module version/go.mod hash` line.
+
+[source,text]
+----
+github.com/gorilla/mux v1.8.1 h1:TnC2...
+github.com/gorilla/mux v1.8.1/go.mod h1:dvbg...
+----
+
+Processing:
+. Ignores empty lines or lines starting with `#`
+. Ignores lines whose second field ends with `/go.mod` (checksum duplicate)
+. Extracts `module` and `version` (`v` prefix removed)
+. Deduplication by `module@version` key (avoids the duplicate between a module's two lines)
+. Name = raw module path in lowercase (slashes kept for the PURL)
+
+=== `parseGoMod(String path)`
+
+`go.mod` format: individual or block `require` directives.
+
+[source,text]
+----
+require (
+    github.com/gorilla/mux v1.8.1
+    golang.org/x/net v0.17.0  // indirect
+)
+require github.com/pkg/errors v0.9.1
+----
+
+Processing:
+. Detects `require (…)` blocks and isolated `require x v` directives
+. Removes `// indirect` comments and everything following `//`
+. `v` prefix removed from the version
+. `v0.0.0-yyyymmdd-commit` versions (pseudo-versions) are kept as is
+
+== `lib/npm_parser.dart` — npm packages
+
+Pure Dart parser for `package-lock.json` (lockfileVersion 1, 2 and 3).
+
+=== Version detection
+
+[source,dart]
+----
+final v = json['lockfileVersion'];
+if (v == 1) return _parseDependenciesField(json);
+return _parsePackagesField(json);   // v2 and v3
+----
+
+=== `_parsePackagesField` (v2/v3)
+
+`packages` key → map `{ "node_modules/pkg": { version, license, integrity, … } }`.
+
+. Ignores the empty key `""` (project root)
+. `_stripNodeModulesPrefix`: segment after the *last* `node_modules/`
+  (handles nested paths `node_modules/a/node_modules/b`)
+. `_extractLicense(raw)`: handles `String | List` (some packages declare
+  several licenses as an array `[{ "type": "MIT" }]`)
+. `integrity` (SRI `sha512-<base64>`) → `hashes` via `packageHashFromSri`
+
+==== Supplier (`_authorFromPackageJson`)
+
+The npm lockfile carries **no author**. `_parsePackagesField` resolves
+`<lockfile directory>/<node_modules key>/package.json` and reads `author`
+(otherwise the 1^st^ `contributors[]` / `maintainers[]`); `_personName` normalises
+a `{name}` object or a `"Name <email> (url)"` string → `"Name"`.
+Best-effort: `node_modules` tree absent (lockfile committed without
+`npm install`) → empty string, no error. Not applied to the v1 path
+(no reliable installation path).
+
+=== `_parseDependenciesField` (v1)
+
+`dependencies` key → recursive map (nested dependencies).
+
+. Recursive processing: for each package, its own `dependencies` are
+  also parsed (npm v1 nested dependencies)
+. Each package has `version` and `resolved` at the top level
+
+== `lib/yarn_parser.dart` — yarn packages
+
+Pure Dart parser for `yarn.lock`, compatible with yarn v1 (classic) and yarn v2+
+(Berry).
+
+=== Format detection
+
+[source,dart]
+----
+final isBerry = content.contains('__metadata:');
+return isBerry ? _parseBerry(content) : _parseClassic(content);
+----
+
+=== `_parseClassic` (yarn v1)
+
+Format: `"pkg@^1.0.0":` blocks followed by indented lines.
+
+[source,text]
+----
+"lodash@^4.17.21":
+  version "4.17.21"
+  resolved "https://registry.yarnpkg.com/..."
+----
+
+. Detects header lines (not indented, ending with `:`)
+. Extracts `name` via `_nameFromHeader()` which handles `@scope/pkg` scopes,
+  `@npm:`, `@patch:` prefixes, and multi-specification headers separated by `, `
+. Groups the `version`, `resolved` fields into `_YarnBlock`
+. Deduplicates by `name@version`
+
+=== `_parseBerry` (yarn v2+)
+
+Format: `"pkg@npm:^1.0.0":` blocks with YAML-like syntax without quotes.
+
+[source,text]
+----
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+----
+
+. Same block logic as classic
+. The `version:` key has no quotes (unlike yarn v1)
+. `__metadata:` is ignored (Berry metadata block)
+
+== `lib/maven_parser.dart` — Maven dependencies
+
+Pure Dart parser for `pom.xml`. Uses light regex-based XML extraction
+(no XML library available — the only pubspec dependency: `args: ^2.4.2`).
+
+=== Pre-cleaning
+
+Before extraction, the confusing sections are removed from the XML:
+
+[source,dart]
+----
+String _stripSection(String xml, String tag) =>
+    xml.replaceAll(RegExp('<$tag[^>]*>.*?</$tag>', dotAll: true), '');
+
+final cleaned = _stripSection(
+    _stripSection(_stripSection(content, 'dependencyManagement'), 'build'),
+    'plugin');
+----
+
+This avoids extracting dependencies from `dependencyManagement` (version
+declarations without an actual dependency) and Maven plugins.
+
+=== Dependency extraction
+
+Regex on each `<dependency>…</dependency>` block:
+
+. `_extractFirst(xml, 'groupId')` and `_extractFirst(xml, 'artifactId')` via regex
+. Version extracted via `_extractFirst(xml, 'version')` (empty if a `${…}` variable)
+. `test` or `system` scope → ignored
+. Name stored as `groupId:artifactId` (`:` separator for PURL reconstruction)
+
+=== Maven PURL
+
+The `WheelPackage.purl` getter handles the `'maven'` type specifically:
+
+[source,dart]
+----
+if (_packageType == 'maven') {
+  final parts = name.split(':');  // ["org.slf4j", "slf4j-api"]
+  final ns = Uri.encodeComponent(parts[0]);
+  final nm = Uri.encodeComponent(parts[1]);
+  return 'pkg:maven/$ns/$nm@$v';
+}
+----
+
+Example: `org.slf4j:slf4j-api@2.0.7` → `pkg:maven/org.slf4j/slf4j-api@2.0.7`
+
+== `lib/pubspec_parser.dart` — Dart/Flutter packages
+
+*Pure Dart* parser (without the `yaml` dependency) for `pubspec.lock` and
+`pubspec.yaml`. Returns `List<WheelPackage>` with `packageType: 'pub'`
+(PURL `pkg:pub/<name>@<ver>`).
+
+=== `parsePubspecLock(String path, {Map<String,String> sdkVersions})`
+
+Line-by-line reading of the `packages:` block (stable 2-space indentation
+generated by `pub`). For each package:
+
+* `dependency:` — `direct dev` → **excluded**. Transitives pulled only
+  by a dev dependency cannot be distinguished in the lockfile: they
+  remain included.
+* `source:` — `hosted` | `git` | `path` | `sdk`: all kept.
+* `description.name` (hosted) → package name; otherwise the block key.
+* `source: sdk` — the name is **always the key** (`flutter`, `sky_engine`,
+  `flutter_web_plugins`…). The scalar `description:` (`description: flutter`)
+  names the SDK, not the package: using it as the name stuck all these packages
+  on `flutter` then deduplicated them (regression fixed). It is now only
+  used to choose the key in `sdkVersions`.
+* `version:` — resolved version; for `source: sdk`, `pub` always writes
+  `"0.0.0"` (no real version for a package shipped in the SDK) → **empty
+  version** (`pkg:pub/flutter`), unless `sdkVersions` provides the real version
+  (`{'flutter': '3.47.2'}` → all `description: flutter` packages inherit
+  `3.47.2`). Fed by `--sdk-version <sdk>=<ver>` on the CLI side.
+
+`--sdk-version` has a **second effect**, independent of the pubspec parsing: the
+`sdkVersions` map is passed to `CycloneDxGenerator` / `SpdxGenerator` /
+`Spdx3Generator` (`sdkTools` parameter) which add each SDK to the document's
+toolchain — `metadata.tools.components[]` (`type: platform`,
+`bom-ref: tool-sdk-<name>`) in CycloneDX, `creationInfo.creators`
+(`Tool: <name>-<version>`) in SPDX 2.3, a `Tool` element referenced by
+`createdBy` in SPDX 3.0. This is the only place where the **dart** SDK version
+appears (it has no package entry in a Flutter lockfile).
+
+==== Licenses (`--pub-cache` / `--flutter-root`)
+
+`pubspec.lock` carries no license. `_resolveLicense()` locates the
+`LICENSE` file of the *resolved* package on disk and identifies it via
+`identifyArchiveLicense()` (`archive_helpers.dart`):
+
+[cols="1,3", options="header"]
+|===
+|`source:` |Directory searched
+
+|`hosted`
+|`<pubCache>/hosted/<host>/<name>-<version>/` (host deduced from `description.url`,
+`pub.dev` by default)
+
+|`git`
+|`<pubCache>/git/<name>-<resolved-ref>[/<description.path>]/`
+
+|`path`
+|`<description.path>` resolved from the `pubspec.lock` directory
+
+|`sdk`
+|`<flutterRoot>/packages/<name>/`, then `<flutterRoot>/bin/cache/pkg/<name>/`,
+then `<flutterRoot>/LICENSE` (fallback — `flutter_web_plugins` has no LICENSE
+of its own)
+|===
+
+File names tested: `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `LICENCE`,
+`COPYING`, `license`. A missing or unidentifiable file → empty license, no
+error. `pubCache` is auto-detected on the CLI side (`$PUB_CACHE`, otherwise
+`~/.pub-cache` if it exists); `--pub-cache ""` neutralises it.
+
+NOTE: `identifyArchiveLicense()` now recognises the canonical BSD-3-Clause
+text ("Redistribution and use in source and binary forms… / endorse or
+promote products derived") even without the word "BSD" — it is the `LICENSE` of
+almost all pub packages (written by Google).
+* `description.sha256` (hosted) → `WheelPackage.hashes` (`PackageHash('SHA-256', …)`).
+* `description.url` → homepage (`https://pub.dev/packages/<name>` for
+  pub.dev, `<registry>/packages/<name>` for a private registry, the repository
+  URL for `git`).
+
+=== `parsePubspecYaml(String path, {Map<String,String> sdkVersions})`
+
+Only reads the `dependencies:` section (the `dev_dependencies:` and
+`dependency_overrides:` sections are ignored). `flush()` approach: each dependency
+block is buffered to spot a nested `sdk: <x>` line (SDK dependency)
+before emission — its version then comes from `sdkVersions[<x>]` if provided,
+otherwise empty. A simple constraint is reduced to a single version when it is
+unambiguous (`^1.2.3`, `1.2.3`, `>=1.2.3` → `1.2.3`); a range
+(`>=1.0.0 <2.0.0`) or `any` gives an empty version.
+
+=== Lock / yaml priority
+
+In a directory scan, if `pubspec.lock` and `pubspec.yaml` coexist in the
+same place, `bin/sbom_generator.dart` only keeps the `.lock` (resolved
+versions + transitive closure). In a list file, both are honoured as
+listed.
+
+== `lib/csv_generator.dart` — CSV export
+
+Generates a CSV file (RFC 4180) from a `List<Package>`.
+
+=== Signature
+
+[source,dart]
+----
+Future<void> writeToFile(List<Package> packages, String outputPath,
+    {String documentName = 'SBOM', String? inputRef}) async
+----
+
+=== Output format
+
+Fixed header: `name,version,architecture,license,type,purl,url,vendor`
+
+Packages are sorted by name before writing. Each column goes through
+`_cell(value)`:
+
+[source,dart]
+----
+String _cell(String v) {
+  if (v.contains(',') || v.contains('"') || v.contains('\n')) {
+    return '"${v.replaceAll('"', '""')}"';
+  }
+  return v;
+}
+----
+
+RFC 4180: values containing a comma, a quote or a newline
+are enclosed in double quotes, and internal quotes are doubled. The CSV header
+is a machine-read format and is never translated.
+
+== `lib/sbom_reader.dart` — SBOM reader
+
+Re-reads an existing JSON SBOM file and rebuilds a `List<Package>`.
+Used by the `convert` and `licenses` subcommands.
+
+=== `SbomFormat` enum
+
+[source,dart]
+----
+enum SbomFormat { cyclonedx, spdx2, spdx3, unknown }
+----
+
+=== Format detection
+
+[source,dart]
+----
+static SbomFormat detectFormat(Map<String, dynamic> json) {
+  if (json['bomFormat'] == 'CycloneDX')    return SbomFormat.cyclonedx;
+  if (json.containsKey('spdxVersion'))     return SbomFormat.spdx2;
+  if (json.containsKey('@context') && json.containsKey('@graph'))
+                                           return SbomFormat.spdx3;
+  return SbomFormat.unknown;
+}
+----
+
+=== `read(json)` method
+
+Dispatches according to the format:
+
+* *CycloneDX*: reads `json['components']` → `List<Map>` → `_cdxComponent(c)` for each element
+* *SPDX 2.3*: reads `json['packages']` → `_spdx2Package(p)` for each element
+* *SPDX 3.0*: reads `json['@graph']` → filters the nodes of type `software:Package`
+  (`_isSpdx3Package` also tolerates `software_Package`) → `_spdx3Package(node)`,
+  which reads the `software:`-prefixed fields (`software:packageVersion`,
+  `software:downloadLocation`)
+
+Each extractor fills in: `name`, `version`, `purl`, `license`, `vendor`,
+`url`, `hashes` (`hashes` / `checksums` / `verifiedUsing` depending on the format), and
+infers the `packageType` via `_purlToType(purl)`.
+
+=== `_purlToType(String purl)`
+
+[source,dart]
+----
+String _purlToType(String purl) => switch (true) {
+  _ when purl.startsWith('pkg:rpm/')      => 'rpm',
+  _ when purl.startsWith('pkg:golang/')   => 'golang',
+  _ when purl.startsWith('pkg:npm/')      => 'npm',
+  _ when purl.startsWith('pkg:maven/')    => 'maven',
+  _ when purl.startsWith('pkg:pypi/')     => 'pypi',
+  _ when purl.startsWith('pkg:cargo/')    => 'cargo',
+  _ when purl.startsWith('pkg:apk/')      => 'apk',
+  _ when purl.startsWith('pkg:deb/')      => 'deb',
+  _                                       => 'source',
+};
+----
+
+== `bin/sbom_generator.dart` — Entry point
+
+=== `--input` / `-i` option — list file, single archive, or directory
+
+Historically, `--input` always had to point to a list file
+(text, one reference per line). Passing a binary archive directly
+(`.zip` in particular) crashed `File.readAsLines()` with a poorly explicit
+UTF-8 decoding `FileSystemException`. `--input` now accepts
+three forms, resolved by three mutually exclusive branches:
+
+[source,dart]
+----
+bool _isSingleArchiveInput(String path) =>
+    path.endsWith('.zip') ||
+    _isTar(path) ||
+    path.endsWith('.whl') ||
+    path.endsWith('.deb') ||
+    path.endsWith('.rpm') ||
+    _isJar(path);
+
+if (inputPath != null) {
+  if (await FileSystemEntity.isDirectory(inputPath)) {
+    // Recursive scan: any file matched by _isSupportedPackageFile()
+    // becomes a packageRef.
+    final found = <String>[];
+    await for (final entity
+        in Directory(inputPath).list(recursive: true, followLinks: false)) {
+      if (entity is File && _isSupportedPackageFile(entity.path)) {
+        found.add(entity.path);
+      }
+    }
+    found.sort();
+    // If pubspec.lock and pubspec.yaml coexist in the same place, only the
+    // .lock is kept (resolved versions + transitive closure).
+    packageRefs = found;
+  } else if (_isSingleArchiveInput(inputPath) ||
+      _isSupportedPackageFile(inputPath)) {
+    // Single archive/package/manifest (exact name for manifests):
+    // pubspec.lock, requirements.txt, go.sum, pom.xml…
+    packageRefs = [inputPath];
+  } else {
+    try {
+      lines = await File(inputPath).readAsLines();
+    } on FileSystemException {
+      _err('… explicit message …');
+      exit(1);
+    }
+    // … splitting into packageRefs …
+  }
+}
+----
+
+For any remaining path (list file branch), the line-by-line reading
+remains protected by a `try/catch`: any `FileSystemException` (unrecognised
+binary file, invalid encoding) produces an actionable error message instead of a raw
+stack trace.
+
+`_isSupportedPackageFile()` is deliberately stricter than the list
+file for manifests: it requires an *exact* file name
+(`requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`,
+`yarn.lock`, `pubspec.lock`, `pubspec.yaml`) rather than a generic extension
+(`*.txt` for instance), to avoid
+a `README.txt` or a `notes.txt` lying around in the scanned tree being
+mistaken for a requirements file. The list file, for its part, keeps
+accepting any `.txt` (other than `.whl`) via `_isRequirements()` — the
+tolerance is acceptable there because the user explicitly typed the path.
+
+Bare RPM package names (e.g. `bash`) are never discovered by the
+directory scan: they are not files on disk. `--rpm-dir` remains
+the dedicated mechanism to resolve this case.
+
+`FileSystemEntity.type()` replaces the former `File(inputPath).exists()` for
+the initial existence check, because the latter returns `false` for a
+directory path (only true for files), which would have made
+`--input <directory>` fail with "Input file not found".
+
+=== `--image` / `-I` option _(new)_
+
+Reference to an OCI image to analyse. Three accepted formats:
+
+[cols="1,2,2", options="header"]
+|===
+|Format |Description |Example
+
+|Registry
+|Docker Hub or private registry image
+|`nginx:latest`, `ubuntu@sha256:…`
+
+|Tar archive
+|`docker save` or `skopeo copy docker-archive:` export (.tar, .tar.gz, .tgz)
+|`/path/ubuntu.tar`, `/path/image.tar.gz`
+
+|OCI layout
+|Directory containing `index.json`
+|`/path/oci_dir/`
+
+|Local file (binary)
+|Any existing file path, not covered by the three cases
+above — see <<sec-option-binary>> (`--binary`, more explicit for this case)
+|`/usr/local/bin/my-app`
+|===
+
+*`--input` becomes optional* when `--image` is provided. Both sources
+can be combined: OCI packages and packages from the list are
+merged before deduplication and generation.
+
+The OCI tool is checked at startup (`<tool> --version`); the error is
+fatal if the tool is absent.
+
+=== `--oci-tool` option _(new)_
+
+OCI analysis backend, used together with `--image`. Valid values:
+
+[cols="1,3", options="header"]
+|===
+|Value |Description
+
+|`syft` _(default)_
+|Anchore Syft — all package types (deb, rpm, apk, pypi, npm, go, java…)
+
+|`trivy`
+|Aqua Trivy — all package types
+
+|`skopeo`
+|Skopeo + manual layer extraction — dpkg, RPM, APK, Maven JARs, PyPI packages and npm
+
+|`cdxgen`
+|OWASP CycloneDX Generator (`cdxgen --type docker`) — all package types;
+CycloneDX BOM filtered to components carrying a real ecosystem PURL.
+Requires Node.js.
+|===
+
+=== `--rpm-dir` / `-d` option
+
+Makes it possible to resolve bare RPM names (without `/` or extension) to local
+`.rpm` files instead of querying the installed packages database.
+
+*Indexing at startup* (only once):
+
+[source,dart]
+----
+final rpmExactIndex = <String, String>{};       // stem → absolute path
+final rpmNameIndex  = <String, List<String>>{}; // package name → [sorted paths]
+
+await for (final entity in dir.list(recursive: true, followLinks: false)) {
+  if (entity is File && entity.path.endsWith('.rpm')) {
+    final stem = entity.path.split('/').last.replaceAll(RegExp(r'\.rpm$'), '');
+    rpmExactIndex[stem] = entity.path;
+    final name = RegExp(r'^(.+?)-\d').firstMatch(stem)?.group(1) ?? stem;
+    rpmNameIndex.putIfAbsent(name, () => []).add(entity.path);
+  }
+}
+for (final paths in rpmNameIndex.values) paths.sort();
+----
+
+* *`rpmExactIndex`*: key = full stem (e.g. `bash-5.1.8-6.el9.x86_64`),
+  value = path. Covers exact NEVRA matches.
+* *`rpmNameIndex`*: key = package name extracted by `^(.+?)-\d` (e.g. `bash`),
+  value = sorted list of paths. Covers short names.
+
+*Resolution in the loop*:
+
+[source,dart]
+----
+if (rpmDir != null && !ref.contains('/') && !ref.endsWith('.whl') && !_isTar(ref)) {
+  final resolved = rpmExactIndex[ref] ?? rpmNameIndex[ref]?.first;
+  if (resolved != null) ref = resolved;
+  // If several files match the name: warning + first alphabetically
+}
+----
+
+If no match is found in the directory, `rpm -q` is used
+normally (transparent fallback). `.whl` references, tar/zip archives,
+`.deb` and `.jar` are never concerned, even if `--rpm-dir` is specified.
+
+=== `--format` / `-f` option — multi-format _(new)_
+
+Now accepts a comma-separated list of formats. Each format generates
+a separate output file.
+
+* *Single format* (`-f cyclonedx`): `--output` is used as is (backward compatibility)
+* *Multiple formats* (`-f cyclonedx,spdx,markdown`): `--output` is treated as
+  a *base path*; the appropriate extension is added automatically by
+  `_formatExtension()` / `_basePath()`
+
+[cols="1,1", options="header"]
+|===
+|Format |Extension added
+
+|`cyclonedx`
+|`.cdx.json`
+
+|`spdx`
+|`.spdx.json`
+
+|`spdx3`
+|`.spdx3.jsonld`
+
+|`json`
+|`.custom.json`
+
+|`markdown`
+|`.md`
+
+|`asciidoc`
+|`.adoc`
+
+|`html`
+|`.html`
+
+|`csv`
+|`.csv`
+|===
+
+`_basePath(output)` removes the known extensions from the name passed to `--output`
+before adding the new extension. Format validation is done
+manually (const `_validFormats`) since `ArgParser.allowed:` does not support
+composite values.
+
+The dependency resolution loop is skipped if *all* the requested formats
+are `markdown` or `asciidoc` (the two tabular formats do not
+need dependency relationships).
+
+=== `diff`, `merge`, `convert`, `licenses`, `validate`, `scan` and `cra` subcommands _(new)_
+
+Routing before the main parsing:
+
+[source,dart]
+----
+if (arguments.first == 'diff')     { await _runDiff(arguments.sublist(1));     return; }
+if (arguments.first == 'merge')    { await _runMerge(arguments.sublist(1));    return; }
+if (arguments.first == 'convert')  { await _runConvert(arguments.sublist(1));  return; }
+if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); return; }
+if (arguments.first == 'licenses') { await _runLicenses(arguments.sublist(1)); return; }
+if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     return; }
+if (arguments.first == 'cra')      { await _runCra(arguments.sublist(1));      return; }
+----
+
+*`_runDiff(args)`*: validates 2 positional arguments, loads the files via
+`SbomDiffer.loadFile()`, calls `SbomDiffer.diff()`, then either `printDiff()`
+(default, ANSI) or `toJson()` (if `--json`). If `--output` is specified,
+writes to the file rather than stdout.
+
+*`_runMerge(args)`*: validates N ≥ 2 positional arguments + `-o <output>`.
+Loads each SBOM, calls `SbomMerger.merge()`, writes the resulting JSON.
+
+*`_runConvert(args)`*: converts an existing SBOM to one or more formats
+without re-scanning the sources.
+
+Options: `-i <source>` (mandatory), `-f <formats>` (comma-separated),
+`-o <output>` (base path), `-n <name>` (document name).
+
+Implementation:
+. Loads the source JSON via `SbomReader.loadJson(path)`
+. Detects the format with `SbomReader.detectFormat(json)` → `SbomFormat` enum
+. Re-reads the packages with `SbomReader().read(json)` → `List<Package>`
+. Reuses the existing generation loop (same generators as scan)
+
+[source,dart]
+----
+final json  = await SbomReader.loadJson(inputFile);
+final pkgs  = SbomReader().read(json);
+final docName = nameOpt ?? SbomReader().documentName(json) ?? 'converted';
+// then switch (fmt) { case 'cyclonedx': … case 'csv': … }
+----
+
+*`_runLicenses(args)`*: generates a license report (AsciiDoc by default,
+Markdown, HTML, CSV or JSON) from an existing SBOM.
+
+Options: `-i <source>` (mandatory), `-o <output>` (mandatory except with
+`-f json`, which then writes to standard output), `-f <format>`, `-n <name>`
+(document name).
+
+Implementation: same loading as `_runConvert` (`SbomReader.loadJson()` +
+`SbomReader().read(json)`), then delegates all the grouping/formatting to
+`LicenseReportGenerator().writeToFile()` — see
+`lib/license_report_generator.dart` above.
+
+*`_runValidate(args)`*: checks the structural conformity of one or more
+SBOM files (mandatory fields) without external dependency.
+
+Options: positional arguments (files to validate), `--strict` (also checks
+the recommended fields). Exit code `0` = all valid, `1` = at least one
+invalid.
+
+[source,dart]
+----
+Future<bool> _validateSbom(Map<String, dynamic> json, bool strict) {
+  final format = SbomReader.detectFormat(json);
+  return switch (format) {
+    SbomFormat.cyclonedx => _validateCycloneDx(json, strict),
+    SbomFormat.spdx2     => _validateSpdx2(json, strict),
+    SbomFormat.spdx3     => _validateSpdx3(json, strict),
+    _                    => false,
+  };
+}
+----
+
+Fields checked:
+
+[cols="1,2,2", options="header"]
+|===
+|Format |Mandatory |Recommended (strict)
+
+|CycloneDX
+|`bomFormat`, `specVersion`, `serialNumber`, `components`
+|`metadata.timestamp`, `metadata.component`, `version`
+
+|SPDX 2.3
+|`spdxVersion`, `SPDXID`, `name`, `dataLicense`, `packages`
+|`documentNamespace`, `creationInfo`
+
+|SPDX 3.0
+|`@context`, `@graph`
+|nodes of type `software:Package` in `@graph`
+|===
+
+=== `scan` subcommand — vulnerability scan _(new)_
+
+`_runScan(args)` queries one or more external scanners on an already
+generated SBOM, with time filtering on the returned CVEs.
+
+Options specific to this subcommand (its own `ArgParser`, distinct from the
+generation options):
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Default |Description
+
+|`--sbom <file>` / `-s`
+|_(mandatory)_
+|SBOM file to analyse (`.cdx.json`, `.spdx.json`…)
+
+|`--scanner <value>` / `-S`
+|`grype`
+|`grype`, `osv`, `trivy`, or `all` for the three
+
+|`--cve-after <YYYY-MM-DD>`
+|—
+|Only shows CVEs whose date is later
+
+|`--cve-before <YYYY-MM-DD>`
+|—
+|Only shows CVEs whose date is earlier (bounded to 23:59:59 of the day)
+
+|`--cve-date-field <value>`
+|`published`
+|Date field used for the filter: `published`, `modified`, or `latest`
+(the more recent of the two)
+
+|`--include-undated`
+|disabled
+|Includes CVEs with no known date in the filtered results (excluded by
+default as soon as a `--cve-after`/`--cve-before` filter is active)
+
+|`--format <value>` / `-f`
+|`text`
+|`text`, `sarif`, or `markdown` / `asciidoc` / `pdf` (cross-scanner summary
+report — see `_reportScanFormats`)
+
+|`--output <file>` / `-o`
+|—
+|Output file. Mandatory for `markdown` / `asciidoc` / `pdf`; for
+`sarif`, stdout if omitted
+
+|`--enrich` / `--no-enrich`
+|enabled
+|Exploitability enrichment (KEV / EPSS / PoC / CVSS). `--no-enrich` or
+`SBOMGEN_OFFLINE=1` → no network request
+
+|`--no-poc`
+|—
+|Cuts only the third-party source (poc-in-github); KEV / EPSS / `E:` maturity
+remain filled in
+
+|`--enrich-timeout <s>`
+|`8`
+|Maximum delay per enrichment network request
+
+|`--only-kev` / `--epss-min <x>`
+|—
+|Prioritisation filters applied after enrichment, all formats
+
+|`--sort <value>`
+|`severity`
+|Console display order: `severity` or `risk` (KEV → EPSS → severity)
+|===
+
+Exit codes: `text` / `sarif` keep the historical contract (`1` if at least
+one CVE, or scanner error). The report formats return `0` as soon as
+a report is written (whatever the number of CVEs), `1` only if
+`--output` is missing or if no scanner produced any result — so that
+a caller like `build-dist.sh` under `set -e` does not break the build at the
+slightest CVE.
+
+Internal architecture:
+
+[cols="1,3", options="header"]
+|===
+|Function |Role
+
+|`_runScan()`
+|Parses the arguments via `ArgParser`, orchestrates the requested scanners
+
+|`_runScanner()`
+|Dispatch to `_runGrype()`, `_runOsv()`, `_runTrivy()`
+
+|`_runGrype()` / `_runOsv()` / `_runTrivy()`
+|Launches the scanner via `Process.run()` (catches `ProcessException` if the
+binary is not found → explicit message on stderr, no crash),
+parses each tool's own JSON, returns a normalised list
+`{id, severity, package, published, modified}`. The `── Name ──` banner
+is only printed if `--format text` (silent in `sarif` so as not to
+pollute the JSON output)
+
+|`_filterByDate()`
+|Applies `after` / `before` / `includeUndated` on the chosen date field
+
+|`_enrichFindings()`
+|After all scanners, before the filters: gathers the identifiers
+(normalised via `_normalizeCveId`) + one `CveSeed` per CVE (CVSS vector,
+and for Grype native KEV/EPSS), calls `VulnEnricher.enrich()`
+(`lib/vuln_enrichment.dart`), then injects the obtained `ExploitInfo` into
+each finding (`v['exploit']`). Best-effort: any exception leaves
+`ExploitInfo.empty`. Returns the id → `ExploitInfo` map for the report
+
+|`_filterByExploit()`
+|Applies `--only-kev` / `--epss-min` on already enriched findings
+
+|`_cvssFromGrype/Osv/Trivy()`
+|Extract `(CVSS vector, base score)` from each scanner's own JSON
+(`vulnerability.cvss[]`, `severity[].score`, `CVSS.<src>.V3Vector`)
+
+|`_printScanResults()`
+|Sorts by decreasing severity (`Critical` → `Unknown`), or by risk if
+`--sort risk`, and displays a text table per scanner — extra
+`KEV` / `EPSS` / `PoC` columns (`--format text`)
+
+|`_buildSarifReport()`
+|Builds a SARIF 2.1.0 report (one `run` per scanner queried, one
+`rule` deduced per vulnerability identifier, `level` via `_sarifLevel()`,
+`security-severity` via `_sarifSecurityScore()` — raised to `9.5` if KEV).
+Each `result` and `rule` carries the `kev` / `epss` /
+`epssPercentile` / `poc` / `cvssExploitability` properties — `--format sarif`
+
+|`_writeScanReport()`
+|`--format markdown` / `asciidoc` / `pdf`: receives the `ScanReportGenerator`
+(`lib/scan_report_generator.dart`) and writes the file. For `pdf`, first writes
+an `.adoc` alongside then calls `renderAsciiDocToPdf()` (shell-out
+`asciidoctor-pdf` with `_kPdfThemeYaml`, `extends: default-sans` — cover
+page, numbered executive summary + verdict, paginated footer, severity
+badges in the report language; synchronised copy of the theme of
+`gui/lib/widgets/pdf_report.dart`); `ProcessException` or code ≠ 0 →
+keeps the `.adoc`, warns, but does not make the command fail
+
+|`_printSeverityAlerts()`
+|Before writing the file (report formats only): lists on stdout
+`ScanReportGenerator.alerts()` — one line per unique Critical (red
+`\e[1;31m`) / High (orange `\e[38;5;208m`) CVE, with package + scanners,
+the `[KEV]` / `EPSS <score>` / `[PoC]` markers, then a count (including the
+number of KEV CVEs). `--color auto` (default) = `stdout.hasTerminal && !NO_COLOR`;
+`always` / `never` force it. Best-effort, no effect on the exit code
+
+|`_scannerVersion()`
+|Short `x.y.z` version of a scanner (best-effort, for the "Tools" header
+of the report)
+
+|`_printScanUsage()`
+|Displays the subcommand help with examples
+|===
+
+`ScanReportGenerator` (`lib/scan_report_generator.dart`) is pure (no I/O
+apart from `renderAsciiDocToPdf`): `toMarkdown()` / `toAsciiDoc()` take the
+`Map<String, List<…>?>` per scanner (`null` = not run, `[]` = run
+with no result) and produce global summary + breakdown by severity +
+CVE × scanner matrix. `alerts({keep})` returns the `ScanAlert`s (unique CVE,
+worst severity, package, scanners) above a threshold — consumed by
+`_printSeverityAlerts` on the CLI side. OSV-Scanner's distro-prefixed
+identifiers (`DEBIAN-CVE-…`) are normalised (`_distroPrefixedCveRe`) before
+any counting/comparison, as in the GUI dashboard.
+
+`cveNotes()` returns a `Map<String,String>` id → note, rendered as a
+"Notes per CVE" section under the matrix: one entry per CVE that Grype reports
+without a usable fix (`fixState` ≠ `fixed` and `fixedVersions` empty)
+while OSV-Scanner or Trivy carry a fixed version. The runners
+(`_runGrype` / `_runOsv` / `_runTrivy`) feed this by adding to each
+finding `fixState` + `fixedVersions` (Grype `vulnerability.fix`), the `fixed`
+events of the `affected[].ranges[]` ranges (OSV), and `FixedVersion`
+split (Trivy). Goal: make explicit that the fixed version of a distribution
+advisory is generally that of `unstable`/`testing`, not an update
+available for the installed stable release — cf. `usage.en.adoc`, section
+"Why the scanners do not find the same CVEs".
+
+==== Exploitability enrichment (`lib/vuln_enrichment.dart`)
+
+`VulnEnricher.enrich(ids, {seed})` returns a `Map<String, ExploitInfo>`
+(normalised id → signals). It is, along with `renderAsciiDocToPdf`, the only I/O
+point of the package: `dart:io` HTTP requests (no added dependency) and a
+disk cache under `~/.cache/sbom-generator/` (`kev.json`, `epss.json`,
+`poc.json`), 24 h TTL.
+
+[cols="1,3", options="header"]
+|===
+|Signal |Source & strategy
+
+|CISA KEV
+|Grype (`vulnerability.knownExploited`, via `seed`) + the
+`known_exploited_vulnerabilities.json` feed (one request, covers OSV/Trivy).
+Network down → cache, even stale; otherwise empty map
+
+|EPSS
+|Grype (`vulnerability.epss`, via `seed`) + FIRST API
+`api.first.org/data/v1/epss?cve=…` in batches of 100. Per-CVE cache
+
+|Public PoC
+|`poc-in-github.motikan2010.net` API (pool of 6, `enablePoc`) **+** `E:`
+maturity of the CVSS vector (`parseCvssVector`, ≥ _Proof-of-Concept_)
+
+|CVSS exploitability
+|`parseCvssVector()` — pure, `8.22 × AV × AC × PR × UI` for a v3.x vector;
+`null` otherwise (v2/v4: only the `E:` maturity is extracted)
+|===
+
+`enableNetwork == false` (`--no-enrich` / `SBOMGEN_OFFLINE=1`): cache-only
+reading, never a request. `ExploitInfo.riskScore(severity)` provides
+the "risk prioritisation" sort key (KEV weighs 1000, EPSS 0–100, severity
+0–4). The source URLs and the cache directory are injectable
+(constructor) for tests — cf. `test/unit/vuln_enrichment_test.dart`
+(local `HttpServer`).
+
+`ScanReportGenerator` receives this map via `exploitById` (default `const {}`
+= sections omitted): KEV/EPSS/PoC counters in the summary, an
+"Exploitability and active exploitation" section (KEV list + "Risk
+prioritisation" table) in Markdown as in AsciiDoc.
+
+[source,dart]
+----
+Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile, {bool quiet = false}) async {
+  final ProcessResult result;
+  try {
+    result = await Process.run('grype', [
+      sbomFile, '--output', 'json',
+      '--platform', 'linux', '--add-cpes-if-none', '--by-cve',
+    ]);
+  } on ProcessException catch (e) {
+    stderr.writeln('grype: not found (${e.message}). ...');
+    return null;
+  }
+  // exitCode > 1 → error; otherwise parse data['matches'][].{vulnerability, artifact}
+}
+----
+
+The Grype options are aligned with the GUI's launcher
+(`gui/lib/services/grype_runner.dart`): without `--add-cpes-if-none`, Grype only
+matches by PURL and misses CVEs indexed by CPE (e.g. the `flutter` pseudo-package
+of a `pubspec.lock`, which has no usable PURL) — this is the
+cause of a gap observed between `scan` and the Grype tab on a given SBOM.
+`--by-cve` makes it report the CVE ID rather than GHSA, a necessary condition to
+align identifiers with OSV-Scanner/Trivy in the cross-scanner
+matrix. `--platform linux` has no effect on an SBOM input (kept
+for parity). OSV-Scanner (`--format json --sbom`) and Trivy
+(`sbom --format json --quiet`) are already invoked like the GUI.
+
+Each scanner has its own JSON format (`matches[]` for grype,
+`results[].packages[].vulnerabilities[]` for osv-scanner,
+`Results[].Vulnerabilities[]` for trivy); `_runGrype`/`_runOsv`/`_runTrivy`
+absorb this heterogeneity and return the same normalised structure.
+
+The failure of a scanner (missing binary, unreadable JSON) does not prevent the
+other requested scanners (`--scanner all`) from running.
+
+Exit codes: `0` if no vulnerability in the requested range (all
+scanners combined), `1` if at least one found or in case of scanner error.
+
+See `doc/usage.en.adoc` for complete usage examples.
+
+
+[[sec-scan-per-layer-dev]]
+==== Vulnerabilities per layer (`--image`, `--per-layer`) — `lib/layer_scan.dart`
+
+Options: `--image <image>` (mutually exclusive with `--sbom`, which is no longer
+mandatory), `--oci-tool` (default `syft`), `--per-layer`,
+`--layer-scan <attribute|each>` (default `attribute`), `--layer-mode
+<metadata|rootfs>` (only with `--image --per-layer`).
+
+- *`--image`*: `_runSelf()` relaunches this same program (`dart` script —
+  `Platform.script` in `.dart`/`.snapshot`/`.dill` passed to
+  `Platform.resolvedExecutable` — or compiled executable) with
+  `--image … -f cyclonedx -o <tmp>/image.cdx.json [--per-layer
+  --layer-mode …]`, output sent back on stderr (stdout may carry
+  SARIF). Guarantees an SBOM set identical to that of the normal generation
+  without duplicating the pipeline of `main()`. The temporary directory
+  is deleted by the local function `quit(code)`, which replaces the
+  `exit()`s of `_runScan` after its creation.
+- *`LayeredSbomSet.load(globalPath)`* re-reads the set: components of the global one
+  (`sbom_generator:layer:index` — CycloneDX properties, SPDX 2.3 / 3.0
+  annotations) → `layerByPackage` (`name@version` → layer), summaries
+  `sbom_generator:layers:NNN` (digest, instruction), layer SBOMs
+  found by their name (`layerFilesOf`: same base, same extension;
+  extension-less global → `.cdx.json` layers). `null` without layer
+  information → `scan` stops.
+- *`attribute`*: usual scan of the global one, then `attributeLayers()` sets
+  the `layer` key (index) on each finding (`package` = `name@version`,
+  falling back to the name alone if unambiguous — scanners sometimes normalise
+  the version).
+- *`each`*: `_runScanner()` on each layer SBOM (`quiet: true`,
+  a single header per scanner), `layer` set on each finding, lists
+  concatenated. The same CVE can therefore appear in several layers.
+- *Rendering*: `_printScanResults` adds the `LAYER` column as soon as a
+  finding carries `layer`; `_printLayerSummary` (text) and
+  `ScanReportGenerator(layers:, layerScanMode:)` rely on
+  `summarizeByLayer()` (unique CVEs per layer, normalised id, worst severity
+  across scanners); SARIF: `layer` property + mention in the message.
+
+=== `cra` subcommand — Cyber Resilience Act compliance report _(new)_
+
+`_runCra(args)` (dispatched on `arguments.first == 'cra'`) produces a compliance
+report with *Regulation (EU) 2024/2847* restricted to the **subset of
+requirements that can be automatically verified** from an SBOM. The report
+explicitly delimits its scope and **is not a declaration of
+conformity** — non-verifiable requirements are only listed as
+"manufacturer's responsibility".
+
+All the logic is in `lib/cra_report.dart` (pure, no I/O except the PDF).
+`_runCra` is limited to orchestration:
+
+. parses the arguments, validates `--sbom`, `SbomReader.loadJson` (rejects an
+  unknown format);
+. metadata: `CraMetadata` of the CLI flags `.merge(` `cra.yaml` config `)`,
+  the config being `--config` or `./cra.yaml` if it exists; remaining gaps
+  are filled from the SBOM's `metadata.component` / `metadata.supplier`;
+. if `--scan`: `_runScanner` loop over `--scanner` (default `grype`) then
+  `_enrichFindings(... poc: false, quiet: true)`;
+. `Process.run('sbomqs', ['score', '--basic', sbom])` best-effort;
+. builds `CraReportGenerator` and serialises: `json` → stdout or `-o`
+  (exit 2 if verdict `fail`); `asciidoc` / `pdf` → writes the `.adoc` then
+  `renderAsciiDocToPdf`;
+. `stdout`: `Verdict (verified scope): …` + `exit(verdict == fail ? 2 : 0)`.
+
+Checklist cross-referencing four frameworks: **BSI TR-03183-2** (data
+fields per component: name, version, supplier, unique identifier
+PURL/CPE, hash, license, dependency relationships), **CRA Annex I §2**
+(inventory of known vulnerabilities, availability of fixes),
+**NTIA 2021** (seven minimum elements), **CRA art. 14** (any CVE in the
+CISA KEV catalog → ENISA notification within 24 h).
+
+[cols="1,3", options="header"]
+|===
+|Member of `cra_report.dart` |Role
+
+|`CraMetadata`
+|`merge(other)` (this takes precedence); `parseConfig(text)` — flat `cra.yaml`
+(`key: value` per line, `#` comment, FR + EN keys)
+
+|`CraStatus` `{ ok, partial, fail, na }`
+|`.badge` extension (AsciiDoc role, translated) and `.json` (`name`)
+
+|`_FieldCheck`
+|coverage of a BSI field (`id` stable, `label` translated, `covered`/`total`, `offenders`, `ratio`, `status`)
+
+|`CraReportGenerator`
+|`fieldChecks`, `dependencyStatus`, `ntiaElements` (translated labels; the JSON uses
+the stable ids of `_ntia`), `_cves` (deduplicated by normalised ID), `sevCount()`,
+`cvesWithoutFix`, `kevCves`, `blockers`, `verdict`, `verdictSentence`; outputs
+`toAsciiDoc()`, `toJson()` (schema `sbom-generator/cra-report/1`, `regulation`
+`EU 2024/2847`), `toJsonString()`
+|===
+
+Verdict: non-empty `blockers` → `fail` (exit 2); otherwise `partial` if a field
+is partial or if no scan was run; otherwise `ok`. Blocking items:
+non machine-readable format, missing mandatory BSI field, CVE without an
+available fix, CVE in the CISA KEV catalog.
+
+The PDF reuses the asciidoctor-pdf theme of the `scan` report
+(`renderAsciiDocToPdf` re-exported). The GUI
+(`gui/lib/widgets/cra_panel.dart`, "CRA Compliance" tab) does not carry
+this logic: it runs `sbom-generator cra --format json` via
+`Process.run` (with `SBOM_LANG` set to its own language) and displays the JSON.
+
+Tests: `test/unit/cra_report_test.dart` (`parseConfig`, `merge`,
+`CraReportGenerator` on full CDX / minimal CDX / with KEV / SPDX 2.3),
+`test/integration/cra_test.dart` (`@TestOn('posix')`, real CLI `--no-scan`),
+`gui/test/cra_panel_test.dart` (form rendering).
+
+=== CI/CD options _(new)_
+
+*`--deny-license <pattern>`* (multi-option, repeatable): after generation,
+`PolicyChecker.checkDenyLicenses()` is called. Violations are listed
+on stderr. Exit code `2` if at least one violation.
+
+*`--min-quality-score <score>`*: after generation, `PolicyChecker.runSbomqs()`
+is called on the first generated JSON file. Exit code `2` if the score is
+below the threshold. The absence of `sbomqs` causes a fatal error (not ignored).
+
+*`--sign`*: after generation and policy verification, `_signWithCosign(path)`
+is called for each generated SBOM file:
+
+[source,dart]
+----
+Future<void> _signWithCosign(String path) async {
+  final result = await Process.run(
+    'cosign', ['sign-blob', '--yes', '--bundle', '$path.bundle', path]);
+  // Non-fatal warning if cosign fails
+}
+----
+
+The dependency resolution loop is skipped if the format is `html`
+(in addition to `markdown` and `asciidoc`), because HTML does not expose relationships.
+
+=== `--license-map` / `-l` option _(new)_
+
+License override file: one `package_name: SPDX-expression` line
+per entry, `#` comments.
+
+Parsed by `_parseLicenseMap(String path)` → `Map<String, String>`.
+Applied after deduplication via `_applyLicenseOverrides(packages, overrides)`,
+which uses `Package.copyWith({license, vendor})` — a method of the abstract
+`Package` interface, with a covariant return (each concrete type returns its own).
+Packages with no match are returned unchanged.
+
+[source,text]
+----
+# Example overrides.txt
+libssl3: Apache-2.0
+mongodb: SSPL-1.0
+----
+
+=== `--supplier` option _(new)_
+
+Fallback value for the supplier of components whose source carries
+no vendor (Go/npm/yarn/pip/pub lockfiles, `requirements.txt`).
+`_applySupplierFallback(packages, supplier)` applies `copyWith(vendor: …)`
+**only** to packages whose `vendor` is empty — never overrides a detected
+supplier (RPM `%{VENDOR}`, Debian `Maintainer`, Maven `groupId`,
+wheel `Author-email`, npm `package.json` `author`). Applied after
+`--license-map` on generation, and after `reader.read()` on `convert`.
+
+[[sec-option-binary]]
+=== `--binary` / `-b` option _(new)_
+
+Explicit alias for `--image <file>` when the target is a standalone
+binary (not a container image) — see <<sec-syft-binary>> for the
+extraction mechanism. Validation in `_runMain`/`bin/sbom_generator.dart`:
+
+[cols="2,3", options="header"]
+|===
+|Condition |Behaviour
+
+|`!File(binaryPath).existsSync()`
+|Error ("file not found") + `exit(1)`
+
+|`args.wasParsed('oci-tool')` and value ≠ `syft`
+|Error ("only works with --oci-tool syft") + `exit(1)`
+
+|`--binary` and `--image` provided together
+|Error ("mutually exclusive") + `exit(1)`
+
+|otherwise
+|`ociTool` forced to `'syft'`; `imageRef = binaryPath ?? args['image']`, reused unchanged in the rest of the pipeline (`OciParser.parseImage`)
+|===
+
+The console label (`refTypeLabel`) distinguishes `OciRefType.binary`
+("Analysing binary via …") from `registry` ("Analysing OCI image
+(registry) via …") — before this addition, a local file passed to `--image`
+fell into the default `registry` case and displayed this misleading
+console label, no registry actually being queried.
+
+[[sec-option-per-layer]]
+=== `--per-layer` / `--layer-mode` options
+
+Validation (after that of `--oci-tool`):
+
+- `--layer-mode` without `--per-layer` → error;
+- `--per-layer` with `--binary` or a `--image` of type `OciRefType.binary`
+  → error ("a standalone binary has no layers");
+- `--layer-mode metadata` with a backend outside `metadataLayerTools`
+  (`syft`, `trivy`) → error; without `--layer-mode`, the mode is `metadata`
+  for syft/trivy and `rootfs` otherwise (console message);
+- `rootfs` mode on a registry reference with a backend other than
+  skopeo: `skopeo` must be available (local copy of the layers).
+
+Flow: the per-layer analysis follows the usual OCI analysis (the global
+SBOM remains that of a run without `--per-layer`, annotated). The
+`--license-map` / `--supplier` overrides are applied to the layer
+components via `LayerAnalysis.map`. The generation loop is factored into
+a local function `writeAll(pkgs, deps, pathFor, layers:, label:)`,
+called for the global one then for each layer. The document UUIDs are
+drawn *before* any write (global ↔ layers cross-links), which
+makes it possible to write the *global first*: it is the first
+`SBOM written → …` of the output, the one the GUI tabs open by
+default. Layer files: `layerFileBase(_basePath(outputPath), layer,
+total)` + `_formatExtension(fmt)`, i.e. `<base>.layer-NN-<digest12><ext>`.
+A layer's dependencies are resolved on its own components only. `--sign`
+also signs the first format of each layer; `--min-quality-score` only
+concerns the global one.
+
+=== Structured error report _(new)_
+
+Packages whose parser returns `null` are now *traced by ref*
+(not just counted). At the end of processing, a report is emitted on `stderr`:
+
+....
+⚠  2 package(s) skipped:
+   • openssl-libs
+   • mypkg-1.0-1.el9.x86_64.rpm
+....
+
+Implementation: the `Future.wait` loop uses index `i` to correlate
+`rawResults[i]` → `mainRefs[i]` in `failedRefs`. The detailed error messages
+of the parsers are still emitted on `stderr` as they occur.
+
+=== `--concurrency` / `-c` option _(new)_
+
+Controls the number of tasks processed simultaneously (default: `4`, `0` = unlimited).
+Implemented via the `_Semaphore` class:
+
+[source,dart]
+----
+class _Semaphore {
+  _Semaphore(int count) : _count = count;
+  int _count;
+  final _waiters = <Completer<void>>[];
+  Future<void> acquire() async {
+    if (_count > 0) { _count--; return; }
+    final waiter = Completer<void>();
+    _waiters.add(waiter);
+    await waiter.future;
+  }
+  void release() {
+    if (_waiters.isNotEmpty) _waiters.removeAt(0).complete();
+    else _count++;
+  }
+}
+----
+
+The main loop is replaced by:
+
+[source,dart]
+----
+final sem = _Semaphore(concurrencyN == 0 ? mainRefs.length : concurrencyN);
+final rawResults = await Future.wait(
+  List<Future<Package?>>.generate(mainRefs.length, (i) async {
+    await sem.acquire();
+    try {
+      return await _processRef(mainRefs[i], …);
+    } finally { sem.release(); }
+  }),
+);
+----
+
+[NOTE]
+====
+`Future.wait(List.generate(...))` preserves order: `rawResults[i]` matches
+`mainRefs[i]`.
+====
+
+=== requirements.txt pre-processing (`_isRequirements`)
+
+[source,dart]
+----
+bool _isRequirements(String ref) => ref.endsWith('.txt') && !ref.endsWith('.whl');
+----
+
+`.txt` lines are extracted from the main list before the concurrent
+loop and pre-parsed by `RequirementsParser`. Their packages are
+accumulated in `preloadedPackages` and added after the loop.
+
+=== OCI analysis (before the extension dispatch)
+
+If `--image` is provided, `OciParser().parseImage(imageRef, ociTool)` is called
+*outside* the concurrent loop (blocking but single). The produced `OciPackage`s
+are added to `ociPackages` and merged with the packages of the list
+after the loop, before deduplication.
+
+=== Extension dispatch _(extended)_
+
+[source,dart]
+----
+if (ref.endsWith('.whl')) {
+  pkg = await whlParser.parseWheelFile(ref);
+} else if (_isTar(ref)) {          // .tar | .tar.gz | .tgz
+  pkg = await tarParser.parseTarFile(ref);
+} else if (ref.endsWith('.zip')) {
+  pkg = await zipParser.parseZipFile(ref);
+} else if (ref.endsWith('.deb')) {
+  pkg = await debParser.parseDebFile(ref);
+} else {
+  pkg = await rpmParser.parsePackage(ref);
+}
+----
+
+=== Tool checks
+
+* `syft` / `trivy` / `skopeo` / `cdxgen`: checked (`<tool> --version`) if `--image` is provided (the tool tested is that of `--oci-tool`)
+* `rpm`: checked if the list contains at least one non-`.whl`, non-tar,
+  non-`.zip`, non-`.deb` reference
+* `python3`: checked if the list contains at least one `.whl`, tar or `.zip`
+* `dpkg-deb`: checked if the list contains at least one `.deb`
+
+=== Deduplication
+
+[source,dart]
+----
+final seenRefs = <String>{};
+for (final pkg in packages) {
+  if (seenRefs.add(pkg.bomRef)) uniquePackages.add(pkg);
+}
+----
+
+`bomRef` is distinct by type: `pkg-<name>-…` (RPM), `pkg-pypi-<name>-…`
+(Python), `pkg-src-<name>-…` (source).
+
+=== Dependency resolution
+
+Skipped if *all* the requested formats are `markdown` or `asciidoc` (useless
+and costly for these tabular formats that do not expose dependencies).
+
+=== `_printProgress()`
+
+Displays an ANSI progress bar on the current line (overwritten on each
+call via `\r` + `\x1B[K`). The bar is made of 32 cells `█` (filled)
+and `░` (empty), followed by the `current/total` counter and the percentage:
+
+[source,text]
+----
+  [████████████████░░░░░░░░░░░░░░░░] 12/50   24%  bash-5.1.8-6.el9.x86_64.rpm
+----
+
+The label is truncated on the left if the name exceeds the available width.
+The `] n/m  p%  label` format is parsed by the GUI (`sbom_runner.dart`): do
+not translate it.
+
+== `lib/cyclonedx_generator.dart` — CycloneDX 1.6/1.7 generator
+
+=== Updated signature
+
+[source,dart]
+----
+Map<String, dynamic> generate(List<Package> packages, List<PackageDependency> dependencies, {
+  String? documentName, String? author, String? organization,
+  String specVersion = '1.6',              // '1.6' or '1.7'
+  String? tlp,                             // distributionConstraints.tlp (1.7)
+  String? citationSource,                  // citations[] attributedTo (1.7)
+  Map<String, PatentAssertion>? patentsByPackageName,  // patentAssertions (1.7)
+  OsInfo? osInfo,                          // operating-system component (--image)
+})
+----
+
+=== CycloneDX 1.7 support
+
+The 1.6 JSON schema has `additionalProperties: false` everywhere: the 1.7-specific fields
+(`citations`, `definitions.patents`, `components[].patentAssertions`,
+`metadata.distributionConstraints`) are therefore *never* emitted in 1.6, and `generate()`
+throws an `ArgumentError` if `tlp`/`citationSource`/`patentsByPackageName` are provided without
+`specVersion: '1.7'`. `CycloneDxGenerator.supportedSpecVersions` and
+`.validTlpClassifications` expose the valid values for the CLI.
+
+`PatentAssertion` (patentNumber, jurisdiction, legalStatus, assertionType) is validated
+before generation (ST.3 regex for `jurisdiction`, CycloneDX enums for the rest). Each
+referenced patent is deduplicated in `definitions.patents[]` by `bom-ref`
+(`patent-<normalised number>`); the corresponding component receives a
+`patentAssertions[]` entry pointing to that `bom-ref`. Notable point: the `asserter` field must
+be disambiguated with an empty `url: []`, otherwise the schema validates it simultaneously as
+`organizationalEntity` *and* `organizationalContact` and the strict `oneOf` fails.
+
+The citation (`--image` + `--cyclonedx-version 1.7`) attributes `/components` to the `bom-ref`
+of the OCI tool used (`--oci-tool`), added as a second `tools.components[]` in the
+metadata.
+
+=== `group` field (Maven components)
+
+`WheelPackage(packageType: 'maven')` stores the Maven coordinates in the form
+`"groupId:artifactId"` in `Package.name` (internal convention shared by
+`maven_parser.dart`, `jar_parser.dart`, `oci_parser.dart`). `_packageToComponent` splits this
+`name` into two dedicated CycloneDX fields — `group: groupId` and `name: artifactId` — instead
+of leaving the groupId concatenated in `name`, to follow the standard CycloneDX convention
+(`group` field meant exactly for this) and get closer to what syft/trivy emit.
+`Package.name` itself is not modified: the other generators (SPDX, Markdown, CSV…)
+keep displaying `"groupId:artifactId"` as is.
+
+Corollary on the reading side: `sbom_reader.dart` (`_cdxComponent`) recombines `group` + `name`
+into `"groupId:artifactId"` as soon as a component has `packageType == 'maven'` and a non-empty
+`group` field — otherwise the groupId would be silently lost when re-reading a CycloneDX
+document generated this way (`convert`, `merge`, GUI…).
+
+=== Type-specific properties (`_packageToComponent`)
+
+[source,dart]
+----
+if (pkg is RpmPackage) {
+  // rpm:arch, rpm:release, rpm:epoch, rpm:buildTime, rpm:requires × N
+} else if (pkg is WheelPackage) {
+  final ns = pkg.packageType == 'pypi' ? 'pypi' : 'source';
+  // <ns>:platform, <ns>:requires × N
+}
+----
+
+The CPE is only generated for `RpmPackage`s (NVD CPEs concern Linux
+distributions).
+
+=== Debian-specific properties
+
+[source,dart]
+----
+} else if (pkg is DebPackage) {
+  properties.add({'name': 'deb:arch', 'value': pkg.arch});
+  for (final req in pkg.requires) {
+    properties.add({'name': 'deb:depends', 'value': req});
+  }
+}
+----
+
+=== License normalisation
+
+Delegated to `LicenseNormalizer.toCycloneDxLicenses(pkg.license)` (from
+`lib/license_normalizer.dart`). The `_rpmToSpdx` table and all the
+`AND/OR/WITH` logic were removed from this file.
+
+=== Base OS component (`osInfo`, `--image`)
+
+When `osInfo` (see <<sec-osinfo-oci-parser>>) is provided, `_buildOsComponent()`
+adds at the head of `components[]` a `type: "operating-system"` component
+(`name`, `version`, `description`, `cpe`) distinct from the application packages —
+needed so that Trivy in `trivy sbom` mode also evaluates the CVEs of
+system packages. `osInfo` is `null` for any generation without `--image`
+(or with the skopeo backend).
+
+[[sec-spdx-generator]]
+== `lib/spdx_generator.dart` — SPDX 2.3 generator
+
+Signature: `List<Package>`, plus `osInfo` (`OsInfo?`, optional — see
+<<sec-osinfo-oci-parser>>). Normalisation via `LicenseNormalizer.toSpdxExpression()`.
+Type-aware annotation:
+
+[source,dart]
+----
+String _annotationComment(Package pkg) {
+  if (pkg is RpmPackage)
+    return 'arch=${pkg.arch}; epoch=${pkg.epoch}; release=${pkg.release}…';
+  if (pkg is WheelPackage)
+    return '${pkg.packageType == "pypi" ? "pypi" : "source"}:platform=${pkg.arch}';
+  if (pkg is DebPackage)
+    return 'deb:arch=${pkg.arch}';
+}
+----
+
+When `osInfo` is provided, `_osToSpdx()` adds a package
+`primaryPackagePurpose: "OPERATING-SYSTEM"` with a `DESCRIBES` relationship
+from `SPDXRef-DOCUMENT`. This package's `SPDXID` is prefixed
+`SPDXRef-OperatingSystem-` (and not `SPDXRef-Package-` like the others) —
+this is the precise prefix that Trivy recognises for the "os-pkgs" class in
+`trivy sbom` mode; `primaryPackagePurpose` alone is not enough (empirically
+checked, see <<sec-osinfo-oci-parser>>).
+
+`package.supplier` is **always emitted**: `Organization: <vendor>` if known,
+otherwise `NOASSERTION` — the SPDX 2.3 spec asks for the explicit value when the
+supplier is unknown (rather than omitting the field), and this is what
+the NTIA minimum elements and `sbomqs` expect. Same for the OS package.
+`checksums` is emitted from `pkg.hashes` (`spdx2Alg`: `SHA-256` → `SHA256`).
+
+== `lib/spdx3_generator.dart` — SPDX 3.0 JSON-LD generator
+
+Signature: `List<Package>`, plus `osInfo` (`OsInfo?`, optional). Normalisation via `LicenseNormalizer.toSpdxExpression()`.
+Same annotation logic as SPDX 2.3 (`DebPackage` branch included).
+`_buildVendorElements` creates one `Organization` node per unique `pkg.vendor` value
+(works for all types).
+
+When `osInfo` is provided, `_osToElement()` adds a
+`software:Package` element with `software:primaryPurpose: "operatingSystem"`,
+included in the `SpdxDocument`'s `rootElement` and in the `describes` relationship.
+Correct representation according to the SPDX 3.0 spec, but *Trivy cannot read
+SPDX 3.0 JSON-LD SBOMs at all* (`trivy sbom` fails with `SBOM decode
+error: unknown scanning is not yet supported`, independently of this
+component) — a Trivy limitation, unrelated to `sbom_generator`.
+
+== `lib/simple_json_generator.dart` — Custom JSON generator
+
+Signature: `List<Package>`. The `packageType` field is included in each entry.
+The RPM-specific fields (`release`, `epoch`, `buildTime`) are added
+conditionally:
+
+[source,dart]
+----
+if (pkg is RpmPackage) {
+  base['release'] = pkg.release;
+  base['epoch']   = pkg.epoch;
+  base['buildTime'] = pkg.buildTime;
+}
+----
+
+== `lib/markdown_generator.dart` — Markdown table
+
+Signature: `List<Package>`. Generates a table sorted alphabetically by name.
+Dependency resolution is skipped upstream (`markdown`, `asciidoc`
+and `html` formats). Displays `(unknown)` / `(inconnue)` (per language) if `pkg.license` is empty.
+
+== `lib/asciidoc_generator.dart` — AsciiDoc table
+
+Signature: `List<Package>`. Generates an AsciiDoc table sorted alphabetically
+by name — the AsciiDoc equivalent of `MarkdownGenerator`.
+
+[source,dart]
+----
+class AsciidocGenerator {
+  Future<void> writeToFile(
+    List<Package> packages,
+    String outputPath, {
+    String? documentName,
+  }) async { … }
+}
+----
+
+Output structure:
+
+[source,asciidoc]
+----
+= Software Bill of Materials — Licenses
+:doctype: article
+:toc:
+:toclevels: 1
+:icons: font
+
+[cols="<1,<2,<1,<2",options="header",stripes=odd]
+|===
+| Package | Version | Architecture | License
+
+| bash | 5.1.8-6.el9 | x86_64 | GPL-3.0-or-later
+…
+|===
+
+_Generated by sbom_generator — N package(s)._
+----
+
+(In French: `Licences`, `Paquet`, `Licence`, `Généré par sbom_generator — N paquet(s).`)
+
+The `|` character in values is escaped (`\|`) to avoid any
+ambiguity with the AsciiDoc cell separators.
+
+== Data flows — concrete examples
+
+=== RPM: `bash` from a .rpm file
+
+....
+1. Detection: .rpm → RpmParser.parsePackage()
+2. rpm -qp --queryformat '…' → "bash|5.1.8|6.el9|x86_64|(none)|GPL-3.0-or-later|…"
+3. RpmPackage: bomRef="pkg-bash-5.1.8-6.el9-x86_64", purl="pkg:rpm/bash@5.1.8-6.el9?arch=x86_64"
+4. LicenseNormalizer.toCycloneDxLicenses("GPL-3.0-or-later")
+   → normalised = "GPL-3.0-or-later" (no boolean operator)
+   → mapped = "GPL-3.0-or-later" (in kSpdxLicenseIds → id)
+   → {"license": {"id": "GPL-3.0-or-later"}}
+....
+
+=== Python wheel: `requests-2.28.2-py3-none-any.whl`
+
+....
+1. Detection: .whl → WheelParser.parseWheelFile()
+2. python3 zipfile → requests-2.28.2.dist-info/METADATA
+3. _parseRfc822() → {name: "requests", version: "2.28.2", license: "Apache-2.0", …}
+4. _platformFromFilename() → "any" (last segment before .whl)
+5. WheelPackage: packageType='pypi', bomRef="pkg-pypi-requests-2.28.2"
+                  purl="pkg:pypi/requests@2.28.2"
+....
+
+=== Generic archive: `mariadb-11.4.8-linux-systemd-x86_64.tar.gz`
+
+....
+1. Detection: .tar.gz → TarParser.parseTarFile()
+2. python3 tarfile: no PKG-INFO → type='generic'
+   COPYING file found → 2 KB extracted
+3. _parseFilename():
+   segments=[mariadb, 11.4.8, linux, systemd, x86_64]
+   versionIdx=1 ("11.4.8" ≅ ^\d+\.\d+)
+   platform filtering: linux, systemd, x86_64 removed
+   → name="mariadb", version="11.4.8", arch="x86_64"
+4. _identifyLicense(COPYING):
+   title[:300] contains "GNU GENERAL PUBLIC LICENSE" + "Version 2"
+   → "GPL-2.0-only"
+5. WheelPackage: packageType='source', purl="pkg:generic/mariadb@11.4.8"
+....
+
+=== Python sdist: `Django-4.2.1.tar.gz`
+
+....
+1. Detection: .tar.gz → TarParser.parseTarFile()
+2. python3 tarfile: PKG-INFO found → type='python', RFC 822 content
+3. Delegation to WheelParser.parseMetadataText(path, content)
+4. WheelPackage: packageType='pypi', purl="pkg:pypi/django@4.2.1"
+....
+
+=== Debian package: `libssl3_3.0.1-1_amd64.deb`
+
+....
+1. Detection: .deb → DebParser.parseDebFile()
+2. dpkg-deb -f → RFC 822 control: "Package: libssl3\nVersion: 3.0.1-1\n..."
+3. _parseControl() → {Package: libssl3, Version: 3.0.1-1, Architecture: amd64, …}
+4. _parseDependsList("libc6 (>= 2.17), libgcc-s1") → ["libc6", "libgcc-s1"]
+5. DebPackage: bomRef="pkg-deb-libssl3-3.0.1-1-amd64",
+               purl="pkg:deb/libssl3@3.0.1-1?arch=amd64"
+....
+
+=== Requirements.txt: `/opt/reqs/requirements.txt`
+
+....
+1. Detection: .txt → RequirementsParser pre-expansion (before the concurrent loop)
+2. Line-by-line reading: "requests==2.28.0\nnumpy>=1.24\nflask\n"
+3. _parseLine("requests==2.28.0") → WheelPackage(name="requests", version="2.28.0",
+                                                  packageType="pypi")
+4. _parseLine("flask") → WheelPackage(name="flask", version="", packageType="pypi")
+5. Results added to preloadedPackages (then packages after the main loop)
+....
+
+=== OCI image: `nginx:latest` via syft
+
+....
+1. OCI detection: --image nginx:latest (OciRefType.registry)
+2. Process.run('syft', ['nginx:latest', '--output', 'json'])
+3. _parseSyft() traverses artifacts[]:
+   e.g. {name: "bash", version: "5.1.8", type: "rpm", purl: "pkg:rpm/rhel/bash@5.1.8",
+        licenses: [{spdxExpression: "GPL-3.0-or-later"}], metadata: {Arch: "x86_64"}}
+4. OciPackage(name="bash", version="5.1.8", packageType="rpm",
+              purlOverride="pkg:rpm/rhel/bash@5.1.8",
+              bomRef="pkg-oci-rpm-bash-5.1.8")
+5. Results added to ociPackages → merged into packages before deduplication
+....
+
+== Extending the code
+
+=== Adding a new output format
+
+. Create `lib/my_format_generator.dart`:
++
+[source,dart]
+----
+import 'dart:io';
+import 'models.dart';
+
+class MyFormatGenerator {
+  Future<void> writeToFile(
+    List<Package> packages,
+    List<PackageDependency> dependencies,
+    String outputPath, {
+    String? documentName,
+  }) async {
+    final buf = StringBuffer();
+    // … building the content …
+    await File(outputPath).writeAsString(buf.toString());
+  }
+}
+----
+
+. In `bin/sbom_generator.dart`:
++
+[source,dart]
+----
+import 'package:sbom_generator/my_format_generator.dart';
+
+// ArgParser:
+allowed: ['cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'my-format'],
+
+// switch:
+case 'my-format':
+  await MyFormatGenerator().writeToFile(
+    uniquePackages, dependencies, outputPath, documentName: docName);
+----
+
+. If the format contains human-readable text, write it with `tr(fr, en)`
+  (see <<sec-i18n>>) and add a FR/EN test in `test/unit/i18n_reports_test.dart`.
+
+=== Adding a new package type
+
+. In `lib/models.dart`: create `class MyPackage extends Package { … }`
+. Create `lib/my_parser.dart` with a method `Future<MyPackage?> parse(String path)`
+. In `bin/sbom_generator.dart`: add the extension detection and the dispatch
+. In each generator: add `else if (pkg is MyPackage) { … }` for the specific
+  properties
+
+=== Adding a new scanner to the `scan` subcommand
+
+. Add its name to `_validScanners` (`bin/sbom_generator.dart`).
+. Create `_runMyScanner()`: launches the binary via `Process.run()`, parses the
+  JSON into a normalised `List<Map<String, dynamic>>`
+  (`{id, severity, package, published, modified}`).
+. Add a `case` in `_runScanner()`.
+
+== Pitfalls and design decisions
+
+=== 1. `|` separator in SUMMARY (RPM)
+
+`SUMMARY` may contain `|`. It is placed last in `_queryFormat`
+and the fragments ≥ index 12 are rejoined.
+
+=== 2. Duplicate bomRefs (RPM)
+
+Same NEVRA in several repositories → same `bomRef` → forbidden by CycloneDX.
+The deduplication in `main()` removes the second copy.
+
+=== 3. `LicenseRef-*` in CycloneDX
+
+`license.id` is validated against the official SPDX list. `LicenseRef-*` is not
+part of it (in the schema embedded in sbomqs v2.0.6). Use
+`{"license": {"name": "…"}}` instead.
+
+=== 4. `acknowledgement` field (CycloneDX 1.6.1)
+
+Added after the version of the schema embedded in sbomqs. Using it causes
+a validation error. Do not use it.
+
+=== 5. `_capabilityName` and Python RPM modules
+
+`split(RegExp(r'[\s(]'))` would truncate `python3dist(lxml)` to `python3dist`,
+creating false positives. The split on `\s+[<>=!]` preserves the parentheses.
+
+=== 6. GPL → LGPL false positive in license detection
+
+The GPL-2.0 text mentions "GNU Library General Public License" in its
+"How to Apply" section. LGPL detection only looks at the first 300
+characters (document title), not the complete body.
+
+=== 7. Intra-list Python dependencies
+
+Resolution works if names are normalised consistently
+(PEP 503). `WheelPackage.provides` contains the normalised name; `Requires-Dist`
+is also normalised at parsing. `buildDependencies` additionally adds the raw
+`pkg.name` to `providesMap`, covering both forms.
+
+=== 8. Requirements.txt: 1:N cardinality
+
+A single `.txt` file may produce N packages. The concurrent loop models
+`Future<Package?>` (1 ref → 0 or 1 result), incompatible with 1:N
+cardinality. Solution: pre-expansion of the `.txt` files before the loop into `preloadedPackages`.
+
+=== 9. `License` field absent in many `.deb`
+
+The Debian standard does not make the `License` field mandatory in
+`DEBIAN/control`. `DebPackage.license` will often be empty, which gives
+`NOASSERTION` in SPDX and an empty `licenses` list in CycloneDX —
+compliant behaviour, not an error.
+
+=== 10. Order preserved by `Future.wait(List.generate(...))`
+
+`Future.wait` guarantees that the result at index `i` matches input `i`.
+The order of appearance in the final SBOM is therefore identical to the order of the
+input file, despite concurrent processing.
+
+=== 11. Translating messages: what must stay untouched
+
+Since the project is bilingual (see <<sec-i18n>>), any message passes through `tr()`.
+But some texts are *contracts* with other programs and must not
+be translated: the `SBOM written → <path>  (<size> KB)` line and the
+`] n/m  p%  label` progress bar (parsed by the GUI), the layer descriptions
+and the `couche` labels written in SBOMs (parsed by `gui/lib/models/layer_nav.dart`),
+the property names, the JSON keys and the SARIF identifiers. When a
+text becomes translatable, check the GUI regexes
+(`grep -rn "RegExp" gui/lib/services`) before wrapping it in `tr()`.
+
+== Code conventions
+
+[cols="1,1,2", options="header"]
+|===
+|Element |Convention |Example
+
+|Classes
+|`PascalCase`
+|`RpmParser`, `WheelPackage`
+
+|Methods/variables
+|`camelCase`
+|`buildDependencies`, `packageRef`
+
+|Private constants/methods
+|`_` prefix
+|`_queryFormat`, `_hasValue`
+
+|Library functions
+|`_camelCase`
+|`_safeId`, `_normalizePyName`
+|===
+
+=== `_hasValue(String s)`
+
+Present in all generators:
+
+[source,dart]
+----
+bool _hasValue(String s) => s.isNotEmpty && s != '(none)';
+----
+
+RPM returns `"(none)"` for empty fields.
+
+=== `generate()` + `writeToFile()` pattern
+
+The JSON generators expose both methods (except `MarkdownGenerator` and
+`AsciidocGenerator` which only have `writeToFile`). `generate()` returns a
+`Map<String, dynamic>` testable without I/O.
+
+== Mapping table: source → SBOM fields
+
+[cols="3,2,2,2", options="header"]
+|===
+|Source |CycloneDX 1.6 |SPDX 2.3 |SPDX 3.0
+
+|`pkg.name`
+|`name`
+|`name`
+|`name`
+
+|`pkg.fullVersion`
+|`version`
+|`versionInfo`
+|`software:packageVersion`
+
+|`pkg.purl`
+|`purl`
+|`externalRefs[purl]`
+|`externalIdentifier[purl]`
+
+|`pkg.license`
+|`licenses[id/expression/name]`
+|`licenseConcluded/Declared`
+|`concludedLicense/declaredLicense`
+
+|`pkg.vendor`
+|`supplier.name` + `publisher` (omitted if empty)
+|`supplier: "Organization: …"` otherwise `"NOASSERTION"`
+|`suppliedBy` (org URI, omitted if empty)
+
+|`pkg.url`
+|`externalReferences[website]`
+|`downloadLocation`
+|`software:downloadLocation`
+
+|`pkg.summary`
+|`description`
+|`summary`
+|`summary`
+
+|`pkg.hashes` (`PackageHash`)
+|`hashes[alg/content]`
+|`checksums[algorithm/checksumValue]`
+|`verifiedUsing[Hash]`
+
+|*RPM* `headerSha256`
+|`properties[rpm:header-sha256]`
+|`annotations`
+|`annotation`
+
+|`pkg.sourceRef` (if `.rpm`/`.whl`)
+|`externalReferences[distribution]`
+|—
+|—
+
+|*RPM* `release`, `epoch`, `arch`, `buildTime`
+|`properties[rpm:*]`
+|`annotations`
+|`annotation`
+
+|*RPM* `requires` × N
+|`properties[rpm:requires]` × N
+|—
+|—
+
+|*Python/Source* `arch` (platform tag)
+|`properties[pypi:/source:platform]`
+|`annotations`
+|`annotation`
+
+|*Python* `requires` × N
+|`properties[pypi:requires]` × N
+|—
+|—
+
+|*RPM* computed CPE
+|`cpe`
+|—
+|—
+
+|*RPM* `sourceRpm`
+|`externalReferences[vcs]`
+|—
+|—
+
+|*Debian* `arch`
+|`properties[deb:arch]`
+|`annotations`
+|`annotation`
+
+|*Debian* `requires` × N
+|`properties[deb:depends]` × N
+|—
+|—
+
+|requires/provides resolution
+|`dependencies[].dependsOn`
+|`relationships[DEPENDS_ON]`
+|`Relationship[dependsOn]`
+|===
+
+== Performance and limits
+
+=== Processing cost per package
+
+[cols="2,2,1", options="header"]
+|===
+|Type |Subprocess calls |Estimated time
+
+|RPM (installed or file)
+|3 × `rpm` in parallel
+|~15–50 ms
+
+|Wheel `.whl`
+|1 × `python3`
+|~20–50 ms
+
+|Tar archive (Python sdist)
+|1 × `python3`
+|~20–80 ms
+
+|Tar archive (generic)
+|1 × `python3`
+|~20–80 ms
+
+|ZIP archive (generic or sdist)
+|1 × `python3`
+|~20–80 ms
+
+|Debian package `.deb`
+|1 × `dpkg-deb`
+|~5–20 ms
+
+|Requirements.txt
+|0 subprocess
+|< 1 ms
+
+|OCI image via `syft`
+|1 × `syft` (whole image in one pass)
+|1–30 s depending on the image
+
+|OCI image via `trivy`
+|1 × `trivy image`
+|1–30 s (+ DB update if needed)
+
+|OCI image via `skopeo`
+|1 × `skopeo copy` + N × `tar` (layers) + 1 × `rpm`/`dpkg`/`apk`
+|5–120 s depending on the image size
+|===
+
+[NOTE]
+====
+The OCI analysis runs *outside* the concurrent `_Semaphore` loop:
+it is a single blocking call. `--concurrency` only applies to the
+packages of the `--input` file.
+====
+
+The loop is parallelised via `Future.wait()` + `_Semaphore(--concurrency)`.
+With `--concurrency 4` (default) on a large list, the gain is ~4× compared with
+the former sequential loop. With `--concurrency 0` (unlimited), all
+inputs are launched simultaneously.
+
+=== Size of generated files
+
+[cols="1,1,1", options="header"]
+|===
+|Format |~100 packages |~800 packages
+
+|CycloneDX
+|~400 KB
+|~3 MB
+
+|SPDX 2.3
+|~300 KB
+|~2 MB
+
+|SPDX 3.0 JSON-LD
+|~200 KB
+|~1.5 MB
+
+|Custom JSON
+|~800 KB
+|~6 MB
+
+|Markdown
+|~10 KB
+|~80 KB
+|===
+
+=== Known limits
+
+* *No transitive resolution*: only dependencies between packages present
+  in the list are included.
+* *Approximate CPEs*: syntactically valid, may differ from the official NVD
+  entries.
+* *Heuristic archive licenses*: detection from LICENSE/COPYING files
+  is based on text patterns, not on an exhaustive analysis.
+* *`License` field absent in `.deb`*: most Debian packages do not include
+  a `License` field in their `control` — `DebPackage.license` will be empty, which
+  produces `NOASSERTION` in SPDX.
+* *No file existence check*: if a `.whl`, `.tar.gz`,
+  `.zip` or `.deb` path does not exist, the subprocess fails and the package is counted as a
+  failure.
+* *Absent licenses in OCI images (skopeo)*: `_parseDpkgStatus` does not read
+  the `copyright` files; `_parseRpmRoot` only has the `%{LICENSE}` fields
+  of the RPM registry — same gap as with `DebPackage`.
+* *OCI analysis not parallelised*: the `OciParser.parseImage()` call is sequential
+  and blocking; `--concurrency` only applies to `--input` entries.
+
+== Call flow (simplified call graph)
+
+....
+main()
+  ├── initLang()                                (--lang / SBOM_LANG / LC_ALL / LANG)
+  ├── ArgParser.parse()                       (--concurrency validated ≥ 0)
+  ├── _isSingleArchiveInput(inputPath)          [if --input provided]
+  │     ├── true  → packageRefs = [inputPath]
+  │     └── false → File.readAsLines() (try/catch FileSystemException)
+  ├── [manifest pre-expansion]
+  │     ├── RequirementsParser.parseFile()   → preloadedPackages [.txt]
+  │     ├── GoParser.parseGoSum/parseGoMod() → preloadedPackages [go.sum/go.mod]
+  │     ├── NpmParser.parsePackageLock()     → preloadedPackages [package-lock.json]
+  │     ├── YarnParser.parseYarnLock()       → preloadedPackages [yarn.lock]
+  │     ├── MavenParser.parsePomXml()        → preloadedPackages [pom.xml]
+  │     └── PubspecParser.parsePubspec{Lock,Yaml}() → preloadedPackages [pubspec.*]
+  ├── [--rpm-dir indexing]                    [if --rpm-dir specified]
+  │     └── dir.list(recursive: true) → rpmExactIndex + rpmNameIndex
+  ├── Process.run('<ociTool>', ['--version'])  [if --image provided]
+  ├── OciParser().parseImage(imageRef, ociTool)  [if --image provided]
+  │     ├── _parseSyft()   → Process.run('syft', [ref, '--output', 'json'])
+  │     ├── _parseTrivy()  → Process.run('trivy', ['image', '--format', 'json', …])
+  │     └── _parseSkopeo() → Process.run('skopeo', ['copy', …])
+  │                          + _extractOciLayers() + _parseDpkgStatus/RpmRoot/ApkInstalled()
+  ├── Process.run('rpm', ['--version'])       [if RPM in --input]
+  ├── Process.run('python3', ['--version'])   [if .whl, tar or .zip in --input]
+  ├── Process.run('dpkg-deb', ['--version'])  [if .deb in --input]
+  ├── Future.wait(List.generate(N)) via _Semaphore(--concurrency)
+  │     ├── RpmParser.parsePackage()          [if RPM]
+  │     │     └── Future.wait([rpm-queryformat, rpm-requires, rpm-provides])
+  │     ├── WheelParser.parseWheelFile()      [if .whl]
+  │     │     └── Process.run('python3', ['-c', zipScript, path])
+  │     ├── TarParser.parseTarFile()          [if tar]
+  │     │     ├── Process.run('python3', ['-c', tarScript, path])
+  │     │     └── WheelParser.parseMetadataText()  [if Python sdist]
+  │     ├── ZipParser.parseZipFile()          [if .zip]
+  │     │     ├── Process.run('python3', ['-c', zipScript, path])
+  │     │     └── WheelParser.parseMetadataText()  [if Python sdist]
+  │     └── DebParser.parseDebFile()          [if .deb]
+  │           └── Process.run('dpkg-deb', ['-f', path])
+  ├── packages.addAll(preloadedPackages)
+  ├── packages.addAll(ociPackages)
+  ├── [deduplication by bomRef]
+  ├── RpmParser.buildDependencies(List<Package>)
+  └── <Generator>.writeToFile(List<Package>, …)
+        ├── _packageToComponent/_packageToSpdx/… × N
+        │     ├── LicenseNormalizer.toCycloneDxLicenses() / toSpdxExpression()
+        │     ├── if (pkg is RpmPackage) { … RPM-specific … }
+        │     ├── else if (pkg is WheelPackage) { … Python/source … }
+        │     └── else if (pkg is DebPackage) { … deb-specific … }
+        │         [OciPackage: common Package fields, no specific branch]
+        └── File.writeAsString()
+....
+
+== Tests
+
+[source,bash]
+----
+dart test                            # all the tests
+dart test test/unit/                 # unit tests only
+dart test test/integration/          # integration tests (some are skipped
+                                      # automatically depending on the environment)
+----
+
+Executed automatically by
+`.github/workflows/ci.yml` (`dart analyze --fatal-infos` then `dart test`)
+on every push/pull request to `main`.
+
+[[sec-ci-release]]
+=== Continuous integration and releases (GitHub Actions)
+
+[cols="2,2,5",options="header"]
+|===
+|Workflow |Trigger |Content
+
+|`.github/workflows/ci.yml`
+|push to `main`, pull request, manual
+|`cli` job (`dart analyze --fatal-infos`, `dart test`), `gui` job
+(`flutter analyze`, `flutter test -j 1`), then `build` job
+(`dart compile exe` + `flutter build linux --release`, artifacts kept
+7 days).
+
+|`.github/workflows/release.yml`
+|tag `vX.Y.Z`
+|`almalinux:9` container prepared by `.github/scripts/setup-almalinux.sh`
+(Flutter, `rpm-build`, grype / osv-scanner / trivy, asciidoctor-pdf),
+check tag = `version:` of `pubspec.yaml`, `scripts/build-dist.sh --rpm`,
+then GitHub Release: `.tar.gz` archive, RPMs, CycloneDX SBOM, PDF CVE
+reports; notes = `[X.Y.Z]` section of the CHANGELOG
+(`.github/scripts/changelog-section.sh`).
+|===
+
+* SDKs pinned in the workflows (`DART_VERSION`, `FLUTTER_VERSION`): those of
+  the development machine.
+* AlmaLinux 9 (glibc 2.34) for the release: the binaries and RPMs
+  also run on RHEL 9 / 10 and recent Fedoras; `rpm` is available there
+  to describe the runtime dependencies in the archive's SBOM.
+* The tests that run the CLI and check a message pass `--lang fr` and the
+  unit tests set the language explicitly: the runner's locale (e.g.
+  `LANG=C.UTF-8` or an English locale) does not affect them. The `example/3PP`
+  archives used by `test/integration/tar_integration_test.dart` are
+  versioned (1.1 MB).
+* A release is triggered by pushing the tag of the commit
+  `chore(release): passage en version X.Y.Z`; if the tag does not match
+  `pubspec.yaml` or if the CHANGELOG has no `[X.Y.Z]` section, the job
+  fails before publication.
+
+=== Unit suites
+
+[cols="2,1,3", options="header"]
+|===
+|File |Tests |Coverage
+
+|`test/unit/i18n_test.dart`
+|8
+|`langFromLocale`, `initLang` (priority `--lang` > `SBOM_LANG` > `LC_ALL` > `LANG`, `--lang=`), `tr`, `plural`
+
+|`test/unit/i18n_reports_test.dart`
+|3
+|Readable reports in FR / EN (`scan` summary, `cra` report with stable JSON keys, license report)
+
+|`test/unit/license_normalizer_test.dart`
+|23
+|`toSpdxExpression`, `toCycloneDxLicenses`, edge cases
+
+|`test/unit/archive_helpers_test.dart`
+|18
+|`parseArchiveFilename` (real archives + edge cases), `identifyArchiveLicense`
+
+|`test/unit/rpm_parser_test.dart`
+|9
+|`buildDependencies` without subprocess
+
+|`test/unit/requirements_parser_test.dart`
+|10
+|RFC parsing, PEP 503, extras, markers, directives
+
+|`test/unit/oci_parser_test.dart`
+|16
+|`OciParser.detectRefType` (registry, `.tar`, `.tar.gz`, `.tgz`, local file
+→ `binary`), normalisation of syft/trivy types, PURL construction per
+ecosystem, base OS extraction + Trivy family translation
+(`_syftDistroToOsInfo`/`_trivyMetadataToOsInfo`)
+
+|`test/unit/go_parser_test.dart`
+|10
+|`parseGoSum`, `parseGoMod`, deduplication, `v`-prefixed versions, errors
+
+|`test/unit/npm_parser_test.dart`
+|13
+|lockfileVersion 1/2/3, list/string licenses, PURLs, `integrity`→hash,
+supplier from `node_modules/<pkg>/package.json`, errors
+
+|`test/unit/models_test.dart`
+|4
+|`Package.copyWith({license, vendor})` — concrete type preserved, other fields
+intact (RPM/Wheel/Deb/Oci)
+
+|`test/unit/yarn_parser_test.dart`
+|10
+|classic yarn v1, yarn v2+ Berry, scopes, PURLs, errors
+
+|`test/unit/maven_parser_test.dart`
+|10
+|basic extraction, `groupId:artifactId` name, test/system scope,
+`dependencyManagement`, PURL, missing file
+
+|`test/unit/pubspec_parser_test.dart`
+|8
+|`pubspec.lock` (hosted/git/path/sdk, sha256, `direct dev` exclusion,
+private registry), `pubspec.yaml` (excluding `dev_dependencies:`), PURL, errors
+
+|`test/unit/jar_parser_test.dart`
+|14
+|own identity vs relocated dependencies (uber-jar), `MANIFEST.MF`
+fallback, `_knownGroupIdOverrides` table (Spring)
+
+|`test/unit/cyclonedx_generator_test.dart`
+|18
+|default 1.6 spec, 1.7 activation, TLP, citations, patents, validation
+errors, base OS component (`osInfo`)
+
+|`test/unit/spdx_generator_test.dart`
+|18
+|SPDX-2.3 envelope, packages (purl, license, downloadLocation), `supplier`
+(`Organization:` / `NOASSERTION`), `checksums`, `rpm:header-sha256` as
+annotation, DESCRIBES/DEPENDS_ON relationships, base OS package (`osInfo`,
+SPDXID `SPDXRef-OperatingSystem-`)
+
+|`test/unit/spdx3_generator_test.dart`
+|15
+|JSON-LD envelope (@context/@graph), software:Package packages, Organization
+shared by vendor, describes/dependsOn relationships, base OS element (`osInfo`)
+
+|`test/unit/policy_checker_test.dart`
+|10
+|matching of forbidden licenses (exact and partial)
+
+|`test/unit/sbom_reader_test.dart`
+|2
+|format detection, re-reading a CycloneDX document
+
+|`test/unit/csv_generator_test.dart`
+|6
+|headers, sort by name, RFC 4180 escaping
+
+|`test/unit/sbom_diff_test.dart`
+|11
+|purl/name:type key, CycloneDX/SPDX 2.3/SPDX 3.0 (including cross-format
+comparison), toJson
+
+|`test/unit/sbom_merger_test.dart`
+|12
+|CycloneDX dedup (purl/bom-ref/dependencies) and SPDX 2.3 (purl/SPDXID/relationships)
+
+|`test/unit/license_report_generator_test.dart`
+|8
+|grouping by exact license, strong (GPL/AGPL) vs weak (LGPL/…) copyleft
+classification, splitting of compound expressions for the warning,
+packages without license
+|===
+
+(The counts are indicative; run `dart test -r compact` for the exact figure.)
+
+=== Integration suite
+
+[cols="2,1,3", options="header"]
+|===
+|File |Tests |Coverage
+
+|`test/integration/tar_integration_test.dart`
+|8
+|`TarParser` on real archives, `WheelParser` on wheels, unique bomRefs
+
+|`test/integration/oci_skopeo_test.dart`
+|8
+|Skopeo backend: detection of the RPM base path depending on the
+distribution version, Java extraction — requires `rpm` and `skopeo`, some cases
+require an unversioned `keycloak_26.tar` archive
+
+|`test/integration/policy_checker_sbomqs_test.dart`
+|2
+|`PolicyChecker.runSbomqs` on a real SBOM — requires `sbomqs`
+
+|`test/integration/input_directory_test.dart`
+|1
+|`--input <directory>`: recursive scan, filtering by recognised file type
+
+|`test/integration/pubspec_input_test.dart`
+|4
+|`--input pubspec.lock`, lock+yaml directory, SPDX `supplier` `NOASSERTION`,
+`--supplier` fallback
+
+|`test/integration/rpm_parser_integration_test.dart`
+|1
+|`RpmParser.parsePackage` on the real RPM database: `%{SIGMD5}` → `MD5`
+hash, `%{SHA256HEADER}` → `headerSha256` — requires `rpm`
+
+|`test/integration/binary_input_test.dart`
+|4
+|`--binary <file>` end to end (syft backend forced, on
+`Platform.resolvedExecutable`) — requires `syft`; validations: file
+not found, `--oci-tool` ≠ syft, `--binary` + `--image`
+|===
+
+The integration tests are marked `@TestOn('posix')` and skip themselves
+automatically when the required tool or file is absent from the
+environment (e.g. `rpm` not installed, `keycloak_26.tar` not provided) —
+without making the suite fail. The ones that run the CLI pass
+`--lang fr` (see <<sec-i18n>>).
+
+== Checklist before making a change
+
+* [ ] `dart analyze lib/ bin/ test/` passes without error or warning (`No issues found!`)
+* [ ] `dart format --output=none lib/ bin/` passes without differences
+* [ ] `dart test` — all green (some integration tests skip cleanly
+  depending on the environment)
+* [ ] Any new user-visible text has its two versions `tr('fr', 'en')` — and has not
+  broken a contract (`SBOM written → …` line, progress bar, layer
+  texts, JSON keys): see pitfall 11
+* [ ] Documentation updated in both languages (`*.adoc` and `*.en.adoc`, `README*.md`,
+  `CHANGELOG*.md`)
+* [ ] Test on the 5 3PP archives (name, version, arch, license correct)
+* [ ] Test with a mixed list RPM + .whl + .tar.gz + .zip + .deb + .jar + requirements.txt + `--image`
+* [ ] Test with Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`), Dart/Flutter (`pubspec.lock`, `pubspec.yaml`) manifests
+* [ ] Test of the `convert` subcommand: CycloneDX → SPDX, SPDX → CycloneDX, all → CSV
+* [ ] Test of the `licenses` subcommand: grouping, copyleft warning, packages without license
+* [ ] Test of the `validate` subcommand: valid file, invalid, strict mode
+* [ ] Test of the `scan` subcommand: each scanner (`grype`, `osv`, `trivy`, `all`),
+  date filters, `--include-undated`
+* [ ] If `--rpm-dir` is modified: check exact resolution (NEVRA), resolution
+  by name, multi-match warning, `rpm -q` fallback if absent
+* [ ] The CycloneDX SBOM passes `sbom_schema_valid: 10.0` in sbomqs
+* [ ] No duplicate `bom-ref` in the CycloneDX output
+* [ ] If `LicenseNormalizer` is modified: re-run `test/unit/license_normalizer_test.dart`
+  (23 cases)
+* [ ] If `identifyArchiveLicense` is modified: check that GPL-2.0 (MariaDB COPYING)
+  is not detected as LGPL
+* [ ] If `parseArchiveFilename` is modified: check the 5 3PP cases of the table
+  in `archive_helpers_test.dart`
+* [ ] If `_capabilityName` is modified: check `python3dist(lxml) >= 3.0` →
+  `python3dist(lxml)`
+* [ ] If a package type is added: update `models.dart`, all the generators
+  (`if (pkg is …)`), `bin/sbom_generator.dart` (dispatch + tool check) and this document
+* [ ] If `OciParser` or `--image`/`--oci-tool` is modified: test the four backends
+  (syft, trivy, skopeo, cdxgen) with registry, tar and OCI layout; if the OS detection
+  (`OsInfo`) is touched, re-check with `trivy sbom` on the produced SBOM that
+  the "os-pkgs" class is indeed detected (not only that the OS component is
+  present in the JSON — see <<sec-osinfo-oci-parser>>)
+* [ ] If a manifest parser (1:N) is added: add it to the pre-expansion block in
+  `main()` with its `_isXxx()` helper — do not go through the concurrent loop
+
+== External dependencies
+
+[cols="1,1,3", options="header"]
+|===
+|Package |Version |Role
+
+|`args`
+|`^2.4.2`
+|CLI argument parsing
+
+|`test` _(dev)_
+|`^1.31.1`
+|Unit and integration test framework
+|===
+
+Everything else: Dart standard library (`dart:io`, `dart:convert`,
+`dart:math`, `dart:async`).
+
+System tools required at runtime:
+
+[cols="1,2", options="header"]
+|===
+|Tool |Required for
+
+|`rpm`
+|RPM packages (installed or `.rpm` files)
+
+|`python3` + `zipfile` + `tarfile` (stdlib)
+|`.whl` wheels, `.tar*` and `.zip` archives
+
+|`dpkg-deb`
+|Debian `.deb` packages
+
+|`syft`
+|OCI images with `--oci-tool syft` (default)
+
+|`trivy`
+|OCI images with `--oci-tool trivy`
+
+|`skopeo` + `tar`
+|OCI images with `--oci-tool skopeo`
+
+|`cdxgen` (+ Node.js)
+|OCI images with `--oci-tool cdxgen`
+
+|`unzip`
+|`.jar` archives (via `--input`), and the `skopeo` backend (`--oci-tool skopeo`)
+
+|`grype`
+|`scan --scanner grype` subcommand (default)
+
+|`osv-scanner`
+|`scan --scanner osv` subcommand
+
+|`sbomqs`
+|`--min-quality-score`
+
+|`cosign`
+|`--sign`
+|===
+
+== Build and deployment
+
+[source,bash]
+----
+# Development (JIT, compiles on the fly)
+dart run bin/sbom_generator.dart -i packages.txt
+
+# Standalone native binary (AOT, ~30 s compilation)
+dart compile exe bin/sbom_generator.dart -o sbom_generator
+
+# Tests
+dart test                            # all the tests
+dart test test/unit/                 # unit only
+dart test test/integration/          # integration only
+
+# Static analysis
+dart analyze
+
+# Formatting
+dart format lib/ bin/ test/
+dart format --output=none lib/ bin/ test/   # CI mode (no modification)
+----

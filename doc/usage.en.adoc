@@ -1,0 +1,1969 @@
+= sbom_generator — Usage guide
+:toc: left
+:toc-title: Contents
+:toclevels: 3
+:sectnums:
+:icons: font
+:source-highlighter: rouge
+:rouge-style: monokai
+:docdate: 2026-06-30
+:lang: en
+
+🇫🇷 link:usage.adoc[Français] · 🇬🇧 *English*
+
+SBOM (Software Bill of Materials) generator from a mixed list of packages or an OCI image.
+Supports the input types *RPM*, *Python wheel*, *tar/zip archives*, *Debian packages*, *Java archives* (`.jar`), *requirements.txt*, *Go modules* (go.sum/go.mod), *npm/yarn packages* (package-lock.json/yarn.lock), *Maven packages* (pom.xml), *Dart/Flutter packages* (pubspec.lock/pubspec.yaml) and *OCI images* (via syft, trivy, skopeo or cdxgen). `--input` also accepts a directory, scanned recursively for all these types.
+Supports the output formats *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *custom JSON*, *Markdown*, *AsciiDoc*, *interactive HTML* and *CSV*.
+
+== Prerequisites
+
+[cols="1,1,1,2", options="header"]
+|===
+|Component |Minimum version |Required for |Role
+
+|https://dart.dev/get-dart[Dart SDK]
+|3.0.0
+|always
+|Build and execution
+
+|`rpm`
+|—
+|RPM packages
+|Querying RPM metadata
+
+|`python3`
+|3.6+
+|`.whl`, `.tar*`, `.zip`
+|Extracting metadata from archives
+
+|`dpkg-deb`
+|—
+|`.deb`
+|Reading Debian package metadata
+
+|`syft`
+|—
+|`--image` with `--oci-tool syft` (default)
+|OCI image analysis — all package types
+
+|`trivy`
+|—
+|`--image` with `--oci-tool trivy`
+|OCI image analysis — all package types
+
+|`unzip`
+|—
+|`.jar` (via `--input`) or `--image` with `--oci-tool skopeo`
+|Extracting the Maven coordinates (`pom.properties`) of a JAR archive
+
+|`skopeo` + `tar`
+|—
+|`--image` with `--oci-tool skopeo`
+|OCI image analysis — dpkg, RPM, APK, Maven JARs, Python packages and npm
+
+|`cdxgen`
+|—
+|`--image` with `--oci-tool cdxgen`
+|OCI image analysis via OWASP CycloneDX Generator — all package types (requires Node.js)
+
+|`grype`
+|—
+|`scan --scanner grype` subcommand (default)
+|Lookup of known vulnerabilities (CVE) on an already generated SBOM
+
+|`osv-scanner`
+|—
+|`scan --scanner osv` subcommand
+|Lookup of known vulnerabilities via the open OSV database
+
+|`sbomqs`
+|—
+|`--min-quality-score`
+|Quality score of the generated SBOM (0–10)
+
+|`asciidoctor-pdf`
+|—
+|`scan --format pdf`
+|Conversion of the AsciiDoc summary report to PDF (if absent, the `.adoc` is kept)
+
+|`cosign`
+|—
+|`--sign`
+|Cryptographic signature of the generated SBOM files
+|===
+
+Check:
+
+[source,bash]
+----
+dart --version
+rpm --version
+python3 --version
+dpkg-deb --version
+unzip --version   # if --input contains a .jar, or --oci-tool skopeo
+syft version      # if --oci-tool syft
+trivy --version   # if --oci-tool trivy, or scan --scanner trivy
+skopeo --version  # if --oci-tool skopeo
+cdxgen --version  # if --oci-tool cdxgen (requires Node.js)
+grype version         # if scan --scanner grype (default)
+osv-scanner --version # if scan --scanner osv
+sbomqs version         # if --min-quality-score
+asciidoctor-pdf --version # if scan --format pdf
+cosign version         # if --sign
+----
+
+== Installation
+
+=== Option 1 — Direct execution with Dart
+
+[source,bash]
+----
+cd sbom_generator
+dart pub get          # downloads the dependencies (args package)
+dart run bin/sbom_generator.dart --help
+----
+
+=== Option 2 — Compilation to a native binary (recommended)
+
+[source,bash]
+----
+dart compile exe bin/sbom_generator.dart -o sbom_generator
+./sbom_generator --help
+----
+
+The `sbom_generator` binary is standalone; no Dart SDK is needed to run it.
+
+== Syntax
+
+....
+sbom_generator -i <file> [options]
+sbom_generator -I <oci-image> [options]
+sbom_generator -i <file> -I <oci-image> [options]
+sbom_generator --binary <file> [options]
+sbom_generator diff <sbom-a> <sbom-b> [--json] [--output <file>]
+sbom_generator merge <sbom1> <sbom2> ... -o <output> [-n <name>]
+sbom_generator convert -i <source-sbom> -f <format> -o <output>
+sbom_generator licenses -i <source-sbom> -o <licenses.adoc> [-f asciidoc|markdown|html|csv|json]
+sbom_generator validate <sbom1> [<sbom2> ...]
+sbom_generator scan --sbom <file> [options]
+sbom_generator scan --image <image> [--per-layer] [options]
+sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
+sbom_generator cra --sbom <file> [options]
+....
+
+=== Options
+
+[cols="2,1,1,3", options="header"]
+|===
+|Option |Short |Default |Description
+
+|`--input <path>`
+|`-i`
+|_(required if no --image)_
+|List file (one reference per line), single archive/package, or directory
+scanned recursively (see <<Input file format>>)
+
+|`--image <reference>`
+|`-I`
+|_(required if no --input)_
+|OCI image to analyse: `nginx:latest`, `/path/image.tar`, `/path/image.tar.gz`, `/path/image.tgz`, `/path/oci_dir/`
+
+|`--binary <file>`
+|`-b`
+|—
+|Local binary to analyse directly (e.g. statically linked Go executable); forces `--oci-tool syft` — see <<sec-binaire-statique>>
+
+|`--oci-tool <tool>`
+|—
+|`syft`
+|OCI analysis backend: `syft` (default), `trivy`, `skopeo`, `cdxgen`
+
+|`--depth <N\|all>`
+|—
+|`0`
+|Depth of descent into the nested objects of `--input` (jars of an RPM, packages of an archive…): `0` = the object alone, `N` levels, `all` = unlimited (capped at 10) — see <<sec-depth>>
+
+|`--no-nested-files`
+|—
+|—
+|With `--depth`: do not write one SBOM per nested object (merged SBOM only)
+
+|`--per-layer`
+|—
+|—
+|With `--image`: one SBOM per image layer in addition to the global one (`<base>.layer-NN-<digest12>.<ext>`, layer delta) — see <<sec-per-layer>>
+
+|`--layer-mode <mode>`
+|—
+|`metadata`
+|`--per-layer` method: `metadata` (originating layer reported by syft/trivy) or `rootfs` (re-analysis after each layer; forced for `skopeo` and `cdxgen`)
+
+|`--output <file>`
+|`-o`
+|`sbom.json`
+|Output SBOM file (base path if multi-format)
+
+|`--format <fmt>`
+|`-f`
+|`cyclonedx`
+|Output format(s), comma-separated (see below)
+
+|`--name <name>`
+|`-n`
+|`Package Set`
+|Name of the root component in the SBOM
+
+|`--supplier <name>`
+|—
+|—
+|Default supplier for components whose source carries no vendor (npm/yarn/Go/pip/pub lockfiles, `requirements.txt`). Never overrides a detected supplier
+
+|`--rpm-dir <directory>`
+|`-d`
+|—
+|Directory for the recursive search of `.rpm` files; resolves bare names without querying the installed database
+
+|`--concurrency <N>`
+|`-c`
+|`4`
+|Number of packages processed simultaneously (`0` = unlimited)
+
+|`--license-map <file>`
+|`-l`
+|—
+|License override file (`name: SPDX-expression` per line)
+
+|`--deny-license <pattern>`
+|—
+|—
+|Reject components whose license matches the SPDX pattern (partial matching,
+repeatable). Exit code 2 if at least one violation is detected.
+
+|`--sdk-version <sdk>=<ver>`
+|—
+|—
+|Actual version of a Dart/Flutter SDK (repeatable —
+`--sdk-version flutter=3.47.2 --sdk-version dart=3.9.0`). Double effect: (1) the
+version is applied to the matching `source: sdk` packages of a
+`pubspec.lock` / `pubspec.yaml` (which pub always records as `0.0.0`; without the option
+they come out without a version); (2) each SDK is added to the SBOM *toolchain*
+— `metadata.tools.components` (CycloneDX, `type: platform`),
+`creationInfo.creators` (SPDX 2.3), `Tool` elements (SPDX 3.0). This is how
+the `dart` version appears in the SBOM, `dart` having no package in the
+lockfile.
+
+|`--pub-cache <dir>`
+|—
+|auto
+|Pub cache directory (contains `hosted/<host>/<name>-<version>/`). The CLI reads
+the `LICENSE` file of each package of a `pubspec.lock` there — the lockfile
+holds none. Auto-detected (`$PUB_CACHE`, otherwise `~/.pub-cache` if it
+exists); `--pub-cache ""` disables the reading.
+
+|`--flutter-root <dir>`
+|—
+|`$FLUTTER_ROOT`
+|Flutter SDK root, to read the `LICENSE` of `source: sdk` packages
+(`flutter`, `sky_engine`…).
+
+|`--cyclonedx-version <ver>`
+|—
+|`1.6`
+|CycloneDX version generated: `1.6` or `1.7`. Required for `--tlp` and `--patent-map`.
+
+|`--tlp <classification>`
+|—
+|—
+|TLP (Traffic Light Protocol) classification of the BOM — 1.7 only.
+Values: `CLEAR`, `GREEN`, `AMBER`, `AMBER_AND_STRICT`, `RED`.
+
+|`--patent-map <file>`
+|—
+|—
+|Per-package patent declarations file — 1.7 only (see <<patent-map>>).
+
+|`--min-quality-score <score>`
+|—
+|—
+|Minimum required sbomqs score (e.g. `7.5`). Runs `sbomqs score` after generation and
+returns exit code 2 if the score is insufficient.
+
+|`--sign`
+|—
+|disabled
+|Sign the SBOM files with `cosign sign-blob` after generation (requires `cosign` in the PATH).
+A `<sbom>.bundle` file is created next to each signed file.
+
+|`--lang <fr\|en>`
+|—
+|auto
+|Language of messages, `--help` and readable reports. Default: the `SBOM_LANG` environment variable, then `LC_ALL` / `LC_MESSAGES` / `LANG`, otherwise French. See <<sec-langue>>.
+
+|`--verbose`
+|`-v`
+|disabled
+|Shows progress details
+
+|`--version`
+|
+|
+|Shows the version and exits
+
+|`--help`
+|`-h`
+|
+|Shows help
+|===
+
+=== Available formats
+
+[cols="1,1,1,1,3", options="header"]
+|===
+|Value |Standard |Version |Extension |Description
+
+|`cyclonedx`
+|CycloneDX
+|1.6 or 1.7
+|`.cdx.json`
+|Default format (1.6). `--cyclonedx-version 1.7` additionally enables `citations`, `patentAssertions` and `distributionConstraints`.
+
+|`spdx`
+|SPDX
+|2.3
+|`.spdx.json`
+|SPDX 2.3 JSON with `packages[]` and `relationships[]`.
+
+|`spdx3`
+|SPDX
+|3.0
+|`.spdx3.jsonld`
+|SPDX 3.0 JSON-LD with a flat graph of elements (`@graph`).
+
+|`json`
+|Custom
+|—
+|`.custom.json`
+|Readable JSON including all the raw metadata.
+
+|`markdown`
+|—
+|—
+|`.md`
+|Markdown table of packages and licenses.
+
+|`asciidoc`
+|—
+|—
+|`.adoc`
+|AsciiDoc table of packages and licenses.
+
+|`html`
+|—
+|—
+|`.html`
+|Standalone HTML report (no external dependency): statistics,
+charts per ecosystem and license (top 10/15), filterable and sortable table.
+
+|`csv`
+|—
+|—
+|`.csv`
+|CSV file (RFC 4180): one row per package, columns `name`, `version`,
+`architecture`, `license`, `type`, `purl`, `url`, `vendor`. Ideal for integration
+into Excel, Jira or any reporting tool.
+|===
+
+In multi-format mode (`-f cyclonedx,spdx,markdown`), `--output` is treated as
+a base path to which each extension is appended.
+
+== Input file format
+
+A text file, *one reference per line*. Types can be freely mixed in the same
+file.
+
+=== Accepted reference types
+
+[cols="2,2,2", options="header"]
+|===
+|Type |Example |Mechanism
+
+|Installed RPM package name
+|`bash`
+|`rpm -q bash`
+
+|Full NEVRA
+|`bash-5.1.8-6.el9.x86_64`
+|`rpm -q bash-5.1.8-6.el9.x86_64`
+
+|Local `.rpm` file
+|`/mnt/repo/bash-5.1.8.rpm`
+|`rpm -qp /mnt/repo/bash-5.1.8.rpm`
+
+|Python wheel `.whl`
+|`/opt/wheels/requests-2.28.0-py3-none-any.whl`
+|`python3 zipfile` (METADATA extraction)
+
+|Tar archive `.tar.gz` / `.tgz` / `.tar`
+|`/opt/src/mariadb-11.4.8.tar.gz`
+|`python3 tarfile` → PURL `pkg:pypi/…` or `pkg:generic/…`
+
+|ZIP archive `.zip`
+|`/opt/src/mylib-1.0.zip`
+|`python3 zipfile` → PURL `pkg:pypi/…` or `pkg:generic/…`
+
+|Debian package `.deb`
+|`/opt/pkgs/libssl3_3.0.1_amd64.deb`
+|`dpkg-deb -f`
+
+|Java archive `.jar`
+|`/opt/libs/my-lib-1.2.3.jar`
+|Embedded `pom.properties`, otherwise `META-INF/MANIFEST.MF`, otherwise file
+name; PURL `pkg:maven/…`. A "shaded"/uber-jar embedding relocated
+dependencies (each with its own `pom.properties`) yields
+one component per dependency, in addition to the jar itself.
+
+|`requirements.txt` file
+|`/opt/project/requirements.txt`
+|Pure Dart parser (simplified PEP 508)
+
+|Go modules (`go.sum`)
+|`/opt/myapp/go.sum`
+|Pure Dart parser — extracts module and version; PURL `pkg:golang/…`
+
+|Go modules (`go.mod`)
+|`/opt/myapp/go.mod`
+|Pure Dart parser — extracted from `require` directives; PURL `pkg:golang/…`
+
+|npm packages (`package-lock.json`)
+|`/opt/myapp/package-lock.json`
+|Pure Dart parser — lockfileVersion 1, 2 and 3; PURL `pkg:npm/…`
+
+|yarn packages (`yarn.lock`)
+|`/opt/myapp/yarn.lock`
+|Pure Dart parser — classic yarn v1 and yarn v2+ Berry; PURL `pkg:npm/…`
+
+|Maven dependencies (`pom.xml`)
+|`/opt/myapp/pom.xml`
+|Pure Dart parser — compile/provided scope, excluding test and dependencyManagement; PURL `pkg:maven/…`
+
+|Dart/Flutter lockfile (`pubspec.lock`)
+|`/opt/flutterapp/pubspec.lock`
+|Pure Dart parser — resolved versions + transitive closure, all sources (hosted/git/path/sdk), excluding `direct dev`; PURL `pkg:pub/…`. `source: sdk` packages without a version (see `--sdk-version`). Licenses read from the pub cache (see `--pub-cache` / `--flutter-root`)
+
+|Dart/Flutter manifest (`pubspec.yaml`)
+|`/opt/flutterapp/pubspec.yaml`
+|Pure Dart parser — `dependencies:` section only (not `dev_dependencies:`); PURL `pkg:pub/…`
+|===
+
+=== Syntax rules
+
+* Blank lines are ignored.
+* Lines starting with `#` are comments and are ignored.
+* Identical packages (same `bomRef`) are automatically deduplicated.
+
+=== Shortcut: passing a single archive directly
+
+`--input` also directly accepts the path of a single archive or package
+(`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`, `.jar`), or of a
+single manifest recognised by its exact name (`requirements.txt`, `go.sum`,
+`go.mod`, `package-lock.json`, `yarn.lock`, `pom.xml`, `pubspec.lock`,
+`pubspec.yaml`), without going through an intermediate list file:
+
+[source,shell]
+----
+sbom_generator -i /opt/3PP/myapp-2.0.0-linux-amd64.zip -o sbom
+sbom_generator -i /opt/libs/my-lib-1.2.3.jar -o sbom
+sbom_generator -i /opt/flutterapp/pubspec.lock -o sbom
+----
+
+For any other file path, `--input` is still interpreted as a list file (one
+reference per line, see above).
+
+=== Shortcut: passing a directory directly
+
+If `--input` points to a **directory**, it is scanned recursively
+(symbolic links ignored) for all the file types of the table above: `.rpm`,
+`.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, as well as the
+manifests recognised by their exact name (`requirements.txt`, `pom.xml`,
+`go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`,
+`pubspec.yaml`). If `pubspec.lock` and `pubspec.yaml` coexist in the same
+directory, only the `.lock` is kept. A `.txt` that is not named exactly
+`requirements.txt` is therefore not kept, unlike the list file where any
+`.txt` (other than `.whl`) is treated as a requirements file.
+
+[source,shell]
+----
+sbom_generator -i /opt/app/libs -o sbom
+----
+
+Bare RPM package names (e.g. `bash`, with no path or extension) cannot be
+discovered this way: they are not files. Use a list file or `--rpm-dir` in that
+case.
+
+=== Mixed input file example
+
+[source,text]
+----
+# RPM packages (installed names)
+bash
+glibc
+openssl-libs
+
+# Local RPM files
+/mnt/BaseOS/Packages/curl-7.76.1-14.el9.x86_64.rpm
+/mnt/AppStream/Packages/nginx-1.20.1-14.el9.x86_64.rpm
+
+# Python wheels
+/opt/wheels/requests-2.28.0-py3-none-any.whl
+
+# Third-party archives
+/opt/src/mariadb-11.4.8-linux-systemd-x86_64.tar.gz
+
+# Debian package
+/opt/pkgs/libssl3_3.0.1_amd64.deb
+
+# Python dependencies
+/opt/project/requirements.txt
+
+# Go modules (either go.sum or go.mod)
+/opt/myapp/go.sum
+
+# npm / yarn packages
+/opt/webapp/package-lock.json
+/opt/webapp/yarn.lock
+
+# Maven dependencies
+/opt/javaapp/pom.xml
+
+# Temporarily comment out a package
+# systemd
+----
+
+=== Generating the list from an installed system
+
+[source,bash]
+----
+# All installed RPM packages
+rpm -qa > packages.txt
+
+# Packages of a specific group
+rpm -qa --queryformat '%{NAME}\n' | grep ^python > python_pkgs.txt
+
+# RPM files of a mounted ISO/repository directory
+find /mnt/BaseOS/Packages -name '*.rpm' > rpm_files.txt
+----
+
+== Usage examples
+
+=== CycloneDX generation (default)
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -o sbom.cdx.json
+----
+
+=== SPDX 2.3 with a custom name
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f spdx -n "My Application" -o sbom.spdx.json
+----
+
+=== SPDX 3.0 JSON-LD
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f spdx3 -o sbom.spdx3.jsonld
+----
+
+=== Detailed JSON with verbose mode
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f json -n "RHEL 9 system" -o sbom.json -v
+----
+
+=== RPM files from a mounted repository
+
+[source,bash]
+----
+find /mnt/BaseOS/Packages -name '*.rpm' > list.txt
+find /mnt/AppStream/Packages -name '*.rpm' >> list.txt
+./sbom_generator -i list.txt -f cyclonedx -n "RHEL 9 BaseOS+AppStream" -o rhel9.cdx.json
+----
+
+=== Multi-format in a single pass
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f cyclonedx,spdx,markdown -o sbom
+# Generates: sbom.cdx.json + sbom.spdx.json + sbom.md
+----
+
+=== Parallel processing and license overrides
+
+[source,bash]
+----
+# 8 packages in parallel + license overrides
+./sbom_generator -i packages.txt -c 8 -l overrides.txt -o sbom.cdx.json
+----
+
+=== Resolving RPM names from a local directory
+
+[source,bash]
+----
+# Bare names (bash, glibc…) are resolved in /mnt/repo instead of rpm -q
+./sbom_generator -i packages.txt -d /mnt/repo -o sbom.cdx.json
+----
+
+=== Analysing an OCI image (via syft, default)
+
+[source,bash]
+----
+./sbom_generator -I nginx:latest -f cyclonedx -n "nginx" -o nginx.cdx.json
+----
+
+With the `syft`, `trivy` and `cdxgen` backends (not `skopeo`), the generated
+CycloneDX/SPDX SBOM includes a dedicated component for the image's base OS
+— needed so that a tool such as Trivy (`trivy sbom`), rescanning that file
+later, also evaluates the CVEs of system packages (RPM/DEB/APK), not only
+those of application packages. Without this component, these CVEs would be
+silently absent from the result.
+
+NOTE: Conversely, it is normal for an SBOM generated with the `syft` backend
+to surface, once passed through `trivy sbom`, *a few* more Java CVEs
+than `trivy image` on the same image directly — this is not a
+false positive of the SBOM, but an under-detection by the jar analyser
+built into Trivy. Checked on a RHEL 9.6/Keycloak image: 3 HIGH CVEs
+(`micrometer-core`, `postgresql`) found via the SBOM but absent from a
+direct `trivy image`, although both scans target the same
+image. Cause: Trivy identifies a Maven jar through `pom.properties`, then
+`MANIFEST.MF`, then a SHA-1 hash lookup in its `trivy-java-db` database
+(indexed from Maven Central); the jars concerned are
+internal Red Hat rebuilds (`.redhat-000xx`) without `pom.properties` and
+absent from Maven Central, so all three methods fail and Trivy
+silently drops the package — no warning. Syft, for its part, has
+an additional fallback: it can parse the file name
+`<groupId>.<artifactId>-<version>.jar`, the convention used by the
+Quarkus "fast-jar" packaging (`lib/main/` directory) of this image,
+and thus detects these packages where Trivy's built-in analyser fails.
+
+=== Analysing a tar archive exported with docker save
+
+The `.tar`, `.tar.gz` and `.tgz` formats are detected automatically.
+
+[source,bash]
+----
+./sbom_generator -I ./ubuntu.tar --oci-tool trivy -f spdx -o ubuntu.spdx.json
+
+# Compressed archive (docker save ubuntu | gzip > ubuntu.tar.gz)
+./sbom_generator -I ./ubuntu.tar.gz --oci-tool syft -f cyclonedx -o ubuntu.cdx.json
+----
+
+=== Analysing an OCI layout directory via skopeo
+
+[source,bash]
+----
+./sbom_generator -I ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json
+----
+
+=== Analysis via cdxgen (OWASP CycloneDX Generator)
+
+`cdxgen` produces a complete CycloneDX SBOM of the image; the generator only
+keeps the components carrying a real ecosystem PURL
+(`pkg:deb`, `pkg:rpm`, `pkg:apk`, `pkg:pypi`, `pkg:npm`, `pkg:golang`,
+`pkg:maven`…). The file-by-file inventory (`pkg:generic/…` of type
+`file`), the cryptographic assets and the APT repositories emitted by cdxgen are
+discarded, for a result consistent with `syft`/`trivy`. The base OS is
+reconstructed from the `distro=` qualifier of system PURLs (cdxgen does not emit
+a dedicated `operating-system` component).
+
+[source,bash]
+----
+./sbom_generator -I nginx:latest --oci-tool cdxgen -o nginx.cdx.json
+----
+
+NOTE: `cdxgen` is distributed via npm (`npm install -g @cyclonedx/cdxgen`) and
+requires Node.js. Remote registry, tar archive and OCI layout directory are
+all accepted.
+
+[[sec-binaire-statique]]
+=== Analysing a statically linked binary (`--binary`)
+
+[source,bash]
+----
+./sbom_generator --binary /usr/local/bin/my-app -o app.cdx.json
+----
+
+`--binary <file>` is an explicit variant of `--image <file>`:
+`--image` accepts any path, and when it is neither a tar archive nor an OCI
+layout directory, syft itself detects that an existing local path
+is not an image reference and analyses it directly as a
+file — this is the mechanism that makes it possible to read the dependencies
+embedded in a standalone binary, without a registry or container. `--binary` **forces
+`--oci-tool syft`** (the only backend supported here) and rejects any combination
+with `--oci-tool trivy|skopeo|cdxgen` or with `--image`.
+
+[IMPORTANT]
+====
+Actual scope, to know before relying on it for a compliance report:
+
+* *Go* (statically linked or not) — the complete list of modules + versions
+  is read from the `buildinfo` metadata embedded in the binary
+  (the ones `go version -m` displays), via syft's
+  `go-module-binary-cataloger`. Works even on a stripped executable, as long as the build has
+  not explicitly removed this section.
+* *Other binaries* (Rust, statically linked C/C++…) — syft applies a
+  generic classifier that recognises, by version-string fingerprint,
+  a *fixed* catalog of well-known open source libraries (OpenSSL, zlib,
+  sqlite, busybox…). This is not an arbitrary extraction of linked
+  dependencies — only the libraries of the catalog are detected.
+* A statically linked library with no recognised signature nor embedded
+  metadata (home-grown C/C++, Rust without `cargo-auditable`) *cannot*
+  be recovered after the fact — dependencies would have to be traced
+  at build time (e.g. by embedding a dependency JSON as
+  `cargo-auditable` does for Rust).
+====
+
+[[sec-depth]]
+=== Descending into nested objects (`--depth`)
+
+Without `--depth`, only the object designated by `--input` is described (an RPM → one
+component). With `--depth`, the tool extracts what is analysable from it and
+describes it in turn:
+
+[source,bash]
+----
+# An RPM and the jars it contains
+./sbom_generator -i app-1.0-1.x86_64.rpm --depth 1 -o out/app.cdx.json
+# → out/app.cdx.json                           merged SBOM (RPM + jars)
+#   out/app.nested-01-foo-1.2.3.jar.cdx.json   one SBOM per nested object
+#   out/app.nested-02-bar-2.0.jar.cdx.json …
+
+# Archive: all levels, merged SBOM only
+./sbom_generator -i release.tar.gz --depth all --no-nested-files -o out/release.cdx.json
+
+# Directory: each archive/package found is explored
+./sbom_generator -i ./deliverables --depth 2 -f cyclonedx,csv -o out/deliverables
+----
+
+[cols="1,3"]
+|===
+|Depth |Content
+
+|`0` _(default)_
+|the object alone (historical behaviour)
+
+|`N`
+|N levels: 1 = direct objects of the input, 2 = what those contain…
+
+|`all`
+|all levels, capped at 10 (safeguard against self-referencing archives)
+|===
+
+Objects traversed: *rpm*, *deb*, *tar/tgz/tar.gz*, *zip*, *jar/war/ear* (fat
+jars: `BOOT-INF/lib`, `WEB-INF/lib`…), *wheel*, and the manifests
+`requirements.txt`, `package-lock.json`, `yarn.lock`, `go.sum`, `go.mod`,
+`pom.xml`, `pubspec.lock`/`pubspec.yaml` (excluding `META-INF/`). Packages, jars
+and archives are analysed by their usual parser, then the descent continues;
+manifests are not explored any further. Extraction (embedded Python script,
+`python3` required; no `rpm2cpio`, `cpio` or `dpkg-deb`) only keeps
+the analysable files and is bounded: 4 GiB decompressed, 2 GiB per
+file, 50,000 files per archive; absolute paths, `..` and links are
+ignored. A limit being reached is reported and truncates the extraction of that
+archive. Analysing a nested `.rpm` requires `rpm`, a nested `.deb`
+requires `dpkg-deb` (as for a direct input).
+
+The *merged SBOM* contains the root object and all the components found,
+deduplicated by `bom-ref`:
+
+* each nested component carries `sbom_generator:nested:location` (logical
+  path `app.rpm!/usr/share/java/foo.jar!/BOOT-INF/lib/baz.jar`, never a
+  temporary path) and `sbom_generator:nested:depth` (CycloneDX properties;
+  same content as an SPDX 2.3 / 3.0 annotation and in the `nested` field of the
+  custom JSON);
+* the dependency graph contains the containment edges: container
+  component → nested object component → relocated dependencies
+  of an uber-jar; a manifest is attached directly to its container.
+
+One *SBOM per nested object* (jar, package, archive, manifest) is written in
+each requested format, next to `-o`: `<base>.nested-NN-<object>.<ext>`
+(numbered in discovery order, object name sanitised). The merged one
+is written first. `--no-nested-files` keeps only the merged one. `--depth`
+requires `--input`; it does not apply to images (see `--per-layer`).
+
+[[sec-per-layer]]
+=== One SBOM per image layer (`--per-layer`)
+
+[source,bash]
+----
+./sbom_generator -I ./app.tar --per-layer -f cyclonedx,csv -o out/app
+# → out/app.cdx.json                              global SBOM (annotated)
+#   out/app.layer-01-74d97c428c51.cdx.json        layer 1 (base)
+#   out/app.layer-02-b676b687f0f5.cdx.json        layer 2 …
+#   (and the same in .csv)
+
+# Additions, changes and removals: rootfs re-analysis per layer
+./sbom_generator -I nginx:latest --per-layer --layer-mode rootfs -o out/nginx
+----
+
+The global one is written first, then one SBOM per layer *in each requested
+format* (`-f`), next to `-o`. The base name is that of `-o` without the
+format extension; the layer index has at least two digits, so that
+alphabetical order follows layer order.
+
+[cols="1,3,1,2",options="header"]
+|===
+|Mode (`--layer-mode`) |Principle |Backends |Content of a layer SBOM
+
+|`metadata` _(default)_
+|Originating layer reported by the backend: trivy's `Layer.DiffID`; for
+syft, a second analysis with `--scope all-layers` and the lowest layer where the
+package appears (syft's usual analysis only attaches a system package
+to the last layer that rewrote the rpm/dpkg/apk database)
+|`syft`, `trivy`
+|Components *added* by the layer
+
+|`rootfs`
+|Layers are applied one by one onto a cumulative rootfs (overlayfs
+semantics, _whiteouts_ included), the rootfs is re-analysed after each
+layer, the delta is the difference with the previous state
+|All four — the only possible mode with `skopeo` and `cdxgen`
+|Components *added* and *changed* (version bump, different license or
+hash), *removed* components listed separately
+|===
+
+[cols="1,4",options="header"]
+|===
+|Item |Behaviour
+
+|Layer SBOM
+|Root `container` component: `version` = layer digest
+(`diff_id`), `description` = build instruction (`history[].created_by`),
+`sbom_generator:layer:*` properties (index, total, digest, mode, counters,
+one `…:removed` per removed component), BOM-Link to the global SBOM. Each
+component carries `sbom_generator:layer:change` (`added`/`modified`) and, for
+a version bump, `…:previousVersion`.
+
+|Global SBOM
+|Each component of the image carries `sbom_generator:layer:index`/`:digest`
+(layer that introduced it) and `…:modifiedBy` (layers that changed it);
+the root component carries a per-layer JSON summary
+(`sbom_generator:layers:NNN`) and a BOM-Link to each layer SBOM.
+
+|SPDX 2.3 / 3.0
+|Description as a document comment, layer fields as an annotation on
+each package (`sbom_generator:layer:<key>=<value>`); same UUID as
+CycloneDX in the document namespace.
+
+|Markdown / AsciiDoc / HTML
+|Header describing the layer (or the layers), "Couche" column (global)
+or "Changement" column (layer) — these two labels stay in French because they
+are part of the SBOM content —, section of removed components.
+
+|CSV
+|Columns `layer`, `layer_modified_by` (global) or `change`,
+`previous_version` (layer, with one `change=removed` row per removed
+component).
+
+|Combined `--input`
+|Packages coming from `--input` only appear in the global SBOM.
+
+|`--license-map`, `--supplier`
+|Also applied to the components of the layer SBOMs.
+
+|`--sign`
+|Also signs the first format of each layer SBOM.
+
+|Not supported
+|`--binary` (a binary has no layers); `--layer-mode metadata` with
+`skopeo`/`cdxgen`.
+|===
+
+The `rootfs` mode costs one analysis per layer. Layers are read
+directly from a `docker save` / `podman save` archive (docker-archive
+or oci-archive) or an OCI layout; a registry image is first copied
+locally via `skopeo` (which must therefore be installed), falling back to
+podman's local storage (`containers-storage:`) then Docker's
+(`docker-daemon:`) for a locally built image. Layer merging never follows a symbolic
+link: a malicious layer cannot write anything outside the temporary directory.
+
+=== Combining an OCI image and a list of extra packages
+
+[source,bash]
+----
+./sbom_generator -I nginx:latest -i extra_pkgs.txt -f cyclonedx,spdx -o sbom
+# Generates: sbom.cdx.json + sbom.spdx.json
+----
+
+=== Interactive HTML report
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f html -n "My Application" -o sbom.html
+# → sbom.html: standalone report, no external dependency
+----
+
+=== CI/CD pipeline with license and quality checks
+
+[source,bash]
+----
+# Reject GPL and AGPL, require an sbomqs score ≥ 7.0
+./sbom_generator -i packages.txt -f cyclonedx -o sbom.cdx.json \
+  --deny-license GPL --deny-license AGPL \
+  --min-quality-score 7.0
+# Exit code 0 = OK, 2 = policy violation
+----
+
+=== cosign signature
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f cyclonedx,spdx -o sbom --sign
+# Generates: sbom.cdx.json + sbom.cdx.json.bundle (cosign signature)
+#            sbom.spdx.json + sbom.spdx.json.bundle
+----
+
+=== CycloneDX 1.7 with TLP classification and patent declarations
+
+[source,bash]
+----
+./sbom_generator -i packages.txt --cyclonedx-version 1.7 --tlp AMBER \
+  --patent-map patents.txt -o sbom.cdx.json
+----
+
+=== CSV report
+
+[source,bash]
+----
+./sbom_generator -i packages.txt -f csv -o report.csv
+# → report.csv: one row per package, columns:
+#   name,version,architecture,license,type,purl,url,vendor
+----
+
+=== Go modules
+
+[source,bash]
+----
+# From go.sum (all checksum dependencies)
+echo "/opt/myapp/go.sum" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -n "MyGoApp" -o sbom.cdx.json
+
+# From go.mod (direct and indirect dependencies)
+echo "/opt/myapp/go.mod" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -o sbom.cdx.json
+----
+
+=== npm / yarn packages
+
+[source,bash]
+----
+# npm package-lock.json (v1, v2 or v3)
+echo "/opt/webapp/package-lock.json" > sources.txt
+./sbom_generator -i sources.txt -f spdx -o webapp.spdx.json
+
+# yarn.lock (classic v1 or v2+ Berry)
+echo "/opt/webapp/yarn.lock" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx,csv -o webapp
+# → webapp.cdx.json + webapp.csv
+----
+
+=== Maven dependencies
+
+[source,bash]
+----
+echo "/opt/javaapp/pom.xml" > sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -n "MyJavaService" -o sbom.cdx.json
+----
+
+=== Format conversion (`convert`)
+
+Converts an existing SBOM file to one or more formats without re-scanning:
+
+[source,bash]
+----
+# CycloneDX → SPDX 2.3
+./sbom_generator convert -i sbom.cdx.json -f spdx -o sbom.spdx.json
+
+# SPDX → CycloneDX + CSV (multiple formats)
+./sbom_generator convert -i sbom.spdx.json -f cyclonedx,csv -o report
+
+# All formats in a single command
+./sbom_generator convert -i sbom.cdx.json -f spdx,spdx3,markdown,csv -o sbom
+----
+
+Accepted source formats: CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD.
+
+=== License report (`licenses`)
+
+Generates a license compliance report in AsciiDoc format, grouped by license rather than by package:
+
+[source,bash]
+----
+./sbom_generator licenses -i sbom.cdx.json -o licenses.adoc
+
+./sbom_generator licenses -i sbom.spdx.json -o licenses.adoc -n "My project"
+
+# Other formats: markdown, html (standalone), csv, json
+./sbom_generator licenses -i sbom.cdx.json -f html -o licenses.html
+./sbom_generator licenses -i sbom.cdx.json -f json    # JSON on standard output
+----
+
+The report starts with a summary (packages analysed, distinct licenses,
+packages under strong/weak copyleft license, packages with no detected license),
+followed by a warning listing the copyleft identifiers detected — *strong*
+(GPL, AGPL) and *weak* (LGPL, MPL, EPL, CDDL, CPL, EUPL), heuristic
+detection by SPDX identifier, including inside
+compound expressions (`A AND B`) — then by one section per license with the list of
+the packages concerned. `--format` chooses the rendering (`asciidoc` by default,
+`markdown`, `html`, `csv`, `json`); the JSON (summary, licenses with
+category, packages with no license) is the one read by the *Licenses* tab of the
+GUI. Accepted source formats: CycloneDX 1.x JSON, SPDX 2.3
+JSON, SPDX 3.0 JSON-LD.
+
+=== SBOM validation (`validate`)
+
+Checks the structural conformity of one or more SBOM files:
+
+[source,bash]
+----
+# Validate one file
+./sbom_generator validate sbom.cdx.json
+# → sbom.cdx.json : OK (CycloneDX 1.6)
+
+# Validate several files in one pass (exit 1 if at least one is invalid)
+./sbom_generator validate sbom.cdx.json sbom.spdx.json
+
+# Strict mode (recommended fields are also checked)
+./sbom_generator validate --strict sbom.cdx.json
+----
+
+Exit codes: `0` = all valid, `1` = at least one invalid or missing file.
+
+=== Comparing two SBOMs (`diff`)
+
+[source,bash]
+----
+# Coloured diff on the terminal
+./sbom_generator diff before.cdx.json after.cdx.json
+
+# Diff as JSON (for automation)
+./sbom_generator diff before.cdx.json after.cdx.json --json -o diff.json
+
+# The two compared files can be in different formats
+./sbom_generator diff before.spdx.json after.cdx.json
+----
+
+Accepted formats (detected independently for each file): CycloneDX,
+SPDX 2.3, SPDX 3.0 (JSON-LD).
+
+=== Merging SBOMs (`merge`)
+
+[source,bash]
+----
+# Merge two CycloneDX SBOMs (deduplication by PURL)
+./sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json
+
+# Merge several SBOMs with a document name
+./sbom_generator merge a.cdx.json b.cdx.json c.cdx.json \
+  -o merged.cdx.json -n "Complete system"
+
+# Merge SPDX 2.3 SBOMs (deduplication by PURL then SPDXID)
+./sbom_generator merge base.spdx.json extra.spdx.json -o merged.spdx.json
+----
+
+All the source files must be in the same format (that of the first file
+provided): CycloneDX or SPDX 2.3. The output format follows that of the first
+file. The SPDX 3.0 (JSON-LD) format is not supported as input for `merge`.
+
+=== Vulnerability scan (`scan`)
+
+Queries one or more external scanners on an already generated SBOM, with
+optional filtering by CVE publication or modification date.
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Default |Description
+
+|`--sbom <file>` / `-s`
+|_(or `--image`)_
+|SBOM file to analyse (`.cdx.json`, `.spdx.json`…)
+
+|`--image <image>` / `-I`
+|_(or `--sbom`)_
+|Container image (registry, tar archive, OCI layout): its CycloneDX SBOM
+is generated in a temporary directory then scanned — see
+<<sec-scan-per-layer>>
+
+|`--package <file>` / `-p`
+|_(or `--sbom` / `--image`)_
+|Local package or archive (rpm, deb, tar/tgz, zip, jar/war/ear, wheel): its
+CycloneDX SBOM is generated (with `--depth`) in a temporary directory then
+scanned — see <<sec-scan-package>>
+
+|`--depth <N\|all>`
+|`0`
+|With `--package`: depth of descent into nested objects (`0` =
+the object alone); each CVE is attached to the object that contains it
+
+|`--oci-tool <tool>`
+|`syft`
+|SBOM generation backend for `--image`
+
+|`--per-layer`
+|—
+|Vulnerabilities per image layer — see <<sec-scan-per-layer>>
+
+|`--layer-scan <mode>`
+|`attribute`
+|`attribute` (one scan, attribution to the package's originating layer) or
+`each` (SBOM of each layer scanned)
+
+|`--layer-mode <mode>`
+|—
+|With `--image --per-layer`: layer computation (`metadata` or `rootfs`)
+
+|`--scanner <value>` / `-S`
+|`grype`
+|`grype`, `osv`, `trivy`, or `all` for the three
+
+|`--cve-after <YYYY-MM-DD>`
+|—
+|Only shows CVEs published/modified after this date
+
+|`--cve-before <YYYY-MM-DD>`
+|—
+|Only shows CVEs published/modified before this date
+
+|`--cve-date-field <value>`
+|`published`
+|Date field used for the filter: `published`, `modified`, or `latest`
+
+|`--include-undated`
+|disabled
+|Includes CVEs with no known date in the filtered results
+
+|`--enrich` / `--no-enrich`
+|enabled
+|Enriches each CVE with exploitability signals (CISA KEV, EPSS, public
+PoC, CVSS sub-score). `--no-enrich` (or `SBOMGEN_OFFLINE=1`): no network
+request — only the fields already provided by the scanners (Grype
+natively exposes KEV + EPSS) and the local cache are used.
+
+|`--no-poc`
+|—
+|Do not query the third-party PoC source (poc-in-github). KEV, EPSS and the
+`E:` maturity of the CVSS vector remain filled in.
+
+|`--enrich-timeout <s>`
+|`8`
+|Maximum delay, in seconds, per enrichment request.
+
+|`--only-kev`
+|—
+|Keeps only the CVEs listed in the CISA KEV catalog.
+
+|`--epss-min <x>`
+|—
+|Keeps only the CVEs whose EPSS score is ≥ `x` (between 0 and 1).
+
+|`--sort <value>`
+|`severity`
+|Console display order: `severity` (worst severity first) or `risk`
+(KEV, then EPSS descending, then severity).
+
+|`--format <value>` / `-f`
+|`text`
+|`text` (coloured console), `sarif` (SARIF 2.1.0), or `markdown` / `asciidoc` /
+`pdf` (cross-scanner summary report — global summary, breakdown by
+severity for each scanner, CVE × scanner presence matrix). `pdf` =
+`asciidoc` + conversion via `asciidoctor-pdf` (if absent, the `.adoc` is
+kept alongside).
+
+|`--output <file>` / `-o`
+|—
+|Output file. Required for `markdown` / `asciidoc` / `pdf`; for
+`sarif`, written to stdout if omitted.
+
+|`--color <value>`
+|`auto`
+|ANSI colouring of the Critical/High alerts listed on stdout by the
+report formats: `auto` (colour if terminal + `NO_COLOR` unset),
+`always`, `never`.
+|===
+
+[source,bash]
+----
+# All grype CVEs (default scanner)
+./sbom_generator scan --sbom sbom.cdx.json
+
+# All grype CVEs published since 2024
+./sbom_generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# OSV-Scanner CVEs between two dates
+./sbom_generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# All three scanners, "last modification" field, undated CVEs included
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# SARIF export (GitHub Code Scanning integration) to a file
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format sarif --output results.sarif
+
+# PDF summary report (Grype + OSV-Scanner + Trivy)
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format pdf --output scan-report.pdf
+
+# Only actively exploited CVEs (CISA KEV), sorted by risk
+./sbom_generator scan --sbom sbom.cdx.json --scanner all --only-kev --sort risk
+
+# Prioritise: CVEs with an EPSS exploitation probability ≥ 10 %
+./sbom_generator scan --sbom sbom.cdx.json --epss-min 0.1
+
+# Offline (CI without network access): signals via Grype + cache only
+./sbom_generator scan --sbom sbom.cdx.json --no-enrich
+----
+
+`--format text` results are sorted by decreasing severity
+(`Critical` → `Unknown`) and displayed as a text table, one per scanner
+queried. With `--format sarif`, one SARIF `run` is produced per scanner
+queried, with one rule per vulnerability identifier. The failure of a
+scanner (missing binary, unreadable JSON output) does not prevent the other
+requested scanners (`--scanner all`) from running.
+
+Grype is launched with the same options as the Grype tab of the graphical
+interface — notably `--add-cpes-if-none` (Grype synthesises a CPE for
+components that have none, otherwise it only matches by PURL) and `--by-cve`
+(CVE identifier rather than GHSA). `scan` and the GUI therefore report the same
+CVEs on a given SBOM.
+
+The `markdown`, `asciidoc` and `pdf` formats produce a *summary report* in
+the `--output` file: global summary (scanners run, number of unique CVEs
+across all scanners, raw total), breakdown by severity for each scanner, then a
+"CVE × scanner" matrix (✓/—) sorted by severity — OSV-Scanner's
+distro-prefixed identifiers (`DEBIAN-CVE-…`) are reduced to the bare form
+before comparison. These formats return code `0` as soon as a report is
+produced, whatever the number of CVEs (code `1` remains reserved for
+`text` / `sarif`). This is what `scripts/build-dist.sh` uses to attach a
+summary PDF next to the distribution archive.
+
+A *"Notes per CVE"* section follows the matrix when relevant: for
+each CVE where Grype sees *no fix* for the installed distribution
+(`won't fix` / `not fixed` state, taken from the Debian Security Tracker's
+`<no-dsa>` status) while OSV-Scanner or Trivy announce a fixed version,
+a note states that this version is generally the fix carried in the
+_unstable_ / _testing_ branches of the distribution — not an update
+installable on the stable release. This divergence is a frequent
+source of confusion: both scanners are right, they simply are not talking about
+the same thing.
+
+In addition to the file, these three formats *list on stdout each
+Critical (in red) and High (in orange) CVE*, one line per unique CVE
+(deduplicated across scanners), with the package concerned and the scanners that
+saw it, then a count. `--color auto` (default) only colours if
+stdout is a terminal and `NO_COLOR` is unset; `--color always` forces
+colour (useful behind a pipe — `build-dist.sh` enables it when the build
+terminal allows it), `--color never` only emits the `[CRITICAL]` /
+`[HIGH]` prefixes.
+
+Exit codes (`--format text` / `sarif`): `0` = no CVE in the requested range
+(all scanners combined), `1` = at least one CVE found, or scanner error.
+The report formats (`markdown` / `asciidoc` / `pdf`) return
+`0` as soon as a report is written; `1` only if `--output` is missing or if
+no scanner produced any result.
+
+[[sec-scan-package]]
+=== Package or archive scanned directly (`scan --package`)
+
+Generates the SBOM of a local file (rpm, deb, tar/tgz, zip, jar/war/ear,
+wheel) — with descent into nested objects, see <<sec-depth>> — then
+submits it to the scanners, in a temporary directory deleted at the end of the run
+(same mechanism as `--image`). Mutually exclusive with `--sbom` and `--image`.
+
+[source,bash]
+----
+# An RPM and the jars it contains (2 levels), all three scanners
+./sbom_generator scan --package app-1.0-1.x86_64.rpm --depth 2 --scanner all
+
+# An archive: all levels, PDF report
+./sbom_generator scan --package release.tar.gz --depth all --scanner all \
+  -f pdf -o release-cve.pdf
+----
+
+The three scanners receive the same CycloneDX SBOM, hence the same
+components. Each CVE is attached to the object that contains the
+vulnerable package: `OBJECT` column of the text output (logical path
+`app.rpm!/…/foo.jar`, or the file name for a first-level
+component) and internal `container` key; attribution also works with
+`--sbom` on an SBOM produced by `--depth`. The markdown/asciidoc/pdf reports
+and the SARIF do not carry this column.
+
+[[sec-scan-per-layer]]
+=== Vulnerabilities per image layer (`scan --per-layer`)
+
+Attaches each CVE to the image layer that brings the vulnerable package.
+
+[source,bash]
+----
+# Image analysed directly: per-layer SBOM set generated on the fly
+./sbom_generator scan --image ./app.tar --per-layer --scanner all
+
+# SBOM of each layer scanned, layers computed in rootfs mode, PDF report
+./sbom_generator scan --image nginx:latest --per-layer --layer-scan each \
+  --layer-mode rootfs --scanner all -f pdf -o nginx-layers.pdf
+
+# From a set already produced by --per-layer (layer SBOMs alongside)
+./sbom_generator scan --sbom out/app.cdx.json --per-layer
+----
+
+[cols="1,3,3",options="header"]
+|===
+|`--layer-scan` |Principle |What you see
+
+|`attribute` _(default)_
+|A single scan of the global SBOM; each CVE is attached to the originating
+layer of its package (`sbom_generator:layer:index`, `name@version`
+match, then name alone if unambiguous).
+|The CVEs of the final image, by the layer that introduced them.
+
+|`each`
+|The SBOM of each layer is scanned separately.
+|In addition, the CVEs of a version introduced by a layer then replaced
+higher up (with `--layer-mode rootfs`); a CVE may appear in
+several layers.
+|===
+
+`--image` (mutually exclusive with `--sbom`) first generates the CycloneDX SBOM of the image
+(`--oci-tool`, default `syft`; with `--per-layer`, also the layer SBOMs,
+`--layer-mode` of your choice) in a temporary directory deleted at the end of the
+run. With `--sbom`, the file must be the global SBOM of a set
+produced by `--per-layer`, layer SBOMs alongside (same base, same
+extension); otherwise `scan` stops with an explicit message.
+
+* `text` output: `LAYER` column and a "CVEs per layer" table (digest,
+  instruction, number of unique CVEs, critical, high).
+* SARIF: `layer` property on each result.
+* `markdown` / `asciidoc` / `pdf` reports: "Image layers" section
+  and "Layer(s)" column in the cross-scanner comparison.
+* In `attribute` mode, a CVE whose package is absent from the global SBOM remains
+  without a layer (count reported on the console).
+
+=== Exploitability and active exploitation
+
+Severity (CVSS) tells the *potential* seriousness of a flaw, not whether an
+attacker can or will use it. `scan` therefore completes each CVE with four
+prioritisation signals:
+
+[cols="1,3", options="header"]
+|===
+|Signal |What it indicates
+
+|*CISA KEV*
+|The CVE is in CISA's _Known Exploited Vulnerabilities_ catalog:
+active exploitation *confirmed* in the wild. The report includes the date
+added, the remediation due date and any use by ransomware.
+
+|*EPSS*
+|_Exploit Prediction Scoring System_ score (FIRST.org), 0 to 1: probability
+that the CVE is exploited within 30 days, with its percentile (relative rank
+among all CVEs).
+
+|*PoC / public exploit*
+|An exploit is actually available: GitHub repository(ies) recorded by
+`poc-in-github`, or `E:` maturity (at least _Proof-of-Concept_) of the CVSS
+vector when a CNA publishes it.
+
+|*CVSS exploitability*
+|Exploitability sub-score of the vector (0 to 3.9): combines attack vector
+(AV), complexity (AC), privileges (PR) and user interaction (UI). Computed
+locally, without network.
+|===
+
+Sources: Grype already provides KEV, EPSS and the CVSS vector in its database —
+network requests are only used to enrich the CVEs seen only by
+OSV-Scanner / Trivy and to retrieve the PoC signal. Responses are cached for
+24 h under `~/.cache/sbom-generator/`; in case of a network outage, the
+cache (even stale) takes over. `--no-enrich` (or `SBOMGEN_OFFLINE=1`)
+disables any network call.
+
+With `--format text`, three columns are added to the table: `KEV` (✓/—),
+`EPSS` (score + percentile), `PoC` (`✓n` = _n_ repositories, `✓` = CVSS maturity,
+`—` = none, `?` = unknown). The Critical/High alerts of the report formats
+carry the `[KEV]`, `EPSS <score>` and `[PoC]` markers. The summary report
+gains an *"Exploitability and active exploitation"* section: list
+of KEV CVEs with dates, then a *"Risk prioritisation"* table sorted by
+KEV, then EPSS, then severity. With `--format sarif`, each result carries the
+`kev`, `epss`, `epssPercentile`, `poc` and `cvssExploitability` properties, and
+`security-severity` goes to `9.5` for a KEV CVE (GitHub Code
+Scanning prioritisation).
+
+`--only-kev` and `--epss-min` restrict the output (all formats);
+`--sort risk` reorders the console display.
+
+=== Cyber Resilience Act compliance report (`cra`)
+
+Produces a compliance report with Regulation (EU) 2024/2847 (*Cyber
+Resilience Act*) from an SBOM and, optionally, a vulnerability
+scan.
+
+[IMPORTANT]
+====
+The report only covers the *automatically verifiable* requirements:
+
+* *SBOM format and completeness* — commonly used machine-readable format
+  and dependency coverage (Annex I §2 point 1); data fields per
+  component (BSI TR-03183-2: name, version, supplier, unique identifier
+  PURL/CPE, hash, license); NTIA 2021 minimum elements;
+* *vulnerability handling* — inventory of known vulnerabilities
+  (point 1) and availability of fixes (point 2);
+* *actively exploited vulnerabilities* — any CVE in the CISA KEV catalog is
+  flagged as triggering the obligation to notify ENISA and the coordinating
+  CSIRT *within 24 h* (art. 14).
+
+The other CRA obligations (secure update distribution mechanism, effective
+coordinated vulnerability disclosure policy, secure by default design,
+regular tests, regulatory notifications, EU declaration of
+conformity) *are the manufacturer's responsibility* and are only listed. **This document
+is not a declaration of conformity.**
+====
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Default |Description
+
+|`--sbom <file>` / `-s` |_(mandatory)_ |SBOM to assess (CycloneDX or SPDX JSON)
+|`--config <cra.yaml>` / `-c` |`./cra.yaml` if present |Manufacturer / product metadata (see below)
+|`--manufacturer` / `--product` / `--product-version` |— |Override the config file
+|`--support-until <YYYY-MM-DD>` |— |End date of the support period (art. 13 §8)
+|`--vuln-contact <e-mail\|URL>` |— |Vulnerability reporting address (Annex I §2 point 6)
+|`--cvd-policy-url <URL>` |— |Coordinated vulnerability disclosure policy (point 5)
+|`--scan` / `--no-scan` |enabled |Run a vulnerability scan to assess the inventory and the fixes
+|`--scanner <grype\|osv\|trivy\|all>` |`grype` |Scanner(s) to use with `--scan`
+|`--enrich` / `--no-enrich` |enabled |CISA KEV / EPSS enrichment (network)
+|`--format <pdf\|asciidoc\|json>` / `-f` |`pdf` |Output format
+|`--output <file>` / `-o` |— |Required for `pdf` / `asciidoc`; `json` on stdout if omitted
+|===
+
+[source,bash]
+----
+# PDF report, metadata from cra.yaml, Grype scan
+./sbom_generator cra --sbom sbom.cdx.json --config cra.yaml -o cra-report.pdf
+
+# Machine-readable JSON report without vulnerability scan
+./sbom_generator cra --sbom sbom.cdx.json --no-scan --format json
+
+# Metadata on the command line
+./sbom_generator cra --sbom sbom.cdx.json --manufacturer "ACME Corp" \
+  --product WidgetOS --product-version 3.2.1 -o cra-report.pdf
+----
+
+`cra.yaml` file (all keys are optional, `key: value` per
+line, `#` for a comment):
+
+[source,yaml]
+----
+manufacturer: "ACME Corp"
+product: "WidgetOS"
+product_version: "3.2.1"
+support_until: "2030-12-31"
+vulnerability_contact: "security@acme.example"
+cvd_policy_url: "https://acme.example/security/policy"
+----
+
+Failing a provided value, `cra` tries to deduce the manufacturer and product
+from the SBOM's `metadata.component` / `metadata.supplier`.
+
+The PDF follows the same design as the `scan` report (cover page, numbered
+executive summary, verdict). Exit codes: `0` = compliant or compliant with
+reservations within the verified scope, `2` = non-compliant (at least one blocking
+item: non machine-readable format, missing mandatory field,
+vulnerability without a fix, actively exploited CVE). In the JSON report,
+the NTIA elements are keyed by stable identifiers (`supplierName`,
+`componentName`…) whatever the language; the `field` labels of
+the SBOM data fields are translated, alongside a stable `id`.
+
+=== Why the scanners do not find the same CVEs
+
+With `--scanner all`, it is normal for a good part of the CVEs to be
+reported by only one of the three tools. On the same image (RHEL 9.6,
+Keycloak) analysed directly by Grype and by Trivy, a raw comparison
+of identifiers only shows 72 common CVEs out of ~210
+unique identifiers on each side — a gap with two causes:
+
+* *Different identifier nomenclature (main cause)* — on
+  Java packages (JAR/Maven), Grype names its findings with the GitHub
+  Security Advisory identifier (`GHSA-xxxx-xxxx-xxxx`, its main source
+  for this ecosystem) whereas Trivy prefers the matching CVE. It is
+  the same vulnerability under two different names. On this image, the raw
+  agreement was only 2 Java CVEs out of ~135 on each side; once Grype's
+  `GHSA-*` were resolved to their related CVE (`relatedVulnerabilities`
+  field of Grype's JSON output), agreement rises to
+  132/135 (~98 %). On RPM packages (OS base), where both tools
+  natively use the CVE identifier, agreement was already direct at
+  ~94 % (70 common CVEs out of ~75 on each side).
+* *Residual real gaps* — Grype (Anchore database) and Trivy (`trivy-db`)
+  republish their vulnerability databases at different paces and from
+  sources that are not perfectly identical (NVD, GHSA, Red Hat OVAL/CSAF…). A
+  freshly published CVE, or one not yet mapped to a package's exact CPE, may
+  appear in one before the other.
+
+Neither scanner is "the" truth: `--scanner all` is meant
+precisely to obtain the union of the three rather than rely on a single one.
+
+=== Complete pipeline: generation + quality validation
+
+[source,bash]
+----
+# Generation
+./sbom_generator -i packages.txt -f cyclonedx -n "RHEL9 Base System" -o sbom.cdx.json
+
+# Quality validation with sbomqs
+./sbomqs score sbom.cdx.json
+----
+
+[[sec-langue]]
+== Language (FR / EN)
+
+The messages, the `--help` text and the readable reports are available in
+French and English:
+
+* console messages and errors (all subcommands), `--help` text;
+* `scan` summary report (Markdown, AsciiDoc, PDF), `cra` report (AsciiDoc,
+  PDF), license report (`licenses`), HTML, Markdown and AsciiDoc tables.
+
+The language is chosen, in order of priority, by:
+
+. the `--lang fr|en` option (accepted anywhere on the command line, subcommands included);
+. the `SBOM_LANG` environment variable;
+. `LC_ALL`, then `LC_MESSAGES`, then `LANG` (`fr_FR.UTF-8`, `en_US.UTF-8`…);
+. French when nothing is recognised.
+
+[source,bash]
+----
+./sbom_generator --lang en -i packages.txt -o sbom.cdx.json
+SBOM_LANG=en ./sbom_generator scan --sbom sbom.cdx.json -f pdf -o scan-report.pdf
+LANG=en_US.UTF-8 ./sbom_generator cra --sbom sbom.cdx.json --no-scan -o cra-report.pdf
+----
+
+What is *never* translated, because it is read by programs or is part of the
+SBOM: property names and values (`sbom_generator:*`), format names, JSON keys,
+SARIF rule identifiers and the `SBOM written → …` line (read by the GUI), as
+well as the layer descriptions written into the SBOMs. The graphical interface
+forwards its own language to the CLI it launches (via `SBOM_LANG`).
+
+== What the generated SBOM contains
+
+=== Document metadata
+
+[cols="1,2", options="header"]
+|===
+|Field |Content
+
+|Timestamp
+|Generation date/time (UTC ISO 8601)
+
+|Tool
+|`sbom_generator 1.6.0`
+
+|Author
+|Fixed to `sbom_generator` (not configurable)
+
+|Supplier
+|Fixed to `local` (not configurable)
+
+|Lifecycle
+|`operations` (by default)
+
+|Data license
+|`CC0-1.0`
+|===
+
+=== Per component (RPM package)
+
+[cols="2,2,3", options="header"]
+|===
+|Field |RPM source |Description
+
+|Name
+|`%{NAME}`
+|Package name
+
+|Version
+|`%{VERSION}-{%RELEASE}`
+|Full version with release
+
+|PURL
+|computed
+|`pkg:rpm/<name>@<version>?arch=<arch>`
+
+|CPE 2.3
+|computed
+|`cpe:2.3:a:<vendor>:<name>:<version>:*:…`
+
+|Header hash
+|`%{SHA256HEADER}`
+|SHA-256 of the RPM *header* (not of the `.rpm` file) — emitted as the
+`rpm:header-sha256` property, never as an artifact hash
+
+|Artifact hash
+|`.rpm` file: SHA-256 + SHA-512 computed; +
+installed package: `%{SIGMD5}` (MD5)
+|A `.rpm` passed as a path (or resolved via `--rpm-dir`) is hashed
+(SHA-256 + SHA-512). An *installed* package has no file: the
+"pkgid" `%{SIGMD5}` is used (MD5 of header + payload — native RPM content
+identity, also used by Trivy). Emitted as `hashes` / `checksums` /
+`verifiedUsing`
+
+|License
+|`%{LICENSE}`
+|Normalised to SPDX (expression or id)
+
+|Supplier
+|`%{VENDOR}`
+|Package vendor
+
+|Description
+|`%{SUMMARY}`
+|Short summary
+
+|VCS
+|`%{SOURCERPM}`
+|Link to the source RPM (Fedora/RHEL)
+
+|Properties
+|`rpm:arch`, `rpm:release`, `rpm:requires`
+|Additional RPM metadata
+|===
+
+=== Cryptographic hashes of components
+
+`sbom_generator` fills in a component's hash **without any network
+request**, when the source provides it:
+
+* `integrity` of npm lockfiles (`package-lock.json`) and yarn v1
+  (`yarn.lock`), and `sha256` of `pubspec.lock`;
+* Trivy's `Digest` field and Syft's artifact digests (e.g. SHA-1 of JARs)
+  when analysing an OCI image (`--image`);
+* hashes of the components produced by cdxgen;
+* SHA-256 + SHA-512 computed locally for a `.rpm` / `.deb` /
+  `.jar` / `.whl` file passed directly as input;
+* `%{SIGMD5}` (`MD5` hash) for an *installed* RPM package queried by
+  name — the RPM "pkgid" (MD5 of header + payload), the only content
+  identity available when there is no file.
+
+Only the hexadecimal digests of a real artifact/package are kept
+(derived formats — Go `h1:` dirhash, APK `Q1…` checksum — are discarded).
+The digest of the RPM *header* (`%{SHA256HEADER}`) is exposed as the
+`rpm:header-sha256` property and not as an artifact hash.
+
+The hash is written in `hashes` (CycloneDX), `checksums` (SPDX 2.3) and
+`verifiedUsing` (SPDX 3.0). *For an SBOM coming from an OCI image, most
+system packages remain without a hash*: neither Syft nor Trivy
+systematically reconstructs their `Digest` (unlike the "RPM list" path which
+queries `%{SIGMD5}` directly).
+
+=== Component supplier (`supplier`)
+
+The supplier field is taken from the source when it carries one:
+
+[cols="2,3", options="header"]
+|===
+|Source |Field
+
+|RPM |`%{VENDOR}`
+|Debian `.deb` |`Maintainer:`
+|OCI image |`Vendor` (rpm) / `maintainer` (dpkg, apk) / `author` (depending on the backend)
+|Python wheel |`Author-email`, otherwise `Author` / `Maintainer` of the `METADATA` (often absent)
+|Maven (`pom.xml`, `.jar`) |`groupId` (namespace, absent an explicit vendor)
+|npm (`package-lock.json`) |`author` field of each package's `package.json` in `node_modules` — **the lockfile does not contain it**; the `node_modules` tree must be present
+|`go.sum`/`go.mod`, `requirements.txt`, `yarn.lock`, `pubspec.lock` |_(none — these formats carry no vendor)_
+|===
+
+When the source provides nothing, `--supplier "<name>"` gives a fallback
+value (it **never** overrides a detected supplier). Useful when you
+generate the SBOM of a product of which you are the vendor.
+
+In SPDX 2.3, an unknown supplier is written `NOASSERTION` (explicit value
+required by the spec, taken into account by the NTIA minimum elements and
+`sbomqs`) rather than omitted. In CycloneDX, the `supplier` / `publisher`
+keys are simply absent. The `supplier` field is *mandatory* in
+BSI TR-03183-2 (`cra` report).
+
+[source,bash]
+----
+# SBOM of a Node app whose vendor is "ACME Corp"
+./sbom_generator -i package-lock.json --supplier "ACME Corp" -f spdx -o sbom.spdx.json
+----
+
+=== Dependencies
+
+Dependencies are resolved *within the provided list*:
+
+* `rpm -q --requires <pkg>` → list of required capabilities
+* `rpm -q --provides <pkg>` → list of provided capabilities
+* Resolution: if package A requires a capability that package B provides, an `A → B` relationship is added
+* External dependencies (`glibc`, `systemd`…) not present in the list appear in the `rpm:requires` properties but not in `dependsOn`
+
+== Output formats in detail
+
+=== CycloneDX 1.6 / 1.7 (`cyclonedx`)
+
+JSON structure (1.6, default):
+
+....
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": { timestamp, tools, authors, supplier, lifecycles, licenses, component },
+  "components": [ { type, bom-ref, name, version, purl, cpe, hashes, licenses,
+                     supplier, externalReferences, properties } ],
+  "dependencies": [ { ref, dependsOn[] } ],
+  "compositions": [ { aggregate, assemblies[], dependencies[] } ]
+}
+....
+
+Each `dependencies[].dependsOn` contains the `bom-ref`s of the packages the component depends on.
+The root entry lists all the components of the SBOM.
+
+With `--cyclonedx-version 1.7`, additional fields appear depending on the options
+provided (absent from the 1.6 schema, so they never appear in 1.6):
+
+* `metadata.distributionConstraints.tlp` — via `--tlp`
+* root `citations[]`, attributing `/components` to the source tool — automatic as soon as
+  `--image` is used (attribution to `--oci-tool`)
+* `components[].patentAssertions[]` + `definitions.patents[]` — via `--patent-map`
+
+[[patent-map]]
+==== Patent declarations (`--patent-map`)
+
+Text file, one declaration per line:
+
+....
+package_name: patent_number|jurisdiction|legal_status|assertion_type
+openssl: US1234567|US|granted|license
+....
+
+* `jurisdiction`: 2-letter WIPO ST.3 code (`US`, `EP`, `JP`…)
+* `legal_status`: `pending`, `granted`, `revoked`, `expired`, `lapsed`, `withdrawn`,
+  `abandoned`, `suspended`, `reinstated`, `opposed`, `terminated`, `invalidated`, `in-force`
+* `assertion_type`: `ownership`, `license`, `third-party-claim`, `standards-inclusion`,
+  `prior-art`, `exclusive-rights`, `non-assertion`, `research-or-evaluation`
+
+=== SPDX 2.3 (`spdx`)
+
+JSON structure:
+
+....
+{
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": { created, creators },
+  "packages": [ { SPDXID, name, versionInfo, downloadLocation, licenseConcluded,
+                   licenseDeclared, copyrightText, externalRefs, annotations } ],
+  "relationships": [ { spdxElementId, relationshipType, relatedSpdxElement } ]
+}
+....
+
+Relationship types: `DESCRIBES` (document → packages) and `DEPENDS_ON` (resolved dependencies).
+
+=== SPDX 3.0 JSON-LD (`spdx3`)
+
+JSON-LD structure:
+
+....
+{
+  "@context": "https://spdx.org/rdf/3.0.0/spdx-context.jsonld",
+  "@graph": [
+    { type: "SpdxDocument", profileConformance: ["core","software"], … },
+    { type: "CreationInfo", specVersion: "3.0.0", … },
+    { type: "Tool", … },
+    { type: "Organization", … },         ← one per unique supplier
+    { type: "software:Package", … },     ← one per RPM package
+    { type: "Relationship", relationshipType: "describes", … },
+    { type: "Relationship", relationshipType: "dependsOn", … }
+  ]
+}
+....
+
+=== Custom JSON (`json`)
+
+Includes all the raw RPM metadata (`requires`, `provides`) as well as the
+dependencies resolved to readable names. Ideal for scripting or custom
+integration.
+
+== sbomqs quality scores
+
+Example output (`sbomqs score --basic sbom.cdx.json`) on a CycloneDX SBOM:
+
+....
+SBOM Quality Score: 7.8/10.0   Grade: C
+
+Identification  : 10.0/10  A    ← names, versions, local identifiers
+Provenance      : 10.0/10  A    ← author, supplier, timestamp, lifecycle
+Integrity       :  8.9/10  B    ← SHA-256 checksums (excluding signature)
+Completeness    :  6.0/10  D    ← supplier, source code, primary component
+Licensing       :  2.5/10  F    ← sbomqs v2.0.6 limitation for CycloneDX
+Vulnerability   :  9.9/10  A    ← PURL + CPE 2.3
+Structural      : 10.0/10  A    ← valid schema, declared spec
+
+NTIA 2021       : 10.0/10  A
+NTIA 2025 RFC   : 10.0/10  A
+....
+
+=== Known limitations (sbomqs v2.0.6)
+
+[NOTE]
+====
+`comp_with_licenses` and `comp_with_valid_licenses` are *not implemented* for
+CycloneDX in this version of sbomqs (always 0, regardless of the content).
+====
+
+* `comp_with_dependencies`: the `compositions` mechanism is not recognised
+* `sbom_signature`: requires an external cryptographic key
+
+== Project architecture
+
+....
+sbom_generator/
+├── .github/workflows/ci.yml       # CI: analysis + CLI and GUI tests
+├── bin/
+│   └── sbom_generator.dart        # CLI entry point (subcommands: diff, merge, scan, convert, licenses, validate)
+├── lib/
+│   ├── i18n.dart                  # FR / EN localisation of messages (tr(), --lang)
+│   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
+│   ├── rpm_parser.dart            # rpm queries + dependency resolution
+│   ├── wheel_parser.dart          # Reading .whl wheels (python3 zipfile)
+│   ├── tar_parser.dart            # Reading .tar/.tar.gz/.tgz archives
+│   ├── zip_parser.dart            # Reading .zip archives
+│   ├── deb_parser.dart            # Reading .deb packages (dpkg-deb)
+│   ├── jar_parser.dart            # Maven coordinates of a .jar (unzip -p pom.properties)
+│   ├── requirements_parser.dart   # Reading requirements.txt (pure Dart)
+│   ├── go_parser.dart             # Reading go.sum and go.mod (pure Dart)
+│   ├── npm_parser.dart            # Reading package-lock.json v1/v2/v3 (pure Dart)
+│   ├── yarn_parser.dart           # Reading yarn.lock v1 and v2+ Berry (pure Dart)
+│   ├── maven_parser.dart          # Reading pom.xml (pure Dart, light XML extraction)
+│   ├── pubspec_parser.dart        # Reading pubspec.lock / pubspec.yaml (pure Dart)
+│   ├── oci_parser.dart            # OCI image analysis (syft / trivy / skopeo / cdxgen)
+│   ├── archive_helpers.dart       # Shared tar + zip helpers
+│   ├── license_normalizer.dart    # Centralised SPDX normalisation
+│   ├── spdx_license_ids.dart      # SPDX License List snapshot
+│   ├── sbom_diff.dart             # SBOM comparison (diff subcommand)
+│   ├── sbom_merger.dart           # SBOM merging (merge subcommand)
+│   ├── sbom_reader.dart           # SBOM reader (CycloneDX/SPDX) → List<Package> (convert, licenses)
+│   ├── scan_report_generator.dart # Cross-scanner summary report (scan -f md/adoc/pdf)
+│   ├── license_report_generator.dart # AsciiDoc license report (licenses subcommand)
+│   ├── policy_checker.dart        # Forbidden licenses + CI/CD quality score
+│   ├── cyclonedx_generator.dart   # CycloneDX 1.6/1.7 generator
+│   ├── spdx_generator.dart        # SPDX 2.3 generator
+│   ├── spdx3_generator.dart       # SPDX 3.0 JSON-LD generator
+│   ├── simple_json_generator.dart # Custom JSON generator
+│   ├── markdown_generator.dart    # Markdown license table
+│   ├── asciidoc_generator.dart    # AsciiDoc license table
+│   ├── html_generator.dart        # Standalone interactive HTML report
+│   └── csv_generator.dart         # CSV export (RFC 4180)
+├── doc/
+│   ├── developer.adoc             # Developer documentation (FR)
+│   ├── developer.en.adoc          # Developer documentation (EN)
+│   ├── usage.adoc                 # Usage guide (FR)
+│   └── usage.en.adoc              # This document
+├── test/
+│   ├── unit/                      # Unit tests
+│   └── integration/               # Integration tests
+├── scripts/                       # Build, installation, uninstallation
+├── example/3PP/                   # Third-party archive examples
+└── pubspec.yaml                   # Dart dependencies (args ^2.4.2)
+....
+
+`sbomqs`, `grype`, `osv-scanner`, `cosign`, `syft`, `trivy`, `skopeo` and
+`cdxgen` are external tools invoked as subprocesses: they are not
+part of this repository (see <<Prerequisites>>).
+
+== Troubleshooting
+
+=== `rpm: command not found`
+
+Install the `rpm` package:
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install rpm
+
+# Debian/Ubuntu
+sudo apt install rpm
+----
+
+=== `python3 not found — required to read .whl, tar, and zip archives`
+
+Install Python 3:
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install python3
+
+# Debian/Ubuntu
+sudo apt install python3
+----
+
+=== `dpkg-deb not found — required to read .deb files`
+
+Install `dpkg`:
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install dpkg
+
+# Debian/Ubuntu
+sudo apt install dpkg
+----
+
+=== `unzip not found — required to read .jar files`
+
+Install `unzip`:
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install unzip
+
+# Debian/Ubuntu
+sudo apt install unzip
+----
+
+=== `Warning: cannot query "pkg"`
+
+The package is not installed or the `.rpm` file is inaccessible.
+Check with `rpm -q <package>` or `rpm -qp <file.rpm>`.
+
+=== Duplicates in the input list
+
+If the same package (same NEVRA) appears several times (e.g. present in BaseOS
+and AppStream), it is only included once in the SBOM. A
+`($N duplicate(s) removed)` message indicates it.
+
+=== `syft / trivy / skopeo / cdxgen: command not found`
+
+The requested OCI tool is not installed or not in the PATH.
+
+Install the tool via its official script or the system package manager
+(`cdxgen`: `npm install -g @cyclonedx/cdxgen`, requires Node.js).
+Check with `which syft`, `which trivy`, `which skopeo` or `which cdxgen`.
+
+=== `OCI analysis failed: …`
+
+If the OCI analysis fails (inaccessible image, private registry, network permissions):
+
+* Check that the reference is reachable: `docker pull <image>` or `skopeo inspect docker://<image>`
+* For a private registry, authenticate beforehand: `docker login`, `skopeo login`
+* For a local archive, check that the file exists: `ls -lh /path/image.tar` (the `.tar`, `.tar.gz` and `.tgz` formats are supported)
+
+=== Very large SBOM file
+
+The `rpm:requires` properties can represent 50 to 150 entries per package.
+On 779 packages, the CycloneDX file can reach 3 MB. This is normal.
+
+OCI images can contain several hundred packages (Ubuntu base images
+: ~100, complex application images: 300–800).

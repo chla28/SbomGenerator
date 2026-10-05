@@ -6,6 +6,9 @@
 :icons: font
 :experimental:
 :docdate: 2026-06-29
+:lang: fr
+
+🇫🇷 *Français* · 🇬🇧 link:user.en.adoc[English]
 
 == Introduction
 
@@ -313,10 +316,13 @@ Le bouton *文A* (langue de l'interface) propose *Système*, *Français* et
 si elle n'est pas prise en charge. Le choix s'applique immédiatement et
 est sauvegardé.
 
-NOTE: La traduction anglaise est en cours : pour l'instant, seuls les
-éléments communs aux onglets de scan et l'onglet *Grype* sont traduits. Les
-autres écrans, les rapports exportés, ce manuel et les messages du CLI
-restent en français.
+Le choix de langue est aussi transmis au CLI `sbom-generator` lancé par la
+GUI (via `SBOM_LANG`) : les messages de l'onglet *Progression* le suivent.
+
+NOTE: L'interface, les rapports exportés (AsciiDoc/PDF), les messages du CLI
+et ce manuel existent en français et en anglais. Les contenus lus par un
+programme (fichiers SBOM, préfixes `Error:` / `Warning:`, clés JSON) ne sont
+jamais traduits.
 
 == Panneau Configuration
 
@@ -2017,7 +2023,6 @@ automatiquement ce genre de préfixe avant comparaison — la vulnérabilité
 n'apparaît donc qu'une seule fois, sous sa forme CVE nue, au lieu de deux
 lignes distinctes dont une marquée à tort « vue par un seul scanner ».
 
-[[sec-pourquoi-ecarts-scanners]]
 [[sec-dashboard-couches]]
 === Couches de l'image
 
@@ -2029,6 +2034,7 @@ nombre de CVE uniques (tous scanners confondus), dont critiques et
 *Comparaison inter-scanners* gagne une colonne *COUCHE(S)*, et l'export
 AsciiDoc + PDF une section *Couches de l'image* et la même colonne.
 
+[[sec-pourquoi-ecarts-scanners]]
 === Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE
 
 Il est normal — et attendu — qu'une bonne partie des lignes du tableau

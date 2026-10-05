@@ -1,5 +1,7 @@
 # sbom_generator
 
+🇫🇷 **Français** · 🇬🇧 [English](README.en.md)
+
 Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn, Maven, Dart/Flutter), d'archives génériques, ou d'une **image de conteneur** (OCI).
 
 ---
@@ -218,6 +220,7 @@ Options :
       --cyclonedx-version  Version CycloneDX générée : 1.6 (défaut) ou 1.7
       --tlp                Classification TLP du BOM (CycloneDX 1.7 uniquement)
       --patent-map         Déclarations de brevets par paquet (CycloneDX 1.7 uniquement)
+      --lang               Langue des messages : fr | en (défaut : SBOM_LANG, puis LC_ALL/LANG, sinon fr)
   -v, --verbose            Afficher les détails
       --version            Afficher la version
   -h, --help               Afficher l'aide
@@ -366,6 +369,10 @@ sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si no
 ./sbom_generator -i packages.txt --cyclonedx-version 1.7 --tlp AMBER \
   --patent-map patents.txt -o sbom.cdx.json
 
+# Messages et rapports en anglais (défaut : suit SBOM_LANG, LC_ALL, LANG)
+./sbom_generator --lang en -i packages.txt -o sbom.cdx.json
+SBOM_LANG=en ./sbom_generator scan --sbom sbom.cdx.json -f pdf -o scan-report.pdf
+
 # Comparer deux SBOMs
 ./sbom_generator diff ancien.cdx.json nouveau.cdx.json
 ./sbom_generator diff ancien.cdx.json nouveau.cdx.json --json -o diff.json
@@ -373,6 +380,17 @@ sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si no
 # Fusionner plusieurs SBOMs
 ./sbom_generator merge base.cdx.json extra.cdx.json -o merged.cdx.json -n "Système complet"
 ```
+
+### Langue (FR / EN)
+
+Les messages, l'aide `--help` et les rapports lisibles (synthèse `scan`,
+rapport `cra`, rapport de licences, tableaux HTML/Markdown/AsciiDoc) existent
+en français et en anglais. La langue est choisie, dans l'ordre, par
+`--lang fr|en`, la variable d'environnement `SBOM_LANG`, puis `LC_ALL` /
+`LC_MESSAGES` / `LANG` ; français par défaut. Le *contenu* des SBOM (noms de
+propriétés, formats, valeurs) et les sorties lues par des programmes (clés
+JSON, identifiants de règles SARIF, ligne `SBOM written → …`) ne sont jamais
+traduits. La GUI transmet sa propre langue au CLI qu'elle lance.
 
 ### Exemple de fichier d'override de licences (`overrides.txt`)
 
@@ -466,6 +484,7 @@ sbom_generator/
 │   └── sbom_generator.dart      # Point d'entrée CLI + sous-commandes
 │                                #   diff/merge/convert/validate/scan
 ├── lib/
+│   ├── i18n.dart                # Localisation FR / EN des messages (tr(), --lang)
 │   ├── models.dart              # Package, RpmPackage, WheelPackage, DebPackage,
 │   │                            #   OciPackage, PackageHash, PackageDependency, generateUuidV4()
 │   ├── hash_utils.dart          # Collecte/normalisation des empreintes (SRI, Digest, fichiers)
@@ -509,10 +528,13 @@ sbom_generator/
 ├── example/
 │   └── 3PP/                     # Exemples d'archives tierces
 ├── doc/
-│   ├── developer.adoc           # Documentation développeur détaillée
-│   └── usage.adoc               # Guide d'utilisation détaillé
+│   ├── developer.adoc           # Documentation développeur détaillée (FR)
+│   ├── developer.en.adoc        # Documentation développeur détaillée (EN)
+│   ├── usage.adoc               # Guide d'utilisation détaillé (FR)
+│   └── usage.en.adoc            # Guide d'utilisation détaillé (EN)
 ├── pubspec.yaml
-└── README.md
+├── README.md                    # Français
+└── README.en.md                 # Anglais
 ```
 
 ---

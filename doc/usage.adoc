@@ -7,6 +7,9 @@
 :source-highlighter: rouge
 :rouge-style: monokai
 :docdate: 2026-06-30
+:lang: fr
+
+🇫🇷 *Français* · 🇬🇧 link:usage.en.adoc[English]
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
 Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml), *paquets Dart/Flutter* (pubspec.lock/pubspec.yaml) et *images OCI* (via syft, trivy, skopeo ou cdxgen). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
@@ -290,6 +293,11 @@ retourne le code 2 si le score est insuffisant.
 |désactivé
 |Signer les fichiers SBOM avec `cosign sign-blob` après génération (requiert `cosign` dans le PATH).
 Un fichier `<sbom>.bundle` est créé à côté de chaque fichier signé.
+
+|`--lang <fr\|en>`
+|—
+|auto
+|Langue des messages, de l'aide `--help` et des rapports lisibles. Défaut : variable d'environnement `SBOM_LANG`, puis `LC_ALL` / `LC_MESSAGES` / `LANG`, sinon français. Voir <<sec-langue>>.
 
 |`--verbose`
 |`-v`
@@ -852,7 +860,8 @@ CycloneDX dans l'espace de noms du document.
 
 |Markdown / AsciiDoc / HTML
 |En-tête décrivant la couche (ou les couches), colonne « Couche » (global)
-ou « Changement » (couche), section des composants supprimés.
+ou « Changement » (couche) — ces deux libellés restent en français car ils
+font partie du contenu du SBOM —, section des composants supprimés.
 
 |CSV
 |Colonnes `layer`, `layer_modified_by` (global) ou `change`,
@@ -1475,7 +1484,10 @@ Le PDF suit la même charte que le rapport `scan` (page de garde, résumé
 exécutif chiffré, verdict). Codes de retour : `0` = conforme ou conforme avec
 réserves sur le périmètre vérifié, `2` = non conforme (au moins un point
 bloquant : format non lisible par machine, champ obligatoire manquant,
-vulnérabilité sans correctif, CVE activement exploitée).
+vulnérabilité sans correctif, CVE activement exploitée). Dans le rapport JSON,
+les éléments NTIA sont indexés par des identifiants stables (`supplierName`,
+`componentName`…) quelle que soit la langue ; les libellés `field` des champs
+de données du SBOM sont traduits, accompagnés d'un `id` stable.
 
 === Pourquoi les scanners ne trouvent pas les mêmes CVE
 
@@ -1515,6 +1527,37 @@ précisément à obtenir l'union des trois plutôt que de se fier à un seul.
 # Validation de qualité avec sbomqs
 ./sbomqs score sbom.cdx.json
 ----
+
+[[sec-langue]]
+== Langue (FR / EN)
+
+Les messages, l'aide `--help` et les rapports lisibles existent en français
+et en anglais :
+
+* messages et erreurs de la console (toutes les sous-commandes), texte de `--help` ;
+* rapport de synthèse `scan` (Markdown, AsciiDoc, PDF), rapport `cra`
+  (AsciiDoc, PDF), rapport de licences (`licenses`), tableaux HTML, Markdown
+  et AsciiDoc.
+
+La langue est choisie, par ordre de priorité, par :
+
+. l'option `--lang fr|en` (acceptée n'importe où sur la ligne de commande, sous-commandes comprises) ;
+. la variable d'environnement `SBOM_LANG` ;
+. `LC_ALL`, puis `LC_MESSAGES`, puis `LANG` (`fr_FR.UTF-8`, `en_US.UTF-8`…) ;
+. le français si rien n'est reconnu.
+
+[source,bash]
+----
+./sbom_generator --lang en -i packages.txt -o sbom.cdx.json
+SBOM_LANG=en ./sbom_generator scan --sbom sbom.cdx.json -f pdf -o scan-report.pdf
+LANG=en_US.UTF-8 ./sbom_generator cra --sbom sbom.cdx.json --no-scan -o rapport-cra.pdf
+----
+
+Ce qui n'est *jamais* traduit, car lu par des programmes ou faisant partie du
+SBOM : noms et valeurs de propriétés (`sbom_generator:*`), noms de formats,
+clés JSON, identifiants de règles SARIF et ligne `SBOM written → …` (lue par
+la GUI), ainsi que les descriptions de couches écrites dans les SBOM. L'interface
+graphique transmet sa propre langue au CLI qu'elle lance (via `SBOM_LANG`).
 
 == Ce que contient le SBOM généré
 
@@ -1793,6 +1836,7 @@ sbom_generator/
 ├── bin/
 │   └── sbom_generator.dart        # Point d'entrée CLI (sous-commandes : diff, merge, scan, convert, licenses, validate)
 ├── lib/
+│   ├── i18n.dart                  # Localisation FR / EN des messages (tr(), --lang)
 │   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
 │   ├── rpm_parser.dart            # Interrogation rpm + résolution dépendances
 │   ├── wheel_parser.dart          # Lecture wheels .whl (python3 zipfile)
@@ -1825,8 +1869,10 @@ sbom_generator/
 │   ├── html_generator.dart        # Rapport HTML interactif autonome
 │   └── csv_generator.dart         # Export CSV (RFC 4180)
 ├── doc/
-│   ├── developer.adoc             # Documentation développeur
-│   └── usage.adoc                 # Ce document
+│   ├── developer.adoc             # Documentation développeur (FR)
+│   ├── developer.en.adoc          # Documentation développeur (EN)
+│   ├── usage.adoc                 # Ce document
+│   └── usage.en.adoc              # Guide d'utilisation (EN)
 ├── test/
 │   ├── unit/                      # Tests unitaires (212 tests)
 │   └── integration/                # Tests d'intégration (19 tests)
@@ -1854,7 +1900,7 @@ sudo dnf install rpm
 sudo apt install rpm
 ----
 
-=== `python3 not found — required to read .whl, tar, and zip archives`
+=== `python3 introuvable — requis pour lire les archives .whl, tar et zip`
 
 Installez Python 3 :
 
@@ -1867,7 +1913,7 @@ sudo dnf install python3
 sudo apt install python3
 ----
 
-=== `dpkg-deb not found — required to read .deb files`
+=== `dpkg-deb introuvable — requis pour lire les fichiers .deb`
 
 Installez `dpkg` :
 
@@ -1880,7 +1926,7 @@ sudo dnf install dpkg
 sudo apt install dpkg
 ----
 
-=== `unzip not found — required to read .jar files`
+=== `unzip introuvable — requis pour lire les fichiers .jar`
 
 Installez `unzip` :
 
@@ -1893,7 +1939,7 @@ sudo dnf install unzip
 sudo apt install unzip
 ----
 
-=== `Warning: cannot query "pkg"`
+=== `Attention : interrogation impossible de "pkg"`
 
 Le paquet n'est pas installé ou le fichier `.rpm` est inaccessible.
 Vérifiez avec `rpm -q <paquet>` ou `rpm -qp <fichier.rpm>`.

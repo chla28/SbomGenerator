@@ -1,8 +1,12 @@
 # sbom_generator_gui
 
+🇫🇷 **Français** · 🇬🇧 [English](README.en.md)
+
 Interface graphique de bureau (Linux) pour **SBOM Generator**. Elle donne accès, sans ligne de commande, à l'ensemble du flux de travail autour de l'inventaire logiciel (SBOM) : configuration et lancement d'une génération, suivi de la progression, exploration des résultats, recherche de vulnérabilités connues (sur un SBOM déjà généré ou directement sur une image de conteneur), évaluation de la qualité du SBOM produit, comparaison entre deux inventaires, fusion de plusieurs inventaires, génération d'un rapport de licences, et consultation libre de tout fichier SBOM existant.
 
 L'application n'effectue aucun traitement métier elle-même : elle orchestre des outils en ligne de commande externes (`sbom-generator`, `grype`, `osv-scanner`, `trivy`, `sbomqs`, `sbom-scorecard`, `asciidoctor-pdf`) et affiche leurs résultats.
+
+L'interface existe en français et en anglais (menu *Langue de l'interface* : Système / Français / English) et transmet sa langue au CLI `sbom-generator` qu'elle lance (via `SBOM_LANG`).
 
 ---
 
@@ -74,5 +78,5 @@ Exécuté automatiquement par `../.github/workflows/ci.yml` sur chaque push/pull
 
 ## Documentation
 
-- `doc/user.adoc` — guide utilisateur complet : chaque onglet, chaque option, scénarios d'utilisation typiques, dépannage.
-- `doc/developer.adoc` — architecture technique : rôle de chaque fichier, flux de données, conventions, pièges connus.
+- `doc/user.adoc` — guide utilisateur complet : chaque onglet, chaque option, scénarios d'utilisation typiques, dépannage (anglais : `doc/user.en.adoc`).
+- `doc/developer.adoc` — architecture technique : rôle de chaque fichier, flux de données, conventions, pièges connus (anglais : `doc/developer.en.adoc`).

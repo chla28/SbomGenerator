@@ -1,0 +1,2965 @@
+= SBOM Generator GUI — Developer guide
+:toc: left
+:toc-title: Contents
+:toclevels: 3
+:sectnums:
+:icons: font
+:source-highlighter: rouge
+:rouge-style: monokai
+:experimental:
+:docdate: 2026-06-29
+:lang: en
+
+🇫🇷 link:developer.adoc[Français] · 🇬🇧 *English*
+
+== Introduction
+
+This document describes the architecture of the Flutter GUI of the
+`sbom_generator` project. It is aimed at a Dart developer who has not yet
+practiced Flutter, or who joins the project without knowing its history.
+
+The GUI is a Linux desktop application (Flutter desktop).
+It performs no business processing itself: it orchestrates two external
+command-line tools —
+
+* *sbom-generator*: generates the SBOM files
+* *grype*: analyzes the generated SBOMs and detects CVE vulnerabilities
+
+== Development setup
+
+=== Requirements
+
+[cols="1,2", options="header"]
+|===
+|Tool |Minimum version
+
+|Flutter SDK
+|3.44.x (stable channel)
+
+|Dart SDK
+|^3.12.2 (included in Flutter)
+
+|`sbom-generator`
+|compiled binary reachable in the PATH or next to the GUI (see <<sec-settings-service>>)
+
+|`grype`
+|installed and reachable in the PATH (`grype --version`)
+
+|`asciidoctor-pdf`
+|optional, for the PDF conversion from the UI
+|===
+
+=== Installing Flutter
+
+[source,bash]
+----
+# Clone Flutter
+git clone https://github.com/flutter/flutter.git ~/flutter
+export PATH="$HOME/flutter/bin:$PATH"
+
+# Enable Linux desktop support
+flutter config --enable-linux-desktop
+
+# Check
+flutter doctor
+----
+
+=== Running the GUI in development
+
+[source,bash]
+----
+cd gui/
+
+# Download the dependencies
+flutter pub get
+
+# Run in debug mode (hot-reload available)
+flutter run -d linux
+
+# Analyze the code (equivalent to dart analyze)
+flutter analyze
+
+# Run the tests (-j 1: more deterministic than the default parallelism on
+# machines with limited resources, see Development setup)
+flutter test -j 1
+----
+
+In debug mode, Flutter prints assertions in the console (e.g. ListTile in
+ColoredBox). These messages are harmless _warnings_, not crashes
+(see <<sec-piege-listile>>).
+
+Run automatically by `../.github/workflows/ci.yml` (GUI job:
+`flutter analyze` then `flutter test -j 1`) on each push/pull request to
+`main`.
+
+=== Building a standalone binary
+
+[source,bash]
+----
+flutter build linux --release
+# Binary produced in:
+# build/linux/x64/release/bundle/sbom_generator_gui
+----
+
+== Architecture & files
+
+=== Overview
+
+----
+gui/
+├── lib/
+│   ├── main.dart                     # Entry point — StatefulWidget, ThemeMode + color + language
+│   ├── home_screen.dart              # Main screen — 2-column layout + theme palette
+│   ├── l10n/                         # Localization (gen-l10n): app_fr.arb / app_en.arb + generated code
+│   ├── models/
+│   │   ├── sbom_config.dart          # SBOM configuration (state + toJson/fromJson + toCommandLine)
+│   │   ├── sbom_result.dart          # Output models (OutputFile, SbomResult…)
+│   │   ├── app_themes.dart           # Predefined color themes (kAppThemes, AppTheme)
+│   │   ├── cve_date_filter.dart      # CVE time filter (CveDateFilter, CveDateField)
+│   │   ├── layer_nav.dart            # --per-layer SBOM set: global ↔ layers, layer fields
+│   │   └── layer_scan.dart           # Per-layer vulnerability analysis: set, result, JSON merges
+│   ├── services/
+│   │   ├── sbom_runner.dart          # Runs sbom-generator, event stream
+│   │   ├── grype_runner.dart         # Runs grype (SBOM or image), event stream
+│   │   ├── osv_runner.dart           # Runs osv-scanner (SBOM or image), event stream
+│   │   ├── trivy_runner.dart         # Runs trivy (SBOM or image), event stream
+│   │   ├── vuln_enrichment.dart      # Synced copy of the CLI module: CISA KEV / EPSS / PoC / CVSS
+│   │   ├── scan_enrichment.dart      # Seeds from the scanners' JSON + normalizeCveId + enrichCves
+│   │   ├── layer_scan_service.dart   # Per-layer SBOM (CLI --per-layer) + per-layer scan orchestration
+│   │   ├── package_scan_service.dart # SBOM of a package/archive (CLI --input --depth) before scan, session cache
+│   │   ├── version_service.dart      # Installed version detection + latest GitHub release
+│   │   └── settings_service.dart     # Binary lookup + settings persistence + theme + enrichment
+│   └── widgets/
+│       ├── config_panel.dart         # Left panel: form + drag & drop + _CommandPreview
+│       ├── results_panel.dart        # Right panel: 14 tabs; merges the ExploitInfo of the 3 tabs
+│       ├── grype_panel.dart          # Grype tab (standalone + KeepAlive)
+│       ├── osv_panel.dart            # OSV-Scanner tab (standalone + KeepAlive)
+│       ├── trivy_panel.dart          # Trivy tab (standalone + KeepAlive)
+│       ├── cra_panel.dart            # CRA Compliance tab — drives `sbom-generator cra`
+│       ├── vuln_shared.dart          # VulnRow, VulnTableView: vulnerability table
+│       │                             #   shared (sort/filter/search/CSV+AsciiDoc+PDF export,
+│       │                             #   KEV/EPSS columns, expandable CveDetailPanel row)
+│       │                             #   + ScanSourceToggle/ImageRefField (SBOM/image source)
+│       ├── cve_detail.dart           # CveDetail / ScannerCveView / CveDetailPanel — shared CVE detail
+│       ├── quality_panel.dart        # SBOM Quality tab — sbomqs + sbom-scorecard
+│       ├── dashboard_panel.dart      # Dashboard tab — multi-scanner CVE synthesis
+│       │                             #   (sortable cross-scanner comparison + expandable rows)
+│       ├── layer_selector.dart       # “Global SBOM / layer N” banner (--per-layer)
+│       ├── sbom_tree_panel.dart      # SBOM Tree tab — component exploration
+│       ├── sbom_diff_panel.dart      # SBOM Comparison tab — diff of two SBOMs
+│       ├── sbom_merge_panel.dart     # SBOM Merge tab — merges several SBOMs
+│       ├── sbom_licenses_panel.dart  # SBOM Licenses tab — visualization + report via `licenses`
+│       └── sbom_viewer_panel.dart    # SBOM Viewer tab — external file exploration
+├── doc/
+│   ├── developer.adoc               # This document (French)
+│   ├── developer.en.adoc            # This document (English)
+│   ├── user.adoc                    # User guide (French)
+│   └── user.en.adoc                 # User guide (English)
+├── test/
+│   ├── widget_test.dart
+│   ├── config_panel_input_test.dart
+│   ├── sbom_config_test.dart
+│   ├── dashboard_panel_test.dart
+│   ├── cra_panel_test.dart
+│   ├── cve_detail_test.dart
+│   ├── pdf_report_test.dart
+│   ├── sbom_merge_panel_test.dart
+│   ├── sbom_licenses_panel_test.dart
+│   ├── license_report_test.dart
+│   ├── vuln_shared_test.dart
+│   ├── scan_source_test.dart
+│   ├── layer_nav_test.dart
+│   ├── layer_scan_test.dart
+│   ├── cli_command_test.dart
+│   ├── sbom_tree_panel_layers_test.dart
+│   └── sbom_viewer_panel_test.dart
+└── pubspec.yaml
+----
+
+=== Role of each file
+
+==== `main.dart` — Entry point
+
+`main()` is *async*: it loads the saved configuration, the theme and the
+color index (`shared_preferences`) before the first render, then passes these
+values to `SbomGeneratorApp`.
+
+`SbomGeneratorApp` is a `StatefulWidget` that:
+
+* manages `ThemeMode _themeMode` (light / dark)
+* manages `int _themeIndex` (index in `kAppThemes`)
+* exposes `_toggleTheme()` and `_onThemeIndexChanged(int)` passed to `HomeScreen`
+* declares a `theme` (light) and a `darkTheme` (dark), both based on
+  `ColorScheme.fromSeed(seedColor: kAppThemes[_themeIndex].color)`
+  with the right `brightness`
+
+When `_themeIndex` changes, `SettingsService.saveThemeColorIndex(index)` is
+called in a non-blocking way.
+
+==== `home_screen.dart` — Main screen
+
+`HomeScreen` is a `StatefulWidget` (see <<sec-flutter-stateful>>) that:
+
+* receives `initialConfig`, `themeMode`, `onThemeToggle`, `themeIndex` and
+  `onThemeIndexChanged` from `SbomGeneratorApp`
+* holds the global state of the SBOM session: log, produced files, progress,
+  exit code, execution state, sbomqs output
+* instantiates `SbomRunner`; initializes `_config` from `initialConfig`
+* listens to the `SbomRunner` stream and redistributes the events to
+  `ResultsPanel` through `setState()`
+* automatically triggers the PDF conversion (`asciidoctor-pdf`) after a
+  success if `_config.generatePdf` is true
+* triggers `_runSbomqs()` after a success if `_config.enableSbomqs` is true
+* saves the configuration (`SettingsService.saveConfig`) before each
+  generation and on each field change (`onChanged` of `ConfigPanel`)
+* displays in the `AppBar`: palette button 🎨 (`IconButton` →
+  `_showThemePicker`), theme toggle button 🌙/☀, info button
+
+`_startScan()` puts as the first entry of `_logLines` the complete shell
+command via `_config.toCommandLine(SettingsService.cliBinary)`.
+
+`_showThemePicker()` opens `_ThemePickerDialog` (inline dialog defined at the
+bottom of the file). `_ThemePickerDialog` displays a `Wrap` of `_ThemeSwatch`
+— colored circles (`AnimatedContainer`) with a check mark for the active
+theme.
+
+Layout: `Row` with two children —
+
+[source,text]
+----
+HomeScreen
+├── ConfigPanel    (fixed width 390 px)
+│     └── SbomConfig (shared mutable model)
+└── ResultsPanel   (Expanded — takes the rest)
+----
+
+==== `models/sbom_config.dart` — SBOM configuration
+
+Mutable object (`SbomConfig`) shared between `HomeScreen` and `ConfigPanel`.
+It exposes `toArgs()` which builds the CLI argument list, and
+`expectedOutputPaths()` for the preview of the files before generation.
+
+`toCommandLine(String binary)` is added for human display:
+
+[source,dart]
+----
+String toCommandLine(String binary) {
+  return [binary, ...toArgs()]
+      .map((s) => s.contains(' ') ? '"$s"' : s)
+      .join(' ');
+}
+----
+
+This method is called in `_startScan()` of `HomeScreen` (first line of the
+log) and in `_CommandPreview` of `ConfigPanel` (live preview).
+
+It also exposes `toJson()` / `SbomConfig.fromJson(Map)` for persistence
+through `SettingsService`. The fields that are *not* persisted (too
+contextual) are `inputFile` and `pdfOutputPath`.
+
+Added field: `bool enableSbomqs` (default: `false`) — enables the automatic
+quality analysis after generation.
+
+Fields added for OCI:
+
+* `String imageRef` (default: `''`) — reference of an OCI image (`--image`);
+  empty means the OCI analysis is disabled.
+* `String ociTool` (default: `'syft'`) — chosen OCI backend (`--oci-tool`).
+  Values: `'syft'`, `'trivy'`, `'skopeo'`, `'cdxgen'`.
+* `String binaryPath` (default: `''`) — local binary to analyze directly
+  (`--binary`), see <<sec-binary-field>>.
+
+* `String nestedDepth` (default: `'0'`) — descent depth into the nested
+  objects of `--input` (`--depth`): `'0'`, `'1'`…`'3'` or `'all'`
+  (`allNestedDepths`). `bool nestedFiles` (default: `true`) — one SBOM per
+  nested object; `false` → `--no-nested-files`. `toArgs()` only emits
+  `--depth` (and `--no-nested-files`) if `inputFile` is filled in and the
+  depth ≠ `'0'`; the CLI refuses `--depth` without `--input`. Option
+  displayed by `_NestedDepthOptions` (`config_panel.dart`), under the input
+  field. The `*.nested-NN-*` files are picked up from the `SBOM written →`
+  lines like the layer SBOMs.
+* `bool perLayer` (default: `false`) — one SBOM per layer (`--per-layer`),
+  see <<sec-per-layer-option>>.
+* `String layerMode` (default: `'metadata'`) — remembered method
+  (`--layer-mode`); the transmitted value is `effectiveLayerMode`, which is
+  `'rootfs'` for a backend outside `metadataLayerTools` (`{'syft', 'trivy'}`)
+  whatever the remembered choice (the CLI refuses `metadata` with skopeo /
+  cdxgen).
+
+These fields are included in `toJson()` / `fromJson()` (keys `'imageRef'`,
+`'ociTool'`, `'binaryPath'`, `'perLayer'`, `'layerMode'`) and therefore
+persisted between sessions. They are loaded by `_loadProfileInto()` in
+`_ProfilesDialog`.
+
+In `toArgs()`:
+
+[source,dart]
+----
+if (binaryPath.isNotEmpty) {
+  // --binary is exclusive with --image on the CLI side and forces --oci-tool syft:
+  // ociTool only applies to --image, never emitted here.
+  args.addAll(['--binary', binaryPath]);
+} else if (imageRef.isNotEmpty) {
+  args.addAll(['--image', imageRef]);
+  args.addAll(['--oci-tool', ociTool]);
+  if (perLayer) {
+    args.addAll(['--per-layer', '--layer-mode', effectiveLayerMode]);
+  }
+}
+----
+
+`--per-layer` is only emitted with `--image`: neither `--input` alone nor
+`--binary` (a binary has no layers).
+
+Exposed constants:
+
+* `allFormats`, `formatLabels`, `_formatExtensions` — format checkboxes
+  (`formatLabel(fmt, l)` returns the displayed label, translating `json`)
+* `allOciTools` (`['syft', 'trivy', 'skopeo', 'cdxgen']`) — list of the OCI backends
+* `ociToolLabels` (`{'syft': 'Syft', 'trivy': 'Trivy', 'skopeo': 'Skopeo',
+  'cdxgen': 'cdxgen'}`) — labels of the OCI tool selector segments
+
+==== `models/app_themes.dart` — Color themes
+
+Defines `AppTheme` (a label + a color) and the constant `kAppThemes`, a list
+of 10 predefined themes (the label is the French source name; the displayed
+name is translated through the `theme*` keys of the ARB files):
+
+[source,dart]
+----
+const kAppThemes = [
+  AppTheme('Indigo',  Color(0xFF1A237E)),  // default theme (index 0)
+  AppTheme('Bleu',    Color(0xFF1565C0)),
+  AppTheme('Violet',  Color(0xFF4A148C)),
+  AppTheme('Teal',    Color(0xFF004D40)),
+  AppTheme('Vert',    Color(0xFF1B5E20)),
+  AppTheme('Orange',  Color(0xFFBF360C)),
+  AppTheme('Rouge',   Color(0xFFB71C1C)),
+  AppTheme('Rose',    Color(0xFF880E4F)),
+  AppTheme('Ardoise', Color(0xFF37474F)),
+  AppTheme('Marron',  Color(0xFF4E342E)),
+];
+----
+
+The color is injected into the Material 3 `ColorScheme.fromSeed(seedColor: ...)`,
+which automatically generates the whole theme palette (primaries, surfaces,
+states).
+
+==== `models/sbom_result.dart` — Result models
+
+Contains `OutputFile` (path + formatted size) and `SbomResult` (output
+aggregate). `SbomResult` is not used directly in the UI — the fields are
+passed up one by one through the stream events (see <<sec-stream>>).
+
+==== `models/cve_date_filter.dart` — CVE time filter
+
+Immutable model shared between the three scanner panels (Grype, OSV, Trivy)
+and the `scan` CLI.
+
+[source,dart]
+----
+enum CveDateField { published, modified, latest }
+
+class CveDateFilter {
+  final DateTime? after;
+  final DateTime? before;
+  final CveDateField field;   // date field used for filtering
+  final bool includeUndated;  // include CVEs with no date
+
+  static const CveDateFilter empty = CveDateFilter();
+  bool get hasConstraints => after != null || before != null;
+
+  bool matches(DateTime? published, DateTime? modified) { … }
+  CveDateFilter copyWith({…}) { … }
+}
+----
+
+Notable points:
+
+* `hasConstraints` returns `false` when `after` and `before` are both null —
+  `matches()` then short-circuits with no computation.
+* `CveDateField.latest` uses `_latest(a, b)` which returns the later of the
+  two dates (handles the cases where one is null).
+* `copyWith()` applies the *sentinel pattern* (`static const Object _sentinel`)
+  to distinguish “parameter not provided” from “parameter explicitly `null`”
+  on the `DateTime?` fields — the `?? this.field` pattern cannot be used to
+  clear a nullable date.
+* `CveDateFilter.empty` (constant) is used as the initial value in
+  `ResultsPanel` for the three filters, avoiding null checks.
+
+==== `services/sbom_runner.dart` — SBOM execution
+
+[[sec-sbom-runner]]
+Launches `sbom-generator` through `Process.start()` and exposes a
+`Stream<SbomEvent>`. Four event types (sealed class):
+
+[cols="1,2", options="header"]
+|===
+|Event |Content
+
+|`SbomProgressEvent`
+|current, total, percent, label — parsed from the stdout progress bar
+
+|`SbomLogEvent`
+|line, isError, isWarning — any log line
+
+|`SbomOutputFileEvent`
+|an `OutputFile` parsed from `"SBOM written → path (size)"`
+
+|`SbomDoneEvent`
+|exitCode
+|===
+
+`HomeScreen` listens to this stream with `.listen()` and calls `setState()` on
+each event to update the UI.
+
+The runner starts the CLI with the language environment of the interface
+(`SettingsService.cliEnvironment`, variable `SBOM_LANG`) so that the CLI
+messages follow the language chosen in the GUI. The *machine contracts* it
+parses (`SBOM written →`, the `] n/m %` progress bar, the `Error:` /
+`Warning:` / `⚠` / `   •` prefixes) are never translated by the CLI.
+
+==== `services/grype_runner.dart` — Grype execution
+
+[[sec-grype-runner]]
+Same principle as `sbom_runner.dart`, but the events are different:
+
+[cols="1,2", options="header"]
+|===
+|Event |Content
+
+|`GrypeOutputEvent`
+|Complete grype JSON (accumulated from stdout, emitted after exit)
+
+|`GrypeTemplateEvent`
+|Content of the temporary template output file (read after exit)
+
+|`GrypeDoneEvent`
+|exitCode + optional stderr
+|===
+
+When a template file is configured, grype is launched with two outputs:
+
+[source,bash]
+----
+grype sbom.cdx.json \
+  --output json \
+  --output template=/tmp/grype_tmpl_<ts>.txt \
+  --template ./grype_csv.tmpl \
+  ...
+----
+
+The JSON output arrives on stdout (captured in `jsonBuf`).
+The template output is written to a temporary file, read after exit, then
+deleted (see <<sec-piege-tmpl>>).
+
+[[sec-scan-image]]
+===== Container image scan (Grype/OSV-Scanner/Trivy)
+
+The three scan panels (see <<sec-vuln-shared>>) offer a *SBOM file /
+Container image* toggle. The `sbomFile` parameter of `run()` was renamed
+`target` in the three runners to reflect this double usage: path of an SBOM
+file in the default mode, or image reference (registry, local archive, OCI
+layout directory) in image mode.
+
+`grype_runner.dart` needs no branching logic: grype detects the source type
+by itself from the positional argument (SBOM file, registry image,
+`docker save`/OCI archive, OCI layout directory — see `grype --help`). Only a
+`platform` parameter (`--platform`, e.g. `linux/arm64`) was added, taking
+precedence over the existing `platformLinux` boolean:
+
+[source,dart]
+----
+if (platform != null && platform.isNotEmpty) {
+  args.addAll(['--platform', platform]);
+} else if (platformLinux) {
+  args.addAll(['--platform', 'linux']);
+}
+----
+
+IMPORTANT: `grype_panel.dart` forces `platformLinux: false` when
+`sourceKind == ScanSourceKind.image`, whatever the state of the
+`--platform linux` checkbox. This checkbox only has an effect in SBOM file
+mode; in image mode, `--platform linux` (without architecture) is *rejected*
+by grype on a multi-platform image (`no child with platform linux in index`,
+verified in real conditions) — only the dedicated field must apply in this
+mode.
+
+[[sec-package-scan-dev]]
+==== “Package / archive” source — `services/package_scan_service.dart`
+
+`ScanSourceKind.package` (3^rd^ segment of `ScanSourceToggle`, shared by the
+three tabs) displays `PackageSourceField` (`vuln_shared.dart`): path field,
+picker button and depth menu (`packageScanDepths`: `0`, `1`, `2`, `3`, `all`).
+No business logic on the GUI side: `PackageScanService.prepare(path, depth)`
+launches `sbom-generator --input … --depth N --no-nested-files --format
+cyclonedx --output <tmp>/package.cdx.json` (`SettingsService.cliBinary`),
+caches the SBOM path for the session (key: path + modification date + depth,
+hence shared by the three tabs; a failure is not cached) and raises
+`PackageScanException` (exit code + stderr) on failure. `kill()` interrupts
+the generation.
+
+In each tab, `_analyze()` delegates to `_analyzePackage()` for this source:
+path validation, “Generating the package SBOM…” state (`_status`),
+`PackageScanService.prepare`, then `_launch(sbom, false, label)` — the same
+body as for an SBOM file (`_launch` is the former end of `_analyze`). The
+target label (header of the reports) is `package “name” (depth N)`. The
+*Stop* button calls `PackageScanService.kill()`.
+
+*CLI Command* popup: `_cliSections()` adds the SBOM generation
+(`cliPackageSbom`, `/tmp/sbom-paquet/package.cdx.json`) before the usual
+sections of `_scanCliSections(sbomTarget:, packageTarget:)`;
+`sbomGeneratorScanArgs(usePackage: true, packageDepth:)` produces
+`scan --package <file> [--depth N] --scanner …`. The `OBJECT` column (nested
+object containing the vulnerable package) only exists in the CLI output: the
+`GrypeVuln` / `OsvVuln` / `TrivyVuln` models do not carry the object.
+
+==== `services/osv_runner.dart` — OSV-Scanner execution
+
+Same architecture as `grype_runner.dart`. Two event types (sealed class):
+
+[cols="1,2", options="header"]
+|===
+|Event |Content
+
+|`OsvOutputEvent`
+|Complete osv-scanner JSON (accumulated from stdout, emitted after exit)
+
+|`OsvDoneEvent`
+|exitCode + optional stderr
+|===
+
+Peculiarity: an exit code of *1* indicates that vulnerabilities were found
+(normal osv-scanner behavior), not an error. Only a code *greater than 1*
+signals a real error — this behavior is shared by `scan image` (verified in
+real conditions).
+
+In SBOM file mode (`useImage: false`, default), the launched command keeps
+the old flag style (still accepted, although marked `[DEPRECATED]` in the help
+of osv-scanner ≥ 2.x):
+
+[source,bash]
+----
+osv-scanner --format json --sbom <target> [--config <configFile>]
+----
+
+In image mode (`useImage: true`), only the `scan image` subcommand
+(introduced in CLI v2) can analyze an image; the old style does not allow it:
+
+[source,bash]
+----
+osv-scanner scan image --format json <target>                # registry
+osv-scanner scan image --format json --archive <target>      # local archive
+----
+
+The choice between the two is made through `FileSystemEntity.typeSync(target)`:
+a local file triggers `--archive`, otherwise `target` is passed as is
+(registry reference). *Unlike Grype and Trivy, osv-scanner cannot read an OCI
+layout directory* (only a tar archive is supported by `--archive`) — this is
+why `osv_panel.dart` passes `allowOciDir: false` to `ImageRefField` and does
+not offer this picker. osv-scanner has no `--platform` option either.
+
+==== `services/trivy_runner.dart` — Trivy execution
+
+Same architecture. Named parameters of `run()`:
+
+[source,dart]
+----
+Stream<TrivyEvent> run({
+  required String target,
+  bool useImage = false,
+  String? platform,                     // e.g. 'linux/arm64', image mode only
+  List<String> severities = const [],   // e.g. ['CRITICAL', 'HIGH']
+  bool ignoreUnfixed = false,
+  bool skipDbUpdate = false,
+  String? configFile,
+})
+----
+
+Two event types:
+
+[cols="1,2", options="header"]
+|===
+|Event |Content
+
+|`TrivyOutputEvent`
+|Complete trivy JSON (accumulated from stdout, emitted after exit)
+
+|`TrivyDoneEvent`
+|exitCode + optional stderr
+|===
+
+In SBOM file mode (`useImage: false`), the subcommand is `sbom`:
+
+[source,bash]
+----
+trivy sbom --format json --quiet \
+  [--severity CRITICAL,HIGH,...] \
+  [--ignore-unfixed] \
+  [--skip-db-update] \
+  [--config trivy.yaml] \
+  <target>
+----
+
+In image mode (`useImage: true`), the subcommand becomes `image` and
+`--platform` is added if provided. `--input` accepts either an archive
+(`docker save`/OCI) or an OCI layout directory; a registry reference is
+passed as a positional argument, as in SBOM mode:
+
+[source,bash]
+----
+trivy image --format json --quiet \
+  [--severity ...] [--ignore-unfixed] [--skip-db-update] \
+  [--config trivy.yaml] [--platform linux/arm64] \
+  <target>                    # registry reference
+# or, if FileSystemEntity.typeSync(target) detects a local path:
+trivy image [...] --input <target>   # local archive or OCI directory
+----
+
+NOTE: It is expected that the SBOM mode (on an SBOM generated by
+`sbom_generator` with the syft backend) and the image mode of `TrivyRunner`
+do not report exactly the same Java CVEs for the same image — this is not a
+bug of this file nor of `oci_parser.dart`. The jar analyzer built into Trivy
+identifies a jar through `pom.properties`, then `MANIFEST.MF`, then a SHA-1
+lookup in its `trivy-java-db` database (indexed from Maven Central), and
+silently drops the package if all three fail — which happens for internally
+rebuilt jars (e.g. Red Hat `.redhat-000xx`) without `pom.properties` and
+absent from Maven Central. The syft cataloger, used to produce our SBOMs, can
+recover these packages by parsing the file name
+`<groupId>.<artifactId>-<version>.jar`. Verified on a RHEL 9.6/Keycloak
+image: `trivy sbom` found 3 HIGH CVEs (`micrometer-core`, `postgresql`) absent
+from a direct `trivy image`. See `user.en.adoc`, section “Why Grype,
+OSV-Scanner and Trivy do not find the same CVEs”.
+
+[[sec-enrichissement]]
+==== `services/vuln_enrichment.dart` + `scan_enrichment.dart` — CVE enrichment
+
+The GUI does not depend on the root package: `services/vuln_enrichment.dart`
+is a **synchronized copy** of the CLI's `lib/vuln_enrichment.dart` (keep both
+identical — the class bodies are, only the header comment differs). It
+provides `VulnEnricher` (CISA KEV through the CISA feed, EPSS through the
+FIRST API, PoC through `poc-in-github.motikan2010.net`, all with `dart:io
+HttpClient`, 24 h cache under `~/.cache/sbom-generator/` shared with the CLI,
+falling back to the cache if the network fails), `parseCvssVector()` and the
+`CveSeed` / `ExploitInfo` models.
+
+`scan_enrichment.dart` bridges with the panels:
+
+* `normalizeCveId(id)` — same distro regex as `_normalizeVulnId` of the
+  dashboard;
+* `seedsFromGrypeJson` / `seedsFromOsvJson` / `seedsFromTrivyJson` — extract
+  the *seeds* from each scanner's raw JSON: CVSS vector for all, and
+  **native KEV + EPSS for Grype** (which carries them in its database — as
+  many network requests avoided);
+* `enrichCves(ids, {seed, online})` — instantiates `VulnEnricher` and returns
+  `Map<String, ExploitInfo>`.
+
+Each panel (`grype_panel` / `osv_panel` / `trivy_panel`), after
+`dedupeVulns`, calls `_enrich(rawJson, vulns)`: builds the seeds, calls
+`enrichCves` (best-effort, `_enrichRun` guards against races),
+`setState(_exploitById)`, then passes up through `onExploitChanged`.
+`ResultsPanel` merges the three maps (`_mergedExploit`, priority to the
+entries carrying the most signal) and passes it to `DashboardPanel`. The `☁`
+button (toolbar of `VulnTableView`) toggles `online`; the choice is persisted
+by `SettingsService.saveScanEnrichOnline()` (key `scan_enrich_online_v1`,
+default enabled) and shared by the three tabs.
+
+[[sec-cve-detail-widget]]
+==== `widgets/cve_detail.dart` — CVE detail (shared)
+
+* `ScannerCveView` — what *one* scanner reports (severity, package,
+  versions, dates, free field `extra` = type / ecosystem / title).
+* `CveDetail { id, List<ScannerCveView> views, ExploitInfo exploit }` —
+  aggregates 1 to 3 views. Getters: `isCve` / `isGhsa`, `description` (best
+  sentence among the `extra`, ignores short fields), `links` (NVD / CVE.org /
+  osv.dev / CISA KEV or GitHub Advisory depending on the type),
+  `toAdocRows(esc)` for the export.
+* `CveDetailPanel` — `StatelessWidget` displayed in the expanded row:
+  Package(s) sections, *Reported by* (scanner × severity × dates table),
+  *Exploitability* (KEV / EPSS / CVSS + vector / PoC + `launchUrl` links),
+  *References* (`OutlinedButton` → browser), *copy the identifier* button.
+
+Built on the dashboard side by `_crossCveDetail` (3 scanners) and on the tabs
+side by `_VulnTableViewState._detailFor` (1 scanner). Depends on no panel file
+— no import cycle.
+
+[[sec-version-service]]
+==== `services/version_service.dart` — Installed version + GitHub update
+
+This file groups three independent elements.
+
+*`ToolVersionInfo`* — immutable model:
+
+[source,dart]
+----
+class ToolVersionInfo {
+  final String? installed;   // '0.87.0', null = not installed
+  final String? latest;      // '0.88.1', null = API unreachable
+  final String? releaseUrl;  // GitHub release page URL
+  bool get isInstalled => installed != null;
+  bool get hasUpdate { ... } // compares installed < latest (semver)
+}
+----
+
+*`VersionService`* — three asynchronous static methods:
+
+[source,dart]
+----
+VersionService.checkGrype()   // grype version
+VersionService.checkOsv()     // osv-scanner --version
+VersionService.checkTrivy()   // trivy --version
+----
+
+Each call runs the command through `Process.run()`, extracts the first
+`\d+\.\d+\.\d+` pattern in stdout+stderr, then queries
+`https://api.github.com/repos/<owner>/<repo>/releases/latest` (5 s timeout) to
+retrieve `tag_name` and `html_url`.
+
+*`ToolVersionBadge`* — `StatelessWidget` widget displayed at the top of
+`_ConfigSection` in each panel:
+
+[cols="1,3", options="header"]
+|===
+|State |Rendering
+
+|`info == null`
+|Nothing (check in progress)
+
+|Not installed
+|Red icon + “not installed”
+
+|Up to date
+|Green icon + “v{installed}”
+
+|Update available
+|Orange icon + “v{installed} → v{latest}” (clickable → GitHub release)
+|===
+
+The badge uses `url_launcher` to open the release page in the browser. It is
+initialized in `initState()` of each panel with
+`.then((info) { if (mounted) setState(...) })` so as not to block rendering.
+The displayed texts come from the ARB files (`svc*` keys).
+
+[[sec-settings-service]]
+==== `services/settings_service.dart` — Binary resolution + persistence
+
+`SettingsService.cliBinary` looks for the `sbom-generator` binary in this
+order:
+
+1. `<exe_dir>/../../bin/sbom-generator` (installed Linux bundle)
+2. `<exe_dir>/sbom-generator` (side-by-side binary)
+3. `sbom-generator` in the PATH (development fallback)
+
+In development, it is enough for the CLI to be compiled and reachable in the
+PATH:
+
+[source,bash]
+----
+cd ..   # project root
+dart compile exe bin/sbom_generator.dart -o build/sbom-generator
+export PATH="$PWD/build:$PATH"
+----
+
+The service also handles *persistence* through `shared_preferences`:
+
+[cols="2,3", options="header"]
+|===
+|Method |Role
+
+|`saveConfig(SbomConfig)`
+|Serializes the config as JSON and stores it under the key `sbom_config_v1`
+
+|`loadConfig()`
+|Deserializes and returns a `SbomConfig?` (null if no saved config)
+
+|`saveTheme(ThemeMode)`
+|Stores `'light'`, `'dark'` or `'system'` under the key `theme_mode`
+
+|`loadTheme()`
+|Returns the saved `ThemeMode`, or `ThemeMode.system` by default
+
+|`saveThemeColorIndex(int)`
+|Stores the color theme index (0-9) under the key `theme_color_index`
+
+|`loadThemeColorIndex()`
+|Returns the saved index, or `0` (Indigo) by default
+
+|`saveLanguage(String)` / `loadLanguage()`
+|Interface language (`system`, `fr`, `en`), key `ui_language_v1`; `system`
+by default
+
+|`cliLang` / `cliEnvironment`
+|Static field set by `main.dart` from the effective locale, and the process
+environment `{SBOM_LANG: cliLang}` built from it — passed by all the runners
+to the CLI they launch
+
+|`saveScanEnrichOnline(bool)` / `loadScanEnrichOnline()`
+|Allow the CVE enrichment network requests (key `scan_enrich_online_v1`,
+default `true`) — `☁` button of the scan tabs
+
+|`listProfiles()`
+|Returns the list of saved profile names (key `profile_names_v1`)
+
+|`saveProfile(String name, SbomConfig)`
+|Serializes and stores the profile under the key `profile_v1_<URI-encoded name>`
+
+|`loadProfile(String name)`
+|Deserializes and returns the `SbomConfig?` of the named profile
+
+|`deleteProfile(String name)`
+|Deletes the profile and its name from the list
+|===
+
+The `sbom_config_v1` key includes a version suffix to ease future migrations
+(ignore obsolete `v0` keys, add `v2`, etc.).
+
+Profile names are encoded with `Uri.encodeComponent()` to avoid collisions
+between names containing special characters.
+
+==== `widgets/config_panel.dart` — Configuration form
+
+`ConfigPanel` is a `StatefulWidget` that:
+
+* exposes a Flutter `Form` + `TextFormField` form
+* synchronizes the fields to the `SbomConfig` object on each change
+  (through `_sync()`) and calls the optional `widget.onChanged?.()` callback
+* triggers the launch through `widget.onRun()` (callback to `HomeScreen`)
+* dynamically generates the format checkboxes from the `allFormats` list
+* wraps the *Input file* field in a `DropTarget` (`desktop_drop` package) to
+  accept file drag and drop from the system file manager — an `_isDragging`
+  boolean triggers an `AnimatedContainer` with a blue outline
+* offers the *sbomqs quality score* checkbox (drives `SbomConfig.enableSbomqs`)
+* exposes a 🔖 button in the header for the management of named profiles
+
+The `VoidCallback? onChanged` parameter is called after each field change
+(text through `_sync()`, booleans directly in their `setState`). `HomeScreen`
+uses it to trigger `SettingsService.saveConfig()` without waiting for the next
+launch.
+
+All the visible texts come from the ARB files (`cfg*` keys): `build()` reads
+`final l = context.l10n;` and the private sub-widgets do the same in their own
+`build()`.
+
+*Configuration profiles*: the panel header is a `Row` with the title on the
+left and an `IconButton(Icons.bookmarks_outlined)` on the right. This button
+calls `_showProfilesDialog(context)` which opens `_ProfilesDialog`.
+
+`_ProfilesDialog` is a `StatefulWidget` defined at the end of the file:
+
+* at `initState()`, loads the profile list through `SettingsService.listProfiles()`
+* displays a `TextField` + *Save* button: calls `_sync()` to make sure
+  `widget.config` is up to date, then `SettingsService.saveProfile()`
+* for each existing profile: *Load* button (calls `_loadProfileInto`) and
+  *Delete* button (confirmation dialog, then `SettingsService.deleteProfile()`)
+
+`_loadProfileInto(SbomConfig loaded)` copies all the profile fields into the
+existing `TextEditingController`s and calls `_sync()` +
+`widget.onChanged?.call()`. The `inputFile` field is intentionally excluded
+from the loading.
+
+*File type filter*: the internal `_FileField` widget accepts two optional
+callbacks — `onPick` (standard filtered selection) and `onPickAll` (all
+files). When both are provided, the 📂 icon is replaced by a
+`PopupMenuButton<bool>` offering:
+
+* *Filtered type (extensions)* — calls `onPick`
+* *All files* — calls `onPickAll`
+
+*OCI image section*: inserted between the input file field and the Output
+section. It includes two elements:
+
+. *OCI image field* — `_imageCtrl` / `TextEditingController` linked to
+  `c.imageRef`. The 📂 button on the right opens a `PopupMenuButton` with two
+  options: `_pickFile(extensions: ['tar', 'gz', 'tgz'])` for compressed or
+  uncompressed archives, and `_pickDir()` for OCI layout directories.
+  The `registry` type is always typed manually.
+. *OCI tool selector* — `_OciToolSelector` (private widget) displayed only if
+  `c.imageRef.isNotEmpty`. A four-segment `SegmentedButton` (`syft`, `trivy`,
+  `skopeo`, `cdxgen`) that updates `c.ociTool` through `setState`.
+
+[[sec-binary-field]]
+*Standalone binary field* (`--binary`, under a second “OR” separator):
+`_BinaryField` (private widget, modeled on `_OciImageField` but with a simple
+file picker — no tar/folder `PopupMenuButton`, a binary generally has no
+recognizable extension) linked to `_binaryCtrl` / `c.binaryPath`. Unlike the
+OCI image field, it *never* displays the `_OciToolSelector`: `--binary` forces
+`--oci-tool syft` on the CLI side, so `ociTool` makes no sense here. A simple
+informative text (“Backend: syft (forced)…”) is displayed instead when
+`c.binaryPath.isNotEmpty`.
+
+The validation of the input file field (`--input`) is relaxed: the “Required”
+error is only displayed if `imageRef` *and* `binaryPath` are both empty:
+
+[source,dart]
+----
+validator: (v) => (v == null || v.trim().isEmpty) &&
+    _imageCtrl.text.trim().isEmpty &&
+    _binaryCtrl.text.trim().isEmpty
+        ? l.cfgInputRequired   // “Required (or specify an OCI image / a binary)”
+        : null,
+----
+
+*Three-way mutual exclusivity*: `_inputCtrl`, `_imageCtrl` and `_binaryCtrl`
+are mutually exclusive in the UI — filling in one empties the other two, in
+order to avoid any ambiguity about the source really used (the CLI itself can
+combine `--input` and `--image`, but explicitly rejects `--binary` combined
+with `--image`). Each entry point that modifies one of the three fields
+empties the other two before calling `_sync()`:
+
+* `onChanged` of the three `TextFormField`s (manual typing)
+* `onDragDone` of the `DropTarget` (drag and drop onto the input file field)
+* `_pickFile()` / `_pickDir()` — the optional parameter, initially
+  `TextEditingController? clears`, became `List<TextEditingController>?
+  clears` so as to be able to empty the *two* other fields in a single list
+  (also used by `rpm-dir`, `license-map`, etc., which always pass an empty
+  list or omit the parameter):
++
+[source,dart]
+----
+Future<void> _pickFile(TextEditingController ctrl,
+    {String? title, List<String>? extensions,
+    List<TextEditingController>? clears}) async {
+  …
+  ctrl.text = r.files.single.path!;
+  for (final other in clears ?? const <TextEditingController>[]) {
+    other.clear();
+  }
+  _sync();
+  setState(() {});
+}
+----
+
+[[sec-per-layer-option]]
+*One SBOM per layer option* (`--per-layer`): `_PerLayerOptions` (private
+widget), displayed under `_OciToolSelector` hence only when
+`c.imageRef.isNotEmpty`. A `Checkbox` linked to `c.perLayer`; once checked, a
+*Metadata / Rootfs* `SegmentedButton` linked to `c.layerMode`, whose displayed
+selection is `c.effectiveLayerMode`. The *Metadata* segment is disabled
+(`enabled: false`) for a backend outside `metadataLayerTools`, with a “Rootfs
+mode forced” reminder below.
+
+*Command preview*: the `_CommandPreview` widget is inserted between the
+*▶ Generate the SBOM* button and the end of the form. It reads
+`config.toCommandLine(SettingsService.cliBinary)` at each `build()` (hence
+updates at each existing `setState`) and displays it on a dark background
+with a 📋 copy button.
+
+==== `widgets/osv_panel.dart` — OSV-Scanner tab
+
+`OsvPanel` is a standalone `StatefulWidget` with
+`AutomaticKeepAliveClientMixin` (state preserved when navigating between
+tabs). It receives `List<OutputFile> outputFiles` and automatically
+pre-selects the first SBOM file through `didUpdateWidget`.
+
+Parameters:
+
+* `List<OutputFile> outputFiles` — list of the generated SBOM files
+* `void Function(List<OsvVuln>)? onVulnsChanged` — callback triggered after
+  each successful analysis; `ResultsPanel` uses it to feed `DashboardPanel`
+* `CveDateFilter dateFilter` — current time filter, passed from `ResultsPanel`
+* `void Function(CveDateFilter)? onDateFilterChanged` — callback on each change
+* `void Function(CveDateFilter)? onPropagate` — copies the filter to Grype and Trivy
+
+Internal structure:
+
+* `_ConfigSection` — `ToolVersionBadge` (see <<sec-version-service>>) +
+  `ScanSourceToggle` (see <<sec-vuln-shared>>) which switches between the
+  “SBOM file” field and `ImageRefField(allowOciDir: false)`, then “Toml
+  config” (with `SplitPickButton`)
+* Result banner (green / yellow / orange / red depending on severities)
+* `TabController` with 2 inner tabs: *Vulnerabilities* and *Raw JSON*
+
+`_OsvPanelState` calls `VersionService.checkOsv()` in `initState()`, identical
+to the Grype pattern. `_sourceKind` (`ScanSourceKind`, see <<sec-scan-image>>)
+determines whether `_analyze()` calls `_runner.run()` with `useImage: false`
+(`_fileCtrl` file) or `useImage: true` (`_imageCtrl` reference); in image
+mode, the local existence validation (`File(target).existsSync()`) is only
+applied if `looksLikeLocalPath(target)` is true, so as not to reject a
+registry reference such as `nginx:latest`.
+
+The Vulnerabilities tab displays `VulnTableView<OsvVuln>` (see
+<<sec-vuln-shared>> for the shared component) instantiated with
+`toolName: 'OSV-Scanner'`, `csvHeader`/`csvRow` specific to the OSV columns,
+`extraColumnHeader` for the ecosystem.
+
+`OsvVuln` is a data model parsed from the OSV JSON:
+`results[].packages[].vulnerabilities[]`. The severity is extracted from
+`database_specific.severity` or computed from the CVSS v2/v3 scores. The fixed
+version is read from `affected[].ranges[].events[].fixed`. The date fields:
+
+* `publishedDate` (`DateTime?`) — from `v['published']` (ISO 8601 → UTC)
+* `modifiedDate` (`DateTime?`) — from `v['modified']`
+
+The static method `_normalizeSeverity(String s)` normalizes the heterogeneous
+severity labels returned by the various OSV databases:
+
+[cols="1,1", options="header"]
+|===
+|Raw value (examples) |Normalized value
+
+|`CRITICAL`
+|`Critical`
+
+|`HIGH`
+|`High`
+
+|`MEDIUM`, `MODERATE` (GitHub Advisory, npm)
+|`Medium`
+
+|`LOW`, `NONE`
+|`Low`
+
+|Any other value
+|`Unknown`
+|===
+
+Without this normalization, `MODERATE` appeared as is in the table and the
+severity filter chips were absent (key not found in `_severityOrder` in title
+case).
+
+==== `widgets/trivy_panel.dart` — Trivy tab
+
+`TrivyPanel` — same architecture as `OsvPanel` with the additional options:
+
+* `ToolVersionBadge` (see <<sec-version-service>>) at the top of
+  `_ConfigSection`, fed by `VersionService.checkTrivy()` called in `initState()`
+* `ScanSourceToggle` + “SBOM file” field or `ImageRefField` (with, in image
+  mode, an optional “Platform” field — `--platform`, see <<sec-scan-image>>)
+* 5 `FilterChip`s for `--severity` (CRITICAL / HIGH / MEDIUM / LOW / UNKNOWN)
+* `CheckboxListTile` for `--ignore-unfixed`
+* `CheckboxListTile` for `--skip-db-update`
+* “trivy.yaml” field with `SplitPickButton`
+
+Parameters:
+
+* `void Function(List<TrivyVuln>)? onVulnsChanged` — callback to
+  `ResultsPanel` to feed `DashboardPanel` (same pattern as `OsvPanel`)
+* `CveDateFilter dateFilter` — current time filter, passed from `ResultsPanel`
+* `void Function(CveDateFilter)? onDateFilterChanged` — callback on each change
+* `void Function(CveDateFilter)? onPropagate` — copies the filter to Grype and OSV
+
+`VulnTableView<TrivyVuln>` (see <<sec-vuln-shared>>) instantiated with
+`toolName: 'Trivy'`, `descriptionOf: (v) => v.title`. The CSV columns are:
+Severity, CVE/ID, Package, Installed version, Fixed version, Title,
+Locations. The severity strings are upper-case (`CRITICAL`, `HIGH`…) unlike
+Grype (`Critical`, `High`…).
+
+`TrivyVuln` is parsed from `Results[].Vulnerabilities[]` of the Trivy JSON.
+The `Title` field is displayed as a subtitle of each entry. The date fields
+(PascalCase, Trivy convention):
+
+* `publishedDate` (`DateTime?`) — from `v['PublishedDate']` (ISO 8601 → UTC)
+* `modifiedDate` (`DateTime?`) — from `v['LastModifiedDate']`
+
+NOTE: Contrary to an earlier note of this document (obsolete, fixed here),
+`SplitPickButton` is *not* duplicated locally in each panel: it is a shared
+public widget, defined in `vuln_shared.dart` (see <<sec-vuln-shared>>) and
+imported by `grype_panel.dart` / `osv_panel.dart` / `trivy_panel.dart`.
+
+==== `widgets/cra_panel.dart` — CRA Compliance tab
+
+`CraPanel` (`StatefulWidget`) drives the `sbom-generator cra` CLI subcommand —
+*Cyber Resilience Act* compliance report (Regulation (EU) 2024/2847),
+automatically verifiable scope only. Like the other panels that depend on the
+binary, it **does not carry** the analysis logic (which lives in
+`lib/cra_report.dart` on the CLI side): it builds a command line and runs
+`Process.run(SettingsService.cliBinary, [...])`.
+
+Parameter: `List<OutputFile> outputFiles` — the list of generated SBOMs, to
+pre-fill the “SBOM file” field (`.cdx.json` / `.spdx.json` first, otherwise
+`.json`; never a `.pdf`).
+
+State of `_CraPanelState`: seven `TextEditingController`s (SBOM + six product
+metadata), `String? _configPath` (`cra.yaml` file), `bool _scan` (default
+`true`), `String _scanner` (default `grype`), plus `_running` / `_error` /
+`Map<String, dynamic>? _result`.
+
+* `_run()` — `cra --sbom <p> --format json` (+ `--scan`/`--no-scan`,
+  `--scanner`, `_metaArgs()`). The JSON is read from `stdout` *even if*
+  `exitCode == 2` (non-compliant report); only a `stdout` not starting with
+  `{` is treated as an error. The JSON keys are stable and never translated
+  (including the NTIA keys and the `id` of the `fieldChecks`): the panel
+  translates the displayed labels from these identifiers.
+* `_exportPdf()` — `FilePicker.saveFile` then `cra ... --format pdf -o
+  <path>`; `exitCode` 0 or 2 = success (file written).
+* `_metaArgs()` — only adds `--manufacturer` / `--product` /
+  `--product-version` / `--support-until` / `--vuln-contact` /
+  `--cvd-policy-url` for non-empty fields, plus `--config` if a `cra.yaml` is
+  loaded.
+
+`_CraResultView` (private) renders the JSON: verdict banner (`verdict` /
+`verdictSentence`), four KPI tiles (`sbom.fieldChecks` “ok”,
+`ntiaMinimumElements` “ok” / 7, `vulnerabilities.withoutFix`,
+`vulnerabilities.activelyExploited`), `blockers` list, `Table` of the
+`fieldChecks` (field / coverage / status), reminder of format + components +
+dependency relationships.
+
+Test: `test/cra_panel_test.dart` (form rendering, SBOM auto-fill, presence of
+the buttons, metadata expansion).
+
+==== `widgets/quality_panel.dart` — SBOM Quality tab
+
+`QualityPanel` is a standalone `StatefulWidget` with
+`AutomaticKeepAliveClientMixin`. It launches two tools in parallel through
+`Future.wait`:
+
+[cols="1,2", options="header"]
+|===
+|Tool |Command
+
+|`sbomqs`
+|`sbomqs score --json [--profile p1,p2,...] <sbomFile>`
+
+|`sbom-scorecard`
+|`sbom-scorecard score <sbomFile>`
+|===
+
+The `_selectedProfiles` state (`Set<String>`) of `_QualityPanelState` holds the
+profiles checked by the user. When it is non-empty, `_runSbomqs` builds the
+args list with `--profile _selectedProfiles.join(',')`.
+
+*sbomqs models* — all private in `quality_panel.dart`:
+
+`_SbomqsCheck` — an individual criterion, parsed from
+`files[0].comprehenssive[i].features[j]`:
+
+* `category` — from the parent `comprehenssive[i].category`
+* `name` — from `features[j].key`
+* `score`, `maxScore` (fixed = 10) — `features[j].score`
+* `description` — `features[j].description`
+* `isRequired` (bool) — `features[j].required`; only present in the profile features
+
+`_SbomqsProfile` — an industry profile, parsed from `files[0].profiles[i]`:
+
+* `name` — `profiles[i].profile`
+* `score`, `grade`, `message`
+* `features` (`List<_SbomqsCheck>`) — non-empty only when the profile was
+  requested through `--profile`; otherwise the list is empty
+  (`hasFeatures == false`)
+
+`_SbomqsResult` — root of the result:
+
+* `spec`, `specVersion` — `files[0].spec` (UPPERCASE), `files[0].spec_version`
+* `numComponents` — `files[0].num_components`
+* `score` — `files[0].sbom_quality_score`
+* `checks` — flattening of `comprehenssive[*].features[]` (always present)
+* `profiles` — list of `_SbomqsProfile` (always present, empty features
+  without `--profile`)
+
+NOTE: The JSON field is `comprehenssive` (double s) — a typo in sbomqs.
+
+`_ScorecardResult` parses the text (regex) or JSON output of sbom-scorecard.
+
+If a tool is not installed, `Process.run` raises `ProcessException` → the
+section displays `_ErrorBanner` without blocking the other. The two tools are
+independent.
+
+*Interface*:
+
+* `_ConfigSection` — SBOM field + `_SplitPickButton` + `Wrap` of `FilterChip`s
+  for the 9 profiles (`static const _profiles`); `onProfileToggle` updates
+  `_selectedProfiles` in `_QualityPanelState`
+* `_SbomqsSection` — header with `_ScoreBadge`, `_CategoryFilter` (FilterChips
+  per comprehensive category), `_SbomqsTable` (ListView with ✔/✘), table/raw
+  JSON toggle button
+* `_ProfilesCard` — “Industry profiles” card, always displayed when
+  `result.profiles.isNotEmpty`:
+  ** Without features: compact `ListTile` (grade badge + score)
+  ** With features: `ExpansionTile` through `_ProfileTile`; `*` marker for
+     `isRequired` criteria; “N/M criteria” counter in the subtitle
+* `_GradeBadge` — colored 28×28 Container (A=green → F=red)
+* `_ScorecardSection` — header with `_ScoreBadge`, `_ScoreBar` for each
+  category (LinearProgressIndicator colored according to the 80 %/60 %
+  thresholds), chart/raw toggle button
+
+==== `widgets/dashboard_panel.dart` — Dashboard tab
+
+`DashboardPanel` is a `StatefulWidget`. It receives the results of the three
+scanners as parameters (`null` value = scanner not yet run), plus the
+`exploitById` map merged by `ResultsPanel` from the three tabs:
+
+[source,dart]
+----
+class DashboardPanel extends StatefulWidget {
+  final List<GrypeVuln>? grypeVulns;
+  final List<OsvVuln>?  osvVulns;
+  final List<TrivyVuln>? trivyVulns;
+  final Map<String, ExploitInfo> exploitById;
+}
+----
+
+These lists are stored in the state of `ResultsPanel` and passed here.
+`_DashboardPanelState` only holds the sort state of the cross-scanner
+comparison (`_CrossSort? _crossSort`, `bool _crossSortAsc`); the rest is
+computed at each `build()`.
+
+Structure:
+
+* `_GlobalSummary` — banner: number of scanners run, number of *unique* CVEs
+  all scanners combined (`allIds.length`, full union — see below), and the
+  AsciiDoc + PDF export button (`onExport`, `null` as long as no scanner has
+  run)
+* `_ScannerCard` × 3 — one card per scanner with `_SeverityBar` (colored
+  stacked `Expanded(flex: N)` bars) and `_SevRow` (one row per severity)
+* `_CrossScannerSection` (`StatefulWidget`, holds the `Set<String> _expanded`)
+  — complete list of the CVEs seen by *at least one* scanner (not only those
+  common to several — it is precisely by keeping the isolated CVEs that
+  detection gaps between scanners are spotted). Sortable columns through
+  `SortHeader`: SEV. / CVE-ID / (KEV / EPSS if enrichment) / Grype ✓ /
+  OSV ✓ / Trivy ✓ + chevron. The sort is applied by the pure function
+  `_sortCrossRows(rows, _CrossSort, asc, exploitById)` (columns `severity`,
+  `cveId`, `grype`/`osv`/`trivy` = presence first, `kev` = risk prioritization
+  KEV→EPSS→severity, `epss` = score) — **shared with the export** so that the
+  PDF reflects the displayed order. Default: `kev` if enrichment, otherwise
+  `severity`. A CVE seen by a single scanner (`isIsolated`) carries an amber
+  marker. Clicking a row expands a `CveDetailPanel` built by
+  `_crossCveDetail(id, …)` (aggregates the views of the 3 scanners +
+  `ExploitInfo`).
+
+All entries are displayed through a `for` loop in a `Column`; scrolling is
+provided by the `SingleChildScrollView` that wraps the whole `DashboardPanel`.
+
+NOTE: `DashboardPanel` launches no external process for the scans themselves
+— it is a pure visualization widget that consumes the data already parsed by
+the other panels. It does however launch `asciidoctor-pdf` for the PDF
+conversion of its own export (see below).
+
+NOTE: A high number of `isIsolated` rows is not the sign of a bug in one of
+the runners — it is an expected behavior of the external tools. On the Java
+ecosystem, Grype identifies its findings by `GHSA-*` (GitHub Security
+Advisories, its main source for this language) whereas Trivy prefers the
+matching CVE identifier: `_crossScannerRows` compares raw strings
+(`vulnerability.id` / `VulnerabilityID`), so the same vulnerability under two
+aliases appears as two distinct isolated rows rather than a single shared row.
+The rest of the gap (a few CVEs on each side even after alias resolution)
+comes from the freshness/coverage of the respective vulnerability databases
+(Anchore DB for Grype, `trivy-db` for Trivy) — see the detailed user
+explanation with real figures in `user.en.adoc`, section “Why Grype,
+OSV-Scanner and Trivy do not find the same CVEs”. No GHSA↔CVE alias
+resolution is performed on the GUI side: the table faithfully reflects the
+vocabulary of each scanner.
+
+`_crossScannerRows` does however normalize another naming case: OSV-Scanner
+prefixes some of its Debian advisories with the origin
+(`DEBIAN-CVE-2026-13221`) where Grype/Trivy report the bare CVE
+(`CVE-2026-13221`). `_normalizeVulnId(id)` —
+`RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$')` applied to each ID before building the
+`grypeIds`/`osvIds`/`trivyIds` sets/maps (and when computing `allIds` in
+`DashboardPanel.build()`) — reduces `PREFIX-CVE-xxxx-xxxxx` to
+`CVE-xxxx-xxxxx`. Generic pattern rather than a hard-coded prefix list: it
+also covers UBUNTU-/ALPINE-/etc. if a scanner produces them. Verified
+empirically on a real Debian image: 90 of the 95 `DEBIAN-CVE-xxxx` IDs of
+OSV-Scanner matched a Grype ID and 94 a Trivy ID once the prefix was removed —
+200 comparison rows before normalization, 106 after.
+
+NOTE: Two other gaps, more severe than naming, specifically affect the OS
+packages (Debian/Alpine/RPM) and explain massive raw count differences between
+scanners that `_normalizeVulnId` does not touch. **OSV-Scanner can fall to 0
+CVEs on an SBOM while it finds hundreds on the same image scanned directly.**
+For Debian, two causes, both fixed by the syft backend of the `sbom-generator`
+CLI (which the GUI invokes to produce the SBOMs — the GUI therefore benefits
+from it): (1) the `distro` qualifier — OSV-Scanner only links a
+`pkg:deb/debian/...` to `Debian:<n>` if `distro` is `debian-<major>` or if
+`distro_name` carries a known codename, whereas syft fills in the *point
+release* (`distro=debian-13.6`); fixed into `debian-13` +
+`distro_name=trixie`. (2) binary vs source — OSV.dev indexes Debian advisories
+by *source* package (`zlib`, `perl`), not binary (`zlib1g`, `perl-base`); the
+backend therefore emits one component per source package (like cdxgen) and
+removes `upstream=` from the binary. See `../../doc/developer.en.adoc`,
+sections “Source packages” and “Normalization of the Debian `distro`
+qualifier”. On `haproxy:3.4.4`, OSV-Scanner goes from ~19 to 58 Debian CVEs.
+Still out of reach: Alpine/RPM (OSV.dev indexes them poorly in “SBOM scan”
+mode) and `osv-scanner scan image` (internal extraction, no purl) more
+exhaustive on the base OS — on a real Debian image (79 packages), 233 CVEs via
+`scan image`. **Grype and Trivy moreover do not have the same exhaustiveness
+on Debian OS packages** (207 Grype matches versus 27 Trivy on the same SBOM,
+although both use their dedicated distro matcher — `dpkg-matcher` on the
+Grype side, hence not a CPE matching artifact): Grype takes in the whole
+Debian Security Tracker including the `<no-dsa>` (won't-fix) and `not-fixed`
+advisories, where Trivy only reports a more restricted subset — confirmed on
+`security-tracker.debian.org` for `CVE-2026-19499`/`glibc` (listed
+“vulnerable”, `<no-dsa> (Minor issue)`: present at Grype with
+`fix.state=wont-fix`, absent at Trivy). Full detail and verification method in
+`user.en.adoc`, section “Why Grype, OSV-Scanner and Trivy do not find the same
+CVEs”.
+
+===== Image layers (`layerScans`)
+
+`DashboardPanel.layerScans` (`Map<String, LayerScanResult>`, key = scanner
+name) feeds `_layerSynthesis()`: union of the layers, CVE (normalized id) →
+layers, and layer → CVE → worst severity (`_LayerSynthesis`). Displayed by
+`_LayersSection` (card: layer, digest, instruction, CVEs, critical, high,
+method per scanner), *LAYER(S)* column in `_CrossScannerSection` /
+`_CrossRow` (`layersById`), *Image layers* section and *Layer(s)* column in
+`_exportDashboard` (`layers:`).
+
+[[sec-dashboard-export]]
+===== Report severity threshold (`ReportSeverityThreshold`)
+
+`enum ReportSeverityThreshold { critical, high, medium, all }` (label +
+maximum accepted severity rank), chosen by the `DropdownButton` of
+`_GlobalSummary` (key `report-severity`) and remembered by
+`SettingsService.save/loadReportSeverity` (`dashboard_report_severity_v1`).
+`filterForReport(grype, osv, trivy, threshold, exploitById)` filters *per CVE*
+(normalized id): a CVE keeps all its rows if its worst severity all scanners
+combined reaches the threshold or if it is CISA KEV. The export chain is split
+into `_buildDashboardReport` (filter, then aggregates recomputed on the
+subset: unique CVEs, cross rows, layer synthesis) → `_dashboardReportAdoc`
+(AsciiDoc content, filter note at the top) → `_exportDashboard` (file choice,
+writing, `asciidoctor-pdf`). `dashboardReportAdoc` (`@visibleForTesting`)
+exposes the generation to the tests.
+
+===== `_crossScannerRows` / `_exportDashboard` — AsciiDoc + PDF export
+
+Unlike `VulnTableView` (grype/osv/trivy_panel.dart, see <<sec-vuln-shared>>),
+the dashboard has no single, filterable/sortable row-by-row list to export:
+it is a composite view (summary + 3 cards + cross table). The export therefore
+reproduces everything that is displayed on screen rather than a filtered
+selection.
+
+`_crossScannerRows(grypeVulns, osvVulns, trivyVulns)` — top-level function
+(not a method of `_CrossScannerSection`) that computes the sorted union of the
+CVEs with their presence per scanner, as `typedef _CrossRowData = ({String id,
+String severity, bool inGrype, bool inOsv, bool inTrivy})`. Extracted from the
+body of `_CrossScannerSection.build()` to be also called by
+`_exportDashboard`, guaranteeing that the exported report matches the
+displayed table exactly (no logic duplicated between the two).
+
+`_exportDashboard(context, {scansRun, uniqueIds, grype, osv, trivy,
+crossRows, exploitById, crossSortCol, crossSortAsc, l})` builds the AsciiDoc
+report in the language `l` (the interface language by default): global
+summary, tools (see <<sec-pdf-report>>), distribution per scanner (one
+subsection per scanner with its `buildSeverityBarSvg`/`svgImageMacro` bar and
+its count per severity through `DashboardPanel._countByKey`), cross-scanner
+comparison — `crossRows` sorted by `_sortCrossRows` with the sort column
+**active on screen** (`crossSortCol`/`crossSortAsc`), KEV / EPSS columns added
+if `exploitById` is non-empty —, then CVE details: one block per row of the
+comparison (already filtered by the report threshold through
+`filterForReport`, KEV always included — no second filter), rendered by
+`CveDetail.toAdocRows(adocEscape)` (<<sec-cve-detail-widget>>). Then follows
+the same pattern as `_VulnTableViewState._exportAsciiDoc()`: writing of the
+`.adoc` through `FilePicker.saveFile`, conversion through
+`runAsciidoctorPdf`, `SnackBar` feedback.
+
+==== `widgets/sbom_tree_panel.dart` — SBOM Tree tab
+
+`SbomTreePanel` is a `StatefulWidget` with `AutomaticKeepAliveClientMixin`.
+
+Private models:
+
+* `_SbomComponent(name, version, type, license, purl, layerFields)` — an SBOM
+  component; `layerFields` = `sbom_generator:layer:*` fields read by
+  `layerFieldsOf`, `layer` = `layerColumnLabel` label
+* `_SbomInfo` — metadata + list of components, with a `parse(String json)` method:
+  ** `_parseCycloneDX()` — reads `components[]`, `licenses[0].expression`
+  ** `_parseSpdx()` — reads `packages[]`, `externalRefs[purl]`
+  ** `_parseSpdx3()` — detects `@graph`, reads the `type: 'software:Package'`
+     elements, PURL through `externalIdentifier[externalIdentifierType=purl]`
+
+“Virtual flat list” pattern (performance with 800+ components):
+
+[source,dart]
+----
+sealed class _ListItem {}
+final class _GroupHeader extends _ListItem { final String key; final int count; }
+final class _CompItem    extends _ListItem { final _SbomComponent comp; }
+----
+
+`_buildItems()` builds a flat `List<_ListItem>` with the group headers
+interleaved. A single `ListView.builder` displays all the items, avoiding
+nested `ExpansionTile`s and the rendering of 800+ widgets in one pass.
+
+The `_collapsed` set keeps the keys of the collapsed groups.
+
+Sub-widgets:
+
+* `_FileBar` — `MenuAnchor` listing the SBOM `outputFiles` (excluding layer
+  SBOMs, see `isLayerSbomFile`) + “Open…” button
+* `LayerSelector` (shared, see <<sec-layer-nav>>) — under the file bar when
+  the opened file belongs to a `--per-layer` set
+* `_InfoBar` — metadata chips (format, name, number of components)
+* `_GroupBySelector` — `SegmentedButton<_GroupBy>` (None / Type / License,
+  + Layer if `_SbomInfo.hasLayers`); the expand / collapse all buttons are
+  `IconButton`s with a tooltip (labeled `TextButton`s overflowed the bar once
+  the *Layer* segment was added)
+* `_GroupHeaderTile` — clickable group header (expand/collapse)
+* `_ComponentTile` — an expandable row with copyable PURL
+  (`Clipboard.setData`), version, type, license as `SelectableText`
+
+`_autoLoad` opens the first SBOM of `outputFiles` that is *not* a layer SBOM
+(the CLI writes the global one first anyway). `_loadFile` additionally
+computes `LayerNav.discover(path)`, `LayerDocInfo.fromSbom(json)` and the
+layer labels (`readLayerLabels` on the global one, cached as long as we stay
+in the same set); it goes back to *Type* grouping if the new file has no layer
+fields.
+
+NOTE: The `firstOrNull` retrieval uses `.where(...).firstOrNull` (Dart 3
+built-in on `Iterable`), *not* `firstWhereOrNull` from `package:collection`.
+
+==== `widgets/sbom_diff_panel.dart` — SBOM Comparison tab
+
+`SbomDiffPanel` is a `StatefulWidget` with `AutomaticKeepAliveClientMixin`.
+
+The parsing models are duplicated from `sbom_tree_panel.dart` (private `_`),
+including `_spdx3()` for SPDX 3.0 JSON-LD. This duplication is intentional:
+the two panels may diverge in their parsing needs, and it avoids a public
+dependency.
+
+Comparison algorithm (`_computeDiff`):
+
+[source,dart]
+----
+List<_DiffEntry> _computeDiff(_SbomInfo a, _SbomInfo b) {
+  // key = _diffKey(c): purl without version (up to the last '@') if present,
+  //   otherwise "name.toLowerCase():type.toLowerCase()" — aligned with
+  //   SbomDiffer._componentKey() on the CLI side (lib/sbom_diff.dart) so that
+  //   both comparisons produce the same result on the same pair of files.
+  // builds mapA / mapB
+  // union of the keys → for each key:
+  //   absent from A → added
+  //   absent from B → removed
+  //   different version or license → changed
+  //   otherwise → unchanged
+  // sorts: added/removed/changed before unchanged, then by name
+}
+----
+
+NOTE: Before this purl-first key, `_computeDiff` indexed by
+`name.toLowerCase()` alone, which produced a result different from the CLI
+`diff` subcommand (purl-first) on a package rename with an identical purl
+(false Added+Removed instead of a single Modified). Fixed. The key logic
+itself (`_componentKey`) is covered on the CLI side by
+`test/unit/sbom_diff_test.dart`; no dedicated widget test on the GUI side (see
+<<sec-file-io-tests>>).
+
+Statuses:
+
+[source,dart]
+----
+enum _Status { added, removed, changed, unchanged }
+----
+
+Sub-widgets:
+
+* `_FileSelectorBar` — two `_FileSlot`s (field + 📂) + *Compare* button
+  (active only if both files are loaded)
+* `_SummaryBar` — 4 colored counters (green added / red removed / orange
+  modified / grey unchanged)
+* `_FilterBar` — `_FilterChip2` toggle per status + search field; the
+  *Unchanged* components are hidden by default
+* `_DiffHeader` — column headers
+* `_DiffRow` — background and left border colored by status; for modified
+  components: version and license displayed with `TextDecoration.lineThrough`
+  (old value) + green text (new value)
+
+[[sec-merge-panel]]
+==== `widgets/sbom_merge_panel.dart` — SBOM Merge tab
+
+`SbomMergePanel` is a `StatefulWidget` with `AutomaticKeepAliveClientMixin`.
+Unlike `SbomDiffPanel`/`SbomTreePanel`/`SbomViewerPanel`, this panel does not
+parse the SBOM content itself: it merely collects a list of file paths and
+delegates the merge to the CLI binary through `SbomRunner` (the same service
+as the generation, reused as is).
+
+State of `_SbomMergePanelState`:
+
+* `List<String> _inputFiles` — paths of the files to merge (added through
+  `_pickFiles({bool filtered})` — two-entry menu: `filtered: true` uses
+  `FileType.custom` + `allowedExtensions: ['json', 'jsonld']`,
+  `filtered: false` uses `FileType.any` for SBOMs without a `.json`
+  extension — or through the *Generated files* menu fed by
+  `widget.outputFiles`)
+* `_outputCtrl`, `_nameCtrl` — text controllers for `-o`/`-n`
+* `_running`, `_exitCode`, `_resultPath` — execution state
+* `_logLines` — output lines of `SbomRunner` (`SbomLogEvent`)
+
+`_runMerge()` builds the arguments `['merge', ..._inputFiles, '-o', outputPath, if (name) '-n', name]`
+and passes them to `SbomRunner.run(args: args)`; unlike the generation, the
+`SbomOutputFileEvent` return is not exploited (the output file name is already
+known on the form side), only `SbomLogEvent`/`SbomDoneEvent` are consumed.
+
+The *Merge* button is only active if `_inputFiles.length >= 2` and
+`_outputCtrl.text` is non-empty (`canMerge` in `build()`).
+
+[NOTE]
+====
+The status label (counter of selected files) is wrapped in an
+`Expanded(child: Text(..., overflow: TextOverflow.ellipsis))` — without this
+`Expanded`, the toolbar overflows (`RenderFlex overflowed`) as soon as the
+available width drops below ~1250 px, which happens right at the default size
+of a Flutter test (800×600). See <<sec-file-io-tests>>.
+====
+
+[[sec-licenses-panel]]
+==== `widgets/sbom_licenses_panel.dart` — SBOM Licenses tab
+
+`SbomLicensesPanel` is a `StatefulWidget` with
+`AutomaticKeepAliveClientMixin`, built on the same model as `SbomMergePanel`
+(<<sec-merge-panel>>): no local parsing of the SBOM, complete delegation to
+`sbom-generator licenses` through `SbomRunner`.
+
+The panel has two functions:
+
+* *Visualization*: when a file is selected, `_selectFile()` calls
+  `loadLicensesViaCli()` (`licenses -f json -o <temporary file>`, read then
+  deleted — the standard output mixes progress and log) and parses the result
+  into `LicenseReportData` (`models/license_report.dart`). The widget's
+  `loader` parameter allows replacing this loading in the tests. The GUI
+  classifies nothing: copyleft categories and groupings come from the CLI. Two
+  views (`_View.grouped`: `ExpansionTile` per license; `_View.table`: rows
+  sortable by column), badges per category, text filter
+  (`LicenseReportData.filter`, case-insensitive, on the license or the
+  package).
+* *Report* (bottom of the page): format of choice (`_ReportFormat`: asciidoc,
+  markdown, html, csv, json → `-f`). `_setFormat()` adapts the extension of
+  the output file as long as it matches that of the previous format.
+
+State of `_SbomLicensesPanelState`:
+
+* `String? _inputFile` — path of the single source file (unlike
+  `SbomMergePanel`, a single input file, no list)
+* `_outputCtrl`, `_nameCtrl` — text controllers for `-o`/`-n`
+  (`_outputCtrl` initialized to `licences.adoc`)
+* `_running`, `_exitCode`, `_resultPath`, `_logLines` — same role as in
+  `SbomMergePanel`
+
+`_runLicenses()` builds the arguments `['licenses', '-i', _inputFile!,
+'-f', format, '-o', outputPath, if (name) '-n', name]`. The *Generate* button
+is only active if `_inputFile != null` and `_outputCtrl.text` is non-empty.
+
+`_sbomFiles` (files offered in the *Generated files* menu) filters
+`widget.outputFiles` on the three SBOM extensions readable by `licenses`
+(`.cdx.json`, `.spdx.json`, `.spdx3.jsonld`) — unlike `SbomMergePanel` which
+excludes `.spdx3.jsonld` (SPDX 3.0 not supported as input for `merge`),
+`licenses` accepts the three formats like `diff`.
+
+==== `widgets/sbom_viewer_panel.dart` — SBOM Viewer tab
+
+`SbomViewerPanel` is a const `StatefulWidget` that lets you open and explore
+any SBOM file from the file system.
+
+Internal models:
+
+[source,dart]
+----
+class _Component {
+  final String name, version, type, license, summary, purl;
+
+  factory _Component.fromSbom(Map<String, dynamic> raw, String format) {
+    // CycloneDX: fields name, version, type, licenses[0].license.id, description, purl
+    // SPDX 2.x: fields name, versionInfo, licenseConcluded, summary, externalRefs[purl]
+    // SPDX 3.0: @graph[type=software:Package], name, software:packageVersion,
+    //   concludedLicense/declaredLicense, summary, externalIdentifier[purl]
+  }
+}
+----
+
+State managed by `_SbomViewerPanelState`:
+
+* `_all` — complete list after loading
+* `_filtered` — list after applying the filters
+* `_selected` — selected component (displays the details panel)
+* `_docName`, `_format` — document metadata
+* `_search`, `_typeFilter`, `_sortCol`, `_sortAsc` — filter state
+
+Key methods:
+
+* `_loadFile()` — `FilePicker.pickFiles()` then `_openPath(path)`
+* `_openPath(path)` — JSON parse → `_Component.fromSbom()`; also computes
+  `_nav` (`LayerNav.discover`), `_layerInfo` (`LayerDocInfo.fromSbom`) and
+  `_layerLabels` — it is also the `onOpen` callback of the `LayerSelector`
+  displayed under the header. `_Component.layer` feeds a *Layer* / *Change*
+  column (sort column 4) displayed only if a component carries one
+* `_applyFilter()` — filters `_all` on `_search` (name/version/license/purl)
+  and `_typeFilter`
+* `_sort(col)` — sorts `_filtered` in place by column
+
+Private sub-widgets:
+
+* `_StatBadge` — “N components” badge
+* `_TypeBadge` — colored badge for the ecosystem type
+* `_Header(label, col)` — sortable column header (▲/▼/↕ icon)
+* `_DetailRow(label, value)` — `label: value` row in the details panel
+
+[NOTE]
+====
+`_DetailRow` uses `label` (not `key`) to avoid the conflict with `Widget.key`.
+====
+
+[[sec-layer-nav]]
+==== `models/layer_nav.dart` + `widgets/layer_selector.dart` — Per-layer SBOM
+
+Navigation in a set produced by `sbom-generator --per-layer` (global
+`<base><ext>`, layers `<base>.layer-NN-<digest12><ext>`), shared by the Tree
+and the Viewer:
+
+* `LayerNav.discover(path)` — lists the file's directory, finds the layers of
+  the same set (same base, same extension; for a global one without
+  extension — single-format output named without suffix — any readable
+  extension, `.cdx.json` first) and the global one from a layer. `null` if the
+  file belongs to no set. The link is made *by name*, not by content: it works
+  for the three readable formats.
+* `LayerDocInfo.fromSbom(json)` — description to display: properties
+  `sbom_generator:layer:*` / `sbom_generator:layers:NNN` of the CycloneDX root
+  component (`layerLabels`: counters + instruction per layer, `removed`),
+  document comment in SPDX 2.3 / 3.0.
+* `readLayerLabels(globalPath)` — re-reads the labels from the global one when
+  a layer is opened directly.
+* `layerFieldsOf(component)` — layer fields of a component: CycloneDX
+  properties, `annotations[].comment` (SPDX 2.3) or `annotation[].statement`
+  (SPDX 3.0), pattern `sbom_generator:layer:<key>=<value>`. These texts are
+  *machine contracts* written by the CLI: they stay in French and are never
+  translated; the GUI translates their display from the parsed values.
+* `layerColumnLabel` / `layerGroupKey` — column label and grouping key
+  (sortable `Layer 01`…, `Added` / `Modified`).
+* `isLayerSbomFile(path)` — excludes layer SBOMs from the automatic
+  selections.
+
+`LayerSelector` (stateless): `DropdownButton` *Global SBOM / Layer i/N
+(digest) + label*, lines of `LayerDocInfo.lines`, badge of the removed ones
+(tooltip). It opens nothing itself: it calls `onOpen(path)`.
+
+==== `widgets/results_panel.dart` — Results panel
+
+`ResultsPanel` is a `StatefulWidget` that manages a `TabController` with **14
+tabs**:
+
+[cols="1,1,2", options="header"]
+|===
+|Index |Label |Content
+
+|0
+|Progress
+|`_LogExportBar` + `_LogView` + `_StatsCard`
+
+|1
+|Results (N)
+|`_ResultsView` — generated files, sbomqs score, warnings, fatal error
+
+|2
+|Dashboard
+|`DashboardPanel` — multi-scanner CVE synthesis
+
+|3
+|Grype
+|`GrypePanel(onVulnsChanged: ...)` — standalone grype analysis panel
+
+|4
+|OSV-Scanner
+|`OsvPanel(onVulnsChanged: ...)` — standalone osv-scanner analysis panel
+
+|5
+|Trivy
+|`TrivyPanel(onVulnsChanged: ...)` — standalone trivy analysis panel
+
+|6
+|CRA Compliance
+|`CraPanel` — drives `sbom-generator cra`, displays the compliance verdict
+
+|7
+|SBOM Quality
+|`QualityPanel` — sbomqs + sbom-scorecard in parallel
+
+|8
+|Tree
+|`SbomTreePanel` — exploration of the SBOM components
+
+|9
+|Comparison
+|`SbomDiffPanel` — diff between two SBOM files
+
+|10
+|Merge
+|`SbomMergePanel` — merges several SBOMs through `sbom-generator merge`
+
+|11
+|Licenses
+|`SbomLicensesPanel` — AsciiDoc license report through `sbom-generator licenses`
+
+|12
+|Viewer
+|`SbomViewerPanel` — interactive exploration of an external SBOM file
+
+|13
+|Preview (N)
+|`_SbomPreviewTab` — preview of the content of an SBOM file
+|===
+
+Local state of `_ResultsPanelState`:
+
+* `List<GrypeVuln>? _grypeVulns` — fed by `GrypePanel.onVulnsChanged`
+* `List<OsvVuln>? _osvVulns` — fed by `OsvPanel.onVulnsChanged`
+* `List<TrivyVuln>? _trivyVulns` — fed by `TrivyPanel.onVulnsChanged`
+* `CveDateFilter _grypeFilter` — date filter passed to `GrypePanel`
+* `CveDateFilter _osvFilter` — date filter passed to `OsvPanel`
+* `CveDateFilter _trivyFilter` — date filter passed to `TrivyPanel`
+
+`null` lists mean “scanner not yet run” and are passed to `DashboardPanel`,
+which displays a prompt message for each missing scanner.
+
+Filter propagation works by *lift-and-broadcast*: the filter state lives in
+`ResultsPanel`, not in the child panels. When `GrypePanel.onPropagate(f)` is
+called, `ResultsPanel` overwrites `_osvFilter` and `_trivyFilter` with `f`,
+which rebuilds the two panels through their parameters — with no `GlobalKey`
+nor method call on a child `State`.
+
+Automatic behavior of the `TabController`:
+
+* switches to the *Progress* tab as soon as a generation starts
+* switches to the *Results* tab at the end of a successful generation
+* automatically pre-selects the first non-PDF file in `_SbomPreviewTab` when
+  `outputFiles` changes
+
+Notable sub-widgets:
+
+* `_LogExportBar` — dark bar with *Copy* (clipboard) and *Save* (FilePicker)
+  buttons; visible only once the generation is finished
+* `_StatsCard` — card with packages / files / warnings counters; visible only
+  on success (`exitCode == 0 && progressTotal > 0`)
+* `_SbomPreviewTab` — selection dropdown + monospace content on a black
+  background; asynchronous reading, truncation at 50,000 characters
+* `_ResultsView` — accepts `String? sbomqsOutput` and displays it in an
+  indigo block if non-null
+
+The `String? sbomqsOutput` parameter is propagated from `HomeScreen`.
+
+The log coloring (`_lineColor`) relies on the line *prefixes* produced by the
+CLI (`Error:`, `Warning:`, `⚠`, `   •`, `SBOM written`, `Generating` /
+`Génération`…): this is why the CLI never translates the first four.
+
+==== `widgets/grype_panel.dart` — Grype tab
+
+`GrypePanel` is a **standalone** `StatefulWidget` with
+`AutomaticKeepAliveClientMixin` (state preserved when navigating between tabs
+— see <<sec-keepalive>>). It manages its own state (SBOM file, options,
+results) without going through `HomeScreen`.
+
+Parameters:
+
+* `List<OutputFile> outputFiles` — automatically pre-selects the first SBOM
+  file through `didUpdateWidget` if the field is still empty
+* `void Function(List<GrypeVuln>)? onVulnsChanged` — callback triggered after
+  each successful analysis; `ResultsPanel` uses it to feed `DashboardPanel`
+* `CveDateFilter dateFilter` — current time filter, passed from `ResultsPanel`
+* `void Function(CveDateFilter)? onDateFilterChanged` — callback called on
+  each filter change in the `DateFilterBar`
+* `void Function(CveDateFilter)? onPropagate` — callback called by the “Apply
+  to other tabs” button; `ResultsPanel` uses it to overwrite the filters of
+  the two other panels
+
+The file picker buttons use `SplitPickButton` (shared, see
+<<sec-vuln-shared>>, based on `MenuAnchor`) to offer “Filtered type” / “All
+files” as a split button.
+
+A `ScanSourceToggle` (see <<sec-vuln-shared>> and <<sec-scan-image>>) chooses
+between the “SBOM file” field and `ImageRefField` (local archive or OCI layout
+directory through its two buttons, or direct typing of a registry reference);
+in image mode, an optional “Platform” field appears (`--platform`).
+
+`_GrypePanelState` calls `VersionService.checkGrype()` in `initState()` and
+stores the result in `ToolVersionInfo? _versionInfo`. This field is passed to
+`_ConfigSection` which displays a `ToolVersionBadge` at the top of the form
+(see <<sec-version-service>>).
+
+The results are displayed in a second `TabController` with 3 inner tabs:
+
+[cols="1,1,2", options="header"]
+|===
+|Index |Label |Content
+
+|0
+|Table (N)
+|`VulnTableView<GrypeVuln>` — `DateFilterBar` + search + sort + severity filters + CSV/AsciiDoc+PDF export (see <<sec-vuln-shared>>)
+
+|1
+|JSON
+|`JsonView` — formatted raw JSON (black background)
+
+|2
+|Template
+|`_TemplateView` — raw output of the template file
+|===
+
+`GrypeVuln` (model parsed from the Grype JSON) exposes:
+
+* `publishedDate` (`DateTime?`) — from `vuln['publishedDate']` (ISO 8601 → UTC)
+* `modifiedDate` (`DateTime?`) — from `vuln['lastModifiedDate']`
+* Both fields are absent from many Grype results: `null` is normal.
+
+The `VulnTableView<GrypeVuln>` instance is built with `toolName: 'Grype'`,
+`severityOrder: ['Critical', 'High', 'Medium', 'Low', 'Negligible']`,
+`csvHeader`/`csvRow` for the columns Severity, CVE/ID, Package, Installed
+version, Fixed version, Type, Locations, and `extraColumnHeader: 'TYPE'` /
+`extraOf: (v) => v.packageType`. The component itself — search, sort, filters,
+`DateFilterBar`, deduplication, exports — is documented only once in
+<<sec-vuln-shared>> since it is strictly identical for Grype, OSV and Trivy.
+
+[[sec-vuln-shared]]
+== `widgets/vuln_shared.dart` — Components shared between Grype, OSV and Trivy
+
+Until an earlier session, the three vulnerability scan tabs displayed a
+sorted/filtered/exportable table duplicated almost identically in each panel
+file. `vuln_shared.dart` factors out this common base; only the fields
+specific to each tool remain in `grype_panel.dart` / `osv_panel.dart` /
+`trivy_panel.dart` (`XxxVuln` model, configuration form, result banner).
+
+=== `VulnRow` — common base of the three vulnerability models
+
+[source,dart]
+----
+abstract class VulnRow {
+  String get id;
+  String get severity;
+  String get packageName;
+  String get installedVersion;
+  String get fixedVersion;
+  DateTime? get publishedDate;
+  DateTime? get modifiedDate;
+  int get occurrenceCount;   // 1 = no merge, see dedupeVulns below
+}
+----
+
+`GrypeVuln`, `OsvVuln` and `TrivyVuln` each implement this interface
+(`implements VulnRow`) and remain separate classes — kept distinct rather than
+unified into one, because `DashboardPanel` and `ResultsPanel` consume them
+with their own type (additional fields: `packageType` for Grype, `ecosystem`
+for OSV, `title` for Trivy). Each also carries `occurrenceCount` (default `1`)
+and a `withOccurrenceCount(int n)` method that rebuilds the instance with a
+different counter — used only by `dedupeVulns` (below).
+
+[[sec-dedupe-vulns]]
+=== `dedupeVulns<T extends VulnRow>` — merging of visual duplicates
+
+[source,dart]
+----
+List<T> dedupeVulns<T extends VulnRow>(
+  List<T> vulns,
+  T Function(T first, int count) withOccurrenceCount,
+)
+----
+
+The same component can be detected at several distinct locations of an
+image/SBOM — e.g. `jackson-databind` present as a standalone jar *and* shaded
+(embedded) in a fat jar such as `keycloak-admin-cli-*.jar` — with exactly the
+same severity, the same vulnerability identifier, the same package name and
+the same installed version. As `GrypeVuln`/`TrivyVuln` carry no “path” field,
+these two legitimate and distinct scanner entries are, on screen, visually
+indistinguishable; without merging they appear as duplicates.
+
+`dedupeVulns` groups by the key `(severity, id, packageName,
+installedVersion)`, joined with a NUL byte (`\u0000`) rather than a simple
+space to avoid any collision if a field contained a space, and keeps the first
+occurrence encountered, of which `withOccurrenceCount` rebuilds a copy with
+the number of merged occurrences. The order of first appearance is preserved
+(Dart `Map`, insertion-ordered).
+
+Each panel calls `dedupeVulns` immediately after the JSON parsing, before
+`setState()`:
+
+[source,dart]
+----
+final raw = GrypeVuln.fromJson(jsonOutput);
+final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
+setState(() { _jsonOutput = jsonOutput; _vulns = vulns; });
+widget.onVulnsChanged?.call(_vulns);
+----
+
+This single insertion point is enough to propagate the merge *everywhere*
+with no additional logic elsewhere: `_vulns.length` (tab label, summary
+banner), the per-severity counters in `VulnTableView` (computed on
+`widget.vulns`), the CSV/AsciiDoc exports (`_filtered` derives from
+`widget.vulns`) and `DashboardPanel` (fed through `onVulnsChanged`) all
+receive the already merged list. Only the raw JSON view (`_jsonOutput`,
+untouched) remains faithful to the tool's complete, unmerged output — a
+deliberate choice to keep a 100 % faithful data channel for debugging
+purposes.
+
+The *×N* badge displayed in `VulnTableView` (next to the identifier, visible
+as soon as `occurrenceCount > 1`) carries a tooltip explaining the merge.
+
+=== `VulnTableView<T extends VulnRow>`
+
+Generic widget parameterized by the vulnerability type. Receives, in addition
+to `vulns`/`parseFailed`/`parseFailedMessage`/`severityOrder`/`dateFilter`:
+
+[cols="2,3", options="header"]
+|===
+|Parameter |Role
+
+|`toolName` _(required)_
+|Name displayed in the title of the AsciiDoc/PDF export reports and of the
+export dialog box (`'Grype'`, `'OSV-Scanner'`, `'Trivy'`)
+
+|`csvDialogTitle`, `csvFileName`, `csvHeader`, `csvRow`
+|CSV export settings — `csvHeader` also serves as the source for the column
+headers of the AsciiDoc report (`csvHeader.split(',')`)
+
+|`extraColumnHeader` / `extraOf`
+|Optional column at the end of the row (e.g. “TYPE” for Grype); `null` if the
+tool has no classification field
+
+|`descriptionOf`
+|Optional descriptive text on the 2nd line (e.g. the CVE title for Trivy)
+
+|`exploitById` / `enrichPending`
+|`Map<String, ExploitInfo>` (normalized id → exploitability signals) and
+“enrichment in progress” flag. Empty = enrichment not run: KEV/EPSS columns,
+“CISA KEV” filter and badges hidden
+
+|`enrichOnline` / `onEnrichOnlineChanged`
+|State and toggle of the toolbar `☁` button (online / offline) — the caller
+persists the choice (`SettingsService`) and restarts the enrichment
+
+|`layerScan`
+|`LayerScanResult?` of the per-layer analysis (see <<sec-layer-scan>>):
+*LAYER* column (`_layerChip`, digest + instruction tooltip), filter menu
+`_layerFilter` (`_layerFilterMenu`), `_groupByLayer` toggle (list built by
+`_entries`: `_layerHeader` header per layer then its rows, “unknown layer” at
+the end), banner of the number not attributed, *Layer(s)* column in the CSV /
+AsciiDoc exports and *Image layers* section in the AsciiDoc. `null` = none of
+these elements
+|===
+
+`_VulnTableViewState<T>` maintains search, sort (`VulnSortCol` — extended with
+`kev` and `epss`), severity filters (`_activeFilters`), `_kevOnly` filter,
+date filter, and the `Set<String> _expanded` of the expanded rows — the
+`_filtered` getter composes the filters. Each row (`ListTile`) is clickable:
+the tap expands/collapses a `CveDetailPanel` (see <<sec-cve-detail-widget>>)
+built from the row (`_detailFor`, a single scanner view) and from
+`exploitById`. The click no longer copies the identifier — the “copy” button
+is in the detail panel.
+
+[[sec-scan-source-widgets]]
+=== `ScanSourceToggle` / `ImageRefField` / `looksLikeLocalPath`
+
+Components shared by the three panels for the container image scan (see
+<<sec-scan-image>> on the runners side):
+
+* `enum ScanSourceKind { sbomFile, image, package }` — state of the toggle,
+  held in each `_XxxPanelState._sourceKind`.
+* `ScanSourceToggle` — `SegmentedButton<ScanSourceKind>` with three segments
+  (“SBOM file” / “Container image” / “Package / archive”), compact style.
+* `ImageRefField` — input field for the image reference, with two
+  `IconButton.outlined` buttons: local archive (`.tar`/`.tar.gz`/`.tgz`,
+  always offered) and OCI layout directory (offered only if
+  `allowOciDir: true`, default value; `osv_panel.dart` passes `false` because
+  osv-scanner cannot read such a directory). The field label (`HelpLabel`) and
+  the `hintText` adapt their content to `allowOciDir`.
+* `bool looksLikeLocalPath(String s)` — heuristic (`s.startsWith('/')`,
+  `'./'`, `'../'` or `'~'`) used on the panels side to decide whether the
+  local existence validation (`File(...).existsSync()`) applies before
+  launching the analysis; a registry reference such as `nginx:latest` does not
+  trigger it.
+
+These three elements carry no command logic: the choice between “registry /
+archive / OCI directory” and its translation into CLI arguments stays in each
+`*_runner.dart` (see <<sec-scan-image>>), not here.
+
+* `LayerScanOptions` — *Per layer* checkbox + `SegmentedButton`
+  Attribution / Each layer and Metadata / Rootfs, linked to a
+  `LayerScanSettings` held by each panel (`_layerSettings`), displayed under
+  the image field. `ScanStatusLine` displays the current step under the
+  progress bar.
+
+[[sec-cli-commande-dev]]
+=== “CLI Command” preview
+
+* The scanner arguments are built by static methods
+  `GrypeRunner.buildArgs` / `OsvRunner.buildArgs` / `TrivyRunner.buildArgs`
+  (and `LayerScanService.prepareArgs` for the generation of the per-layer
+  set), called both by `run()` and by the preview: the displayed command is by
+  construction the one that is executed. `GrypeRunner.buildArgs` receives the
+  template output file (`templateOutput`), chosen by `run()` in the temporary
+  directory.
+* `vuln_shared.dart`: `shellQuote` / `shellCommand` (POSIX quoting),
+  `sbomGeneratorScanArgs` (`sbom-generator scan` equivalent: target, scanner,
+  per-layer options, `CveDateFilter` date filter, `--no-enrich`),
+  `equivalentScanNote` (options that cannot be transposed),
+  `layeredCliSequence` (preparation + scan of the image or `for` loop over the
+  layer SBOMs, fictitious directory `cliLayerDir`), `CliCommandSection`,
+  `CliCommandButton`, `CliCommandDialog` (`SelectableText` + copy through
+  `Clipboard`).
+* Each panel provides `_cliSections()` (current settings, read on click) to
+  its `_ConfigSection` (`cliSections`), which places the button next to the
+  analyze button. In the loop of the “each layer” mode, the command is built
+  with the target `LAYER_SBOM`, then replaced by `"$f"` (unquoted).
+
+[[sec-layer-scan]]
+=== Per-layer analysis — `models/layer_scan.dart` + `services/layer_scan_service.dart`
+
+* `LayeredSbomSet.parse(globalPath, json)` — set produced by
+  `sbom-generator --per-layer`: `layerByPackage` (`name@version` → layer, from
+  `sbom_generator:layer:index`), layers (`LayerInfo`: index, digest,
+  instruction from `sbom_generator:layers:NNN`, layer SBOM path through
+  `LayerNav.discover`). `layerOf(name, version)` (falls back to the name alone
+  if unambiguous), `layerOfDigest(digest)` (full digest, then short prefix
+  read from the file name).
+* `vulnLayerKey(id, package, version)` — key common to the raw and
+  deduplicated rows (`dedupeVulns` merges on the same fields + severity): the
+  layers are carried by a `LayerScanResult.layersByKey` map rather than by the
+  three `GrypeVuln` / `OsvVuln` / `TrivyVuln` models.
+* `mergeGrypeJson` / `mergeOsvJson` / `mergeTrivyJson` — merge of the outputs
+  of the “each layer” mode into a document in the native format (concatenation
+  of `matches` / `results` / `Results`): `fromJson`, the JSON view and the
+  enrichment (`seedsFrom…Json`) apply unchanged.
+* `trivyLayerDigests` (`Layer.DiffID`) / `osvLayerDigests`
+  (`image_origin_details.index` → `image_metadata.layer_metadata[i].diff_id`)
+  — native layer of an image scan output, prioritized in attribution. Needed
+  for OSV-Scanner, which reports the *source* package (`expat`) where the SBOM
+  carries the binary (`libexpat`).
+* `LayerScanService.prepare(image, layerMode)` — launches the CLI
+  (`SettingsService.cliBinary --image … --oci-tool syft --per-layer
+  --layer-mode … -f cyclonedx`) in a temporary directory; result cached per
+  (image, mode) for the session (the three tabs share it), a failure is not
+  cached. `kill()` interrupts the generation (*Stop* button).
+* `LayerScanService.run(image, settings, scanOnce, parse, merge,
+  nativeDigests?, onStatus?, isCancelled?, prepareSet?)` — orchestrates the
+  two methods; each panel provides `_scanOnce(target, useImage)` (its runner
+  consumed up to the end event, through `_start`, which carries the panel's
+  options), its `fromJson` and its merge function. `prepareSet` replaces
+  `prepare` in the tests. The service never returns a displayed sentence: it
+  reports a typed `LayerScanStep` that the interface translates.
+
+Each panel (`_analyze`) switches to `_analyzeLayered` when the source is an
+image and `_layerSettings.enabled`; the result is passed up through
+`onLayerScanChanged` (`null` for a scan without layers) to `ResultsPanel`,
+which holds `_layerScans` (key: scanner name) and passes it to the dashboard.
+
+=== CSV and AsciiDoc + PDF export
+
+Two buttons in the toolbar, both disabled if `_filtered` is empty:
+
+* *CSV export* (`Icons.download_outlined`) — `_exportCsv()`: writes
+  `csvHeader` then one row per element of `_filtered` through `csvRow`,
+  RFC 4180 escaping (`csvEscape`), path chosen through
+  `FilePicker.saveFile(...)`. `_filtered` derives from `widget.vulns`, already
+  merged by `dedupeVulns` (see <<sec-dedupe-vulns>>): each panel adds a
+  “Locations” column to `csvHeader`/`csvRow` reporting `v.occurrenceCount`.
+  The CSV header is *not* translated (it is read by programs).
+* *AsciiDoc + PDF export* (`Icons.picture_as_pdf_outlined`) —
+  `_exportAsciiDoc()`: writes an AsciiDoc report on `_filtered` (hence after
+  the severity/search/date filters, like the CSV) — in the interface language
+  (`AppLocalizations l`, passed to the report builders) — figures summary
+  (count per severity, each label passed to `pdfSeverityBadge` +
+  `buildSeverityBarSvg`/`svgImageMacro` bar, date filter applied if any),
+  tools section (`pdfToolVersionRow('sbom_generator_gui', kGuiVersion)` then
+  `pdfToolVersionRow(widget.toolName, await _toolVersionFor(widget.toolName))`
+  — see <<sec-pdf-report>>) followed by a detailed table whose columns are
+  derived from `csvHeader`/`csvRow` (no dedicated AsciiDoc parameters: the CSV
+  and the AsciiDoc share the same column description; only the first cell —
+  the severity — goes through `pdfSeverityBadge` instead of raw `adocEscape`).
+  Once the `.adoc` is written, it automatically tries
+  `runAsciidoctorPdf(path, pdfPath)` (see <<sec-pdf-report>>) — silent if the
+  tool is absent (generic `catch`, message in the result `SnackBar`) or fails
+  (non-zero exit code reported, `.adoc` kept); same philosophy as
+  `HomeScreen._generatePdf()` (PDF conversion of the main SBOM report, which
+  does not use the colored theme — see <<sec-pdf-report>>), more compact
+  because there is no persistent log to feed — all user feedback goes through
+  the `SnackBar`. `adocEscape(s)` only escapes `|` (ambiguous at the start of
+  an AsciiDoc cell) — simpler than `csvEscape` because the exported values
+  (severity, CVE, package name, version) contain in practice no line break nor
+  quote to escape.
+
+[[sec-pdf-report]]
+=== `widgets/pdf_report.dart` — Shared PDF theme and helpers
+
+Visual styling common to `_VulnTableViewState._exportAsciiDoc()` (above) and
+`_exportDashboard` (<<sec-dashboard-export>>), so that the two exports look
+alike and look like the screen rather than each producing a default black and
+white PDF:
+
+* `kGuiVersion` — GUI version constant, the only place to update on the GUI
+  side on a bump (with `gui/pubspec.yaml`); `home_screen.dart` (“About”
+  dialog) also refers to it, instead of a duplicated literal.
+* `runAsciidoctorPdf(adocPath, pdfPath)` — writes the YAML theme
+  (`_kPdfThemeYaml`) in the system temp folder at each call (static content,
+  negligible cost), then launches `asciidoctor-pdf` with
+  `-a pdf-theme=<absolute path>`. The theme `extends: default-sans`
+  (sans-serif variant provided by asciidoctor-pdf — no font to embed):
+  slate-blue palette, dark table headers, cover page (`:title-page:`), footer
+  “`{document-title}` … Page {page-number} / {page-count}” with rule, `sev-*`
+  roles (severity badges), `h1-num` / `h1-num-alert` (executive summary
+  figures), `verdict-urgent` / `verdict-watch` / `verdict-ok`.
+  *Synchronized copy* of `_kPdfThemeYaml` from `lib/scan_report_generator.dart`
+  (CLI package) — keep both identical.
+* `pdfSeverityBadge(severity, {l})` — renders `[.sev-xxx]#LABEL#` with the
+  label translated by `frenchSeverityLabel(severity, l: l)` (CRITIQUE /
+  ÉLEVÉE / MOYENNE / FAIBLE in French, CRITICAL / HIGH / MEDIUM / LOW in
+  English; the function name is historical). Same thresholds as
+  `severityFg`/`severityBg` (this file, above).
+* `pdfFrenchDate(DateTime, {l})` — long date in the report language
+  (“8 septembre 2026” / “8 September 2026”) for the `:revdate:` attribute of
+  the header, with no `intl` dependency.
+* `buildSeverityBarSvg(countsBySeverity)` / `svgImageMacro(svg)` — reproduce
+  `_SeverityBar` (`dashboard_panel.dart`): proportional segments
+  Critical/High/Medium/Low/Other, same colors, same rounded corners. Built as
+  SVG and embedded as a data URI (`image::data:image/svg+xml;base64,...[]`)
+  rather than as colored-background table cells: the AsciiDoc attribute
+  `{set:cellbgcolor:...}`, a documented technique to color a cell, turned out
+  not to be honored by the default theme of asciidoctor-pdf 2.3.24 during
+  tests — the data URI SVG needs no additional temporary file.
+* `grypeVersion()` / `osvScannerVersion()` / `trivyVersion()` — launch
+  respectively `grype version`, `trivy --version`, `osv-scanner --version` and
+  extract the number through a regex anchored at the start of the line
+  (`^Version:` for grype/trivy — which anchors on the first non-indented line
+  as well as the version, without capturing the indented database versions
+  that follow at trivy —, `^osv-scanner version:` for osv-scanner). Executed
+  at export time, not at scan time: reflects the really installed version even
+  if the tool was updated since. Return `null` (generic `try`/`catch`) if the
+  tool is absent from the `PATH` or if the output does not match the expected
+  format — the callers must then not display the line “null”, hence
+  `pdfToolVersionRow(label, version)` which displays `_unavailable_` in italic
+  in this case.
+
+All the visible texts of the reports come from the ARB files (`pdf*`, `adoc*`,
+`rep*`, `dash*` keys) through an optional `AppLocalizations? l` parameter
+(default: French, which keeps the existing tests unchanged); the exports
+triggered from the UI pass `context.l10n`.
+
+=== `widgets/help_viewer.dart` — online help (embedded user manual)
+
+`HelpViewerScreen`, opened from the ❓ icon of the top bar
+(`home_screen.dart`), displays the user manual in the application itself —
+`doc/user.adoc` in French, `doc/user.en.adoc` in English — not only the short
+contextual help of the per-field ❓ icons (`HelpIcon`/`HelpLabel`,
+`widgets/help_icon.dart`).
+
+**Asset generation (`tool/generate_help.dart`)** — to be re-run manually
+(`dart run tool/generate_help.dart` from `gui/`) after any modification of
+`doc/user.adoc` or `doc/user.en.adoc`; its outputs are committed like ordinary
+generated files, the application itself never runs `asciidoctor`. For each of
+the two guides (`user.adoc` → `assets/help/manual/`, `user.en.adoc` →
+`assets/help/manual_en/`):
+
+* Renders the guide as a single HTML through `asciidoctor -a icons! -a toc!`
+  (`icons!`: text labels “Note”/“Tip”… rather than an external icon font that
+  `flutter_html` cannot load; `toc!`: the table of contents is rebuilt on the
+  Flutter side, no need for asciidoctor's one).
+* Splits the HTML with `package:html` at each `<div class="sect1">`
+  (asciidoctor already wraps each top-level `== ` section in such a div,
+  direct child of `#content` — no need to manually re-split on the `<h2>`s) →
+  one file `<n>.html` per chapter (22 currently).
+* Emits `toc.json`: the ordered `{title, file}` list for the table of
+  contents, and an `anchor id → chapter index` table built from all the
+  `id="…"` attributes of the HTML (including the `[[sec-xxx]]` anchors of the
+  `.adoc`) — lets an internal cross-reference (`<<sec-xxx>>`, rendered
+  `<a href="#sec-xxx">`) switch the reader to the right chapter on click, even
+  if it points to a chapter other than the displayed one.
+
+The two directories are declared in `pubspec.yaml` (`assets:`). At the opening,
+`HelpViewerScreen` picks `manual_en` when the effective language is English
+(`appLocale`) and the directory exists, `manual` (French) otherwise. Anchor
+ids (`sec-…`) are identical in both guides.
+
+**Reader (`HelpViewerScreen`)** — `Scaffold` with a table of contents (search
++ `ListView` of chapter titles) on the left and the content of the selected
+chapter on the right, rendered by the `flutter_html` package (native Flutter
+widgets, no WebView — `webview_flutter` has no stable Linux desktop support,
+`flutter_html` needs none). The chapters (HTML + plain text) are loaded only
+once at startup (`_loadAll`, `Future.wait`, ~240 KB in total) rather than
+lazily at each selection: the search must be able to scan the content of all
+the chapters without a disk round-trip at each keystroke. `onAnchorTap`
+intercepts clicks on internal links: anchor known in `toc.json` → chapter
+change (`Navigator` not used, just a `setState` +
+`ScrollController.jumpTo(0)`); otherwise, opening through `url_launcher`
+(external link). The style (`_helpStyle`) mirrors the colors of the current
+Material theme (`Theme.of(context)`), including in dark mode — same principle
+as the PDF theme of `pdf_report.dart` above, simpler (no separate theme file,
+just a `Map<String, Style>` passed to the `Html` widget).
+
+**Search** — a `TextField` at the top of the table of contents filters
+`_visibleIndices` (title *or* content, case-insensitive) on the plain text of
+each chapter, extracted from the HTML through `package:html`
+(`html_parser.parse(html).documentElement?.text`, more reliable than a
+tag-stripping regex — correctly handles entities such as `&#8217;`).
+`_snippetFor(i)` builds a short context excerpt around the first occurrence of
+the query (±60 characters, `…` at the start/end if truncated), displayed as
+subtitle of the table-of-contents `ListTile` when the match comes from the
+content rather than from the title. No highlighting *in* the content displayed
+on the right nor scrolling to the occurrence: `flutter_html` does not render
+individually addressable widgets (no key per node), finding and highlighting a
+precise passage would require rebuilding one's own rendering engine — out of
+proportion for what it would bring.
+
+NOTE: `flutter_html: ^3.0.0` imports an internal API
+(`package:html/src/query_selector.dart`) whose shape changed in `html 0.15.6+`
+(`Method not found: 'matches'` at compile time) — `html` is therefore pinned
+to `0.15.5` (see the comment in `pubspec.yaml`). Direct dependency (not only
+transitive through `flutter_html`): `HelpViewerScreen` also uses it directly
+for the search (`_stripHtml`), and `tool/generate_help.dart` relies on the same
+version resolution. To be re-evaluated if `flutter_html` is updated.
+
+=== `DateFilterBar` / `DateChip`
+
+* `DateFilterBar`: `Row` with calendar icon, “CVE date:” label,
+  `SegmentedButton<CveDateField>` (Published / Modified / Most recent), two
+  `DateChip`s (After… / Before…), “Undated” checkbox, `Spacer`, “Apply to
+  other tabs” `TextButton`.
+* `DateChip`: `InkWell` with rounded border; a click opens `showDatePicker`
+  (`firstDate: 1999`, `lastDate: DateTime.now()`); the built-in × clears the
+  bound.
+* Any change calls `widget.onDateFilterChanged` through
+  `CveDateFilter.copyWith()`; `onPropagate` copies the current filter to the
+  two other panels (lift-and-broadcast managed by `ResultsPanel`, see above).
+
+=== `JsonView` / `SortHeader` / `SplitPickButton` / `ErrorBanner`
+
+Other shared widgets, with no significant state of their own: `JsonView` (raw
+JSON rendering on a black background), `SortHeader` (clickable ▲/▼ column
+header, optional `width` parameter not used by `VulnTableView` — the three
+panels now have columns of uniform width), `SplitPickButton` (file picker
+button with “Filtered type”/“All files” menu, based on `MenuAnchor`),
+`ErrorBanner` (generic red error banner).
+
+=== Data flows
+
+==== SBOM generation
+
+[source,text]
+----
+User
+  │ clicks "Generate the SBOM"
+  ▼
+HomeScreen._startScan()
+  │ SettingsService.saveConfig(_config)
+  │ builds List<String> args via SbomConfig.toArgs()
+  ▼
+SbomRunner.run(args: args)   →   Process.start('sbom-generator', args)
+  │
+  │ Stream<SbomEvent>
+  ├── SbomProgressEvent  →  setState() → _progressCurrent/Total/Percent/Label
+  ├── SbomLogEvent       →  setState() → _logLines, _fatalError, _warnings
+  ├── SbomOutputFileEvent →  setState() → _outputFiles
+  └── SbomDoneEvent      →  setState() → _isRunning=false, _exitCode
+                            if exitCode==0 && generatePdf → _generatePdf()
+                            if exitCode==0 && enableSbomqs → _runSbomqs()
+                              └── Process.run('sbomqs', ['score', path])
+                                  setState() → _sbomqsOutput (embedded score)
+                                  (distinct from QualityPanel._runSbomqs which passes --json [--profile ...])
+----
+
+==== Grype analysis
+
+[source,text]
+----
+User
+  │ clicks "Analyze" in GrypePanel
+  ▼
+GrypePanel._analyze()
+  │ builds target/useImage from _sourceKind (SBOM file or image,
+  │ see <<sec-scan-image>>) + the args from the local state
+  ▼
+GrypeRunner.run(...)   →   Process.start('grype', args)
+  │
+  │ Stream<GrypeEvent>
+  ├── GrypeOutputEvent(json)    →  dedupeVulns(...) (see <<sec-dedupe-vulns>>)
+  │                                → setState() → _vulns (GrypeVuln[]) with publishedDate/modifiedDate
+  │                                widget.onVulnsChanged?.call(_vulns)
+  │                                → ResultsPanel.setState() → _grypeVulns
+  │                                  → DashboardPanel receives grypeVulns
+  ├── GrypeTemplateEvent(text)  →  setState() → _templateOutput, switches to tab 2
+  └── GrypeDoneEvent(code)      →  setState() → _isRunning=false, _exitCode
+
+VulnTableView<GrypeVuln>.build()
+  │ widget.dateFilter (CveDateFilter passed from ResultsPanel)
+  ▼
+_filtered getter
+  ├── severity filter (_activeFilters)
+  ├── search filter (_searchTerm)
+  ├── date filter (dateFilter.matches(v.publishedDate, v.modifiedDate))
+  └── sort (_sortCol, _sortAsc)
+
+DateFilterBar (user interaction)
+  │ onDateFilterChanged → ResultsPanel.setState() → _grypeFilter updated
+  │   → GrypePanel receives the new dateFilter → VulnTableView rebuilds
+  └── onPropagate → ResultsPanel.setState() → _osvFilter = _trivyFilter = Grype filter
+----
+
+==== OSV-Scanner analysis
+
+[source,text]
+----
+User
+  │ clicks "Analyze" in OsvPanel
+  ▼
+OsvPanel._analyze()
+  │ builds target/useImage from _sourceKind (SBOM file, or image
+  │ through `scan image` — no OCI directory, see <<sec-scan-image>>)
+  ▼
+OsvRunner.run(...)   →   Process.start('osv-scanner', args)
+  │
+  │ Stream<OsvEvent>
+  ├── OsvOutputEvent(jsonOutput)  →  dedupeVulns(...) → setState() → _vulns (OsvVuln[]), _jsonOutput
+  │                                   widget.onVulnsChanged?.call(_vulns)
+  │                                   → ResultsPanel.setState() → _osvVulns
+  └── OsvDoneEvent(exitCode)      →  setState() → _isRunning=false
+      note: exitCode 1 = vulns found (normal), >1 = real error
+----
+
+==== Trivy analysis
+
+[source,text]
+----
+User
+  │ clicks "Analyze" in TrivyPanel
+  ▼
+TrivyPanel._analyze()
+  │ builds target/useImage from _sourceKind (see <<sec-scan-image>>)
+  │ + the args from the local state (severities, ignoreUnfixed…)
+  ▼
+TrivyRunner.run(...)   →   Process.start('trivy', ['sbom'|'image', '--format', 'json', ...])
+  │
+  │ Stream<TrivyEvent>
+  ├── TrivyOutputEvent(jsonOutput)  →  dedupeVulns(...) → setState() → _vulns (TrivyVuln[]), _jsonOutput
+  │                                     widget.onVulnsChanged?.call(_vulns)
+  │                                     → ResultsPanel.setState() → _trivyVulns
+  └── TrivyDoneEvent(exitCode)      →  setState() → _isRunning=false
+----
+
+[[sec-l10n]]
+== Localization (FR / EN)
+
+The interface uses Flutter's standard mechanism (`gen-l10n`):
+
+* `l10n.yaml`: ARB files in `lib/l10n/`, *French = reference language*
+  (`app_fr.arb`, template), generated class `AppLocalizations`.
+* `lib/l10n/app_<language>.arb`: one file per language; the French one carries
+  the description of each key (`@key.description`) and the parameters
+  (`placeholders`). Plurals and parameters in ICU syntax
+  (`{count, plural, =1{…} other{…}}`) — never concatenation of sentence
+  fragments nor “(s)”.
+* `lib/l10n/app_localizations*.dart`: *generated* code (by `flutter pub get`
+  or `flutter gen-l10n`), versioned; do not edit by hand.
+* `lib/l10n/l10n.dart`: `AppLanguage` (`system` / `fr` / `en`, setting
+  remembered by `SettingsService.load/saveLanguage`, key `ui_language_v1`),
+  `resolveAppLocale` (system language if supported, otherwise French), the
+  `context.l10n` extension, the global `appLocale` (effective locale, updated
+  by `main.dart`) and `appL10n()` for the code without a `BuildContext`
+  (services, exports). `context.l10n` falls back to French outside a localized
+  application: widget tests mounted without delegates — most existing tests —
+  therefore see the French texts without modification.
+* `main.dart` wires `localizationsDelegates`, `supportedLocales`, `locale` and
+  `localeListResolutionCallback`, and `_applyLanguage` updates `appLocale` and
+  `SettingsService.cliLang`; `home_screen.dart` carries the language menu (key
+  `language-menu`).
+
+*Adding a text*: key in `app_fr.arb` (with description), translation in
+`app_en.arb`, `flutter gen-l10n`, then `context.l10n.myKey` (or
+`l10n.myKey(param)`) in the widget. Prefix per area: `common…`,
+`scanSource…`, `vulnTable…`, `dateFilter…`, `layerScan…`, `cliCommand…`,
+`cfg…` (configuration panel), `dash…`, `pdf…` / `adoc…` / `rep…` (exported
+reports), `<tab>…` (`grype…`). A function outside a widget receives
+`AppLocalizations` as a parameter — mandatory when it is called from a widget,
+optional `{AppLocalizations? l}` (default: French) for the exports and models
+tested without a context (e.g. `equivalentScanNote(l10n, …)`,
+`pdfSeverityBadge(sev, l: l)`); a service never produces a displayed sentence
+but a typed value that the interface translates (e.g. `LayerScanStep` →
+`layerScanStepLabel`). In an `async` method, read `final l = context.l10n;` at
+the beginning, before the first `await`.
+
+*Adding a language*: `lib/l10n/app_<code>.arb` with all the keys, then a value
+in `AppLanguage` and its label in the menu.
+
+*Tests*: `test/l10n_test.dart` checks that each ARB file has the same keys and
+parameters as the French one, that each French key is documented, the language
+resolution, the fallback and the menu; `test/l10n_grype_test.dart` displays the
+pilot tab in English.
+
+*What is not translated* (machine contracts, identical whatever the language):
+the lines of the CLI parsed by the GUI (`SBOM written → …`, the `] n/m %`
+progress bar, the `Error:` / `Warning:` / `⚠` / `   •` prefixes), the
+`sbom_generator:*` properties, the texts embedded in the SBOMs (including the
+layer texts read back by the GUI), the JSON keys, the CSV headers, and the
+content of the files read by other tools. The CLI messages themselves are
+translated through `lib/i18n.dart` (`tr(fr, en)`, `--lang` / `SBOM_LANG`); the
+GUI forwards its language through `SettingsService.cliEnvironment`.
+
+State: the whole interface, the exported reports (AsciiDoc/PDF/HTML), the
+online help and the CLI messages are available in both languages.
+
+== Flutter concepts for beginners
+
+[[sec-flutter-stateful]]
+=== StatefulWidget vs StatelessWidget
+
+A `StatelessWidget` is immutable: its properties do not change after
+construction. A `StatefulWidget` has a separate `State<T>` object, which can
+call `setState()` to trigger a *rebuild* (re-render) of the widget.
+
+[source,dart]
+----
+class MyWidget extends StatefulWidget {
+  const MyWidget({super.key});
+  @override
+  State<MyWidget> createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  int _count = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('$_count');
+  }
+
+  void _increment() {
+    setState(() => _count++);   // triggers a rebuild
+  }
+}
+----
+
+In this project: `HomeScreen`, `ResultsPanel`, `ConfigPanel` and `GrypePanel`
+are all `StatefulWidget`s.
+
+[[sec-stream]]
+=== Stream and event listening
+
+A `Stream<T>` is an asynchronous flow that emits zero, one or several values
+over time, then terminates.
+
+[source,dart]
+----
+final stream = SbomRunner().run(args: [...]);
+
+stream.listen(
+  (event) {
+    // called on each event
+    setState(() { /* update the UI */ });
+  },
+  onError: (Object e) { /* error */ },
+);
+----
+
+On the `SbomRunner` side, the stream is produced with a `StreamController<T>`:
+
+[source,dart]
+----
+final controller = StreamController<SbomEvent>();
+// ... emit events:
+controller.add(SbomLogEvent('log line'));
+// ... terminate:
+controller.close();
+return controller.stream;
+----
+
+=== TabController
+
+A `TabController` manages the active tab of a `TabBar` / `TabBarView`.
+Its `length` is fixed at construction and *cannot be modified* (see
+<<sec-piege-tabcontroller>>).
+
+It is created in `initState()` and released in `dispose()`.
+The `SingleTickerProviderStateMixin` mixin is necessary to provide the
+animation (`vsync` parameter).
+
+[source,dart]
+----
+class _MyState extends State<My> with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 14, vsync: this);  // ResultsPanel: 14 tabs
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+}
+----
+
+To change tab programmatically: `_tabs.animateTo(index)`.
+
+=== didUpdateWidget
+
+`didUpdateWidget(OldWidget old)` is called when the parent rebuilds the widget
+with new parameters. It is the right place to react to a prop change without
+recreating the whole state:
+
+[source,dart]
+----
+@override
+void didUpdateWidget(GrypePanel old) {
+  super.didUpdateWidget(old);
+  if (widget.outputFiles != old.outputFiles) {
+    _updateAutoFile();   // update the SBOM file field
+  }
+}
+----
+
+== Extension guide
+
+=== Adding an SBOM output format
+
+All the formats are declared in `models/sbom_config.dart`. No widget
+modification is needed: the checkboxes are generated dynamically from
+`allFormats`.
+
+. In `_formatExtensions`, add the extension: `'newformat': '.new.json'`
+. In `allFormats`, add `'newformat'`
+. In `formatLabels`, add the displayed label: `'newformat': 'New Format 1.0'`
+  (if the label must be translated, handle it in `formatLabel()` like `json`)
+
+=== Adding a parameter to the SBOM generation
+
+. In `models/sbom_config.dart`: add the field in `SbomConfig` and inject it in
+  `toArgs()`, `toJson()` / `fromJson()` (and test it in `sbom_config_test.dart`)
+. In `widgets/config_panel.dart`: add the UI control in the *Options* section
+  of the `ListView`, with its texts in both ARB files (`cfg…` keys)
+
+=== Adding a parameter to Grype
+
+. In `services/grype_runner.dart`: add the named parameter to `run()` and
+  build the CLI argument in the `args` list
+
+[source,dart]
+----
+Stream<GrypeEvent> run({
+  // ... existing parameters ...
+  bool newFlag = false,      // <1>
+}) {
+  // ...
+  if (newFlag) args.add('--new-flag');   // <2>
+}
+----
+<1> Declare the parameter with its default value
+<2> Inject into the argument list
+
+. In `widgets/grype_panel.dart`:
+  * Add the state in `_GrypePanelState` (`bool _newFlag = false;`)
+  * Add the control in `_ConfigSection` (pass it as a parameter)
+  * Pass the value to `_runner.run(..., newFlag: _newFlag)`
+
+=== Adding a tab in ResultsPanel
+
+The `TabController` is currently at `length: 14` (Progress, Results,
+Dashboard, Grype, OSV-Scanner, Trivy, CRA Compliance, SBOM Quality, Tree,
+Comparison, Merge, Licenses, Viewer, Preview). Real example: the addition of
+the *CRA Compliance* tab (`CraPanel`, inserted at index 6, `length` 13 → 14)
+followed exactly these steps.
+
+. In `results_panel.dart`, modify the controller initialization:
++
+[source,dart]
+----
+_tabs = TabController(length: 14, vsync: this);  // was 13
+----
+
+. Add a `Tab(...)` in the `TabBar`, at the chosen position:
++
+[source,dart]
+----
+Tab(
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(Icons.my_icon, size: 16),
+      SizedBox(width: 6),
+      Text(context.l10n.tabMyTab),
+    ],
+  ),
+),
+----
+
+. Add the matching widget in the `TabBarView`, **at the same index** as the
+  `Tab` (the order of the two lists must stay synchronized):
++
+[source,dart]
+----
+MyNewWidget(outputFiles: widget.outputFiles),
+----
+
+. If the new tab receives data from `HomeScreen`, add the matching parameter
+  to `ResultsPanel` and propagate it from `home_screen.dart`.
+
+. If the new tab calls the CLI, reuse `SbomRunner` (`services/sbom_runner.dart`)
+  rather than writing a new `Process.start` service — this is what
+  `SbomMergePanel` does for `sbom-generator merge` (see <<sec-merge-panel>>)
+  and `SbomLicensesPanel` for `sbom-generator licenses` (see
+  <<sec-licenses-panel>>).
+
+=== Adding a filter to the `CveDateFilter` model
+
+`CveDateFilter` is immutable — any addition is made through an additional
+field and extension of `copyWith()`.
+
+. Add the field in `CveDateFilter` (e.g. `final String? severity`)
+. Extend the *sentinel* pattern in `copyWith()` if the field is nullable
+. Update `matches()` with the filtering logic
+. Propagate the new field from `DateFilterBar` (shared component,
+  <<sec-vuln-shared>>) through
+  `widget.onDateFilterChanged(widget.dateFilter.copyWith(…))`
+. Update `_filterByDate()` in `bin/sbom_generator.dart` to replicate the same
+  logic on the CLI side
+
+=== Extending the `scan` CLI subcommand
+
+The `scan` subcommand is implemented in `bin/sbom_generator.dart` by the
+function `_runScan(List<String> args)` and its helpers.
+
+Internal architecture:
+
+[cols="1,3", options="header"]
+|===
+|Function |Role
+
+|`_runScan()`
+|Parses the arguments through `ArgParser`, orchestrates the scanners
+
+|`_runScanner()`
+|Dispatches to `_runGrype()`, `_runOsv()`, `_runTrivy()`
+
+|`_runGrype()` / `_runOsv()` / `_runTrivy()`
+|Launches the scanner through `Process.run()`, parses the JSON,
+returns a normalized `List<Map<String, dynamic>>`:
+`{id, severity, package, published, modified}`
+
+|`_filterByDate()`
+|Applies `after` / `before` / `includeUndated` — same logic as
+`CveDateFilter.matches()` but without a Flutter dependency
+
+|`_printScanResults()`
+|Displays the text table sorted by severity
+
+|`_printScanUsage()`
+|Displays the help with examples
+|===
+
+To add a new scanner:
+
+. Add its name in the `_validScanners` constant
+. Create a `_runMyScanner()` function that:
+  * Launches the binary through `Process.run()`
+  * Parses the JSON into `List<Map<String, dynamic>>` with the keys
+    `id`, `severity`, `package`, `published`, `modified`
+. Add a `case` in `_runScanner()`
+
+The messages displayed by these functions go through `tr(fr, en)`
+(`lib/i18n.dart`); the JSON keys and the machine prefixes stay untranslated.
+
+=== Adding a sub-tab in GrypePanel
+
+The Grype result sub-tabs (Table / JSON / Template) are managed by
+`_resultTabs` in `_GrypePanelState`.
+
+. Change `TabController(length: 3)` into `TabController(length: 4)`
+. Add the matching state in `_GrypePanelState`
+. Handle the data reception in the `.listen()` of `_runner.run()`
+. Add the `Tab` in the results `TabBar` and the widget in the `TabBarView`
+
+== Pitfalls & technical decisions
+
+[[sec-keepalive]]
+=== Preserving the state of remote tabs (AutomaticKeepAliveClientMixin)
+
+By default, a `TabBarView` releases the widgets of non-visible tabs to save
+memory (`PageView` behavior). When the user comes back to a tab, its `State`
+is recreated from scratch — the selected file, the options and the results are
+lost.
+
+The solution is `AutomaticKeepAliveClientMixin` on the `State` of each panel:
+
+[source,dart]
+----
+class _GrypePanelState extends State<GrypePanel>
+    with AutomaticKeepAliveClientMixin {
+
+  @override
+  bool get wantKeepAlive => true;  // <1>
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);           // <2>
+    // ... rest of the build
+  }
+}
+----
+<1> Declare that this state must be kept
+<2> The `super.build()` call is mandatory — it enables the keep-alive mechanism
+
+This mixin is applied to `_GrypePanelState`, `_OsvPanelState`,
+`_TrivyPanelState`, `_QualityPanelState`, `_SbomTreePanelState` and
+`_SbomDiffPanelState`.
+
+[[sec-piege-osv-severity]]
+=== Heterogeneity of the OSV severity labels
+
+The JSON returned by `osv-scanner` can contain severity values coming from
+different databases, without normalization:
+
+* NVD/CVE: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`
+* GitHub Security Advisory: `CRITICAL`, `HIGH`, `MODERATE`, `LOW`
+* npm Advisory: `CRITICAL`, `HIGH`, `MODERATE`, `LOW`, `INFO`
+* PyPI: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`
+
+Without processing, two problems arise:
+
+. The severity filter chips disappear because `_severityOrder` uses title case
+  (`'Medium'`) but the keys in `counts` are upper-case (`'MODERATE'`,
+  `'MEDIUM'`…) → `counts.containsKey('Medium') = false`.
+. The `'MODERATE'` labels appear as is in the table instead of `'Medium'`.
+
+The solution is `OsvVuln._normalizeSeverity()`, applied when the JSON is
+received (not at display time), which maps all the variants to the five
+canonical values used in the application: `Critical`, `High`, `Medium`, `Low`,
+`Unknown`.
+
+[[sec-piege-tabcontroller]]
+=== TabController.length is fixed
+
+The `length` of a `TabController` is immutable after creation. For a
+conditional tab (visible only if a condition is met), two approaches:
+
+* *Always-present tab, conditional content*: this is the approach chosen for
+  the *Template* tab of `GrypePanel` — it is always there, but displays a hint
+  if no template is configured.
+* *Recreate the widget with a key*: assign a `Key` to the widget containing the
+  `TabController` and change it to force the complete rebuild. To be avoided
+  if possible because it resets the whole state.
+
+[[sec-piege-tmpl]]
+=== Temporary file for the Grype template output
+
+Grype can only write one output on stdout. When the template mode is enabled
+in addition to the JSON mode, two output channels are needed.
+
+The solution retained in `grype_runner.dart`:
+
+. grype is launched with `-o json` (stdout) *and*
+  `-o template=/tmp/grype_tmpl_<ts>.txt`
+. stdout is captured in `jsonBuf` (usual)
+. after the process exit, the temp file is read, its content is emitted
+  through `GrypeTemplateEvent`, then the file is deleted
+
+[source,dart]
+----
+// Temp file created before Process.start()
+final tmpFile = File('${Directory.systemTemp.path}/grype_tmpl_${ts}.txt');
+
+// After exitCode.then(...)
+final content = await tmpFile.readAsString();
+controller.add(GrypeTemplateEvent(content));
+await tmpFile.delete();
+----
+
+If grype does not support the `-o template=<file>` syntax (versions < 0.65),
+an alternative is to launch grype twice sequentially.
+
+[NOTE]
+====
+The snippet above simplifies an important detail: `tmpFile` is actually
+`File?` (`null` when no template is requested), declared as a mutable local
+variable then captured by **two** nested closures
+(`Process.start(...).then((process) { … process.exitCode.then((code) async {
+… }); })`). The Dart type checker does not reliably promote a mutable variable
+captured across several closures/`await`s — an
+`if (tmpFile != null && tmpFile.existsSync())` test was enough for
+`.existsSync()` right after, but failed to compile on `tmpFile.delete()`
+a bit further (`tmpFile` fell back to `File?`). Fix: rebind into a `final`
+local variable at the point of use — `final tf = tmpFile; if (tf != null &&
+tf.existsSync()) { … tf.delete(); }` — which stays reliably promoted since it
+is never reassigned.
+====
+
+=== Stream vs Future for external processes
+
+`Process.run()` returns a `Future<ProcessResult>` — convenient but blocking:
+stdout is only accessible after the process ends.
+
+`Process.start()` returns a `Future<Process>` from which the `stdout` and
+`stderr` streams are accessible in real time. It is mandatory to display the
+progress line by line in `SbomRunner`.
+
+For `GrypeRunner`, the choice of the stream is not for real time (grype
+displays nothing useful along the way) but for architectural consistency and
+to be able to call `kill()` at any time.
+
+=== Automatic selection of the SBOM file in GrypePanel
+
+`GrypePanel._updateAutoFile()` is called from `didUpdateWidget` when
+`outputFiles` changes (after a successful generation).
+
+The `_fileCtrl.text.isNotEmpty` guard is essential: without it, each new SBOM
+generation would overwrite a manual selection made by the user in the “SBOM
+file” field of the Grype tab.
+
+The automatic selection priority:
+
+. `.cdx.json` or `.spdx.json` (formats natively recognized by grype)
+. `.json` or `.jsonld` (fallback)
+
+=== unawaited(process.stdin.close())
+
+After `Process.start()`, the stdin of the child process stays open. Some
+processes wait for stdin to be closed before starting. The call
+`process.stdin.close()` returns a `Future<void>` that we do not want to
+`await` (we do not want to block the stream).
+
+`unawaited()` from `dart:async` explicitly marks this Future as intentionally
+ignored, which suppresses the Dart warning.
+
+[[sec-piege-listile]]
+=== ListTile assertions in debug mode
+
+In Flutter debug mode, a warning is displayed when a `CheckboxListTile` or
+`ListTile` is a child of a `ColoredBox` or `Container(color: ...)`. Flutter
+cannot paint the ink effects (ripple) on the right ancestor.
+
+These are *assertions* (dev warnings), not errors: the application works
+normally. They disappear in release mode.
+
+To suppress them in dev: wrap the `ListTile` in a `Material`:
+
+[source,dart]
+----
+Material(
+  color: Colors.transparent,
+  child: CheckboxListTile(...),
+)
+----
+
+=== SbomConfig is a shared mutable object
+
+`SbomConfig` is instantiated in `HomeScreen` (from the `initialConfig` loaded
+by `main()` or a default `SbomConfig()`) and passed by reference to
+`ConfigPanel`. `ConfigPanel` modifies it directly (through `_sync()`) without
+going through value callbacks.
+
+It is a deliberate choice for simplicity: the model is always consistent at
+launch time (the `_run()` method calls `_sync()` before `widget.onRun()`). In
+return, `HomeScreen` does not receive a notification on each keystroke, which
+avoids useless rebuilds of the results panel.
+
+For persistence, `ConfigPanel` calls the `widget.onChanged?.call()` callback
+after each modification. `HomeScreen` connects `_saveSettings()` to it, which
+calls `SettingsService.saveConfig(_config)` asynchronously and non-blockingly.
+
+=== Synchronous `setState()` in `initState()` (`SbomTreePanel`)
+
+`SbomTreePanel.initState()` directly called `_autoLoad(widget.outputFiles)`,
+which invokes `_loadFile()` — an `async` function whose very first
+instruction (before the first `await`) is a `setState()`. In Dart, the code of
+an `async` function before the first `await` runs *synchronously* in the
+caller's call stack: this `setState()` therefore ran during `initState()`,
+before the widget had finished mounting.
+
+Fixed by deferring the call after the first frame:
+
+[source,dart]
+----
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance
+      .addPostFrameCallback((_) => _autoLoad(widget.outputFiles));
+}
+----
+
+It is the standard fix for any `setState()` call triggered from `initState()`.
+It is *not* the cause of the blocking described in <<sec-file-io-tests>>
+(reproduced even with this fix in place) but remains a robustness improvement
+in its own right.
+
+[[sec-file-io-tests]]
+=== `testWidgets` + real `dart:io File`: blocking observed in some environments
+
+While writing widget tests for `SbomTreePanel`/`SbomDiffPanel` that write a
+JSON fixture to disk (`File(...).writeAsString()`) and then have the tested
+panel read it, the test blocked indefinitely (up to the internal timeout of
+`flutter_test`, ~30 s, followed by a secondary error `Bad state: Cannot close
+sink while adding stream.` during the forced cleanup).
+
+Diagnosis by repetition with a minimal test, without any project code: a
+`testWidgets` that does a simple `File(...).writeAsString()` then
+`tester.pumpWidget(...)` already blocks, whereas the same code in a classic
+`test` (without `WidgetTester`) runs instantly. The blocking persists with the
+development tool sandbox disabled — so it is not a sandboxing artifact, but an
+environment-specific interaction between `AutomatedTestWidgetsFlutterBinding`
+and real file I/O.
+
+Practical consequence: the widget tests of this repository avoid any real file
+writing/reading inside `testWidgets` (`sbom_merge_panel_test.dart`,
+`sbom_viewer_panel_test.dart` stick to an in-memory state). The coverage of
+the SBOM parsing logic (purl key, CycloneDX/SPDX formats) is therefore carried
+on the CLI side (`test/unit/sbom_diff_test.dart`), which exercises the same
+algorithm (`_componentKey`/`_diffKey`) with no Flutter dependency.
+
+If this constraint disappears in a different environment (standard developer
+workstation, GitHub Actions CI), nothing prevents adding equivalent widget
+tests for `SbomTreePanel`/`SbomDiffPanel`.
+
+=== Two `rootBundle.loadString` in the same test file: the second one blocks
+
+While writing the tests of `HelpViewerScreen` (which loads
+`assets/help/manual/toc.json` through `rootBundle.loadString` in `initState`),
+a second `testWidgets` in the *same file* — each mounting its own instance of
+the widget — saw its loading future never resolve: no error, no `setState`,
+a repeated `pump` (up to 4 s) changed nothing, and `pumpAndSettle` ended up
+timing out rather than crashing cleanly.
+
+Diagnosis by repetition with a minimal widget, without any project code nor
+`flutter_html`: a `StatefulWidget` whose `initState` just calls
+`rootBundle.loadString('assets/…')` reproduces the same blocking as soon as it
+is mounted a second time in two `testWidgets` of the same file — first test:
+a 500 ms `pump` is enough; second test: even after 4 s of repeated `pump`s,
+the string stays on its initial “loading” text. An asset cache isolation
+defect between tests of the same file in this Flutter/test binding, unrelated
+to `HelpViewerScreen` itself.
+
+Practical consequence: `help_viewer_test.dart` (loading + display of the first
+chapter) and `help_viewer_navigation_test.dart` (click on the table of
+contents) are two separate files rather than two `testWidgets` of the same
+file — `package:test` isolates each file in its own isolate, which works
+around the problem (verified: both pass once separated).
+
+=== Machine prefixes of the CLI are not translated
+
+The log coloring of `ResultsPanel` and the parsing of `SbomRunner` rely on
+literal prefixes of the CLI lines: `Error:`, `Warning:`, `⚠`, `   •`,
+`SBOM written →`, the `] n/m %` progress bar. The CLI (`lib/i18n.dart`,
+`tr(fr, en)`) translates the *message* that follows but never these prefixes;
+translating them would silently break the coloring, the warning counter and
+the detection of the produced files. The same goes for the `sbom_generator:*`
+properties and the texts embedded in the SBOMs, which the GUI reads back.
+
+== Dependencies
+
+[cols="2,1,3", options="header"]
+|===
+|Package |Version |Usage
+
+|`file_picker`
+|^11.0.2
+|Native file pickers (SBOM, template, grype config, log saving)
+
+|`shared_preferences`
+|^2.3.5
+|Persistence of the configuration and theme between sessions (`SettingsService`)
+
+|`path`
+|^1.9.1
+|Path manipulation (`path.join`, `path.dirname`) in `SettingsService`
+
+|`url_launcher`
+|^6.3.1
+|Opening the generated files with the system application (`launchUrl(Uri.file(...))`)
+
+|`desktop_drop`
+|^0.7.1
+|Reception of file drag and drop from the system file manager (Linux) in
+`ConfigPanel`
+
+|`flutter_html`
+|^3.0.0
+|Rendering of the user manual (pre-generated HTML) in `HelpViewerScreen` —
+native Flutter widgets, no WebView (not supported on Linux desktop)
+
+|`html`
+|`0.15.5` (pinned — see the note in `widgets/help_viewer.dart` above)
+|HTML parsing: `tool/generate_help.dart` (splitting into chapters, dev-time
+only) and `HelpViewerScreen._stripHtml` (plain text extraction for the
+search, at runtime)
+|===

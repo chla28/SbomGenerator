@@ -1,0 +1,3083 @@
+= SBOM Generator GUI — User guide
+:toc: left
+:toc-title: Contents
+:toclevels: 3
+:sectnums:
+:icons: font
+:experimental:
+:docdate: 2026-06-29
+:lang: en
+
+🇫🇷 link:user.adoc[Français] · 🇬🇧 *English*
+
+== Introduction
+
+=== What is an SBOM?
+
+An *SBOM* (Software Bill of Materials) is a structured file listing all the
+components of a piece of software: packages, libraries, versions, licenses.
+It plays the role of a bill of materials, in the industrial sense of the term.
+
+The most widespread formats are:
+
+* *CycloneDX* (JSON, recommended by OWASP and ANSSI)
+* *SPDX* (ISO/IEC 5962:2021 standard, adopted by the Linux Foundation)
+
+=== What is Grype?
+
+*Grype* (Anchore) is an open-source CVE vulnerability scanner.
+It analyzes an SBOM file and compares it with vulnerability databases
+(NVD, GitHub Security Advisories…) to identify the affected packages and
+their severity level.
+
+Severity levels (from most critical to most benign):
+
+[cols="1,1,3", options="header"]
+|===
+|Level |Color in the UI |Meaning
+
+|Critical
+|Dark red
+|Immediate exploitation, maximum impact (RCE, privilege escalation…)
+
+|High
+|Red-orange
+|Significant impact, likely exploitation
+
+|Medium
+|Orange
+|Exploitable under particular conditions
+
+|Low
+|Green
+|Limited impact, hard to exploit
+
+|Negligible
+|Grey
+|Theoretical impact, generally not exploitable in practice (Grype only)
+|===
+
+NOTE: The databases used by OSV-Scanner sometimes use the label `MODERATE`
+(GitHub Advisory, npm) instead of `MEDIUM`. The application unifies them
+automatically: any `MODERATE` severity is displayed as `Medium` in the table
+and the filters.
+
+=== About the tool
+
+*SBOM Generator GUI* is a Linux desktop graphical interface that orchestrates
+command-line tools:
+
+* `sbom-generator`: generates SBOM files from a list of packages or an OCI image
+* `grype`: analyzes the generated SBOMs to detect CVE vulnerabilities (Anchore)
+* `osv-scanner`: analyzes SBOMs to detect CVE vulnerabilities (Google)
+* `trivy`: analyzes SBOMs to detect CVE vulnerabilities (Aqua Security)
+* `sbomqs`: computes an SBOM quality score (optional)
+* `asciidoctor-pdf`: converts the AsciiDoc report to PDF (optional)
+
+The interface lets you configure the options, follow the execution in real
+time, access the produced files, preview them, and run a vulnerability
+analysis without ever opening a terminal.
+
+For each run, the *equivalent command line* is displayed in the interface —
+under the *▶ Generate the SBOM* button and as the first entry of the progress
+log.
+
+Settings are *automatically saved* between sessions.
+
+== Requirements & installation
+
+=== Requirements
+
+[cols="2,1,2", options="header"]
+|===
+|Component |Mandatory |Role
+
+|`sbom-generator`
+|Yes
+|SBOM file generation
+
+|`syft`
+|No
+|OCI image analysis (Configuration panel — default OCI tool)
+
+|`skopeo` / `trivy` / `cdxgen`
+|No
+|OCI image analysis — alternative backends (Configuration panel — OCI tool);
+`cdxgen` requires Node.js
+
+|`trivy` (CVE analysis)
+|No
+|CVE vulnerability analysis (Trivy tab)
+
+|`grype`
+|No
+|CVE vulnerability analysis (Grype tab)
+
+|`osv-scanner`
+|No
+|CVE vulnerability analysis (OSV-Scanner tab)
+
+|`trivy`
+|No
+|CVE vulnerability analysis (Trivy tab)
+
+|`asciidoctor-pdf`
+|No
+|Automatic PDF conversion of the AsciiDoc report (SBOM, or vulnerability
+export from Grype/OSV-Scanner/Trivy)
+
+|`sbomqs`
+|No
+|SBOM quality score (option in Configuration)
+|===
+
+==== Checking that the tools are available
+
+[source,bash]
+----
+sbom-generator --version
+syft version
+grype version
+osv-scanner --version
+trivy --version
+cdxgen --version
+asciidoctor-pdf --version
+sbomqs version
+----
+
+==== Installing syft (optional)
+
+[source,bash]
+----
+# Official Anchore script
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+syft version
+----
+
+==== Installing cdxgen (optional)
+
+[source,bash]
+----
+# Via npm (requires Node.js ≥ 20)
+npm install -g @cyclonedx/cdxgen
+
+# Check
+cdxgen --version
+----
+
+==== Installing grype
+
+[source,bash]
+----
+# Official Anchore script
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+grype version
+----
+
+==== Installing osv-scanner (optional)
+
+[source,bash]
+----
+# Official Google script
+curl -sSfL \
+  https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Or via Go (if Go is installed)
+go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+# Check
+osv-scanner --version
+----
+
+NOTE: `osv-scanner` must be reachable in the PATH when the GUI is launched.
+If the tool is installed through Go in `~/go/bin`, add that folder to the PATH
+of your graphical session (`~/.profile` or `~/.bash_profile`).
+
+==== Installing trivy (optional)
+
+[source,bash]
+----
+# Official Aqua Security script
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Or via the package manager (Fedora/RHEL)
+sudo rpm -ivh https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.rpm
+
+# Check
+trivy --version
+----
+
+==== Installing asciidoctor-pdf (optional)
+
+[source,bash]
+----
+gem install asciidoctor-pdf
+----
+
+==== Installing sbomqs (optional)
+
+[source,bash]
+----
+# Download the latest release from GitHub
+# https://github.com/interlynk-io/sbomqs/releases
+curl -sSfL https://raw.githubusercontent.com/interlynk-io/sbomqs/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+sbomqs version
+----
+
+=== Starting the interface
+
+[source,bash]
+----
+sbom_generator_gui
+----
+
+If the binary is not in the PATH, run it directly:
+
+[source,bash]
+----
+/path/to/sbom_generator_gui
+----
+
+== Interface overview
+
+The interface is split into two panels separated by a vertical divider.
+
+----
+┌────────────────────────────────────────────────────────────────────────────┐
+│  🗒 SBOM Generator                     [❓] [🎨] [🌙] [ℹ]                 │
+├───────────────────────┬────────────────────────────────────────────────────┤
+│                       │                                                    │
+│   Configuration       │ [Progress][Results][Grype][OSV][Trivy][Merge][Licenses][Viewer][Preview]│
+│   ─────────────────   │ ─────────────────────────────────────────────────  │
+│   INPUT               │                                                    │
+│   [file.lst     📂▾]  │   12 / 23  52%    bash-5.1.8-6.el9.x86_64         │
+│   (drag & drop)       │   ████████████████░░░░░░░░░░░░                    │
+│                       │                                                    │
+│   OUTPUT              │   $ sbom-generator --input …                      │
+│   [sbom        📂▾]   │   Generating CycloneDX…                           │
+│   [x] CycloneDX       │   Resolved bash-5.1.8                             │
+│   [ ] SPDX 2.3        │   SBOM written → sbom.cdx.json  (42.3 KB)         │
+│   [ ] AsciiDoc        │                         [Copy] [Save]             │
+│   ...                 │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │
+│   OPTIONS             │  ✔ 23 packages  •  1 SBOM file                    │
+│   [Document name]     │                                                    │
+│   Concurrency: 4      │                                                    │
+│   [ ] Verbose         │                                                    │
+│   [ ] sbomqs score    │                                                    │
+│                       │                                                    │
+│  [▶ Generate SBOM]    │                                                    │
+│  $ sbom-generator …   │                                                    │
+│                       │                                                    │
+└───────────────────────┴────────────────────────────────────────────────────┘
+----
+
+*Left panel — Configuration*: setting of all the options before launching.
+Fixed width (390 px). Settings are restored automatically at each start. The
+equivalent CLI command is displayed under the *▶ Generate the SBOM* button and
+is updated in real time.
+
+*Right panel — Results*: fourteen tabs — Progress (with log export and
+summary), Results (files + sbomqs score), Dashboard (multi-scanner CVE
+synthesis), Grype, OSV-Scanner and Trivy (CVE analyses), CRA Compliance
+(Cyber Resilience Act compliance report), SBOM Quality (sbomqs +
+sbom-scorecard), SBOM Tree (exploration of the SBOM components), SBOM
+Comparison (diff of two SBOMs), SBOM Merge (combines several SBOMs into one),
+SBOM Licenses (visualization of the SBOM licenses and compliance report in
+AsciiDoc, Markdown, HTML, CSV or JSON), SBOM Viewer (interactive exploration
+of an external SBOM file) and Preview (preview of the SBOM content).
+
+The *❓* button in the title bar opens this user manual directly in the
+application (table of contents on the left, selected chapter on the right) —
+not to be confused with the smaller ❓ icons present on each field/section,
+which display a short tooltip on hover instead of opening the full manual.
+The search field at the top of the table of contents filters the chapters by
+title *and* by content as you type; an excerpt of the passage found is
+displayed under the title of the matching chapter.
+
+The *🌙 / ☀* button in the title bar switches between dark and light mode.
+The *🎨* button opens the theme color picker. Both preferences are saved.
+
+The *文A* button (interface language) offers *System*, *Français* and
+*English*. *System* follows the language of the workstation, falling back to
+French if it is not supported. The choice applies immediately and is saved.
+The language is also forwarded to the `sbom-generator` CLI launched by the
+GUI (via `SBOM_LANG`), so the messages of the Progress tab follow it.
+
+NOTE: The interface, the exported reports (AsciiDoc/PDF), the CLI messages and
+this manual are available in French and English. Machine-read contents (SBOM
+files, `Error:` / `Warning:` prefixes, JSON keys) are never translated.
+
+== Configuration panel
+
+=== Input section
+
+==== Input file (`--input`)
+
+Path to the file containing the list of packages to analyze.
+The 📂 button to the right of the field offers a menu:
+
+[cols="2,3"]
+|===
+|*Filtered type (.lst .txt)* |Only shows files with the usual extensions
+|*All files* |Shows all the files of the directory
+|===
+
+TIP: You can also *drag and drop* a file from your file manager (Nautilus,
+Thunar…) directly onto this field. A blue outline indicates that the drop is
+accepted.
+
+The file must contain *one item per line*. The accepted types are:
+
+[cols="2,3", options="header"]
+|===
+|Type |Line format
+
+|Installed RPM package
+|`bash` or `bash-5.1.8-6.el9.x86_64`
+
+|Local RPM file
+|`/path/to/package.rpm`
+
+|Python wheel (`.whl`)
+|`/path/to/package-1.0-py3-none-any.whl`
+
+|Tar archive
+|`/path/to/pkg.tar.gz` or `.tgz`
+
+|Zip archive
+|`/path/to/archive.zip`
+
+|Debian package (`.deb`)
+|`/path/to/package.deb`
+
+|Python dependencies
+|`/path/to/requirements.txt`
+
+|Java archive (`.jar`)
+|`/path/to/lib-1.2.3.jar`
+
+|Manifest / lockfile
+|`go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pom.xml`,
+`pubspec.lock`, `pubspec.yaml`
+|===
+
+A single input file may contain lines of different types. A path pointing
+directly to an archive or to a single manifest (rather than to a list file) is
+also accepted; a directory is scanned recursively for all these types. For
+Dart/Flutter, `pubspec.lock` provides the resolved versions and the complete
+transitive closure (development dependencies are excluded); `pubspec.yaml`
+only provides the direct dependencies of the `dependencies:` section.
+
+NOTE: The *Packages to analyze* field becomes optional if an *OCI image* is
+specified in the next section.
+
+IMPORTANT: The *Packages to analyze* and *OCI image* fields are mutually
+exclusive in the interface: filling in one (typing, drag and drop, or
+file/directory picker) automatically empties the other. To combine both
+sources in a single analysis, use the command line (`--input` and `--image`
+together).
+
+=== OCI image section
+
+==== OCI image (`--image`)
+
+Reference of an OCI image to analyze. Three formats are accepted:
+
+[cols="2,3,2", options="header"]
+|===
+|Format |Description |Example
+
+|Registry
+|Docker Hub image or private registry
+|`nginx:latest`
+
+|Tar archive
+|`docker save` or `skopeo copy docker-archive:` export (.tar, .tar.gz, .tgz)
+|`/path/ubuntu.tar`, `/path/image.tar.gz`
+
+|OCI layout
+|Directory containing `index.json`
+|`/path/oci_dir/`
+|===
+
+The 📂 button to the right of the field opens a context menu:
+
+* *Tar archive (.tar / .tar.gz / .tgz)* — file picker filtered on these three extensions
+* *OCI layout directory* — directory picker
+
+For registry images, type the reference manually.
+
+If the field is empty, the OCI analysis is disabled.
+
+==== OCI tool (`--oci-tool`)
+
+Only visible when the *OCI image* field is filled in. Select the analysis
+backend:
+
+[cols="1,2,2", options="header"]
+|===
+|Tool |Description |Requirements
+
+|Syft (default)
+|Anchore Syft — all package types (deb, rpm, apk, pypi, npm, go, java…)
+|`syft` in the PATH
+
+|Trivy
+|Aqua Trivy — all package types
+|`trivy` in the PATH
+
+|Skopeo
+|Manual layer extraction — dpkg, RPM and APK only
+|`skopeo` and `tar` in the PATH
+
+|cdxgen
+|OWASP CycloneDX Generator — all package types; the produced SBOM is
+filtered to the components carrying a real ecosystem PURL
+|`cdxgen` in the PATH (requires Node.js)
+|===
+
+[[sec-depth]]
+==== Descent depth (`--depth`)
+
+Under the input field, the *Depth* selector lets you descend into the objects
+contained in the input: for example the jars of an RPM, the packages and jars
+of a `.tar.gz` / `.zip` archive, the jars of a fat jar, as well as the
+manifests found (`package-lock.json`, `go.sum`, `pom.xml`…).
+
+[cols="1,3"]
+|===
+|*0 — object only* |Default behavior: the input is not opened
+|*1 level, 2, 3* |Descends N levels (1 = direct objects of the input, 2 = what these contain…)
+|*Unlimited* |All levels (capped at 10)
+|===
+
+The generated SBOM merges the object and everything it contains: each nested
+component carries its location (`sbom_generator:nested:location`) and its
+depth, and the dependency graph links the container to its content. As soon
+as the depth is greater than 0, the *One SBOM per nested object* checkbox
+additionally writes one SBOM per jar/package/archive
+(`<output>.nested-NN-<object>.<ext>`); these files appear in the list of
+produced files, after the global SBOM. Unchecking the box adds
+`--no-nested-files`.
+
+NOTE: The depth only applies to a *file / folder* input (not to an image or a
+binary). The extraction is size-bounded and requires `python3`; analyzing a
+nested `.rpm` requires `rpm`.
+
+[[sec-per-layer]]
+==== One SBOM per layer (`--per-layer`)
+
+Checkbox visible under the OCI backend, only for an *OCI image* (a standalone
+binary has no layers). Once checked, the generation produces, in addition to
+the global SBOM, one SBOM per image layer in each checked format:
+`<output>.layer-NN-<digest>.<ext>` (e.g. `sbom.layer-02-b676b687f0f5.cdx.json`).
+
+The SBOM of a layer describes its *delta*: the components added or modified
+by the layer, with the removed components listed separately; its root
+component carries the build instruction (`RUN …`, `COPY …`) and the digest of
+the layer. The global SBOM indicates, for each component, the layer that
+introduced it.
+
+The method selector (`--layer-mode`) offers:
+
+[cols="1,3",options="header"]
+|===
+|Method |Principle
+
+|Metadata (default)
+|Originating layer reported by Syft or Trivy. Fast; only *additions* are
+known. Unavailable with Skopeo and cdxgen.
+
+|Rootfs
+|Layers are applied one by one and the image is re-analyzed after each one:
+additions, *modifications* (version bumps…) and *removals*. One analysis per
+layer, hence slower. The only possible mode with Skopeo and cdxgen (reminder
+displayed under the selector). For a registry image, `skopeo` must be
+installed.
+|===
+
+Layer SBOMs can be browsed from the *SBOM Tree* and *SBOM Viewer* tabs (see
+<<sec-nav-couches>>). The global SBOM is always the first file produced: it is
+the one that the other tabs (Preview, scanners, Quality, CRA…) select by
+default.
+
+==== Standalone binary (`--binary`)
+
+Separate field, under a second “OR” separator: local executable to analyze
+directly (not a container image) — for example a statically linked Go binary.
+The 📂 button opens a simple file picker (no extension filter, a binary often
+has none).
+
+Mutually exclusive with *Packages to analyze* and *OCI image*: filling in this
+field automatically empties the other two, and conversely.
+
+Systematically forces the Syft backend (the *OCI tool* selector is not
+displayed for this field) — it is the only backend able to exploit the
+metadata embedded in a standalone binary:
+
+* *Go* (statically linked or not): the complete list of modules + versions
+  is read from the `buildinfo` metadata embedded in the executable, even if
+  stripped.
+* *Other languages* (Rust, static C/C++…): only a *fixed* catalog of
+  well-known open-source libraries (OpenSSL, zlib, sqlite, busybox…) is
+  detected through a version-string fingerprint — not an arbitrary
+  extraction of the linked dependencies.
+* A statically linked library with no recognized signature nor embedded
+  metadata (home-made C/C++, Rust without `cargo-auditable`) cannot be
+  recovered afterwards.
+
+=== Output section
+
+==== Base path (`--output`)
+
+Prefix of the generated files, without extension.
+Example: `sbom` will produce `sbom.cdx.json`, `sbom.spdx.json`, etc.
+A relative path is resolved from the current directory at launch time.
+
+A preview of the expected file names is displayed as soon as the field is
+filled in.
+
+==== Formats (`--format`)
+
+Check one or more formats. At least one format must be selected.
+
+[cols="2,2,3", options="header"]
+|===
+|Format |Produced extension |Typical use
+
+|CycloneDX 1.6
+|`.cdx.json`
+|Vulnerability analysis with grype, OWASP tools
+
+|SPDX 2.3
+|`.spdx.json`
+|Legal compliance, OpenChain tools
+
+|SPDX 3.0 JSON-LD
+|`.spdx3.jsonld`
+|Linked ecosystems (RDF/ontology)
+
+|Custom JSON
+|`.custom.json`
+|Integration into internal pipelines
+
+|Markdown
+|`.md`
+|Documentation directly readable on GitHub/GitLab
+
+|AsciiDoc
+|`.adoc`
+|Rich technical report (tables, styles)
+
+|HTML
+|`.html`
+|Standalone interactive report (filterable and sortable, charts by ecosystem/license)
+
+|CSV
+|`.csv`
+|Import into a spreadsheet or a data-processing pipeline
+|===
+
+==== PDF option (AsciiDoc only)
+
+When the *AsciiDoc* format is checked, an additional option appears:
+*Convert to PDF (asciidoctor-pdf)*. If enabled, the `asciidoctor-pdf` tool is
+launched automatically after the `.adoc` is generated.
+
+An optional field lets you specify the destination path of the PDF.
+Without a value, the PDF is created in the same folder as the `.adoc`, with
+the same base name.
+
+=== Options section
+
+==== SBOM document name (`--name`)
+
+Label that will appear in the SBOM metadata
+(`metadata.component.name` field in CycloneDX).
+Example: `My Application 2.1.0`.
+Leave empty to use the name of the input file.
+
+==== Local RPM directory (`--rpm-dir`)
+
+Folder containing additional `.rpm` files to include in the analysis.
+Useful to enrich the metadata resolution (exact version, license)
+when the packages are not installed on the current machine.
+
+==== License override (`--license-map`)
+
+Text file used to correct or specify the licenses of some packages.
+The button on the right offers the same options as the input file field:
+filtered type (`.txt`, `.yaml`) or all files.
+Format: one rule per line: `package-name: SPDX-expression`
+
+Example:
+----
+openssl: OpenSSL
+my-internal-lib: LicenseRef-PROPRIETARY
+----
+
+==== Concurrency (`--concurrency`)
+
+Number of packages processed in parallel. The slider goes from *0*
+(unlimited) to *16*. The default value is *4*.
+
+* Increase it if your machine has many cores and a good network connection.
+* Decrease it (1 = sequential) in case of rate-limiting errors on the repositories.
+* The value 0 processes all the packages simultaneously — to be used with
+  caution on large lists.
+
+==== Verbose mode (`--verbose`)
+
+Displays additional information in the *Progress* tab: resolution tools used,
+processing statistics, details of each package found.
+
+==== sbomqs quality score
+
+When this option is checked, `sbomqs score` is run automatically on the first
+generated JSON SBOM file (`*.cdx.json` or `*.spdx.json`).
+The result is displayed in the *Results* tab under the file list.
+
+If `sbomqs` is not installed, the option is silently ignored.
+
+NOTE: See <<_installing_sbomqs_optional>> for the installation.
+
+=== Settings persistence
+
+All the settings of the *Options* section — selected formats, base path, RPM
+directory, license file, concurrency level, verbose mode, PDF generation,
+sbomqs score — are *automatically saved* after each generation and *restored*
+at the next application start.
+
+The saved settings *do not include* the input file (too tied to a particular
+context) nor the PDF path.
+
+=== Configuration profiles
+
+A *profile* groups all the configuration settings under a custom name, and can
+be recalled in one click to switch quickly between several typical
+configurations (e.g. “RHEL 9 production”, “Python audit”, “Minimal CI/CD”).
+
+==== Accessing the profiles
+
+Click the 🔖 (bookmarks) icon at the top right of the Configuration panel
+header.
+
+----
+  ┌─ Configuration ────────────────── [🔖] ─┐
+  │  ...                                     │
+----
+
+==== Profile management window
+
+----
+  ┌─ Configuration profiles ────────────────────────────────────┐
+  │                                                              │
+  │  Profile name : [ RHEL 9 production       ] [Save]          │
+  │                                                              │
+  │  ─────────────────────────────────────────────────────────  │
+  │  RHEL 9 production               [Load] [Delete]             │
+  │  Python audit                    [Load] [Delete]             │
+  │  Minimal CI/CD                   [Load] [Delete]             │
+  │                                                              │
+  └──────────────────────────────────────────────────────────────┘
+----
+
+[cols="2,3"]
+|===
+|*Save* |Saves the current state of all the fields under the entered name
+|*Load* |Applies the profile values (except the input file)
+|*Delete* |Asks for confirmation, then deletes the profile
+|===
+
+NOTE: The *input file* is not included in the profiles — it is generally
+specific to each usage context.
+
+TIP: If a profile with the same name already exists, *Save* updates it.
+
+=== Command preview
+
+Under the *▶ Generate the SBOM* button, the shell command line equivalent to
+the current configuration is permanently displayed:
+
+----
+  $ sbom-generator --input /home/user/packages.lst \
+    --output /home/user/sbom --format cyclonedx spdx
+----
+
+This preview is updated at each field change. A 📋 button copies the command
+to the clipboard to replay it from a terminal or integrate it into a CI/CD
+script.
+
+=== Starting and stopping the generation
+
+Click *▶ Generate the SBOM* to start.
+The button turns into *■ Stop generation* during execution.
+Clicking Stop sends an interrupt signal to the process.
+
+== Progress tab
+
+The *Progress* tab is activated automatically when the generation starts.
+
+----
+  12 / 23 packages   52%                      bash-5.1.8-6.el9.x86_64
+  ████████████████████████████░░░░░░░░░░░░░░░
+
+                                    [Copy] [Save]
+  $ sbom-generator --input /home/user/packages.lst --output sbom …   ← cyan
+  Generating CycloneDX 1.6 SBOM…
+  Resolved bash-5.1.8-6.el9.x86_64
+  Warning: unknown license for 'mylib'
+  SBOM written → sbom.cdx.json  (42.3 KB)
+
+  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  ✔  23 packages  •  1 SBOM file(s)  •  1 warning(s)
+----
+
+=== Terminal color codes
+
+[cols="2,3", options="header"]
+|===
+|Color |Meaning
+
+|Cyan
+|Shell command launched (first line, prefixed with `$`)
+
+|White (default)
+|General information
+
+|Blue
+|Start of a step (`Generating`, `Resolving`, `Found`, `Analysed`)
+
+|Orange
+|Warning (`Warning:`, `⚠`)
+
+|Red
+|Fatal error (`Error:`)
+
+|Green
+|Produced file (`SBOM written`, `PDF written`)
+
+|Light blue
+|PDF conversion in progress
+|===
+
+The terminal text is selectable to copy-paste error messages.
+
+=== Progress bar
+
+The progress bar shows the number of processed packages, the percentage and
+the name of the current package. It only appears during the generation.
+
+Once the generation is finished, the *Results* tab is activated automatically
+on success.
+
+=== Log export
+
+Once the generation is finished, two buttons appear at the top of the terminal:
+
+[cols="1,3"]
+|===
+|Copy |Copies all the logs to the clipboard
+|Save |Opens a save dialog to write the logs to a `.log` file
+|===
+
+=== Post-generation summary
+
+At the end of a successful generation, a summary card is displayed at the
+bottom of the tab:
+
+* number of analyzed packages
+* number of generated SBOM files
+* number of warnings (in orange if > 0)
+
+The card outline is green on success with no warning, orange otherwise.
+
+== Results tab
+
+The *Results (N)* tab shows the number of generated files in its label.
+
+----
+  ✔  2 SBOM file(s) generated — 1 warning(s)
+  ┌─────────────────────────────────────────────────────┐
+  │ 📄 sbom.cdx.json                                    │
+  │    /home/user/project/sbom.cdx.json    [📋] [↗]    │
+  │    42.3 KB                                          │
+  ├─────────────────────────────────────────────────────┤
+  │ 📄 sbom.spdx.json                                   │
+  │    /home/user/project/sbom.spdx.json   [📋] [↗]    │
+  │    38.1 KB                                          │
+  └─────────────────────────────────────────────────────┘
+
+  ⚠ Warnings (1)
+  Warning: unknown license for 'mylib-1.2.3'
+----
+
+=== Result banner
+
+* *Green background*: the generation succeeded. The number of files and
+  warnings is displayed.
+* *Red background*: the generation failed. The error message is displayed
+  directly in the banner.
+
+=== Generated files
+
+Each file is presented in a card with:
+
+* its name (bold, monospace font)
+* its full path
+* its size
+
+Two buttons are available on the right of each card:
+
+[cols="1,3"]
+|===
+|📋 |Copies the full path to the clipboard
+|↗ |Opens the file with the default system application (JSON viewer, editor…)
+|===
+
+=== sbomqs score
+
+If the *sbomqs quality score* option is checked and `sbomqs` is installed,
+an indigo block is displayed after the file list with the complete output of
+`sbomqs score`:
+
+----
+  ── sbomqs score ──────────────────────────────────
+  sbomqs score sbom.cdx.json
+  Document Name  Format  Spec   Score   Avg
+  sbom.cdx.json  cdx     1.6    8.3/10  8.3
+----
+
+The text is selectable to copy-paste the score.
+
+=== Warnings
+
+Warnings are displayed in a collapsed orange block. If there are more than 5,
+a *Show N more…* button displays them all.
+These warnings are non-blocking: the SBOM files were generated.
+
+=== Fatal error
+
+On failure (non-zero exit code), the error message appears in a selectable red
+block to make copy-pasting easier.
+
+== Preview tab — SBOM preview
+
+The *Preview (N)* tab shows the raw content of the generated SBOM files
+directly in the interface, without having to open an external editor.
+
+----
+  ┌─ File: [ sbom.cdx.json ▼ ]                         [📋] ─┐
+  │                                                            │
+  │  {                                                         │
+  │    "bomFormat": "CycloneDX",                               │
+  │    "specVersion": "1.6",                                   │
+  │    "version": 1,                                           │
+  │    "metadata": {                                           │
+  │      "component": {                                        │
+  │        "name": "My Application 2.1.0",                    │
+  │        ...                                                 │
+  └────────────────────────────────────────────────────────────┘
+----
+
+=== File selection
+
+A drop-down menu at the top of the tab lists all the non-PDF files generated
+in the current session. The first file is selected automatically at the end
+of the generation.
+
+=== Rendering behavior
+
+* The content is displayed in a monospace font on a dark background, like the terminal.
+* JSON files (CycloneDX, SPDX) are displayed as is.
+* Markdown and AsciiDoc files are also displayed as plain text.
+* Beyond *50,000 characters*, the content is truncated with a note
+  indicating the real total size.
+* The text is selectable.
+
+=== Copying the content
+
+The 📋 button at the top right copies the whole displayed content to the
+clipboard.
+
+NOTE: The Preview tab does not replace a dedicated tool for exploring large
+JSON files. For very large files, use the ↗ button (Results tab) to open the
+file in your system application.
+
+== Grype tab — Vulnerability analysis
+
+The *Grype* tab is entirely standalone: it can be used at any time,
+independently of a recent SBOM generation.
+
+----
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ SBOM file ] [ Container image ]                                │
+  │  SBOM file : [ /project/sbom.cdx.json                  ] [Choose] │
+  │                                                                   │
+  │  [x] --platform linux   [x] --add-cpes-if-none   [x] --by-cve    │
+  │                                                                   │
+  │  Distro            --fail-on       --only-fixed                   │
+  │  [ rhel:9  ▼ ]     [ (none) ▼ ]   [ ]              [Analyze]    │
+  │                                                                   │
+  │  Template (-t) : [ ./grype_csv.tmpl              ] [Choose]      │
+  │  grype.yaml    : [                               ] [Choose]      │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 5 vulnerability(ies): 1 Critical, 2 High, 2 Medium            │
+  ├──────────────┬───────────────────────────────────────────────────┤
+  │ [Table (5)]  │ [JSON]  │ [Template]                              │
+  ├──────────────┴───────────────────────────────────────────────────┤
+  │  CRITICAL  openssl 1.1.1k → 1.1.1l  CVE-2021-3711  rpm         │
+  │  HIGH      bash 5.0.17              CVE-2021-3489   rpm         │
+  │  HIGH      curl 7.76.1              CVE-2023-38545  rpm         │
+  │  MEDIUM    zlib 1.2.11              CVE-2022-37434  rpm         │
+  │  MEDIUM    expat 2.2.10             CVE-2022-25235  rpm         │
+  └───────────────────────────────────────────────────────────────────┘
+----
+
+=== Version indicator
+
+At the top of the configuration panel, the application displays the installed
+`grype` version and the update status, checked in the background at startup:
+
+* *✔ v0.87.0* (green) — `grype` is installed and up to date.
+* *↑ v0.87.0 → v0.88.1* (orange, clickable) — a new version is available on
+  GitHub. Click to open the release page in the browser.
+* *not installed* (red) — `grype` is not found in the PATH.
+
+NOTE: The check queries the GitHub API. Without a network connection, only the
+installed version is displayed, with no comparison.
+
+[[sec-source-scan]]
+=== Selecting the source to analyze
+
+A *SBOM file / Container image / Package / archive* toggle at the top of the
+panel lets you choose what grype analyzes. This choice, as well as the
+associated field, is shared by the three scan tabs (Grype, OSV-Scanner,
+Trivy) — see also <<sec-onglet-trivy-source>> and <<sec-onglet-osv-source>>.
+
+*SBOM file* (default mode): the field is automatically pre-filled with the
+last SBOM file generated in the current session, giving priority to the
+formats recognized by grype: `.cdx.json` (CycloneDX) then `.spdx.json`
+(SPDX). You can type a path manually or click *Choose* to browse the file
+system. The `.json` and `.jsonld` formats are offered in the picker.
+
+NOTE: Grype analyzes the content of the file, not its extension.
+A CycloneDX file renamed `.json` is recognized correctly.
+
+*Container image*: the field accepts three forms of reference, all supported
+by grype with no syntax distinction on the application side:
+
+* a *registry* reference, e.g. `nginx:latest`, `ghcr.io/org/app:tag` — the
+  image is fetched through the local Docker configuration (`docker login`)
+  if the registry is private, with no dedicated credentials field in the
+  application;
+* an *archive* exported by `docker save` (or an OCI archive), through the
+  dedicated button (extensions `.tar`, `.tar.gz`, `.tgz`);
+* an *OCI layout directory* (produced for example by `skopeo copy`), through
+  the second dedicated button.
+
+An optional *Platform* field appears in image mode, to force the target
+platform on a multi-architecture image (e.g. `linux/arm64`). Left empty, grype
+automatically detects the most suitable platform.
+
+[[sec-scan-paquet]]
+*Package / archive*: a local file — `.rpm`, `.deb`, `.tar` / `.tar.gz` /
+`.tgz`, `.zip`, `.jar` / `.war` / `.ear`, `.whl` — is analyzed directly,
+without going through an SBOM file. The application first runs
+`sbom-generator --input <file> --depth N` (see <<sec-depth>>) in a temporary
+directory, then the scanner analyzes the produced CycloneDX SBOM, exactly
+like an SBOM file: the three tabs (Grype, OSV-Scanner, Trivy) therefore
+receive the same components. The *Depth* selector (0 — object only, 1 to 3
+levels, Unlimited) chooses how far to descend into the contained objects (jars
+of an RPM, packages of an archive…). The generated SBOM is reused by the tabs
+as long as the file and the depth do not change. The header of the exported
+reports indicates “package <name> (depth N)”.
+
+NOTE: CVEs are displayed per vulnerable package (`name@version`). To know
+which nested object contains it, use the *sbom-generator scan --package
+equivalent* command of the *CLI Command* button (`OBJECT` column).
+
+[[sec-cli-commande]]
+=== Command line (*CLI Command* button)
+
+The *CLI Command* button, next to the analyze button (shared by the three scan
+tabs), opens a popup with the commands matching the current settings of the
+tab, each with a *Copy* button:
+
+* *Command run by the tab* — the exact `grype` / `osv-scanner` / `trivy` line,
+  with all the options of the tab (built by the same code as the execution).
+  With the *Per layer* option (see <<sec-scan-couches>>), the sequence
+  actually launched: generation of the per-layer SBOM set
+  (`sbom-generator --image … --per-layer`), then the scan of the image
+  (*Attribution*) or a `for f in …; do …; done` loop over the layer SBOMs
+  (*Each layer*). The application's temporary directory is replaced by
+  `/tmp/sbom-couches`.
+* *sbom-generator scan equivalent* — the command of the project's CLI that
+  produces the same kind of analysis: target (`--sbom` or `--image`),
+  `--scanner`, per-layer options (`--per-layer --layer-scan …
+  --layer-mode …`), the tab's date filter (`--cve-after`, `--cve-before`,
+  `--cve-date-field`, `--include-undated`) and offline enrichment
+  (`--no-enrich`). A remark points out the options of the tab with no
+  equivalent (template, `--fail-on`, `--only-fixed`, Trivy severities,
+  configuration files…) and reminds that with `--image`, `sbom-generator scan`
+  analyzes the SBOM generated by syft and not the image directly.
+
+With the *Package / archive* source, the popup additionally displays the SBOM
+generation (`sbom-generator --input … --depth N`, SBOM written to
+`/tmp/sbom-paquet/`) before the scanner command, and the equivalent is
+`sbom-generator scan --package … --depth N`.
+
+As long as the target is not filled in, it appears as `<sbom.cdx.json>`,
+`<image>` or `<package>`.
+
+[[sec-scan-couches]]
+=== Per-layer analysis (“Container image” source)
+
+In *Container image* mode, the *Per layer* checkbox (shared by the three scan
+tabs) attributes each vulnerability to the *layer* of the image that brings
+the vulnerable package. The application first generates, through
+`sbom-generator --image … --per-layer` (syft backend), a global SBOM and one
+SBOM per layer in a temporary directory; this set is reused by the three tabs
+as long as the image and the computation do not change.
+
+[cols="1,3,3",options="header"]
+|===
+|Method |Principle |What you see
+
+|Attribution (default)
+|A single scan of the image, as without the option; each vulnerability is
+attached to the originating layer of its package. Trivy and OSV-Scanner
+report this layer themselves (`Layer.DiffID`, `image_origin_details`), used
+first; otherwise, the package is looked up in the global SBOM.
+|The CVEs of the final image, by the layer that introduced them.
+
+|Each layer
+|The SBOM of each layer is scanned separately (one scan per layer); the
+outputs are merged.
+|In addition, the CVEs of a version introduced by a layer then replaced
+higher up (with the *Rootfs* computation). A CVE may appear in several
+layers.
+|===
+
+The second selector chooses the layer computation: *Metadata* (originating
+layer reported by syft — fast, additions only) or *Rootfs* (layers applied one
+by one and re-analyzed — additions, modifications, removals; slower). During
+the analysis, a status line indicates the current step (preparing the SBOMs,
+layer i/N…); the *Stop* button also interrupts the generation and the
+remaining scans.
+
+In the *Table view* (see <<sec-vue-table>>):
+
+* a *LAYER* column shows the layer(s) of each vulnerability (`?` if the
+  package is absent from the image SBOM — a banner shows the number); the
+  tooltip recalls the digest and the build instruction;
+* the *All layers / Layer N (n)* menu filters on one layer;
+* the *Group by layer* button (layers icon) groups the list under one header
+  per layer — digest, build instruction and counters per severity;
+* the CSV and AsciiDoc + PDF exports add a *Layer(s)* column and, for the PDF,
+  an *Image layers* section.
+
+The *Dashboard* reuses this information (see <<sec-dashboard-couches>>).
+
+NOTE: In *Each layer* mode, OSV-Scanner analyzes SBOMs and not the image: it
+then finds few or no CVEs on system packages (see
+<<sec-pourquoi-ecarts-scanners>>) — prefer *Attribution* with this tool.
+
+=== Scan options
+
+==== `--platform linux`
+
+Forces grype to consider the target platform as Linux when resolving
+vulnerabilities, in *SBOM file* mode only. Recommended for SBOMs coming from
+RPM or DEB package lists.
+
+Uncheck this option if you analyze an SBOM coming from another system (macOS
+libraries…).
+
+NOTE: This checkbox has no effect in *Container image* mode: it is ignored in
+favor of the *Platform* field described above (`linux` alone, without
+architecture, is moreover rejected by grype on a multi-platform image).
+
+==== `--add-cpes-if-none`
+
+Grype uses *CPE* (Common Platform Enumeration) identifiers to match packages
+with CVE entries. If a package of the SBOM has no declared CPE, this option
+asks grype to generate one automatically from the package name and version.
+
+Recommended: reduces false negatives on SBOMs produced without CPEs (which is
+the case of most SBOMs generated by `sbom-generator`).
+
+==== `--by-cve`
+
+Without this option, grype groups the results by *GHSA* identifier (GitHub
+Security Advisory) when available. With this option, each result is presented
+under its main *CVE* identifier, which is more universal and recognized by
+vulnerability management tools.
+
+Recommended for interoperability with ticketing tools (Jira, defect trackers,
+etc.) or internal vulnerability repositories.
+
+==== `--distro rhel:<version>`
+
+Specifies the target Linux distribution. Without this option, grype tries to
+deduce it from the SBOM, which may fail or produce imprecise matches.
+
+RHEL versions available in the menu: *7*, *8*, *9*, *10*. Select *(none)* to
+let grype detect the distribution automatically.
+
+NOTE: Choosing the wrong version may cause false positives (vulnerabilities
+not applicable because already fixed by the RHEL backport) or false negatives.
+Check the exact version of your system with `cat /etc/redhat-release`.
+
+==== `--fail-on <severity>`
+
+Controls the exit code of grype. With this option, grype returns an error
+(non-zero) code if at least one vulnerability of the given level or higher is
+detected. Useful in CI/CD.
+
+Example: `--fail-on high` makes the analysis fail if a *High* or *Critical*
+vulnerability is found.
+
+The result banner in the UI reflects this exit code: red background if grype
+returned an error, green otherwise.
+
+==== `--only-fixed`
+
+Only shows the vulnerabilities for which a fixed version is available. Lets
+you focus on the immediately actionable items.
+
+=== Output template (`-t`)
+
+The *Template (-t)* field lets you generate a custom output (CSV, HTML, text)
+through a Go template file.
+
+The field is pre-filled with `./grype_csv.tmpl`. If this file does not exist
+at launch time, the template output is ignored without error.
+
+Example of a Go template for a CSV:
+
+----
+"CVE","Package","Installed version","Fixed version","Severity"
+{{- range .Matches}}
+"{{.Vulnerability.ID}}","{{.Artifact.Name}}","{{.Artifact.Version}}","{{fixedIn .Vulnerability}}","{{.Vulnerability.Severity}}"
+{{- end}}
+----
+
+The produced output is displayed in the *Template* tab (see
+<<sec-vue-template,Template view>>) and can be copied to the clipboard.
+
+NOTE: Grype is launched in a single pass that simultaneously produces the JSON
+output (for the Table view) and the template output (through a temporary
+file).
+
+=== Configuration file (`grype.yaml`)
+
+Path to a grype configuration file in YAML format. Lets you define ignore
+rules, custom databases, proxies, etc.
+
+This parameter is optional. Leave the field empty to use the default grype
+configuration (`~/.grype.yaml` if it exists).
+
+Official documentation: https://github.com/anchore/grype#configuration
+
+=== Starting and stopping the analysis
+
+Click *Analyze* to start. A linear progress bar is displayed during the
+execution. The button becomes *Stop* to interrupt.
+
+=== Interpreting the results
+
+==== Summary banner
+
+Appears once the analysis is finished, before the result tabs.
+
+[cols="2,3", options="header"]
+|===
+|Banner color |Meaning
+
+|Green background
+|No vulnerability detected (or none above the `--fail-on` threshold)
+
+|Yellow background
+|Vulnerabilities of Medium or Low level detected
+
+|Orange background
+|At least one High vulnerability
+
+|Red background
+|At least one Critical vulnerability
+|===
+
+==== Table view
+
+[[sec-vue-table]]
+The Table view shows a search/sort toolbar, the severity filters, then the
+list of vulnerabilities:
+
+----
+  [ Search...                            ] [⬇]
+  Filter : [Critical (1)] [High (2)] [Medium (2)] [Low (0)]  [Show all]
+
+  ┌────────────┬──────────────────┬──────────────────┬───────────────┬──────┐
+  │ SEVERITY ↕ │ PACKAGE ↕        │ VERSION ↕        │ CVE/ID ↕      │ TYPE │
+  ├────────────┼──────────────────┼──────────────────┼───────────────┼──────┤
+  │ CRITICAL   │ openssl          │ 1.1.1k → 1.1.1l  │ CVE-2021-3711 │ rpm  │
+  │ HIGH       │ bash             │ 5.0.17  (no fix) │ CVE-2021-3489 │ rpm  │
+  │ MEDIUM     │ zlib             │ 1.2.11  → 1.2.12 │ CVE-2022-37434│ rpm  │
+  └────────────┴──────────────────┴──────────────────┴───────────────┴──────┘
+----
+
+*Merging of visual duplicates*: the same component can be detected at several
+distinct locations in the analyzed image/SBOM — for example a library present
+both as a standalone jar and shaded (embedded) in another jar — with exactly
+the same severity, the same CVE, the same package and the same version. Grype
+and Trivy then rightly report two distinct results, but visually identical in
+this table (no column shows the file path). These rows are therefore merged
+into a single one, with a *×N* badge next to the CVE identifier — hover it to
+see the real number of locations. This merging applies to the summary banner,
+the severity counters and the exports (see below); only the *JSON* view
+(<<sec-vue-json,JSON view>>) remains faithful to the full, unmerged output of
+the tool.
+
+*Search*: the search field filters in real time on the package name, the CVE
+identifier, the version or the type.
+
+*Sort*: click a column header (SEVERITY, PACKAGE, VERSION, CVE/ID) to sort in
+ascending order, click again to reverse. The ↑↓ arrow indicates the active
+column and sort direction. By default, results are sorted by decreasing
+severity (Critical first).
+
+*CSV export*: the ⬇ (download) button exports the current filtered list
+(taking into account the search, the severity filters, and already merged —
+see above) to a `.csv` file in RFC 4180 format. Columns: Severity, CVE/ID,
+Package, Installed version, Fixed version, Type, Locations (number of merged
+occurrences, `1` if the component is present in a single place only).
+
+*AsciiDoc + PDF export*: the ⬥ button (next to the CSV export) exports the
+filtered list into a polished report: *cover page* (title, date, analyzed
+target, version), *executive summary* — a figures box “Critical / High /
+CISA KEV / Total” and a one-sentence verdict (“Immediate action required” if
+KEV CVEs are present, etc.) — severity distribution bar, *Tools* section
+(versions detected through `<tool> --version` at export time, hence always
+up to date), then the detailed table. The `.adoc` file is then converted to
+PDF through `asciidoctor-pdf`; if the tool is missing, the `.adoc` is still
+produced and a message says so. The output location is chosen through a
+dialog box.
+
+The PDF uses a sober layout: sans-serif font, slate-blue palette, dark table
+headers, colored severity badges (labels in the report language: CRITICAL /
+HIGH / MEDIUM / LOW), footer with report title and “Page X / Y” pagination.
+The *dashboard* report (export button of its summary card) follows the same
+style and adds a *“CVE details”* section.
+
+*Severity filters*: click one or more badges to only display the
+vulnerabilities of the matching level. The *Show all* button clears the active
+filters. Only the badges matching severities present in the results are
+displayed.
+
+*Date filter*: a time-filtering bar sits above the table. It lets you display
+only the CVEs published or modified in a given date range:
+
+----
+  📅 CVE date: [Published] [Modified] [Most recent]
+     After: [2024-01-01 ×]   Before: [2024-12-31 ×]
+     [✓] Undated    [Apply to other tabs]
+----
+
+* *Date field*: three-value selector — *Published* (initial publication date
+  of the CVE), *Modified* (last update), *Most recent* (the later of the two
+  available dates).
+* *After / Before*: clickable chips opening a calendar. An × clears each bound
+  independently.
+* *Undated*: checkbox to include the CVEs whose selected date field is absent
+  or not filled in in the scanner data. By default, these CVEs are excluded
+  when a filter is active.
+* *Apply to other tabs*: copies the current filter to the two other CVE tabs
+  (OSV-Scanner and Trivy). The analyses themselves are not re-run; only the
+  display is filtered.
+
+NOTE: The date filter is applied as post-processing on the JSON returned by
+Grype. It is independent of the Grype command-line options and can be combined
+with the severity filters and the text search.
+
+Columns:
+
+* *Severity badge*: colored label (CRITICAL / HIGH / MEDIUM / LOW / NEGLIGIBLE)
+* *Package*: name of the affected package in bold
+* *Versions*: installed version, and fixed version if available (after `→`).
+  The `(won't fix)` mention indicates that the maintainer does not plan a fix.
+* *CVE*: vulnerability identifier
+* *Type*: package type (`rpm`, `python`, `deb`…)
+
+*Clicking a row expands it* and shows the <<sec-cve-detail,full CVE detail>>:
+package and versions, severity and dates as reported by the scanner, detailed
+exploitability (KEV, EPSS, CVSS, PoC) and reference buttons (NVD, CVE.org,
+osv.dev, CISA KEV). The detail panel contains a *copy the identifier* button.
+Clicking the row again collapses it.
+
+==== Exploitability and active exploitation
+
+[[sec-exploitabilite]]
+After each scan, the application enriches the CVEs found with four
+prioritization signals, displayed as chips under each row and as sortable
+*KEV* / *EPSS* columns:
+
+* *KEV* (red chip 🔥) — the CVE is in the *CISA Known Exploited
+  Vulnerabilities* catalog: active exploitation confirmed in the wild. The
+  hover tooltip gives the date added and any use by ransomware.
+* *EPSS* — *Exploit Prediction Scoring System* score (FIRST.org), from 0 to 1:
+  probability of exploitation within 30 days, with its percentile.
+* *PoC* — a public exploit is recorded (GitHub repositories via
+  `poc-in-github`, or the `E:` maturity of the CVSS vector).
+* *expl.* — exploitability sub-score of the CVSS vector (AV/AC/PR/UI), from 0
+  to 3.9, computed locally.
+
+Grype already provides KEV, EPSS and the CVSS vector in its database: for the
+Grype tab, only the PoC signal requires a network request. For OSV-Scanner and
+Trivy, the KEV/EPSS enrichment is done online. Responses are cached for 24 h in
+`~/.cache/sbom-generator/` (shared with the command line).
+
+*CISA KEV filter*: a *CISA KEV (N)* chip appears next to the severity filters
+as soon as an exploited CVE is present — click it to display only these CVEs.
+The *KEV* sort puts the catalog CVEs first; the *EPSS* sort orders by
+decreasing probability.
+
+*Online / offline toggle*: the ☁ icon in the table toolbar enables or cuts the
+network enrichment requests. The choice is remembered (like the theme) and
+shared by the three scan tabs. Offline, only the data provided by Grype and
+the local cache are used.
+
+The CSV and AsciiDoc/PDF exports gain the *KEV*, *EPSS* and *PoC* columns when
+the enrichment has produced results; the *dashboard* marks the KEV/high-EPSS
+CVEs in its cross-scanner comparison and brings them to the top.
+
+==== JSON view
+
+[[sec-vue-json]]
+Displays the raw JSON output of grype, formatted and indented. Useful to
+inspect the detail of a vulnerability (CVSS, references, metadata…).
+
+The 📋 button at the top right copies the whole JSON to the clipboard.
+
+==== Template view
+
+[[sec-vue-template]]
+Displays the result of the template file generation (CSV or other custom
+format). Only visible if a template file has been configured in the
+*Template (-t)* field.
+
+A hint is displayed if no template is configured or if the analysis has not
+been run yet.
+
+The 📋 button copies the output to the clipboard.
+
+== OSV-Scanner tab — Vulnerability analysis
+
+The *OSV-Scanner* tab uses Google's tool to look for vulnerabilities from an
+SBOM file or a container image. Its interface is identical to that of the
+Grype tab.
+
+----
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ SBOM file ] [ Container image ]                                │
+  │  SBOM file : [ /project/sbom.cdx.json           ] [Choose ▾]    │
+  │  Toml config: [                                 ] [Choose ▾]    │
+  │                                                      [Analyze]   │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 3 vulnerability(ies): 1 Critical, 2 High                      │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnerabilities (3)] │ [Raw JSON]                                │
+  └───────────────────────┴───────────────────────────────────────────┘
+----
+
+=== Version indicator
+
+Same behavior as in the Grype tab (see <<_version_indicator>>), applied to
+`osv-scanner`. The badge is displayed at the top of the configuration panel
+as soon as the startup check is finished.
+
+=== Requirements
+
+`osv-scanner` must be installed and reachable in the PATH
+(see <<_installing_osv_scanner_optional>>).
+
+[[sec-onglet-osv-source]]
+=== Selecting the source to analyze
+
+Same *SBOM file / Container image* toggle as in the Grype tab
+(see <<sec-source-scan>>). In *SBOM file* mode, the field is pre-filled with
+the last generated file; the *Choose* button offers:
+
+* *Filtered type*: `.json` and `.jsonld` files
+* *All files*
+
+In *Container image* mode, the field accepts a *registry* reference
+(e.g. `nginx:latest`) or a local *archive* (`docker save`, through the
+dedicated button) — in `.tar`, `.tar.gz` or `.tgz` format.
+
+NOTE: Unlike Grype and Trivy, OSV-Scanner cannot read an OCI layout directory
+directly: only the archive is offered here. It also has no platform option
+(`--platform`).
+
+The *Per layer* option is available in image mode, as for Grype —
+see <<sec-scan-couches>>.
+
+=== Optional configuration (toml)
+
+Path to an `osv-scanner.toml` configuration file used to define ignore rules
+by vulnerability ID. This parameter is optional.
+
+=== Starting the analysis
+
+Click *Analyze*. In *SBOM file* mode, OSV-Scanner runs with:
+
+[source,bash]
+----
+osv-scanner --format json --sbom /path/to/sbom.cdx.json
+----
+
+In *Container image* mode, the subcommand changes (`--sbom` cannot scan an
+image):
+
+[source,bash]
+----
+osv-scanner scan image --format json nginx:latest
+# or, for a local archive:
+osv-scanner scan image --format json --archive /path/to/image.tar
+----
+
+An exit code of 1 indicates that at least one vulnerability was found (this is
+normal, not an error); a code greater than 1 indicates an error.
+
+=== Results
+
+==== Vulnerabilities view
+
+Same interface as the Grype tab: search bar + sort + CSV export, severity
+filters, then the list of vulnerabilities.
+
+----
+  [ Search...                            ] [⬇]
+  Filter : [Critical (1)] [High (2)] [Medium (0)] [Low (0)]  [Show all]
+
+  ┌────────────┬────────────────────┬────────────────┬────────────────────────┐
+  │ SEVERITY ↕ │ CVE/ID ↕           │ PACKAGE ↕      │ FIXED VERSION ↕        │
+  ├────────────┼────────────────────┼────────────────┼────────────────────────┤
+  │ CRITICAL   │ CVE-2023-12345     │ requests 2.28  │ 2.31.0                 │
+  └────────────┴────────────────────┴────────────────┴────────────────────────┘
+----
+
+*Search and sort*: identical to the Grype tab (see <<sec-vue-table>>).
+
+*Merging of visual duplicates*: same behavior (×N badge) as the Grype tab —
+see <<sec-vue-table>>.
+
+*CSV export*: the ⬇ button exports the filtered (already merged) view.
+Columns: Severity, CVE/ID, Package, Installed version, Fixed version,
+Ecosystem, Locations.
+
+*AsciiDoc + PDF export*: the ⬥ button exports the same filtered view into an
+AsciiDoc report (summary by severity + detailed table), with automatic PDF
+conversion if `asciidoctor-pdf` is installed — see the full description in the
+Grype tab (<<sec-vue-table>>).
+
+*Date filter*: same bar as the Grype tab (see <<sec-vue-table>>). The
+*Published* field corresponds to `published` of the OSV JSON, the *Modified*
+field to `modified`. The *Apply* option copies the filter to the Grype and
+Trivy tabs.
+
+Columns:
+
+* Colored severity badge
+* CVE identifier (clickable — copies to the clipboard)
+* Name and version of the affected package
+* Fixed version (if available)
+
+The severity is determined from the `database_specific.severity` field or from
+the CVSS scores present in the OSV JSON.
+
+==== Raw JSON view
+
+Displays the complete JSON returned by `osv-scanner`, useful to inspect the
+detailed metadata of each vulnerability.
+
+== Trivy tab — Vulnerability analysis
+
+The *Trivy* tab uses Aqua Security's tool. It offers additional options
+compared with OSV-Scanner and Grype.
+
+----
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ SBOM file ] [ Container image ]                                │
+  │  SBOM file : [ /project/sbom.cdx.json           ] [Choose ▾]    │
+  │                                                                   │
+  │  Severities : [CRITICAL] [HIGH] [MEDIUM] [LOW] [UNKNOWN]         │
+  │  [ ] --ignore-unfixed   [ ] --skip-db-update                     │
+  │  trivy.yaml   : [                               ] [Choose ▾]    │
+  │                                                      [Analyze]   │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 4 vulnerability(ies): 1 CRITICAL, 3 HIGH                      │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnerabilities (4)] │ [Raw JSON]                                │
+  └───────────────────────┴───────────────────────────────────────────┘
+----
+
+=== Version indicator
+
+Same behavior as in the Grype tab (see <<_version_indicator>>), applied to
+`trivy`. The badge is displayed at the top of the configuration panel as soon
+as the startup check is finished.
+
+=== Requirements
+
+`trivy` must be installed and reachable in the PATH
+(see <<_installing_trivy_optional>>).
+
+[[sec-onglet-trivy-source]]
+=== Selecting the source to analyze
+
+Same *SBOM file / Container image* toggle, same accepted formats in image mode
+(registry, local archive, OCI layout directory) as in the Grype tab (see
+<<sec-source-scan>>), including the optional *Platform* field (`--platform`,
+e.g. `linux/arm64`).
+
+In *SBOM file* mode, Trivy is launched through its `trivy sbom` subcommand;
+in *Container image* mode, through `trivy image` (a local archive or directory
+is then passed through `--input`, a registry reference as a direct argument).
+
+NOTE: On a CycloneDX/SPDX SBOM generated by `sbom_generator` with the `syft`
+backend, it is normal that the *SBOM file* mode finds a few *more* Java CVEs
+than the *Container image* mode on the same image — this is not a false
+positive of the SBOM, but an under-detection by the jar analyzer built into
+Trivy for jars without `pom.properties` (e.g. internal Red Hat rebuilds),
+which the syft cataloger detects through the file name where Trivy fails. See
+<<sec-pourquoi-ecarts-scanners>> for the detail with real figures.
+
+The *Per layer* option is available in image mode, as for Grype; in
+attribution mode, the layer reported by Trivy itself (`Layer.DiffID`) is
+used — see <<sec-scan-couches>>.
+
+=== Scan options
+
+==== Severity filter (`--severity`)
+
+Check one or more severities to restrict the analysis. If none is checked, all
+severities are analyzed.
+
+Available levels: *CRITICAL*, *HIGH*, *MEDIUM*, *LOW*, *UNKNOWN*.
+
+==== `--ignore-unfixed`
+
+Only shows the vulnerabilities for which a fixed version is available.
+Equivalent to `--only-fixed` in Grype.
+
+==== `--skip-db-update`
+
+Prevents Trivy from updating its local database at startup. Useful in an
+offline environment or for fast repeated analyses when the database is already
+up to date.
+
+==== Configuration file (`trivy.yaml`)
+
+Path to a Trivy configuration file in YAML format. Lets you define ignore
+rules, proxies, private registries, etc.
+
+This parameter is optional. The *Choose* button offers a `.yaml` / `.yml`
+filter or all files.
+
+=== Equivalent command
+
+In *SBOM file* mode, Trivy is launched with the arguments:
+
+[source,bash]
+----
+trivy sbom --format json --quiet \
+  [--severity CRITICAL,HIGH,...] \
+  [--ignore-unfixed] \
+  [--skip-db-update] \
+  [--config trivy.yaml] \
+  /path/to/sbom.cdx.json
+----
+
+In *Container image* mode:
+
+[source,bash]
+----
+trivy image --format json --quiet \
+  [--severity CRITICAL,HIGH,...] [--ignore-unfixed] [--skip-db-update] \
+  [--config trivy.yaml] [--platform linux/arm64] \
+  nginx:latest
+# or, for a local archive/OCI directory:
+trivy image --format json --quiet [...] --input /path/to/image.tar
+----
+
+=== Results
+
+Same interface as the Grype and OSV-Scanner tabs: search bar + sort +
+CSV/AsciiDoc+PDF export, severity filters, merging of visual duplicates (×N
+badge, see <<sec-vue-table>>), then the list of vulnerabilities.
+
+*CSV export* (⬇ button): columns Severity, CVE/ID, Package, Installed
+version, Fixed version, Title, Locations.
+
+*AsciiDoc + PDF export* (⬥ button): same report as on the Grype/OSV-Scanner
+tabs (summary by severity + detailed table, automatic PDF conversion if
+`asciidoctor-pdf` is installed) — see <<sec-vue-table>>.
+
+The *Title* column corresponds to the `Title` field of the Trivy JSON (short
+description of the CVE). It appears as a subtitle of each entry in the list.
+
+*Date filter*: same bar as the Grype tab (see <<sec-vue-table>>). The
+*Published* field corresponds to `PublishedDate` of the Trivy JSON, the
+*Modified* field to `LastModifiedDate`. The *Apply* option copies the filter
+to the Grype and OSV-Scanner tabs.
+
+[[sec-onglet-cra]]
+== CRA Compliance tab — Cyber Resilience Act
+
+The *CRA Compliance* tab produces a compliance report with *Regulation (EU)
+2024/2847* (Cyber Resilience Act) from an SBOM. It drives the
+`sbom-generator cra` subcommand (the binary configured in the settings) and
+displays its result.
+
+[IMPORTANT]
+====
+The report only covers the CRA requirements that can be *verified
+automatically* from an SBOM and a known-vulnerability analysis:
+
+* *SBOM format and completeness* — commonly used machine-readable format,
+  dependency coverage (Annex I §2 point 1), data fields per component (BSI
+  TR-03183-2: name, version, supplier, unique PURL/CPE identifier, hash,
+  license), NTIA 2021 minimum elements;
+* *vulnerability management* — inventory of known vulnerabilities and
+  availability of fixes (Annex I §2 points 1-2);
+* *actively exploited vulnerabilities* — any CVE in the CISA KEV catalog is
+  flagged as triggering the obligation to notify ENISA *within 24 h*
+  (art. 14).
+
+The other CRA obligations (secure distribution of updates, effective
+coordinated disclosure policy, secure-by-default design, regular testing,
+regulatory notifications, EU declaration of conformity) are the manufacturer's
+responsibility and are only listed. *This report is not a declaration of
+conformity.*
+====
+
+=== Filling in the form
+
+*SBOM file to assess*: pre-filled with the first generated SBOM
+(`.cdx.json` / `.spdx.json`, otherwise `.json`). The *Choose* button opens a
+file picker.
+
+*Product metadata (optional)*: collapsible section — Manufacturer, Product,
+Product version, End of support (`YYYY-MM-DD`), Vulnerability reporting
+contact, URL of the coordinated disclosure policy. The *Load a cra.yaml*
+button imports these values from a file (`key: value` per line). The fields
+entered here take precedence over the file; missing values are deduced from
+the `metadata.component` of the SBOM.
+
+*Scan for known vulnerabilities*: checked by default. Runs a scanner (*Grype*
+by default, or OSV-Scanner / Trivy / all three) to assess the vulnerability
+inventory and the availability of fixes, with CISA KEV / EPSS enrichment.
+Unchecked, the report is limited to the SBOM analysis and states that
+vulnerability management could not be attested.
+
+=== Running and exporting
+
+*Assess*: runs the analysis and displays the result under the form:
+
+* *verdict banner* — Compliant / Partial / Non-compliant on the verified
+  scope, with the summary sentence;
+* *four indicators* — compliant SBOM fields, NTIA elements, vulnerabilities
+  without a fix, actively exploited CVEs (KEV);
+* *blocking items* — list of the reasons for non-compliance, if any;
+* *table of SBOM data fields* (BSI TR-03183-2) with coverage and status per
+  field;
+* reminder of the SBOM format, the number of components and dependency
+  relationships, and the vulnerability count.
+
+*Export the PDF report*: regenerates the complete report as a PDF (cover
+page, executive summary, product identification, detailed SBOM analysis,
+vulnerability management, manufacturer requirements, conclusion) and saves it
+at the chosen location. The PDF conversion requires `asciidoctor-pdf`.
+
+A *Non-compliant* report is not an error: it lists the points to fix. Blocking
+reasons: non-machine-readable format, insufficiently filled mandatory field,
+vulnerability without an available fix, CVE in the CISA KEV catalog.
+
+== SBOM Quality tab — Quality assessment
+
+The *SBOM Quality* tab assesses the quality of an SBOM file with two
+complementary tools: *sbomqs* (Interlynk) and *sbom-scorecard* (eBay). A
+single click on *Analyze* runs both in parallel.
+
+----
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  SBOM file : [ /project/sbom.cdx.json        ] [📂▾]  [Analyze] │
+  │  Profiles: [NTIA 2021] [NTIA 2025] [FSCT] [BSI] [BSI v1.1]     │
+  │            [BSI v2.0] [BSI v2.1] [OpenChain v1.1] [Interlynk]  │
+  ├──────────────────────────────────────────────────────────────────┤
+  │ ┌─ sbomqs ──────────────────────────────────────── 5.8 / 10 ──┐ │
+  │ │ Filter : [Identification] [Provenance] [Integrity] ...       │ │
+  │ │                                                              │ │
+  │ │  ✔ comp_with_name           Identification   10/10           │ │
+  │ │  ✔ comp_with_version        Identification   10/10           │ │
+  │ │  ✘ sbom_authors             Provenance        0/10           │ │
+  │ │  ✘ comp_with_strong_checksums  Integrity      0/10           │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ Industry profiles ──────────────────────────────────────────┐ │
+  │ │  [A] NTIA Minimum Elements (2021)       10.0/10  ▶ details  │ │
+  │ │  [C] Interlynk                           7.2/10  ▶ details  │ │
+  │ │  [D] BSI TR-03183-2 v1.1                6.7/10  ▶ details  │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ sbom-scorecard ──────────────────────────────── 69 / 100 ──┐ │
+  │ │  Spec          ████████████████████████████████████  100    │ │
+  │ │  Quality       ████████████████████████░░░░░░░░░░░░   63    │ │
+  │ │  NTIA-minimum  ████████████████████████████████░░░░   88    │ │
+  │ │  Total         ██████████████████████████░░░░░░░░░░   69    │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  └──────────────────────────────────────────────────────────────────┘
+----
+
+=== Requirements
+
+[cols="2,1,2", options="header"]
+|===
+|Tool |Source |Role
+
+|`sbomqs`
+|Interlynk
+|Global score + detailed criteria per category (Identification, Provenance, Integrity…) and industry profiles
+
+|`sbom-scorecard`
+|eBay
+|Global score as a percentage, broken down by category
+|===
+
+Both tools are optional: if one is not installed, its section displays an
+error message without blocking the other.
+
+==== Installing sbom-scorecard (optional)
+
+[source,bash]
+----
+# Via Go
+go install github.com/eBay/sbom-scorecard@latest
+
+# Or download the binary from the GitHub releases
+# https://github.com/eBay/sbom-scorecard/releases
+
+# Check
+sbom-scorecard --version
+----
+
+=== Selecting profiles
+
+The *Profiles* line under the file picker contains nine independently
+selectable `FilterChip`s:
+
+[cols="1,2", options="header"]
+|===
+|Chip |sbomqs profile
+
+|NTIA 2021
+|NTIA Minimum Elements (2021)
+
+|NTIA 2025
+|NTIA Minimum Elements (2025) — RFC
+
+|FSCT
+|Framing Software Component Transparency (3rd Edition)
+
+|BSI
+|BSI TR-03183-2 (latest version, alias of bsi-v2.1)
+
+|BSI v1.1
+|BSI TR-03183-2 v1.1
+
+|BSI v2.0
+|BSI TR-03183-2 v2.0
+
+|BSI v2.1
+|BSI TR-03183-2 v2.1
+
+|OpenChain v1.1
+|OpenChain Telco SBOM Guide v1.1
+
+|Interlynk
+|Interlynk Scoring Profile
+|===
+
+With no selection, sbomqs only performs the full analysis (*Comprehensive*).
+With one or more profiles checked, sbomqs receives `--profile p1,p2,...` and
+the criteria detail per profile is displayed in the *Industry profiles* card.
+
+NOTE: Choosing profiles does not replace the full analysis — both sections are
+always displayed simultaneously.
+
+=== sbomqs section
+
+Displays a table of quality criteria per category (Identification,
+Provenance, Integrity, Completeness, Licensing, Vulnerability, Structural,
+Component Quality). A ✔ (green) / ✘ (red) icon indicates whether the criterion
+is met (score = 10/10).
+
+*Category filters*: the FilterChips at the top of the table let you display
+only the criteria of one or more categories.
+
+The `{ }` / ≡ button toggles between the table and the raw JSON.
+The 📋 button copies the raw JSON to the clipboard.
+
+=== Industry profiles section
+
+Always present after a successful analysis. It displays for each available
+profile:
+
+* A colored badge with the grade (A / B / C / D / F)
+* The full name of the profile
+* The score out of 10
+
+If profiles were selected in the configuration bar before the analysis, each
+profile has an expand button (▶) that reveals the list of its criteria with:
+
+* ✔/✘ icon, criterion name, short description, score
+* “N / M criteria” counter in the subtitle
+* `*` marker for the *mandatory* (required) criteria of the profile
+
+TIP: When no profile is selected, the section header displays an ⓘ tooltip
+recalling how to enable the detail.
+
+=== sbom-scorecard section
+
+Displays a bar chart for each score category.
+
+[cols="2,3", options="header"]
+|===
+|Color |Meaning
+
+|Green
+|Score ≥ 80 % — excellent quality
+
+|Orange
+|Score between 60 % and 80 % — acceptable quality
+
+|Red
+|Score < 60 % — insufficient quality
+|===
+
+The `{ }` / ≡ button toggles between the chart and the raw output.
+
+=== State persistence
+
+Like the other analysis tabs, the *SBOM Quality* tab remembers its state when
+navigating between tabs: the selected file and the results remain displayed
+even after viewing another tab.
+
+== Dashboard tab — CVE synthesis
+
+The *Dashboard* tab presents a synthesis view that aggregates the results of
+the three scanners (Grype, OSV-Scanner, Trivy) without having to navigate
+between each tab. It is populated automatically after the analyses are run.
+
+----
+  ┌─ Global synthesis ─────────────────────────────────────────────  [⬥]─┐
+  │  3 scanners run  •  87 unique CVEs                                   │
+  └────────────────────────────────────────────────────────────────────┘
+
+  ┌─ Grype (42) ───────────┐  ┌─ OSV-Scanner (31) ─────┐  ┌─ Trivy (38) ─────┐
+  │ CRITICAL  ██  5        │  │ CRITICAL  █   3         │  │ CRITICAL  ██  4   │
+  │ HIGH      ████ 18      │  │ HIGH      ████ 15       │  │ HIGH      ████ 16 │
+  │ MEDIUM    ███ 14       │  │ MEDIUM    ██  10        │  │ MEDIUM    ██  14  │
+  │ LOW       █   5        │  │ LOW       █   3         │  │ LOW       █   4   │
+  └────────────────────────┘  └────────────────────────┘  └──────────────────┘
+
+  ┌─ Cross-scanner comparison (87 CVEs) ──────────────────────────────────┐
+  │ CRITICAL  CVE-2021-3711   Grype ✓  OSV ✓  Trivy ✓                   │
+  │ HIGH      CVE-2023-38545  Grype ✓  OSV ✓  Trivy ✗                   │
+  │ ⚠ MEDIUM  CVE-2024-9999   Grype ✓  OSV ✗  Trivy ✗                   │
+  └──────────────────────────────────────────────────────────────────────┘
+----
+
+=== Per-scanner cards
+
+Each scanner has a card displaying:
+
+* The distribution by severity (colored stacked bars)
+* The number of vulnerabilities per level
+
+The cards of scanners not yet run display a prompt message.
+
+=== Global synthesis
+
+The top banner indicates:
+
+* The number of scanners that produced results (out of 3)
+* The total number of *unique* CVEs (union of the identifiers of all the
+  scanners run)
+* The ⬥ AsciiDoc + PDF export button (see <<sec-dashboard-export>>)
+
+=== Cross-scanner comparison
+
+The table at the bottom lists *all* the vulnerabilities detected by *at least
+one* scanner — not only those common to several: it is precisely by keeping
+the isolated CVEs (seen by a single scanner while several ran) that detection
+gaps between tools can be spotted. These isolated rows carry an amber border,
+a ⚠ icon and a “Seen by a single scanner out of N” tooltip to tell them apart
+at a glance. A ✓ / — mark indicates presence or absence in each scanner.
+
+*Sort*: click a column header to sort, click again to reverse (the ↑ / ↓ arrow
+indicates the active column and direction):
+
+* *SEV.* — severity (Critical first);
+* *CVE / ID* — alphabetical order;
+* *Grype* / *OSV* / *Trivy* — CVEs seen by this scanner first (✓ before —),
+  to isolate in one click what each tool detects alone;
+* *KEV* and *EPSS* (columns only present if the enrichment ran, see
+  <<sec-exploitabilite>>) — CISA catalog CVEs first, or decreasing EPSS score.
+
+By default, rows are ordered by *risk prioritization* — CISA KEV, then
+decreasing EPSS, then severity — when the enrichment produced results; by
+severity alone otherwise. The AsciiDoc / PDF export follows exactly the
+displayed order.
+
+[[sec-cve-detail]]
+*CVE detail*: click a row (the ▾ chevron on the right indicates it) to expand
+it. A panel then displays, from the data already in memory:
+
+* the affected *package*, its installed version and the fixed version, as seen
+  by each scanner;
+* the *severity* and the publication / modification *dates*, per scanner —
+  often different from one tool to another;
+* the *detailed exploitability*: CISA KEV (date added, remediation due date,
+  use by ransomware), EPSS score and its percentile, CVSS exploitability
+  sub-score with the vector and the exploit maturity, public PoC repositories
+  (clickable links);
+* *reference buttons* opening NVD, CVE.org, osv.dev and — for a CVE of the
+  catalog — CISA KEV in the browser, plus a *copy the identifier* button.
+
+Clicking the row again collapses the panel. The same detail is available in
+the Grype / OSV-Scanner / Trivy tabs.
+
+If the list exceeds the available height, the tab's vertical scrollbar lets
+you browse everything — scroll down inside the Dashboard tab.
+
+NOTE: OSV-Scanner sometimes prefixes a CVE with the origin of the distro
+advisory (e.g. `DEBIAN-CVE-2026-13221` for a Debian package) where Grype and
+Trivy report the same bare identifier (`CVE-2026-13221`). The table
+automatically normalizes this kind of prefix before comparing — the
+vulnerability therefore appears only once, in its bare CVE form, instead of
+two distinct rows one of which is wrongly marked “seen by a single scanner”.
+
+[[sec-dashboard-couches]]
+=== Image layers
+
+When at least one scan tab has analyzed an image with the *Per layer* option
+(see <<sec-scan-couches>>), an *Image layers* card is displayed: for each
+layer, its digest, its build instruction and the number of unique CVEs (all
+scanners combined), including critical and high ones; the method used by each
+scanner is recalled at the top. The *Cross-scanner comparison* gains a
+*LAYER(S)* column, and the AsciiDoc + PDF export an *Image layers* section and
+the same column.
+
+[[sec-pourquoi-ecarts-scanners]]
+=== Why Grype, OSV-Scanner and Trivy do not find the same CVEs
+
+It is normal — and expected — that a good part of the rows of the
+cross-scanner table are isolated (seen by a single tool). On the same Keycloak
+image (RHEL 9.6, ~450 MB) analyzed directly by Grype and by Trivy, a raw
+comparison of identifiers only shows 72 common CVEs out of ~210 unique
+identifiers on each side — a gap with two quite distinct causes:
+
+* *Different identifier naming (main cause, not a real detection gap)* — on
+  Java packages (JAR/Maven), Grype names its findings with the *GitHub
+  Security Advisory* identifier (`GHSA-xxxx-xxxx-xxxx`, its main source for
+  this ecosystem) while Trivy prefers the matching *CVE* identifier. It is the
+  same vulnerability under two different names — Grype moreover lists the
+  related CVE in its `relatedVulnerabilities` field. On this same image, the
+  two tools seemed to agree on only 2 Java CVEs out of ~135 on each side; once
+  Grype's `GHSA-*` are resolved to their related CVE, the agreement rises to
+  132/135 (~98 %). On RPM packages (OS base), where both tools natively use
+  the CVE identifier, the agreement was already direct at ~94 % (70 common
+  CVEs out of ~75 on each side).
+* *Another different naming, this one normalized automatically* — on Debian
+  packages, OSV-Scanner names some of its advisories `DEBIAN-CVE-xxxx-xxxxx`
+  (Debian Security Tracker origin) where Grype and Trivy report the matching
+  bare CVE identifier. Unlike the GHSA↔CVE case above, the Dashboard's
+  comparison table resolves this prefix automatically (see
+  <<sec-dashboard-export>>) — on a real Debian image, this reduced the number
+  of rows of the cross-scanner comparison from 200 to 106 (nearly half were
+  only this naming duplicate).
+* *Residual real gaps (freshness and coverage of the databases)* — Grype
+  (Anchore database) and Trivy (`trivy-db`) republish their vulnerability
+  databases at paces and from sources that are not perfectly identical (NVD,
+  GHSA, Red Hat OVAL/CSAF…). A just-published CVE, or one not yet mapped to
+  the exact CPE of a package, may appear in one before the other. The version
+  matching rules (affected bounds, RPM epoch) and the retained severity score
+  (NVD CVSS vs vendor vs distro) may also differ slightly from one engine to
+  another.
+* *Grype and Trivy do not have the same exhaustiveness on Debian OS
+  packages* — on a real Debian image (79 packages), Grype reported 207 matches
+  versus only 27 for Trivy, on the same SBOM. This is nevertheless not a
+  problem of CPE false positives: both tools do use their dedicated distro
+  matcher (`dpkg-matcher` on the Grype side). The gap comes from the
+  completeness of the data taken in — Grype reports the whole Debian Security
+  Tracker, including the advisories marked `<no-dsa>` (minor bug that Debian
+  chose never to fix) and the CVEs with no known fixed version, where Trivy
+  only reports a more restricted subset. Checked on
+  `security-tracker.debian.org`: a CVE cited only by Grype (`CVE-2026-19499`
+  on `glibc`/trixie) is indeed listed there as “vulnerable” with the note
+  `<no-dsa> (Minor issue)` — Grype therefore rightly reports it (“won't fix”
+  state), Trivy simply omits it. Neither is wrong: Trivy is more conservative
+  (CVEs with a settled status), Grype more exhaustive but noisier.
+
+Neither scanner is “the” truth: each has its own database and its own matching
+granularity. That is precisely the purpose of this tab — seeing the union of
+the three scanners rather than relying on a single one to maximize detection
+coverage.
+
+A gap may also appear with a *single* scanner depending on whether it is given
+an SBOM or the image directly — typically in the Trivy tab (see
+<<sec-onglet-trivy-source>>) between the *SBOM file* (`trivy sbom`) and
+*Container image* (`trivy image`) modes. On this same Keycloak image,
+`trivy sbom` on an SBOM generated with the `syft` backend found 3 HIGH CVEs
+(`micrometer-core`, `postgresql`) absent from a direct `trivy image`: the jar
+analyzer built into Trivy identifies a jar through `pom.properties`, then
+`MANIFEST.MF`, then a SHA-1 lookup in its `trivy-java-db` database (indexed
+from Maven Central) — and silently drops the package if all three fail, which
+happens for internally rebuilt jars (e.g. `.redhat-000xx`) without
+`pom.properties` and absent from Maven Central. The syft cataloger, for its
+part, can recover these packages by parsing the file name
+`<groupId>.<artifactId>-<version>.jar` (convention of the Quarkus “fast-jar”
+packaging of this image). Here again, the SBOM does not invent CVEs: it is
+`trivy image` that misses a few that `trivy sbom` finds thanks to syft's more
+complete detection.
+
+The same kind of gap existed for OSV-Scanner, but far more drastically: on
+distribution packages, giving it a syft SBOM brought the result down to almost
+*zero* CVEs, whereas scanning the image directly finds hundreds. Two causes,
+both fixed at the source by `sbom_generator` (syft backend):
+
+* *`distro` qualifier* — OSV-Scanner only links a `pkg:deb/debian/...` to the
+  `Debian:13` ecosystem if `distro` is `debian-<major>` or if `distro_name`
+  carries a known codename. syft fills in the *point release*
+  (`distro=debian-13.6`, read from `/etc/debian_version`), which is not
+  recognized. Fixed: `debian-13.6` → `debian-13` + `distro_name=trixie`.
+* *Binary vs source package* — OSV.dev indexes Debian advisories by *source*
+  package (`zlib`, `perl`), not binary (`zlib1g`, `perl-base`). syft only
+  lists the binary (with `upstream=`), which OSV-Scanner does not use. Fixed:
+  one component per distinct source package is added (like cdxgen), and
+  `upstream=` is removed from the binary so that Grype does not count the CVE
+  twice.
+
+On `haproxy:3.4.4` (Debian 13.6), the syft SBOM thus goes from ~0 to 58
+OSV-Scanner CVEs (parity with the cdxgen SBOM), cross-checked by the three
+scanners instead of Grype alone.
+
+Two limits remain:
+
+* the other families of distribution packages (Alpine, RPM/RHEL) — OSV.dev
+  indexes them poorly or not at all in “SBOM scan” mode;
+* `osv-scanner scan image`, which does its own extraction without PURLs,
+  remains more exhaustive on the base OS. For maximum OS coverage with this
+  tool, scan the image directly.
+
+[[sec-dashboard-export]]
+=== AsciiDoc + PDF export
+
+The ⬥ button (PDF icon, in the global synthesis card) exports a report
+reproducing the whole displayed view:
+
+* the global summary (scanners run, unique CVEs);
+* the *Tools* section: version of sbom_generator_gui and version of each
+  scanner run (detected through `<tool> --version` at export time, hence
+  always up to date even if the tool was updated since the last scan —
+  “unavailable” if the tool is no longer in the `PATH`);
+* for each scanner: its severity distribution with a colored bar (or “Not
+  run” / “No vulnerability detected” as appropriate);
+* the complete cross-scanner comparison table (severity, CVE/ID, presence per
+  tool, and KEV / EPSS columns if the enrichment ran), in the *same order as
+  displayed on screen*, with the distro-prefixed CVEs already normalized (see
+  <<sec-pourquoi-ecarts-scanners>>);
+* a *“CVE details”* section: one block per CVE retained by the report's
+  severity threshold (all with “All”; CISA KEV catalog CVEs are always
+  included) — with package, versions, severity and dates per scanner, and all
+  the exploitability information (KEV, EPSS, CVSS, PoC, links). It reproduces
+  the content of the expandable detail panel on screen.
+
+Unlike the Grype/OSV-Scanner/Trivy tabs, there is only one synthesis view
+here — no individually filtered rows to export, but the active sort column of
+the cross-scanner table is respected.
+
+*Report severity level*: the menu to the left of the export button
+(*Critical*, *≥ High*, *≥ Medium*, *All* — *All* by default) limits the whole
+report to the CVEs of that level or above: executive summary, distribution per
+scanner, image layers, cross-scanner comparison and detail. The choice is
+remembered from one session to another; the on-screen display is not
+filtered.
+
+* A CVE is retained according to its *worst* severity, all scanners combined:
+  a CVE that is High for Grype and Medium for Trivy appears in a “≥ High”
+  report with both scanners, so that the comparison stays fair.
+* The *CISA KEV* catalog CVEs (actively exploited) are always included,
+  whatever their severity.
+* The filtered report states it at the top (chosen level, number of retained
+  CVEs out of the total) and the proposed file name carries the level
+  (`vulnerability-report-high.adoc`).
+
+The button stays disabled as long as no scanner has been run. Once the `.adoc`
+file is written (location chosen through a dialog box), the conversion to PDF
+through `asciidoctor-pdf` is attempted automatically; if the tool is not
+installed, the `.adoc` file is still produced and a message says so — same
+behavior as the export of the scan tabs (see <<sec-vue-table>>). The PDF
+reuses the Dashboard colors (severity badges, distribution bar, blue headers)
+— see <<sec-vue-table>> for the theme detail.
+
+NOTE: The Dashboard is updated automatically every time an analysis is run in
+a scanner tab. No additional action is required.
+
+== SBOM Tree tab
+
+The *SBOM Tree* tab lets you explore the components of an SBOM file
+(CycloneDX or SPDX) without opening a JSON editor.
+
+----
+  ┌─ File: [ sbom.cdx.json ▼ ]  [📂 Open…]                            ─┐
+  │  CycloneDX 1.6  •  My Application 2.1.0  •  246 components          │
+  ├─ Group by: [None] [Type] [License]                                    │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ ▶ rpm  (132)                                                           │
+  │ ▼ python  (89)                                                         │
+  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
+  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
+  │    ...                                                                 │
+  │ ▶ deb  (25)                                                            │
+  └────────────────────────────────────────────────────────────────────────┘
+----
+
+=== Selecting the SBOM file
+
+The drop-down menu lists the SBOM files generated in the current session. The
+first `.cdx.json`, `.spdx.json` or `.spdx3.jsonld` file is selected
+automatically. Layer SBOMs (`--per-layer`) are not listed there: they are
+opened from the layer selector (see <<sec-nav-couches>>).
+
+The *Open…* button lets you load any file from the file system.
+
+Supported formats:
+
+* *CycloneDX 1.6* — `.cdx.json` (`components[]` field)
+* *SPDX 2.x* — `.spdx.json` (`packages[]` field)
+* *SPDX 3.0 JSON-LD* — `.spdx3.jsonld`
+
+=== Information bar
+
+After loading, a metadata line is displayed:
+
+* SBOM format and version
+* Document name / main component
+* Total number of components
+
+=== Grouping
+
+The *Group by* selector offers three modes:
+
+[cols="2,3"]
+|===
+|*None* |All components in a flat list sorted by name
+|*Type* |Grouping by package type (rpm, python, deb…)
+|*License* |Grouping by SPDX license expression
+|*Layer* |SBOM produced with `--per-layer` only: grouping by originating
+layer (`Layer 01`, `Layer 02`… in the global SBOM) or by change (`Added` /
+`Modified` in a layer SBOM)
+|===
+
+The icons to the right of the selector expand or collapse all the groups.
+
+Groups are collapsible. Click a group header to open or close it.
+
+=== Component details
+
+Click a component to display its details (expandable field):
+
+* *PURL* (Package URL) — clickable to copy to the clipboard
+* *Version*
+* *Type*
+* *License*
+* *Layer* — originating layer (global SBOM) or change (layer SBOM), for an
+  SBOM produced with `--per-layer`
+
+NOTE: Components with no PURL in the SBOM do not display this field.
+
+[[sec-nav-couches]]
+=== Per-layer navigation (`--per-layer`)
+
+When the opened file belongs to a set produced with `--per-layer` (global SBOM
+or layer SBOM), an *N layer(s)* banner is displayed under the file bar, in
+this tab as in the *SBOM Viewer*:
+
+* a *Global SBOM / Layer 1/N (digest) …* drop-down menu directly opens the
+  chosen SBOM; for each layer, it recalls the counters
+  (`+added ~modified -removed`) and the build instruction;
+* under the menu, the description of the displayed document: digest,
+  instruction, counters of the layer (or number of layers and mode for the
+  global one);
+* an *N removed* badge lists on hover the components removed by the layer
+  (rootfs mode).
+
+The files of the same set are found by their name in the directory of the
+opened file (`<base>.<ext>` and `<base>.layer-NN-<digest>.<ext>`, same
+format): navigation also works for a set opened through *Open…*.
+
+=== State persistence
+
+The tab remembers its state (selected file, grouping, open/closed groups) when
+navigating between tabs.
+
+== SBOM Viewer tab
+
+The *SBOM Viewer* tab lets you open and explore any CycloneDX or SPDX SBOM
+file from the file system, independently of a generation in progress.
+
+----
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  [📂 Open an SBOM file…]                                                │
+  │  CycloneDX 1.6  •  Keycloak 26.0.0  •  453 components                  │
+  │                                                                         │
+  │  [ Search name, version, license… ]  [ All types ▼ ]                   │
+  │                                                                         │
+  │  Name ▲         Version        Type    License           PURL           │
+  │  ─────────────────────────────────────────────────────────────────────  │
+  │  snakeyaml      2.0            java    Apache-2.0        pkg:maven/…    │
+  │  requests       2.31.0         pypi    Apache-2.0        pkg:pypi/…     │
+  │  bash           5.1.8-6.el9    rpm     GPL-3.0-or-later  pkg:rpm/…      │
+  │  ...                                                                    │
+  │                               ┌─ Details ────────────────────────────┐  │
+  │                               │  Name     snakeyaml                  │  │
+  │                               │  Version  2.0                        │  │
+  │                               │  Type     java                       │  │
+  │                               │  License  Apache-2.0                 │  │
+  │                               │  PURL     pkg:maven/org.yaml/…       │  │
+  │                               └──────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────────────┘
+----
+
+=== Opening a file
+
+Click *📂 Open an SBOM file…* to browse the file system. The picker offers the
+`.json`, `.jsonld`, `.cdx.json`, `.spdx.json` extensions.
+
+Supported formats:
+
+* *CycloneDX 1.6* — `components[]` with the fields `name`, `version`, `type`,
+  `purl`, `licenses`, `description`
+* *SPDX 2.x* — `packages[]` with the fields `name`, `versionInfo`,
+  `licenseConcluded`, `summary`, `externalRefs[purl]`
+* *SPDX 3.0 JSON-LD* — `software:Package` elements of the `@graph`, with the
+  fields `name`, `software:packageVersion`, `concludedLicense`/`declaredLicense`,
+  `summary`, `externalIdentifier[purl]`
+
+The information bar displays the detected format, the document name and the
+total number of loaded components.
+
+=== Per-layer navigation
+
+For an SBOM produced with `--per-layer`, the layer banner described in
+<<sec-nav-couches>> is displayed under the header: it lets you switch from the
+global SBOM to each layer SBOM without going back to the file picker.
+
+=== Filter and search
+
+The search field filters the components in real time on:
+
+* the package name
+* the version
+* the license
+* the PURL
+* the layer (SBOM produced with `--per-layer`)
+
+The *All types* drop-down menu filters by ecosystem type (`rpm`, `java`,
+`pypi`, `npm`, `deb`, `apk`…). The two filters combine.
+
+=== Components table
+
+The table displays the columns *Name*, *Version*, *Type*, *License* and
+*PURL*, plus, for an SBOM produced with `--per-layer`, a *Layer* column
+(global SBOM: originating layer and layers that modified the component) or
+*Change* (layer SBOM: `added`, `modified (was <version>)`). Click a column
+header to sort in ascending order, click again to reverse the order.
+
+=== Details panel
+
+Click a table row to display a details panel on the right, summarizing all the
+fields of the selected component: name, version, type, license, description
+and PURL.
+
+=== Persistence
+
+The opened file and the active filters are remembered when navigating between
+tabs. The file is not reloaded automatically if its content changes on disk.
+
+NOTE: The SBOM Viewer is a standalone tab — it can be used with any SBOM file,
+not only those generated by sbom_generator.
+
+== SBOM Comparison tab
+
+The *SBOM Comparison* tab highlights the differences between two SBOM files
+(for example before / after an update).
+
+----
+  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
+  │ [ /path/to/before.cdx.json ] [📂]     │  │ [ /path/to/after.cdx.json ] [📂]     │
+  └───────────────────────────────────────┘  └──────────────────────────────────────┘
+                                                                    [Compare]
+
+  Added: 5  │  Removed: 3  │  Modified: 8  │  Unchanged: 230
+
+  Filter : [✓ Added] [✓ Removed] [✓ Modified] [ Unchanged]
+  Search : [ openssl…                                ]
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
+  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
+  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+----
+
+=== Loading the files
+
+Select a file in each slot (SBOM A and SBOM B) through the 📂 button or by
+typing a path. The CycloneDX, SPDX 2.x and SPDX 3.0 JSON-LD formats are
+supported (same formats as the Tree tab); the two compared files do not need
+to be in the same format.
+
+Click *Compare* to start the comparison. The button is only active if both
+files are selected.
+
+=== Counter bar
+
+Displays the number of components in each category:
+
+[cols="1,1,3"]
+|===
+|+  (green) |Added |Present in B, absent from A
+|−  (red) |Removed |Present in A, absent from B
+|~  (orange) |Modified |Present in A and B, but with a different version or license
+|=  (grey) |Unchanged |Identical in A and B
+|===
+
+=== Filters and search
+
+The filter chips let you show or hide each category. By default, *Unchanged*
+components are hidden to focus on the differences.
+
+The search field filters on the component name in real time, in combination
+with the category filters.
+
+=== Differences column
+
+For *Modified* components:
+
+* The *version* shows the old value struck through and the new value in green
+* The *license* shows the old value struck through and the new value in green
+
+== SBOM Merge tab
+
+The *SBOM Merge* tab combines several SBOM files into a single document,
+deduplicating the common components. It orchestrates the
+`sbom-generator merge` subcommand in the background.
+
+----
+  ┌─ [➕ Add files…]  [📂 Generated files]   3 file(s) selected ─┐
+  │  📄 base.cdx.json         /path/to/base.cdx.json                          [✕]  │
+  │  📄 extra-1.cdx.json      /path/to/extra-1.cdx.json                       [✕]  │
+  │  📄 extra-2.cdx.json      /path/to/extra-2.cdx.json                       [✕]  │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [ Output file: merged.cdx.json ]  [ Document name (optional) ]  [🔀 Merge]
+
+  ✔ Merge succeeded → merged.cdx.json
+----
+
+=== Selecting the files to merge
+
+Two ways to fill the list:
+
+* *➕ Add files…*: opens a two-entry menu — *.json / .jsonld* (filters the
+  picker on these extensions) or *All files* (no filter, for SBOMs whose
+  extension is not `.json`, e.g. `.cdx`, `.spdx`, `bom`, or with no
+  extension). Multiple selection is possible in both cases. The content must
+  remain CycloneDX or SPDX 2.x JSON whatever the file name.
+* *📂 Generated files*: menu listing the SBOM files produced during the
+  current session (same formats as the Tree tab, except SPDX 3.0 — see
+  Constraints below).
+
+Each file in the list can be removed individually through the *✕* button. The
+*🔀 Merge* button is only active with at least two selected files and a filled
+output path.
+
+=== Output file and document name
+
+* *Output file*: path of the produced merged document (default value:
+  `merged.cdx.json`).
+* *Document name* (optional): if filled in, replaces the document name in the
+  merged file; otherwise, the name of the first source file is kept.
+
+=== Launch and result
+
+The *🔀 Merge* button launches `sbom-generator merge` with the selected files.
+The command output (log) is displayed under the fields, followed by a result
+banner:
+
+* *✔ Merge succeeded → <file>* (green) on success.
+* *✘ Merge failed (code N)* (red) on failure — check the displayed log for the
+  error detail.
+
+=== Constraints
+
+All the selected files must be in the same format (that of the first file in
+the list): CycloneDX or SPDX 2.3. The output format follows that of the first
+file. The SPDX 3.0 (JSON-LD) format is not supported as merge input.
+
+== SBOM Licenses tab
+
+The *SBOM Licenses* tab displays the licenses contained in an existing SBOM
+file and lets you generate a compliance report (AsciiDoc, Markdown, HTML, CSV
+or JSON) at the bottom of the page. It orchestrates the
+`sbom-generator licenses` subcommand in the background.
+
+----
+  ┌─ [📄 Choose a file…]  [📂 Generated files]   /path/to/sbom.cdx.json ─┐
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [12 package(s)] [5 license(s)] [2 strong copyleft] [1 unlicensed]
+  [🔍 Filter by license or package…]             [By license | Table]
+  ▸ Apache-2.0                                                     3
+  ▾ GPL-3.0-or-later  [strong copyleft]                            2
+        bash 5.3.9-3.fc44
+        …
+  ▸ No license detected  [unlicensed]                              1
+  ────────────────────────────────────────────────────────────────────
+  [Format ▾] [ Output file: licenses.adoc ] [ Name (optional) ] [⚖ Generate]
+
+  ✔ Report generated → licenses.adoc
+----
+
+=== SBOM licenses
+
+As soon as a file is selected, its licenses are displayed:
+
+* A row of chips summarizes the SBOM: number of packages, distinct licenses,
+  packages under strong copyleft (red), weak copyleft (orange) and with no
+  detected license (yellow).
+* The *By license* view lists the licenses (with the number of packages); a
+  click expands the matching packages. The *Table* view lists one package per
+  row (package, version, license), sortable by clicking a header.
+* The filter field keeps the licenses whose identifier contains the entered
+  text, or the packages whose name matches (case-insensitive).
+
+The grouping and the copyleft classification are those of the CLI: they are
+exactly those of the generated report.
+
+=== Selecting the source file
+
+Two ways to designate the file:
+
+* *📄 Choose a file…*: opens a system file picker.
+* *📂 Generated files*: menu listing the SBOM files produced during the
+  current session (same formats as the Tree tab: CycloneDX, SPDX 2.3,
+  SPDX 3.0 JSON-LD).
+
+The *⚖ Generate* button is only active once a file is selected and an output
+path is filled in.
+
+=== Output file and document name
+
+* *Format*: AsciiDoc (default), Markdown, HTML (standalone), CSV or JSON.
+  The extension of the output file follows the format as long as it has not
+  been modified by hand.
+* *Output file*: path of the produced report (default value:
+  `licenses.adoc`).
+* *Document name* (optional): if filled in, replaces the document name in the
+  report header; otherwise, the name of the source file is kept.
+
+=== Launch and result
+
+The *⚖ Generate* button launches `sbom-generator licenses` on the selected
+file. The command output (log) is displayed under the fields, followed by a
+result banner:
+
+* *✔ Report generated → <file>* (green) on success.
+* *✘ Generation failed (code N)* (red) on failure — check the displayed log
+  for the error detail.
+
+The report (AsciiDoc; the other formats reproduce the same content) groups
+the packages by exact license, with a figures summary at the top (analyzed
+packages, distinct licenses, packages under strong/weak copyleft license,
+packages with no detected license), a warning listing the detected copyleft
+identifiers (GPL/AGPL as strong; LGPL, MPL, EPL, CDDL, CPL, EUPL as weak), and
+one section per license listing the matching packages.
+
+=== Constraints
+
+The source format must be recognized (CycloneDX, SPDX 2.3 or SPDX 3.0). The
+copyleft classification is a detection heuristic based on the SPDX
+identifier, not a legal analysis.
+
+== Customizing the appearance
+
+=== Color theme picker
+
+Click the 🎨 icon in the title bar to open the color picker. Ten predefined
+themes are offered:
+
+[cols="2,2", options="header"]
+|===
+|Theme |Main color
+
+|Indigo (default)
+|Dark indigo (#1A237E)
+
+|Blue
+|Dark blue (#1565C0)
+
+|Purple
+|Deep purple (#4A148C)
+
+|Teal
+|Dark blue-green (#004D40)
+
+|Green
+|Forest green (#1B5E20)
+
+|Orange
+|Burnt orange (#BF360C)
+
+|Red
+|Blood red (#B71C1C)
+
+|Pink
+|Deep pink (#880E4F)
+
+|Slate
+|Slate grey (#37474F)
+
+|Brown
+|Brown (#4E342E)
+|===
+
+The selected theme is applied immediately and *saved* for the next session.
+
+=== Light / dark toggle
+
+The 🌙 / ☀ button alternates between dark and light mode. The theme color
+stays the same in both modes — only the overall brightness changes. The
+preference is also saved.
+
+== Typical workflows
+
+=== Scenario 1 — Generating an SBOM from an RPM list
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|1
+|Prepare an `rpm.lst` file containing the list of RPM packages
+(output of `rpm -qa`, one package per line)
+
+|2
+|In the *Packages to analyze* field, select `rpm.lst`
+
+|3
+|In the *Base path* field, enter the output path: `sbom` or
+`/tmp/audit/sbom`
+
+|4
+|Check *CycloneDX 1.6* (recommended format for the grype analysis)
+
+|5
+|Optionally fill in the *SBOM document name* (e.g. `RHEL 9.3 — HA Server`)
+
+|6
+|Click *▶ Generate the SBOM*
+
+|7
+|Follow the progress in the *Progress* tab
+
+|8
+|At the end, the *Results* tab opens automatically.
+Use ↗ to open the generated JSON file.
+|===
+
+=== Scenario 1b — Generating an SBOM from an OCI image
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|1
+|Make sure `syft` (or `trivy` / `skopeo` / `cdxgen`) is installed
+(see <<_installing_syft_optional>>)
+
+|2
+|In the *OCI image* field, enter the reference: `nginx:latest`,
+`/path/ubuntu.tar` (or `.tar.gz` / `.tgz`), or use 📂 to browse
+(tar archives or OCI layout directory)
+
+|3
+|Select the OCI backend if needed (Syft is the default)
+
+|4
+|In the *Base path* field, enter the output path: `sbom`
+
+|5
+|Check the desired format(s) (CycloneDX recommended)
+
+|6
+|Click *▶ Generate the SBOM*. The interface first displays the message
+`Analysing OCI image …` while the tool analyzes the image, then starts the
+SBOM generation.
+
+|7
+|At the end, the *Results* tab opens. Continue with Grype to analyze the
+vulnerabilities (Grype tab — the SBOM file is pre-filled).
+|===
+
+=== Scenario 2 — Generating an SBOM then analyzing vulnerabilities with Grype
+
+Continuation of scenario 1:
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|9
+|Go to the *Grype* tab. The *SBOM file* field is already filled in with the
+`.cdx.json` generated in the previous step.
+
+|10
+|Select the RHEL version in the *Distro* menu: e.g. `rhel:9`
+
+|11
+|Leave *--platform linux*, *--add-cpes-if-none* and *--by-cve* checked
+
+|12
+|Optional: select a `--fail-on` *threshold* (e.g. `high`) and check
+*--only-fixed* to filter on fixable vulnerabilities
+
+|13
+|Optional: fill in the *Template (-t)* field with `./grype_csv.tmpl`
+to produce a CSV export
+
+|14
+|Click *Analyze*
+
+|15
+|Look at the *Table* view for an overview by severity, the *JSON* view for
+the technical details, and the *Template* view for the CSV export
+|===
+
+=== Scenario 2b — Cross-checking OSV-Scanner and Trivy results
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|1
+|After an SBOM generation, go to the *OSV-Scanner* tab.
+The *SBOM file* field is pre-filled.
+
+|2
+|Click *Analyze*. Look at the *Vulnerabilities* view with the severity
+filters.
+
+|3
+|Go to the *Trivy* tab. The *SBOM file* field is also pre-filled (the tabs
+remember their state when navigating).
+
+|4
+|Optional: check *--ignore-unfixed* to only see fixable vulnerabilities.
+
+|5
+|Click *Analyze*. Compare the Trivy results with those of OSV-Scanner to
+detect possible false positives or false negatives.
+
+|6
+|Look at the *Raw JSON* view of each tab to access the detailed metadata
+(CVSS, references, affected packages).
+|===
+
+=== Scenario 2c — Filtering CVEs by publication period
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|1
+|After running a Grype (or OSV-Scanner / Trivy) analysis, open the
+matching tab. The date filter bar is visible above the table.
+
+|2
+|To only display the CVEs published since January 1st, 2024, click the
+*After…* chip and select `2024-01-01` in the calendar. The table updates
+instantly.
+
+|3
+|To add an upper bound, click *Before…* and select the desired end date.
+
+|4
+|If you want to filter on the last update rather than on the initial
+publication date, change the *Published* selector to *Modified* or *Most
+recent*.
+
+|5
+|Check *Undated* to include in the results the CVEs whose date is absent from
+the scanner data (empty field in the JSON).
+
+|6
+|Click *Apply to other tabs* to apply the same filter to the OSV-Scanner and
+Trivy tabs without having to reconfigure them.
+
+|7
+|To clear a bound, click the × of the matching chip.
+|===
+
+=== Scenario 3 — Assessing SBOM quality with sbomqs
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|1
+|Install `sbomqs` (see <<_installing_sbomqs_optional>>)
+
+|2
+|In the *Options* section, check *sbomqs quality score*
+
+|3
+|Launch the generation normally (CycloneDX format recommended)
+
+|4
+|After the generation, the *Results* tab opens and displays the sbomqs score
+in an indigo box under the file list
+
+|5
+|Select the score text to copy it into a report
+|===
+
+=== Scenario 4 — AsciiDoc + PDF report
+
+[cols="1,4"]
+|===
+|Step |Action
+
+|1
+|Check the *AsciiDoc* format (and optionally other formats)
+
+|2
+|Check *Convert to PDF (asciidoctor-pdf)*
+
+|3
+|Optional: fill in a PDF path in the field that appears
+
+|4
+|Launch the generation. The PDF is created automatically after the `.adoc`.
+
+|5
+|Both files (`.adoc` and `.pdf`) appear in the *Results* tab
+|===
+
+== `scan` subcommand — CVE analysis from the command line
+
+The `scan` subcommand runs the same CVE analyses as the GUI directly from the
+terminal, with built-in date filtering. It does not require a graphical
+interface.
+
+[source,bash]
+----
+sbom-generator scan --sbom <file.cdx.json> [options]
+----
+
+=== Options
+
+[cols="2,1,3", options="header"]
+|===
+|Option |Default |Description
+
+|`--sbom <path>` (or `-s`)
+|_required_
+|SBOM file to analyze (CycloneDX, SPDX…)
+
+|`--scanner <name>` (or `-S`)
+|`grype`
+|Scanner to use: `grype`, `osv`, `trivy`, or `all` (the three)
+
+|`--cve-after <YYYY-MM-DD>`
+|_none_
+|Only show the CVEs whose date is after this value (inclusive)
+
+|`--cve-before <YYYY-MM-DD>`
+|_none_
+|Only show the CVEs whose date is before this value (inclusive, end of day)
+
+|`--cve-date-field <field>`
+|`published`
+|Date field used: `published`, `modified`, or `latest` (the more recent of
+the two)
+
+|`--include-undated`
+|_disabled_
+|Include the CVEs whose date field is absent from the scanner data
+
+|`--help` (or `-h`)
+|—
+|Display the help of the subcommand
+|===
+
+=== Exit codes
+
+* *0* — no CVE in the requested range (or no CVE found at all)
+* *1* — at least one CVE found in the range, or a scanner error
+
+=== Examples
+
+[source,bash]
+----
+# All Grype CVEs since January 1st, 2024
+sbom-generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# OSV-Scanner CVEs between two dates
+sbom-generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# All scanners, modification date, undated CVEs included
+sbom-generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Use in a CI script (returns 1 if recent CVEs are detected)
+sbom-generator scan --sbom sbom.cdx.json \
+  --cve-after "$(date -d '90 days ago' +%F)" && echo "OK" || echo "Recent CVEs!"
+----
+
+=== Output format
+
+For each scanner, the command prints a text table sorted by decreasing
+severity:
+
+----
+── Grype ──────────────────────────────────────────
+  3 CVE(s) found  Filter: field=published  after=2024-01-01
+
+SEVERITY      CVE / ID              PACKAGE
+------------  --------------------  ------------------------------------
+Critical      CVE-2024-1234         openssl@1.1.1k
+High          CVE-2024-5678         bash@5.0.17
+Medium        CVE-2024-9012         zlib@1.2.11
+----
+
+== Troubleshooting
+
+=== `sbom-generator` not found
+
+*Symptom*: the generation fails immediately with an error such as
+`sbom-generator: command not found`.
+
+*Solution*: check that the `sbom-generator` binary is reachable in the PATH:
+
+[source,bash]
+----
+which sbom-generator
+sbom-generator --version
+----
+
+If the binary is installed in a non-standard location, put it in a folder of
+the PATH or create a symbolic link:
+
+[source,bash]
+----
+ln -s /path/to/sbom-generator /usr/local/bin/sbom-generator
+----
+
+=== `syft` / `skopeo` / `cdxgen` not found
+
+*Symptom*: the generation fails with the message
+`syft not found or not working — required for --image.`
+
+*Solution*: install the missing tool and check that it is in the PATH:
+
+[source,bash]
+----
+# Syft
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+syft version
+
+# Skopeo (Fedora/RHEL)
+sudo dnf install skopeo
+skopeo --version
+
+# cdxgen (npm, requires Node.js)
+npm install -g @cyclonedx/cdxgen
+cdxgen --version
+----
+
+=== OCI analysis failure
+
+*Symptom*: `OCI analysis failed: …` in the log.
+
+*Possible causes and solutions:*
+
+* *Unreachable registry image*: check the network connection and the
+  authentication (`docker login` or `skopeo login`).
+* *Corrupted tar archive or unrecognized format*: regenerate the archive
+  with `docker save <image> -o /path/image.tar` (or compressed:
+  `docker save <image> | gzip > /path/image.tar.gz`).
+  The `.tar`, `.tar.gz` and `.tgz` formats are supported.
+* *Invalid OCI layout directory*: check that `index.json` is present at the
+  root of the directory.
+
+=== `grype` not found
+
+*Symptom*: the Grype analysis fails with the message
+`grype not found. Install it: https://github.com/anchore/grype`.
+
+*Solution*: install grype (see <<_installing_grype>>) and check that it is in
+the PATH:
+
+[source,bash]
+----
+which grype
+grype version
+----
+
+=== `osv-scanner` not found
+
+*Symptom*: the OSV-Scanner analysis fails with a message such as
+`osv-scanner: command not found` or the SBOM file is not found.
+
+*Solution*: check that `osv-scanner` is in the PATH of your graphical session
+(not only in the terminal):
+
+[source,bash]
+----
+which osv-scanner
+osv-scanner --version
+----
+
+If `osv-scanner` is installed via `go install` in `~/go/bin`, this folder is
+often not in the graphical PATH. Add it in `~/.profile`:
+
+[source,bash]
+----
+export PATH="$HOME/go/bin:$PATH"
+----
+
+Then log in again or restart the GUI.
+
+=== `trivy` not found
+
+*Symptom*: the Trivy analysis fails with a message such as
+`trivy: command not found`.
+
+*Solution*: check that `trivy` is in the PATH:
+
+[source,bash]
+----
+which trivy
+trivy --version
+----
+
+Install it if needed (see <<_installing_trivy_optional>>).
+
+=== The Trivy database is outdated
+
+*Symptom*: Trivy displays a warning about the age of its database.
+
+*Solution*: leave *--skip-db-update* unchecked (default behavior) so that
+Trivy updates its database automatically at launch. In an offline
+environment, update manually:
+
+[source,bash]
+----
+trivy image --download-db-only
+----
+
+=== No vulnerability detected despite a loaded SBOM
+
+*Possible causes:*
+
+* The selected SBOM file is not a format recognized by grype.
+  Grype natively supports CycloneDX JSON (`.cdx.json`) and SPDX JSON
+  (`.spdx.json`). The SPDX 3.0 JSON-LD format may require a recent version of
+  grype.
+
+* The grype vulnerability database is outdated.
+  Grype updates it automatically on first launch,
+  but may need a manual update:
++
+[source,bash]
+----
+grype db update
+----
+
+* The RHEL version selected in *Distro* does not match the packages of the
+  SBOM. Try *(none)* to let grype detect it automatically.
+
+=== License warnings
+
+*Symptom*: `Warning: unknown license for 'package'` lines appear in the
+progress.
+
+*Explanation*: `sbom-generator` could not determine the SPDX license of the
+package. The SBOM is still generated, with the value `NOASSERTION` for the
+license concerned.
+
+*Solution*: use a *license override* file (`--license-map`) to manually
+define the license of unrecognized packages.
+
+=== The sbomqs score does not appear
+
+*Possible causes:*
+
+* `sbomqs` is not installed or is not in the PATH.
+  Check with `which sbomqs`. If missing, install it
+  (see <<_installing_sbomqs_optional>>).
+
+* The *sbomqs quality score* option is not checked in the *Options* section.
+
+* No JSON SBOM file was generated in the current session.
+  sbomqs only runs on the `.cdx.json`, `.spdx.json` or `.jsonld` formats.
+  Make sure at least one of these formats is selected.
+
+=== The PDF conversion fails
+
+*Symptom*: the message `asciidoctor-pdf not found` appears in the logs
+(SBOM generation) or in the confirmation message (AsciiDoc + PDF export of a
+Grype/OSV-Scanner/Trivy tab — the `.adoc` file is still produced).
+
+*Solution*: install `asciidoctor-pdf` (see
+<<_installing_asciidoctor_pdf_optional>>).
+
+If `asciidoctor-pdf` is installed but not found, make sure the Ruby gems
+folder is in the PATH:
+
+[source,bash]
+----
+gem environment gemdir
+# Example: /home/user/.local/share/gem/ruby/3.2.0
+export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
+----

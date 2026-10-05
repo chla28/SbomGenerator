@@ -8,6 +8,9 @@
 :rouge-style: monokai
 :experimental:
 :docdate: 2026-06-29
+:lang: fr
+
+🇫🇷 *Français* · 🇬🇧 link:developer.en.adoc[English]
 
 == Introduction
 
@@ -105,8 +108,9 @@ flutter build linux --release
 ----
 gui/
 ├── lib/
-│   ├── main.dart                     # Point d'entrée — StatefulWidget, ThemeMode + couleur
+│   ├── main.dart                     # Point d'entrée — StatefulWidget, ThemeMode + couleur + langue
 │   ├── home_screen.dart              # Écran principal — layout 2 colonnes + palette thème
+│   ├── l10n/                         # Localisation (gen-l10n) : app_fr.arb / app_en.arb + code généré
 │   ├── models/
 │   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson + toCommandLine)
 │   │   ├── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
@@ -147,8 +151,10 @@ gui/
 │       ├── sbom_licenses_panel.dart  # Onglet Licences SBOM — visualisation + rapport via `licenses`
 │       └── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
 ├── doc/
-│   ├── developer.adoc               # Ce document
-│   └── user.adoc                    # Guide utilisateur
+│   ├── developer.adoc               # Ce document (français)
+│   ├── developer.en.adoc            # Ce document (anglais)
+│   ├── user.adoc                    # Guide utilisateur (français)
+│   └── user.en.adoc                 # Guide utilisateur (anglais)
 ├── test/
 │   ├── widget_test.dart
 │   ├── config_panel_input_test.dart
@@ -307,6 +313,7 @@ if (binaryPath.isNotEmpty) {
 Constantes exposées :
 
 * `allFormats`, `formatLabels`, `_formatExtensions` — checkboxes de format
+  (`formatLabel(fmt, l)` renvoie le libellé affiché, en traduisant `json`)
 * `allOciTools` (`['syft', 'trivy', 'skopeo', 'cdxgen']`) — liste des backends OCI
 * `ociToolLabels` (`{'syft': 'Syft', 'trivy': 'Trivy', 'skopeo': 'Skopeo',
   'cdxgen': 'cdxgen'}`) — libellés des segments du sélecteur d'outil OCI
@@ -314,7 +321,8 @@ Constantes exposées :
 ==== `models/app_themes.dart` — Thèmes de couleur
 
 Définit `AppTheme` (un label + une couleur) et la constante `kAppThemes`,
-liste de 10 thèmes prédéfinis :
+liste de 10 thèmes prédéfinis (le label est le nom source en français ;
+le nom affiché est traduit par les clés `theme*` des fichiers ARB) :
 
 [source,dart]
 ----
@@ -402,6 +410,12 @@ Lance `sbom-generator` via `Process.start()` et expose un
 
 `HomeScreen` écoute ce stream avec `.listen()` et appelle `setState()` à chaque
 événement pour mettre à jour l'UI.
+
+Le runner lance le CLI avec l'environnement de langue de l'interface
+(`SettingsService.cliEnvironment`, variable `SBOM_LANG`) pour que les messages
+du CLI suivent la langue choisie dans la GUI. Les *contrats machine* qu'il
+analyse (`SBOM written →`, la barre de progression `] n/m %`, les préfixes
+`Error:` / `Warning:` / `⚠` / `   •`) ne sont jamais traduits par le CLI.
 
 ==== `services/grype_runner.dart` — Exécution Grype
 
@@ -770,6 +784,15 @@ Le service gère également la *persistance* via `shared_preferences` :
 |`loadThemeColorIndex()`
 |Retourne l'index sauvegardé, ou `0` (Indigo) par défaut
 
+|`saveLanguage(String)` / `loadLanguage()`
+|Langue de l'interface (`system`, `fr`, `en`), clé `ui_language_v1` ; `system`
+par défaut
+
+|`cliLang` / `cliEnvironment`
+|Champ statique posé par `main.dart` d'après la locale effective, et
+environnement de processus `{SBOM_LANG: cliLang}` qui en est tiré — transmis
+par tous les runners au CLI qu'ils lancent
+
 |`saveScanEnrichOnline(bool)` / `loadScanEnrichOnline()`
 |Autoriser les requêtes réseau d'enrichissement CVE (clé
 `scan_enrich_online_v1`, défaut `true`) — bouton `☁` des onglets de scan
@@ -808,6 +831,10 @@ les collisions entre noms contenant des caractères spéciaux.
   `AnimatedContainer` avec liseré bleu
 * propose la checkbox *Score qualité sbomqs* (pilote `SbomConfig.enableSbomqs`)
 * expose un bouton 🔖 dans l'en-tête pour la gestion des profils nommés
+
+Tous les textes visibles viennent des fichiers ARB (clés `cfg…`) : `build()`
+lit `final l = context.l10n;` et les sous-widgets privés font de même dans
+leur propre `build()`.
 
 Le paramètre `VoidCallback? onChanged` est appelé après chaque modification
 d'un champ (texte via `_sync()`, booléens directement dans leur `setState`).
@@ -869,7 +896,7 @@ les deux :
 validator: (v) => (v == null || v.trim().isEmpty) &&
     _imageCtrl.text.trim().isEmpty &&
     _binaryCtrl.text.trim().isEmpty
-        ? 'Requis (ou spécifiez une image OCI / un binaire)'
+        ? l.cfgInputRequired   // « Requis (ou spécifiez une image OCI / un binaire) »
         : null,
 ----
 
@@ -1056,7 +1083,9 @@ _scan` (défaut `true`), `String _scanner` (défaut `grype`), plus
 * `_run()` — `cra --sbom <p> --format json` (+ `--scan`/`--no-scan`,
   `--scanner`, `_metaArgs()`). Le JSON est lu sur `stdout` *même si*
   `exitCode == 2` (rapport non conforme) ; seul un `stdout` ne commençant
-  pas par `{` est traité comme une erreur.
+  pas par `{` est traité comme une erreur. Les clés JSON sont stables et
+  jamais traduites (y compris les clés NTIA et l'`id` des `fieldChecks`) : le
+  panneau traduit les libellés affichés à partir de ces identifiants.
 * `_exportPdf()` — `FilePicker.saveFile` puis `cra ... --format pdf -o
   <path>` ; `exitCode` 0 ou 2 = succès (fichier écrit).
 * `_metaArgs()` — n'ajoute `--manufacturer` / `--product` /
@@ -1583,7 +1612,10 @@ l'Arborescence et la Visionneuse :
   on ouvre directement une couche.
 * `layerFieldsOf(component)` — champs de couche d'un composant : propriétés
   CycloneDX, `annotations[].comment` (SPDX 2.3) ou `annotation[].statement`
-  (SPDX 3.0), motif `sbom_generator:layer:<clé>=<valeur>`.
+  (SPDX 3.0), motif `sbom_generator:layer:<clé>=<valeur>`. Ces textes sont
+  des *contrats machine* écrits par le CLI : ils restent en français et ne
+  sont jamais traduits ; la GUI traduit leur affichage à partir des valeurs
+  lues.
 * `layerColumnLabel` / `layerGroupKey` — libellé de colonne et clé de
   regroupement (`Couche 01`… triables, `Ajoutés` / `Modifiés`).
 * `isLayerSbomFile(path)` — exclut les SBOM de couche des sélections
@@ -1695,6 +1727,11 @@ Sous-widgets notables :
   indigo si non nul
 
 Le paramètre `String? sbomqsOutput` est propagé depuis `HomeScreen`.
+
+La coloration du journal (`_lineColor`) repose sur les *préfixes* des lignes
+produites par le CLI (`Error:`, `Warning:`, `⚠`, `   •`, `SBOM written`,
+`Generating` / `Génération`…) : c'est pourquoi le CLI ne traduit jamais les
+quatre premiers.
 
 ==== `widgets/grype_panel.dart` — Onglet Grype
 
@@ -1994,7 +2031,9 @@ reste dans chaque `*_runner.dart` (voir <<sec-scan-image>>), pas ici.
   deux méthodes ; chaque panneau fournit `_scanOnce(target, useImage)`
   (son runner consommé jusqu'à l'événement de fin, via `_start`, qui porte
   les options du panneau), son `fromJson` et sa fonction de fusion.
-  `prepareSet` remplace `prepare` dans les tests.
+  `prepareSet` remplace `prepare` dans les tests. Le service ne renvoie jamais
+  de phrase affichée : il signale une étape typée `LayerScanStep` que
+  l'interface traduit.
 
 Chaque panneau (`_analyze`) bascule sur `_analyzeLayered` quand la source
 est une image et `_layerSettings.enabled` ; le résultat est remonté par
@@ -2013,10 +2052,12 @@ vide :
   `FilePicker.saveFile(...)`. `_filtered` dérive de `widget.vulns`, déjà
   fusionné par `dedupeVulns` (voir <<sec-dedupe-vulns>>) : chaque panneau
   ajoute une colonne « Emplacements » à `csvHeader`/`csvRow` reportant
-  `v.occurrenceCount`.
+  `v.occurrenceCount`. L'en-tête CSV n'est *pas* traduit (lu par des
+  programmes).
 * *Export AsciiDoc + PDF* (`Icons.picture_as_pdf_outlined`) — `_exportAsciiDoc()` :
   écrit un rapport AsciiDoc sur `_filtered` (donc après filtres
-  sévérité/recherche/date, comme le CSV) — résumé chiffré (décompte par
+  sévérité/recherche/date, comme le CSV), dans la langue de l'interface
+  (`AppLocalizations l`, transmis aux générateurs) — résumé chiffré (décompte par
   sévérité, chaque libellé passé à `pdfSeverityBadge` + barre
   `buildSeverityBarSvg`/`svgImageMacro`, filtre de date appliqué le cas
   échéant), section `== Outils` (`pdfToolVersionRow('sbom_generator_gui',
@@ -2063,11 +2104,14 @@ chacun un PDF noir et blanc par défaut :
   *Copie synchronisée* de `_kPdfThemeYaml` de
   `lib/scan_report_generator.dart` (paquet CLI) — garder les deux
   identiques.
-* `pdfSeverityBadge(severity)` — rend `[.sev-xxx]#LIBELLÉ#` avec le libellé
-  *francisé* via `frenchSeverityLabel` (CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE).
+* `pdfSeverityBadge(severity, {l})` — rend `[.sev-xxx]#LIBELLÉ#` avec le
+  libellé traduit par `frenchSeverityLabel(severity, l: l)` (CRITIQUE /
+  ÉLEVÉE / MOYENNE / FAIBLE en français, CRITICAL / HIGH / MEDIUM / LOW en
+  anglais ; le nom de la fonction est historique).
   Seuils identiques à `severityFg`/`severityBg` (ce fichier, plus haut).
-* `pdfFrenchDate(DateTime)` — date longue en français (« 8 septembre 2026 »)
-  pour l'attribut `:revdate:` de l'en-tête, sans dépendance `intl`.
+* `pdfFrenchDate(DateTime, {l})` — date longue dans la langue du rapport
+  (« 8 septembre 2026 » / « 8 September 2026 ») pour l'attribut `:revdate:`
+  de l'en-tête, sans dépendance `intl`.
 * `buildSeverityBarSvg(countsBySeverity)` / `svgImageMacro(svg)` —
   reproduisent `_SeverityBar` (`dashboard_panel.dart`) : segments
   proportionnels Critical/High/Medium/Low/Autre, mêmes couleurs, mêmes
@@ -2090,29 +2134,35 @@ chacun un PDF noir et blanc par défaut :
   afficher la ligne "null", d'où `pdfToolVersionRow(label, version)` qui
   affiche `_indisponible_` en italique dans ce cas.
 
+Tous les textes visibles des rapports viennent des fichiers ARB (clés `pdf*`,
+`adoc*`, `rep*`, `dash*`) via un paramètre optionnel `AppLocalizations? l`
+(défaut : français, ce qui laisse les tests existants inchangés) ; les exports
+déclenchés depuis l'interface passent `context.l10n`.
+
 === `widgets/help_viewer.dart` — aide en ligne (manuel utilisateur intégré)
 
 `HelpViewerScreen`, ouvert depuis l'icône ❓ de la barre du haut
-(`home_screen.dart`), affiche `doc/user.adoc` dans l'appli elle-même — pas
-seulement l'aide contextuelle courte des icônes ❓ par champ (`HelpIcon`/
+(`home_screen.dart`), affiche le manuel utilisateur dans l'appli elle-même — `doc/user.adoc` en
+français, `doc/user.en.adoc` en anglais — pas seulement l'aide contextuelle courte des icônes ❓ par champ (`HelpIcon`/
 `HelpLabel`, `widgets/help_icon.dart`).
 
 **Génération des assets (`tool/generate_help.dart`)** — à relancer
 manuellement (`dart run tool/generate_help.dart` depuis `gui/`) après toute
-modification de `doc/user.adoc` ; ses sorties sont commitées comme des
-fichiers générés ordinaires, l'appli elle-même n'exécute jamais
-`asciidoctor` :
+modification de `doc/user.adoc` ou `doc/user.en.adoc` ; ses sorties sont
+commitées comme des fichiers générés ordinaires, l'appli elle-même n'exécute
+jamais `asciidoctor`. Pour chacun des deux guides (`user.adoc` →
+`assets/help/manual/`, `user.en.adoc` → `assets/help/manual_en/`) :
 
-* Rend `doc/user.adoc` en HTML unique via `asciidoctor -a icons! -a toc!`
+* Rend le guide en HTML unique via `asciidoctor -a icons! -a toc!`
   (`icons!` : labels texte "Note"/"Astuce"… plutôt qu'une police d'icônes
   externe que `flutter_html` ne peut pas charger ; `toc!` : le sommaire est
   reconstruit côté Flutter, pas besoin de celui d'asciidoctor).
 * Découpe le HTML avec `package:html` à chaque `<div class="sect1">`
   (asciidoctor enveloppe déjà chaque section `== ` de premier niveau dans
   un tel div, enfant direct de `#content` — pas besoin de redécouper
-  manuellement au fil des `<h2>`) → un fichier `assets/help/manual/<n>.html`
-  par chapitre (21 actuellement).
-* Émet `assets/help/manual/toc.json` : la liste ordonnée `{title, file}`
+  manuellement au fil des `<h2>`) → un fichier `<n>.html` par chapitre (22
+  actuellement).
+* Émet `toc.json` : la liste ordonnée `{title, file}`
   pour le sommaire, et une table `id d'ancre → index de chapitre` construite
   à partir de tous les attributs `id="…"` du HTML (dont les ancres
   `[[sec-xxx]]` du `.adoc`) — permet à un renvoi interne
@@ -2120,11 +2170,16 @@ fichiers générés ordinaires, l'appli elle-même n'exécute jamais
   sur le bon chapitre au clic, même s'il pointe vers un autre chapitre que
   celui affiché.
 
+Les deux répertoires sont déclarés dans `pubspec.yaml` (`assets:`). À
+l'ouverture, `HelpViewerScreen` choisit `manual_en` quand la langue effective
+est l'anglais (`appLocale`) et que le répertoire existe, `manual` (français)
+sinon. Les ids d'ancre (`sec-…`) sont identiques dans les deux guides.
+
 **Lecteur (`HelpViewerScreen`)** — `Scaffold` avec sommaire (recherche +
 `ListView` des titres de chapitres) à gauche et contenu du chapitre
 sélectionné à droite, rendu par le paquet `flutter_html` (widgets Flutter
 natifs, pas de WebView — `webview_flutter` n'a pas de support desktop Linux
-stable, `flutter_html` n'en a besoin d'aucun). Les 21 chapitres (HTML +
+stable, `flutter_html` n'en a besoin d'aucun). Les chapitres (HTML +
 texte brut) sont chargés une seule fois au démarrage (`_loadAll`,
 `Future.wait`, ~240 Ko au total) plutôt que paresseusement à chaque
 sélection : la recherche doit pouvoir scanner le contenu de tous les
@@ -2306,22 +2361,30 @@ L'interface utilise le mécanisme standard de Flutter (`gen-l10n`) :
 * `lib/l10n/l10n.dart` : `AppLanguage` (`system` / `fr` / `en`, réglage
   mémorisé par `SettingsService.load/saveLanguage`, clé `ui_language_v1`),
   `resolveAppLocale` (langue du système si prise en charge, sinon
-  français), et l'extension `context.l10n`. Celle-ci retombe sur le
-  français hors d'une application localisée : les tests de widgets montés
-  sans délégués — la plupart des tests existants — voient donc les textes
+  français), l'extension `context.l10n`, la globale `appLocale` (locale
+  effective, mise à jour par `main.dart`) et `appL10n()` pour le code sans
+  `BuildContext` (services, exports). `context.l10n` retombe sur le français
+  hors d'une application localisée : les tests de widgets montés sans
+  délégués — la plupart des tests existants — voient donc les textes
   français sans modification.
 * `main.dart` branche `localizationsDelegates`, `supportedLocales`,
-  `locale` et `localeListResolutionCallback` ; `home_screen.dart` porte le
-  menu de langue (clé `language-menu`).
+  `locale` et `localeListResolutionCallback`, et `_applyLanguage` met à jour
+  `appLocale` et `SettingsService.cliLang` ; `home_screen.dart` porte le menu
+  de langue (clé `language-menu`).
 
 *Ajouter un texte* : clé dans `app_fr.arb` (avec description), traduction
 dans `app_en.arb`, `flutter gen-l10n`, puis `context.l10n.maCle` (ou
 `l10n.maCle(param)`) dans le widget. Préfixe par zone : `common…`,
 `scanSource…`, `vulnTable…`, `dateFilter…`, `layerScan…`, `cliCommand…`,
-`<onglet>…` (`grype…`). Une fonction hors widget reçoit `AppLocalizations`
-en paramètre (ex. `equivalentScanNote(l10n, …)`) ; un service ne produit
-jamais de phrase affichée mais une valeur typée que l'interface traduit
-(ex. `LayerScanStep` → `layerScanStepLabel`).
+`cfg…` (panneau de configuration), `dash…`, `pdf…` / `adoc…` / `rep…`
+(rapports exportés), `<onglet>…` (`grype…`). Une fonction hors widget reçoit
+`AppLocalizations` en paramètre — obligatoire quand elle est appelée depuis un
+widget, `{AppLocalizations? l}` optionnel (défaut : français) pour les
+exports et modèles testés sans contexte (ex. `equivalentScanNote(l10n, …)`,
+`pdfSeverityBadge(sev, l: l)`) ; un service ne produit jamais de phrase
+affichée mais une valeur typée que l'interface traduit (ex. `LayerScanStep` →
+`layerScanStepLabel`). Dans une méthode `async`, lire `final l = context.l10n;`
+en début de méthode, avant le premier `await`.
 
 *Ajouter une langue* : `lib/l10n/app_<code>.arb` avec toutes les clés, puis
 une valeur dans `AppLanguage` et son libellé dans le menu.
@@ -2331,15 +2394,18 @@ clés et paramètres que le français, que chaque clé française est
 documentée, la résolution de langue, le repli et le menu ;
 `test/l10n_grype_test.dart` affiche l'onglet pilote en anglais.
 
-*Ce qui n'est pas traduit* : le contenu des rapports exportés (AsciiDoc,
-PDF, CSV), l'aide intégrée et les messages du CLI (lots suivants du plan de
-localisation), ainsi que tout texte lu par un programme — lignes du CLI
-analysées par la GUI (`SBOM written → …`), propriétés `sbom_generator:*`,
-texte embarqué dans les SBOM — qui doit rester identique quelle que soit la
-langue.
+*Ce qui n'est pas traduit* (contrats machine, identiques quelle que soit la
+langue) : les lignes du CLI analysées par la GUI (`SBOM written → …`, la
+barre de progression `] n/m %`, les préfixes `Error:` / `Warning:` / `⚠` /
+`   •`), les propriétés `sbom_generator:*`, les textes embarqués dans les SBOM
+(y compris les textes de couches relus par la GUI), les clés JSON, les
+en-têtes CSV et le contenu des fichiers lus par d'autres outils. Les messages
+du CLI eux-mêmes sont traduits par `lib/i18n.dart` (`tr(fr, en)`,
+`--lang` / `SBOM_LANG`) ; la GUI lui transmet sa langue via
+`SettingsService.cliEnvironment`.
 
-État : infrastructure, `widgets/vuln_shared.dart` et onglet Grype migrés ;
-les autres écrans restent à faire.
+État : toute l'interface, les rapports exportés (AsciiDoc/PDF/HTML), l'aide
+en ligne et les messages du CLI existent dans les deux langues.
 
 == Concepts Flutter pour débutant
 
@@ -2465,13 +2531,16 @@ générées dynamiquement depuis `allFormats`.
 . Dans `_formatExtensions`, ajouter l'extension : `'newformat': '.new.json'`
 . Dans `allFormats`, ajouter `'newformat'`
 . Dans `formatLabels`, ajouter le libellé affiché : `'newformat': 'Nouveau Format 1.0'`
+  (si le libellé doit être traduit, le traiter dans `formatLabel()` comme `json`)
 
 === Ajouter un paramètre à la génération SBOM
 
 . Dans `models/sbom_config.dart` : ajouter le champ dans `SbomConfig` et
-  l'injecter dans `toArgs()`
+  l'injecter dans `toArgs()`, `toJson()` / `fromJson()` (et le tester dans
+  `sbom_config_test.dart`)
 . Dans `widgets/config_panel.dart` : ajouter le contrôle UI dans la section
-  *Options* du `ListView`
+  *Options* du `ListView`, avec ses textes dans les deux fichiers ARB (clés
+  `cfg…`)
 
 === Ajouter un paramètre à Grype
 
@@ -2521,7 +2590,7 @@ Tab(
     children: [
       Icon(Icons.my_icon, size: 16),
       SizedBox(width: 6),
-      Text('Nouvel onglet'),
+      Text(context.l10n.tabNouvelOnglet),
     ],
   ),
 ),
@@ -2597,6 +2666,9 @@ Pour ajouter un nouveau scanner :
   * Parse le JSON en `List<Map<String, dynamic>>` avec les clés
     `id`, `severity`, `package`, `published`, `modified`
 . Ajouter un `case` dans `_runScanner()`
+
+Les messages affichés par ces fonctions passent par `tr(fr, en)`
+(`lib/i18n.dart`) ; les clés JSON et les préfixes machine ne sont pas traduits.
 
 === Ajouter un sous-onglet dans GrypePanel
 
@@ -2721,6 +2793,17 @@ variable locale `final` au point d'usage — `final tf = tmpFile; if (tf !=
 null && tf.existsSync()) { … tf.delete(); }` — qui reste promue de façon
 stable puisqu'elle n'est jamais réassignée.
 ====
+
+=== Les préfixes machine du CLI ne se traduisent pas
+
+La coloration du journal de `ResultsPanel` et l'analyse de `SbomRunner`
+reposent sur des préfixes littéraux des lignes du CLI : `Error:`, `Warning:`,
+`⚠`, `   •`, `SBOM written →`, la barre de progression `] n/m %`. Le CLI
+(`lib/i18n.dart`, `tr(fr, en)`) traduit le *message* qui suit mais jamais ces
+préfixes ; les traduire casserait silencieusement la coloration, le compteur
+d'avertissements et la détection des fichiers produits. Il en va de même des
+propriétés `sbom_generator:*` et des textes embarqués dans les SBOM, que la
+GUI relit.
 
 === Stream vs Future pour les processus externes
 

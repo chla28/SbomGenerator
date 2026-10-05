@@ -1,0 +1,724 @@
+# Changelog
+
+🇫🇷 [Français](CHANGELOG.md) · 🇬🇧 **English**
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [Unreleased]
+
+### Added
+- **Bilingual FR / EN project.** The CLI messages, the `--help` text and the
+  readable reports (`scan` summary in Markdown/AsciiDoc/PDF, `cra` report,
+  `licenses` report, HTML/Markdown/AsciiDoc tables) are available in French and
+  English. Language chosen by `--lang fr|en` (accepted anywhere, subcommands
+  included), then the `SBOM_LANG` environment variable, then
+  `LC_ALL` / `LC_MESSAGES` / `LANG`; French by default (`lib/i18n.dart`,
+  `tr(fr, en)`). Never translated: SBOM contents (property names and values,
+  layer descriptions), JSON keys, SARIF identifiers and the
+  `SBOM written → …` line read by the GUI. The GUI forwards its own language
+  to the CLI it launches (`SBOM_LANG`).
+- **GUI fully localized (French / English)**: every screen, the exported
+  reports (AsciiDoc/PDF/CSV on the GUI side), the service messages and the
+  online help (`assets/help/manual_en/`, generated from
+  `gui/doc/user.en.adoc` by `tool/generate_help.dart`) follow the *Interface
+  language* setting; the manual opens in the effective language.
+- English documentation, kept in step with the French one:
+  `README.en.md`, `doc/usage.en.adoc`, `doc/developer.en.adoc`,
+  `gui/doc/user.en.adoc`, `gui/doc/developer.en.adoc`, `gui/README.en.md`,
+  `CHANGELOG.en.md`.
+
+### Changed
+- **`cra` JSON report**: the `ntiaMinimumElements` map is now keyed by stable
+  identifiers (`supplierName`, `componentName`, `componentVersion`,
+  `otherUniqueIdentifiers`, `dependencyRelationship`, `sbomAuthor`,
+  `timestamp`) instead of French labels, and each `fieldChecks[]` entry gains a
+  stable `id` (`name`, `version`, `supplier`, `identifier`, `hash`, `license`)
+  next to the (now translated) `field` label.
+- CLI messages that mixed French and English (parser warnings, errors) are
+  harmonised: each message exists in both languages.
+- Documentation: AsciiDoc (`doc/usage.adoc`, `doc/developer.adoc`) is the only
+  reference; the duplicated `usage.md` and `develop.md` files were removed.
+
+## [1.6.0] - 2026-10-02
+
+### Added
+- **`--depth`: descending into nested objects** (CLI and GUI) — with
+  `--input`, an RPM/deb, a tar/tgz/zip archive, a jar/war/ear or a wheel
+  is opened and what it contains is analysed in turn: jars of an RPM,
+  packages and jars of an archive, jars of a fat jar, manifests encountered
+  (`package-lock.json`, `go.sum`, `pom.xml`…). `--depth 0` (default: the object
+  alone), `N` levels, `all` (capped at 10). The merged SBOM contains
+  the object and its contents (`sbom_generator:nested:location` /
+  `depth` properties, SPDX annotations, `nested` field of the JSON,
+  container → content dependency edges); one SBOM per nested object is written next to `-o`
+  (`<base>.nested-NN-<object>.<ext>`, `--no-nested-files` to skip them).
+  Selective extraction by embedded Python script (rpm, deb, zip, tar — without
+  `rpm2cpio`/`cpio`/`dpkg-deb`), bounded in size and number of files
+  (`lib/nested_archive.dart`). `.war` / `.ear` are now recognised like
+  `.jar`. GUI: *Depth* selector and *One SBOM per nested object* checkbox
+  below the input field.
+- **`scan --package <file> [--depth N]`**: directly scans an RPM, deb,
+  tgz, zip, jar… (SBOM generated with the requested depth, then submitted to
+  Grype / OSV-Scanner / Trivy); each CVE is attached to the object that
+  contains the vulnerable package (`OBJECT` column, internal `container` key),
+  including with `--sbom` on an SBOM produced by `--depth`. GUI: new
+  *Package / archive* source (with depth) in the three scan tabs.
+
+### Changed
+- `scan`: the source selection error now cites `--package` in addition to
+  `--sbom` and `--image` ("exactly one of the three").
+- `Package.copyWith` accepts `sourceRef` (used for the logical paths
+  of nested objects).
+
+## [1.5.16] - 2026-09-29
+
+### Fixed
+- **GUI — dashboard report**: the "CVE details" section did not
+  follow the chosen severity threshold (it stayed limited to
+  KEV / EPSS ≥ 10 % / Critical-High, even with "All" or "≥ Medium"). It now
+  includes all the CVEs retained by the threshold and is titled
+  "CVE details" (formerly "Priority CVE details").
+
+## [1.5.15] - 2026-09-29
+
+### Added
+- **`licenses --format`**: the license report can also be produced
+  as Markdown, HTML (standalone), CSV or JSON (`-f asciidoc|markdown|html|csv|json`,
+  AsciiDoc by default). With `-f json`, `-o` is optional (JSON on standard
+  output). The analysis (grouping, copyleft categories) is
+  now separated from the rendering (`LicenseReportGenerator.analyze` / `render`).
+- **GUI — Licenses tab**: visualises the licenses of the selected SBOM
+  (expandable *By license* view or sortable *Table*, strong/weak copyleft and
+  "no license" badges, filter by license or package); the report at the bottom of the page is
+  generated as AsciiDoc, Markdown, HTML,
+  CSV or JSON as you choose. The data comes from `licenses -f json` (no
+  classification on the GUI side).
+- **GUI — French / English localisation (beginning)**: `gen-l10n`
+  infrastructure (ARB files `gui/lib/l10n/`, French as the reference,
+  ICU plurals), *Interface language* menu (System / Français /
+  English, remembered, fallback to French). Translated: components shared by the
+  scan tabs (table, filters, sources, per-layer analysis, CLI
+  popup) and the Grype tab. The other screens, exported reports, help and
+  the CLI will follow.
+
+## [1.5.14] - 2026-09-27
+
+### Added
+- **GUI, Dashboard — severity level of the PDF report**: *Critical* /
+  *≥ High* / *≥ Medium* / *All* menu (default *All*, remembered) next to
+  the export button. The whole report (summary, breakdown by
+  scanner, layers, cross-scanner comparison, details) covers the retained
+  CVEs, according to their worst severity across all scanners; CISA KEV
+  CVEs are always included. The filtered report states it at the top.
+
+## [1.5.13] - 2026-09-26
+
+### Added
+- **GitHub Actions CI** (`.github/workflows/ci.yml`): static analysis and
+  CLI and GUI tests on every push to `main` and every pull
+  request, then Linux build (`dart compile exe`, `flutter build linux
+  --release`, artifacts kept 7 days). SDKs pinned to those of
+  development (Dart 3.13.4, Flutter 3.47.5).
+- **Automatic release on `vX.Y.Z` tag** (`.github/workflows/release.yml`)
+  : `build-dist.sh --rpm` in an AlmaLinux 9 container (binaries and RPMs
+  compatible with RHEL 9 / 10 and recent Fedora), PDF CVE reports (grype,
+  osv-scanner, trivy), publication of the archive, RPMs, SBOMs and
+  reports in a GitHub Release whose notes are the CHANGELOG
+  section; fails if the tag does not match `pubspec.yaml`.
+
+### Changed
+- The `example/3PP` test archives (1.1 MB) are versioned: the tar/zip
+  integration tests also run in CI.
+
+## [1.5.12] - 2026-09-26
+
+### Added
+- **GUI — "CLI Command" button** in the Grype, OSV-Scanner and
+  Trivy tabs: popup displaying, with a Copy button, the exact native command
+  matching the tab's settings (actual sequence — generation
+  of the layer SBOMs then scan(s) — with the *Per layer* option) and
+  the equivalent `sbom-generator scan` (per-layer options, date filter,
+  `--no-enrich`), with the list of options that cannot be transposed. The
+  scanner arguments are now built by
+  `GrypeRunner/OsvRunner/TrivyRunner.buildArgs`, shared between
+  execution and preview.
+
+## [1.5.11] - 2026-09-26
+
+### Added
+- **Vulnerabilities per image layer** — CLI: `scan --per-layer`, with
+  `--layer-scan attribute|each`:
+  - `attribute` (default): one scan of the global SBOM, each CVE attached to the
+    originating layer of its package (`sbom_generator:layer:index`);
+  - `each`: the SBOM of each layer is scanned (CVEs of a version
+    replaced higher in the stack included).
+  `scan --image <image>` (mutually exclusive with `--sbom`, with `--oci-tool` and
+  `--layer-mode`) generates the SBOM — and the layer SBOMs — in a
+  temporary directory before scanning it. Text output: `LAYER`
+  column + "CVEs per layer" table; SARIF: `layer` property;
+  markdown/asciidoc/pdf reports: "Image layers" section and
+  "Layer(s)" column. New module `lib/layer_scan.dart`.
+- **GUI**: *Per layer* option (Attribution / Each layer,
+  Metadata / Rootfs) in the Grype, OSV-Scanner and Trivy tabs in
+  image mode; with attribution, the native layer of Trivy (`Layer.DiffID`)
+  and OSV-Scanner (`image_origin_details`) takes priority. Table:
+  *LAYER* column, filter by layer, grouping by layer (headers
+  with instruction and counters), CSV/PDF exports with layers. Dashboard:
+  *Image layers* card, *LAYER(S)* column in the cross-scanner
+  comparison, section in the PDF export.
+
+## [1.5.10] - 2026-09-26
+
+### Added
+- **`--per-layer`: one SBOM per image layer** (with `--image`), in addition
+  to the global SBOM, in each requested format:
+  `<base>.layer-NN-<digest12>.<ext>`. A layer's SBOM describes its
+  *delta* (added/modified components, removed ones listed
+  separately); its root component carries the layer's digest and build instruction.
+  The global SBOM states the originating layer of each component
+  (`sbom_generator:layer:index`/`:digest`/`:modifiedBy`) and references each
+  layer SBOM (CycloneDX BOM-Link, `sbom_generator:layers:NNN` summary);
+  SPDX 2.3/3.0: document comment + annotations; Markdown, AsciiDoc,
+  HTML, CSV: "Couche" / "Changement" column and removed components.
+  The global one is written first.
+- **`--layer-mode metadata|rootfs`**:
+  - `metadata` (default, syft/trivy): originating layer reported by the
+    backend — trivy's `Layer.DiffID`; for syft, a second `--scope all-layers`
+    analysis and the lowest layer where the package appears
+    (the usual analysis attaches all system packages to the last
+    layer that rewrote the rpm/dpkg/apk database). Additions only.
+  - `rootfs` (all four backends, the only mode for skopeo/cdxgen): layers
+    applied one by one onto a cumulative rootfs (overlayfs, *whiteouts*
+    included, never following a symbolic link), rootfs re-analysed after
+    each layer — additions, changes (version bump…),
+    removals. A registry image is copied via skopeo, falling back
+    to podman/Docker local storage.
+- New module `lib/image_layers.dart`; `OciParser.layerAttribution`,
+  `rootfsLayerAnalysis`, `scanRootfs`.
+- **GUI**: "One SBOM per layer" checkbox + Metadata/Rootfs choice under the
+  OCI backend; *global SBOM / layer N* navigation (instruction, counters,
+  removed) in the Tree and the Viewer; Layer/Change column
+  in the Viewer, "Layer" grouping in the Tree. Layer SBOMs are excluded from
+  automatic selections and from the "Generated" menu.
+
+### Changed
+- GUI, Tree: "expand / collapse all" buttons as icons with a
+  tooltip (the bar overflowed with the "Layer" segment).
+
+## [1.5.9] - 2026-09-18
+
+### Added
+- **GUI — "Standalone binary" field (`--binary`)**: the GUI did not expose
+  this new CLI flag (v1.5.8). Added a third field in the
+  *Input* section, under a second "OR" separator, mutually exclusive with
+  *Packages to analyse* and *OCI image* (the three clear one another).
+  Does not offer the *OCI tool* selector (`--binary` forces `--oci-tool
+  syft` on the CLI side); displays a text reminder instead. `SbomConfig`
+  gains the `binaryPath` field (persistent, profiles included).
+
+## [1.5.8] - 2026-09-17
+
+### Added
+- **`--binary <file>` / `-b`**: direct analysis of a standalone binary
+  (e.g. statically linked Go executable), without registry or container. Explicit
+  alias for `--image <file>` (already working: syft automatically detects
+  that an existing local path is a file source), which
+  forces `--oci-tool syft` and rejects any combination with `--oci-tool
+  trivy|skopeo|cdxgen` or with `--image`.
+  - **Go** (static or not): complete list of modules + versions read
+    from the embedded `buildinfo` metadata (syft's `go-module-binary-cataloger`),
+    even on a stripped executable.
+  - **Other languages** (Rust, static C/C++…): only syft's generic
+    classifier applies — a *fixed* catalog of well-known open source
+    libraries (OpenSSL, zlib, sqlite, busybox…), not an arbitrary
+    extraction. A library with no known signature nor embedded
+    metadata cannot be recovered after the fact.
+- New enum value `OciRefType.binary` (`lib/oci_parser.dart`):
+  also fixes the misleading console label displayed when `--image`
+  already pointed to a local file ("Analysis of OCI image (registry)"
+  although no registry was queried).
+
+## [1.5.7] - 2026-09-09
+
+### Added
+- **Hash of installed RPM packages**: `%{SIGMD5}` (the RPM "pkgid" —
+  MD5 of header + payload, native content identity, also used by
+  Trivy) is emitted as the component's `MD5` hash. Previously an SBOM
+  generated from a list of installed RPM names carried no hash
+  (only a `.rpm` file passed as a path gave a SHA-256 / SHA-512).
+  `%{SHA256HEADER}` remains exposed separately (`rpm:header-sha256`).
+
+## [1.5.6] - 2026-09-09
+
+### Added
+- **Cryptographic hashes of components** (`Package.hashes`) emitted
+  in the three formats: CycloneDX (`hashes`), SPDX 2.3 (`checksums`),
+  SPDX 3.0 (`verifiedUsing`). Opportunistic collection, without network request:
+  - `integrity` of npm / yarn v1 lockfiles (SRI base64 → hexadecimal) and
+    `sha256` of `pubspec.lock`;
+  - Trivy's `Digest` field and Syft's artifact digests (`archiveDigests`
+    / `digest`, e.g. JAR) when analysing OCI images;
+  - `hashes` of the components produced by cdxgen;
+  - SHA-256 + SHA-512 computation of the `.rpm` / `.deb` / `.jar` / `.whl` files
+    provided directly as input.
+  Only the hexadecimal digests of a real artifact are kept; derived
+  formats (Go `h1:` dirhash, APK `Q1…` checksum) are discarded.
+- The RPM header digest (`%{SHA256HEADER}`), previously wrongly emitted
+  as the `SHA-256` artifact hash of the CycloneDX component, is now
+  exposed as a dedicated `rpm:header-sha256` property/annotation (it is not
+  the hash of the `.rpm` file).
+- New dependency: `package:crypto` (file hash computation).
+- **Supplier of npm components**: the `author` field of each
+  `package.json` installed in `node_modules` is read (the `package-lock.json`
+  does not contain it). Without a `node_modules` tree, behaviour is unchanged.
+- **`--supplier "<name>"`** (generation and `convert`): fallback value for
+  the supplier of components whose source carries no vendor
+  (Go / npm / yarn / pip / pub lockfiles, `requirements.txt`). Never overrides
+  a detected supplier (RPM `%{VENDOR}`, Debian `Maintainer`,
+  Maven `groupId`…). The `supplier` field is mandatory in BSI
+  TR-03183-2 (`cra` report).
+
+### Changed
+- **SPDX 2.3**: a component's `supplier` field is now **always
+  present** — `Organization: <supplier>` if known, otherwise `NOASSERTION`
+  (explicit value required by the spec, taken into account by the NTIA minimum
+  elements and `sbomqs`) instead of being omitted. Same for the OS package.
+- `Package` exposes `copyWith({license, vendor})`; `_applyLicenseOverrides`
+  relies on it (no more manual reconstruction per type).
+- `convert`: a `supplier` equal to `NOASSERTION` in a source SPDX 2.3 SBOM
+  is re-read as "unknown" (empty string) instead of being copied as-is
+  as a supplier name.
+
+### Fixed
+- SPDX 3.0 reader (`convert -i <file>.spdx3.jsonld`): the type filter
+  expected `software_Package` whereas the generator (and `diff`) emit
+  `software:Package`, and the `software:packageVersion` /
+  `software:downloadLocation` fields were not read — `convert` from an SPDX 3.0
+  SBOM returned an **empty** document. Types and fields aligned (both
+  prefix forms tolerated), `NOASSERTION` license now re-read
+  as empty, `verifiedUsing` hashes re-read.
+
+### Notes
+- For an SBOM coming from an OCI image, most system packages remain
+  without a hash: they are installed in the image, not present as an
+  artifact, and neither Syft nor Trivy reconstructs their digest. Coverage
+  improves mainly for application packages and, via Trivy,
+  some of the RPMs.
+
+## [1.5.5] - 2026-09-09
+
+### Added
+- **Cyber Resilience Act compliance report** — new CLI subcommand
+  `sbom_generator cra --sbom <file>` and new *CRA Compliance* tab
+  in the GUI. Assesses an SBOM against the **automatically verifiable subset of
+  the requirements of Regulation (EU) 2024/2847**, clearly delimited:
+  - *SBOM format and completeness* — commonly used machine-readable format
+    and dependency coverage (Annex I §2 point 1), data fields per
+    component (BSI TR-03183-2: name, version, supplier,
+    unique identifier PURL/CPE, hash, license), NTIA 2021 minimum
+    elements;
+  - *vulnerability handling* — inventory of known vulnerabilities and
+    availability of fixes (Annex I §2 points 1-2), via `--scan`;
+  - *actively exploited vulnerabilities* — any CVE in the CISA KEV catalog
+    is flagged as triggering the ENISA notification within 24 h
+    (art. 14).
+  - Manufacturer/product metadata from a `cra.yaml` file, options
+    (`--manufacturer`, `--product`, `--product-version`, `--support-until`,
+    `--vuln-contact`, `--cvd-policy-url`; take precedence over the file) or, failing
+    that, the SBOM's `metadata.component`.
+  - Outputs `--format pdf` (same design as the `scan` report), `asciidoc`
+    or `json` (schema `sbom-generator/cra-report/1`). Exit code `2` if
+    non-compliant (non machine-readable format, missing mandatory field,
+    vulnerability without a fix, actively exploited CVE).
+  - The other CRA obligations are the manufacturer's responsibility: they are listed,
+    not assessed. **The report is not a declaration of conformity.**
+
+## [1.5.4] - 2026-09-08
+
+### Changed
+- **PDF reports** (GUI: dashboard and Grype / OSV / Trivy tabs;
+  CLI: `scan --format pdf|asciidoc`) — visual overhaul:
+  - cover page (title, subtitle, date written out in full, analysed target);
+  - *executive summary*: numeric box "Critical / High / CISA KEV /
+    EPSS ≥ 10 %" and a one-sentence verdict (immediate action required if
+    KEV CVEs are present, priority action if critical ones, etc.);
+  - sober theme: sans-serif font (asciidoctor-pdf's `default-sans`, no
+    embedded font), slate-blue palette, dark table headers,
+    footer "report title … Page X / Y" with a rule;
+  - severity labels in French (CRITIQUE / ÉLEVÉE / MOYENNE / FAIBLE).
+  - GUI: the *analysed target* (SBOM path or image reference) is
+    passed up from the scan tabs to the report header.
+
+## [1.5.3] - 2026-09-08
+
+### Fixed
+- `scripts/build-dist.sh` and `scripts/build-rpm-mock.sh`: the default
+  version is now read from the `version:` field of `pubspec.yaml` instead of
+  being frozen at `1.4.0` — the archive and RPMs carry the right
+  version even without passing the `VERSION` argument.
+
+## [1.5.2] - 2026-09-08
+
+### Added
+- **GUI** — click on a CVE number (dashboard *and* Grype /
+  OSV-Scanner / Trivy tabs): the row expands and shows the full detail of
+  the CVE — package & versions, severity and dates as reported by
+  each scanner, detailed exploitability (CISA KEV with date added /
+  due date / ransomware, EPSS + percentile, CVSS sub-score + vector +
+  maturity, clickable PoC links), and reference buttons to NVD /
+  CVE.org / osv.dev / CISA KEV. New shared widget
+  `gui/lib/widgets/cve_detail.dart`.
+- **GUI**, dashboard PDF / AsciiDoc export: new
+  "Priority CVE details" section — one block per CVE in the CISA KEV catalog,
+  or with EPSS ≥ 10 %, or of Critical / High severity.
+
+### Changed
+- **GUI**, dashboard: the "Cross-scanner comparison" table is
+  now sortable by column — severity, CVE / ID, presence per scanner
+  (Grype / OSV / Trivy, ✓ before —), and CISA KEV / EPSS score when
+  enrichment ran. Clickable headers (click = sort, click again =
+  reverse). The default sort is unchanged (risk prioritisation:
+  KEV → EPSS → severity if enrichment, otherwise severity). The
+  AsciiDoc / PDF export now follows the displayed order.
+
+## [1.5.1] - 2026-09-08
+
+### Added
+- **GUI** — exploitability enrichment in the scan tabs (Grype /
+  OSV-Scanner / Trivy) and the dashboard, aligned with the command line:
+  - *KEV* (CISA, red), *EPSS*, *PoC* and *CVSS expl.* chips under each
+    vulnerability row, sortable *KEV* / *EPSS* columns;
+  - *CISA KEV (N)* filter next to the severity filters;
+  - ☁ button (table toolbar) to toggle online / offline
+    enrichment — choice remembered (`shared_preferences`), shared by the
+    three tabs;
+  - *KEV* / *EPSS* / *PoC* columns added to the CSV and AsciiDoc/PDF exports;
+  - the dashboard marks and prioritises KEV / high-EPSS CVEs in its
+    cross-scanner comparison.
+  New `gui/lib/services/vuln_enrichment.dart` (synchronised copy of the CLI
+  module) + `gui/lib/services/scan_enrichment.dart`. As Grype natively exposes
+  KEV/EPSS/CVSS, only the PoC signal triggers a network request for that tab;
+  24 h cache shared with the CLI under `~/.cache/sbom-generator/`.
+
+## [1.5.0] - 2026-09-08
+
+### Added
+- `sbom-generator scan`: **CVE enrichment with exploitability and active
+  exploitation signals** (`lib/vuln_enrichment.dart`),
+  on by default.
+  - **CISA KEV** — the CVE is actively exploited in the wild (date
+    added, remediation due date, use by ransomware);
+  - **EPSS** (FIRST.org) — 30-day exploitation probability (score +
+    percentile);
+  - **PoC / public exploit** — repositories recorded by `poc-in-github` +
+    `E:` maturity of the CVSS vector;
+  - **CVSS exploitability** — AV/AC/PR/UI sub-score computed locally.
+  As Grype already provides KEV/EPSS/CVSS in its database, network requests are only
+  used to complete the CVEs seen only by OSV-Scanner / Trivy and to
+  retrieve the PoC signal; responses cached for 24 h under
+  `~/.cache/sbom-generator/`, falling back to the cache on network outage.
+- `scan`: new options `--enrich` / `--no-enrich` (also
+  `SBOMGEN_OFFLINE=1`), `--no-poc`, `--enrich-timeout`, `--only-kev`,
+  `--epss-min <x>` and `--sort severity|risk`.
+- `scan --format text`: `KEV` / `EPSS` / `PoC` columns. The Critical/High
+  alerts of the report formats carry the `[KEV]`, `EPSS <score>`, `[PoC]` markers.
+- Summary report (`markdown` / `asciidoc` / `pdf`): section
+  **"Exploitability and active exploitation"** — list of CISA KEV CVEs and
+  **"Risk prioritisation"** table (KEV, then EPSS, then severity) —
+  and KEV/EPSS/PoC counters in the global summary.
+- `scan --format sarif`: `kev`, `epss`, `epssPercentile`, `poc`,
+  `cvssExploitability` properties on each result; `security-severity` raised to
+  `9.5` for a KEV CVE (GitHub Code Scanning prioritisation).
+
+## [1.4.2] - 2026-09-07
+
+### Added
+- syft OCI backend: emission of **source packages**. OSV.dev indexes
+  Debian/Ubuntu advisories by *source* package (`zlib`, `perl`), not by binary
+  (`zlib1g`, `perl-base`); syft only lists the binary (with an `upstream=`
+  qualifier), which OSV-Scanner cannot link to an advisory. The backend
+  now adds one component per distinct source package (`metadata.source`
+  / `sourceVersion` from syft), as cdxgen does. The `upstream=` qualifier
+  is removed from the matching binary so that Grype does not count the same
+  CVE twice. Checked on `haproxy:3.4.4`: OSV-Scanner goes from 19 to 58
+  Debian CVEs (parity with the cdxgen SBOM), Grype keeps exactly the same
+  set of unique CVEs (the raw total deflates from 163 to 80, it
+  over-counted the same CVE on every binary of a given source), and the
+  "Notes per CVE" section of the report goes from 4 to 40 entries.
+- `sbom-generator scan -f markdown|asciidoc|pdf`: **"Notes per CVE"** section
+  under the cross-scanner matrix. For each CVE where Grype sees no
+  fix for the installed distribution (`won't fix` / `not fixed`, taken
+  from the Debian Security Tracker's `<no-dsa>` status) while OSV-Scanner or
+  Trivy announce a fixed version, a note states that this version is
+  generally the fix of the *unstable* / *testing* branches — not an
+  update available for the stable release. Clears up a frequent confusion: both
+  scanners are right, they are not talking about the same thing. The scan
+  runners capture Grype's `fix.state` / fixed versions, OSV's `fixed`
+  events and Trivy's `FixedVersion` for this purpose.
+
+## [1.4.1] - 2026-09-07
+
+### Added
+- `sbom-generator scan`: new output formats `markdown`, `asciidoc` and
+  `pdf` (`-f`, written via `-o`) — a **cross-scanner summary report**:
+  global summary (scanners run, unique CVEs across all scanners, raw
+  total), breakdown by severity for each scanner, and "CVE ×
+  scanner" matrix (✓/—) sorted by severity (OSV-Scanner `DEBIAN-CVE-…` identifiers
+  normalised before comparison). `pdf` = `asciidoc` + `asciidoctor-pdf` (if
+  absent, the `.adoc` is kept). These formats return `0` as soon as a
+  report is produced, whatever the number of CVEs.
+- `scripts/build-dist.sh` now scans the generated SBOM with Grype +
+  OSV-Scanner + Trivy and drops a summary PDF next to the archive
+  (`…-scan-report.pdf`; with `--rpm`, also `…-rpms-scan-report.pdf`).
+  Best-effort: each missing scanner is omitted, the total absence of scanners or
+  of `asciidoctor-pdf` does not fail the build.
+- `sbom-generator scan -f markdown|asciidoc|pdf` now lists on stdout,
+  one line per unique CVE, each **Critical (red)** and
+  **High (orange)** vulnerability — package concerned + scanners that saw it
+  + count. `--color auto` by default (colour if terminal and `NO_COLOR` unset),
+  `--color always` (forces, e.g. behind `build-dist.sh`'s pipe),
+  `--color never`. `build-dist.sh` displays these alerts during the build
+  audit.
+- Licenses of Dart/Flutter packages: `pubspec.lock` contains none; the
+  CLI now reads each package's `LICENSE` file from the pub cache
+  (`$PUB_CACHE` / `~/.pub-cache`, auto-detected; `--pub-cache <dir>` to
+  force, `--pub-cache ""` to disable) and from `--flutter-root` for
+  `source: sdk` packages. In practice the license goes from "almost none" to
+  "almost all" (on the GUI: 63/63 components, sbomqs score 7.7 → 8.7).
+  `identifyArchiveLicense()` also recognises the canonical BSD-3-Clause text
+  without the word "BSD" (the case of almost all pub packages).
+- `--sdk-version <sdk>=<version>` (repeatable): provides the real version of a
+  Dart/Flutter SDK. Double effect — (1) applies the version to the matching
+  `source: sdk` packages of a `pubspec.lock` / `pubspec.yaml` (which `pub`
+  always records as `0.0.0`); (2) adds each SDK to the SBOM toolchain:
+  `metadata.tools.components` (CycloneDX, `type: platform`),
+  `creationInfo.creators` (SPDX 2.3), `Tool` elements (SPDX 3.0) — this is where
+  the `dart` version appears, as it has no package in the lockfile.
+  `scripts/build-dist.sh` passes it automatically from `flutter --version` /
+  `dart --version`.
+
+### Fixed
+- `pubspec.lock` / `pubspec.yaml`: `source: sdk` packages other than the
+  first one (`sky_engine`, `flutter_web_plugins`…) were renamed `flutter`
+  (via the scalar `description:`) then deduplicated → components lost in the
+  SBOM. The name is now the block key. Their dummy `0.0.0` version from the
+  lockfile is also omitted (PURL `pkg:pub/flutter` without a version) — except
+  with `--sdk-version`. Side effect: no more Grype false positives on
+  `flutter@0.0.0` for lack of an aberrant version.
+- `sbom-generator scan --scanner grype` now invokes Grype with the same
+  options as the GUI's Grype tab (`--add-cpes-if-none --by-cve --platform
+  linux`). Without `--add-cpes-if-none`, Grype only matched by PURL and
+  missed the CVEs indexed by CPE (e.g. `flutter@0.0.0` of a `pubspec.lock`):
+  `scan` reported 0 CVEs where the GUI found some. `--by-cve` also aligns the
+  identifiers (CVE vs GHSA) with OSV-Scanner / Trivy for the cross-scanner
+  matrix.
+- CycloneDX: `license.id` is now only assigned to identifiers actually
+  present on the SPDX License List (new snapshot `lib/spdx_license_ids.dart`).
+  The former "the token contains a hyphen followed by a digit" heuristic
+  let `debian/copyright` shortcuts (`GFDL-NIV-1.3`,
+  `BSD-3-clause-Berkeley`, `GPL-2.0-only+-with-link-exception`…) pass as `license.id`, producing an SBOM
+  rejected by CycloneDX schema validation (sbomqs score `sbom_schema_valid` at 0).
+  These values are now carried in `license.name`. Same hardening for the
+  terms of an SPDX expression (SPDX 2.3 / 3.0), escaped as `LicenseRef-…` if they
+  are not SPDX-listed.
+- syft OCI backend: the dpkg/apk maintainer (`metadata.maintainer`) and
+  the architecture (`metadata.architecture`, lowercase key) are now read —
+  they were ignored because the code only tested Pascal-case keys
+  (`Vendor`, `Architecture`). The SBOM of an OCI image analysed via syft thus
+  now carries a component `supplier` (sbomqs metric `comp_with_supplier`) and
+  the `arch` in the PURL of Debian/Alpine packages.
+- syft OCI backend (Debian): the `distro` qualifier of system PURLs and the
+  version of the `operating-system` component are brought back from the *point release*
+  (`debian-13.6`, as syft reads it in `/etc/debian_version`) to the major
+  (`debian-13`, matching `VERSION_ID` of `/etc/os-release`), and `distro_name`
+  (codename, e.g. `trixie`) is added. OSV-Scanner in "SBOM scan" mode
+  did not link `debian-13.6` to the `Debian:13` ecosystem and *silently*
+  reported 0 CVEs on these SBOMs: Grype was then alone, with all
+  its matches as `wont-fix` / `not-fixed` (Debian Security
+  Tracker status, no fixed version), giving a falsely reassuring image.
+  Non-Debian distributions (alpine `3.20.3`, rhel `9.6`…) unchanged: the
+  minor carries information there. Checked on `haproxy:3.4.4`.
+
+## [1.4.0] - 2026-09-06
+
+### Added
+- **cdxgen** OCI backend (`--oci-tool cdxgen`, or "cdxgen" selector in the GUI) in addition
+  to `syft`, `trivy` and `skopeo`: runs `cdxgen --type docker` (OWASP CycloneDX Generator,
+  requires Node.js) and normalises the produced BOM — only components carrying a real
+  ecosystem PURL are kept (`pkg:deb`, `pkg:rpm`, `pkg:apk`, `pkg:pypi`, `pkg:npm`,
+  `pkg:golang`, `pkg:maven`…), cdxgen's file-by-file inventory (`pkg:generic` of
+  type `file`), its cryptographic assets and its APT repositories are discarded for a result
+  consistent with the other backends. Registry, tar archive and OCI layout directory are
+  accepted. The base OS is reconstructed from the `distro=` qualifier of system PURLs
+  (cdxgen does not emit a dedicated `operating-system` component)
+- `scripts/build-dist.sh` now generates a CycloneDX SBOM (`sbom.cdx.json`, runtime
+  dependencies of the GUI) and includes it in the distribution archive, self-hosted via the
+  `sbom-generator` binary just compiled by the script; with `--rpm`, a second SBOM
+  describing the RPMs actually built is produced next to the archive
+- skopeo OCI backend: Debian/Ubuntu packages now extract their license from
+  `/usr/share/doc/<package>/copyright` (DEP-5 machine-readable format) instead of always
+  reporting an empty license — `LicenseNormalizer` also recognises the short names
+  specific to Debian (`GPL-2+`, `Expat`, `public-domain`, `GFDL-1.3`…)
+- GUI: online help — a ❓ button in the top bar opens the full user manual
+  directly in the application (table of contents of the 21 chapters on the left, content on
+  the right, clickable internal cross-references, search by title and by content with context
+  excerpt), in addition to the short contextual help already present on each field/section
+
+### Fixed
+- GUI documentation: two internal cross-references of `user.adoc` (JSON view, Template view)
+  displayed without readable text (`[sec-vue-json]`) for lack of an explicit link text
+- CycloneDX: licenses now distinguish the *declared* value (raw, as
+  reported by the package) from the *concluded* value (SPDX-normalised by
+  `LicenseNormalizer`), via the `license.acknowledgement` field (CycloneDX 1.5+) — a
+  pure AND compound license (e.g. `GPL-2.0-or-later AND BSD-3-Clause`) is split into
+  as many individual `concluded` entries. Improves the quality measured by `sbomqs`
+  (Licensing category) without inventing anything: the data already existed, it is just better
+  exposed. `SbomReader` re-reads the complete raw value from the `declared` entry
+- SPDX 2.3 / SPDX3: `LicenseNormalizer.toSpdxExpression` now escapes any term not
+  recognised as a real SPDX identifier (e.g. `curl`, `permissive`, `public-domain` — short names
+  specific to `debian/copyright`) as `LicenseRef-<slug>`, so that the produced expression
+  remains syntactically valid under the SPDX grammar even on these unlisted
+  Debian names
+- GUI: the Dashboard export (AsciiDoc/PDF) now includes an explanatory note on
+  the detection gaps between scanners specific to system packages (Debian/Alpine/RPM):
+  OSV-Scanner may drop to 0 CVEs in SBOM scan mode, and the exhaustiveness gap between
+  Grype and Trivy on Debian advisories
+
+## [1.3.0] - 2026-09-03
+
+### Added
+- GUI: the PDF exports (Dashboard, Grype, OSV-Scanner, Trivy) now state the
+  version of sbom_generator_gui and that of the scanner(s) concerned (detected via
+  `<tool> --version` at export time)
+
+## [1.2.1] - 2026-09-03
+
+### Fixed
+- GUI: in the Dashboard, a CVE prefixed by OSV-Scanner according to the origin of the distro
+  advisory (e.g. `DEBIAN-CVE-2026-13221`) is no longer counted as distinct from the same bare CVE
+  (`CVE-2026-13221`) reported by Grype/Trivy in the cross-scanner comparison
+
+## [1.2.0] - 2026-09-03
+
+### Added
+- GUI: the PDF exports (Dashboard, Grype, OSV-Scanner, Trivy) now use an
+  `asciidoctor-pdf` theme modelled on the app — coloured severity badges, severity
+  breakdown bar, blue table headers — instead of the default black and white
+  rendering
+
+## [1.1.0] - 2026-08-31
+
+### Added
+- Support for CycloneDX 1.7 in addition to 1.6 (`--cyclonedx-version`): TLP classification
+  (`--tlp`), per-package patent declarations (`--patent-map`) and automatic attribution
+  of component data to the source tool (`citations`, e.g. syft/trivy with `--image`)
+- `--input` now accepts `.jar` files (Maven coordinates via `pom.properties`,
+  `META-INF/MANIFEST.MF`, or file name) and directories scanned recursively for
+  all the package/manifest types already supported; folder picker added in
+  the Flutter GUI
+- A "shaded"/uber-jar embedding relocated dependencies (each with its own
+  `pom.properties`, e.g. `netty-common-*.jar` which embeds `org.jctools:jctools-core`)
+  now produces one SBOM component per detected dependency, in addition to the jar itself —
+  behaviour aligned with syft, checked on two real sets of 207 and 274 jars
+- Manifest parsers: Go (`go.sum`, `go.mod`), npm (`package-lock.json`), yarn (`yarn.lock`), Maven (`pom.xml`)
+- CSV output format (RFC 4180) with columns: name, version, type, purl, license, description, supplier
+- `convert` subcommand: conversion between CycloneDX 1.5, SPDX 2.3, SPDX 3.0 and CSV formats
+- `validate` subcommand: structural validation of existing SBOMs (`--strict` option)
+- `SbomReader`: SBOM reader supporting CycloneDX 1.x, SPDX 2.3 and SPDX 3.0 JSON-LD
+- Interactive HTML output format with dynamic filters, column sorting and built-in CSV export
+- Interactive SBOM viewer in the graphical interface (tab 9)
+- `diff` and `merge` subcommands to compare and merge SBOM files
+- Configurable CI/CD policies for continuous integration
+- Support for SBOM signing and verification via cosign
+- Contextual help (❓) on all panels of the graphical interface
+- Support for `.tar.gz` and `.tgz` archives as local OCI image sources
+- Scan of Python `dist-info` and npm `node_modules` directories via the skopeo backend
+- Scan of Maven JARs in the skopeo backend
+
+### Fixed
+- A CycloneDX/SPDX SBOM generated from a container image (`--image`, syft/trivy
+  backends) never identified the base OS — Trivy in `trivy sbom` mode then
+  silently ignored the whole "os-pkgs" vulnerability class (RPM/DEB/APK system
+  packages), even though each package already carried `distro=...` in its own purl:
+  on a real Keycloak image (UBI 9), `trivy sbom` only found 146 CVEs versus
+  253 for `trivy image` on the same image (101 `os-pkgs` CVEs missing). `OciParser`
+  now extracts the base OS (syft's `distro`, trivy's `Metadata.OS`) and
+  `CycloneDxGenerator`/`SpdxGenerator`/`Spdx3Generator` add a dedicated component
+  (`type: "operating-system"` / `primaryPackagePurpose: "OPERATING-SYSTEM"`). Two
+  undocumented Trivy requirements, isolated by bisection: the name must follow its
+  internal taxonomy (`redhat`, not `rhel` as with syft — mapping table
+  added) and, on the SPDX side, the SPDXID must be prefixed `SPDXRef-OperatingSystem-` (not
+  `SPDXRef-Package-`). skopeo backend not covered (does not read `/etc/os-release`).
+- The "core" modules of Spring Framework (`spring-core`, `spring-webmvc`, `spring-tx`…)
+  extracted from a `.jar` received a wrong groupId (`spring.core` instead of the real
+  `org.springframework`, wrongly deduced from an `Automatic-Module-Name` that is not a
+  Maven groupId) — real security impact: a vulnerability scanner cannot
+  associate CVEs with a wrong groupId, which silently hid unfixed CVEs (CVE-2025-41249,
+  CVE-2024-38820, CVE-2025-22233, among others, on
+  `org.springframework:spring-core`). `JarParser` now applies a curated mapping
+  table (`_knownGroupIdOverrides`) for the ~22 official Spring Framework modules,
+  before the manifest heuristic
+- The Maven components of the CycloneDX SBOM folded the groupId into the `name` field
+  (`"groupId:artifactId"`) instead of using the dedicated `group` field provided by the schema —
+  unlike syft/trivy. `cyclonedx_generator.dart` now separates `group`/`name`,
+  and `sbom_reader.dart` recombines the two on re-reading (`convert`, `merge`) so as not to
+  lose the groupId
+- GUI: the dashboard's "Cross-scanner comparison" table only displayed the
+  CVEs seen by at least 2 out of 3 scanners, hiding those detected by a single scanner —
+  it now lists the full union of CVEs (Grype ∪ OSV ∪ Trivy), with a
+  visual marker (amber border/icon) on CVEs seen by a single scanner to spot
+  detection gaps between tools
+- `.jar` without `pom.properties` (the vast majority of real jars, outside Quarkus/RH builds)
+  were silently ignored: `JarParser` now reads `META-INF/MANIFEST.MF`
+  (`Bundle-SymbolicName`, `Implementation-Vendor-Id`, `Implementation-Title`,
+  `Automatic-Module-Name`) and, failing that, falls back to `groupId = artifactId` rather than
+  dropping the package — on a real set of 207 jars, 82 were lost compared with
+  syft, 0 after this fix
+- "Shaded"/uber-jar `.jar` embedding the `pom.properties` of a relocated dependency
+  (e.g. `netty-common-*.jar` which also embeds that of `org.jctools:jctools-core`)
+  came out with the identity of the embedded dependency instead of its own: `JarParser`
+  now reads each embedded `pom.properties` individually (never concatenated), to
+  avoid any mix-up — detected by comparison with syft on a second real set of 274 jars
+- skopeo returned no RPM package (incorrect `--dbpath` path)
+- Graphical interface tabs are now scrollable to avoid text overlap
+- CLI: `--input` pointing directly to a single archive (`.zip`, `.tar`,
+  `.tar.gz`, `.tgz`, `.whl`, `.deb`, `.rpm`) caused a crash
+  (UTF-8 decoding `FileSystemException`) instead of being treated as the
+  package to analyse; explicit error message for the other cases of an
+  unreadable file
+- GUI: the *Package file* and *OCI image* fields are now
+  mutually exclusive — filling in one automatically empties the other (typing,
+  drag-and-drop, file/directory picker), to avoid any ambiguity about the source
+  actually used
+
+## [1.0.0] - 2026-06-22
+
+### Added
+- Flutter graphical interface with 8 tabs: configuration, results, Grype, diff/merge, CI/CD, cosign, history, date filtering
+- SBOM generation for OCI images (containers) via the skopeo and trivy backends
+- Static HTML output format
+- Filtering by date fields in the graphical interface
+- Grype integration for CVE vulnerability analysis
+- Support for `.deb` packages (Debian/Ubuntu)
+- Support for `.zip` archives
+- Support for `requirements.txt` files (Python)
+- `LicenseNormalizer`: normalisation of SPDX license identifiers
+- `ArchiveHelpers`: archive extraction and inspection
+- Markdown output format
+- Complete documentation in AsciiDoc (`doc/usage.adoc`, `doc/developer.adoc`)
+- RPM spec file for packaging (`sbom_generator.spec`)
+
+### Changed
+- Migration of the documentation from Markdown to AsciiDoc
+- Refactoring of the CycloneDX and SPDX generators into dedicated classes
+
+## [0.1.0] - 2026-04-28
+
+### Added
+- Project initialisation
+- SBOM generation from a list of RPM packages
+- Output formats: CycloneDX 1.5, SPDX 2.3, custom JSON
+- Dependency resolution via `rpm requires/provides`
+- Metadata support: name, version, license, description, supplier, checksum
