@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-05
+
 ### Added
 - **Projet bilingue FR / EN.** Les messages du CLI, l'aide `--help` et les
   rapports lisibles (synthèse `scan` Markdown/AsciiDoc/PDF, rapport `cra`,

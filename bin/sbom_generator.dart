@@ -37,7 +37,7 @@ import 'package:sbom_generator/vuln_enrichment.dart';
 import 'package:sbom_generator/cra_report.dart';
 import 'package:sbom_generator/i18n.dart';
 
-const _version = '1.6.0';
+const _version = '1.6.1';
 
 const _validFormats = {
   'cyclonedx',
