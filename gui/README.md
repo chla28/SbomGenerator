@@ -76,5 +76,3 @@ Exécuté automatiquement par `../.github/workflows/ci.yml` sur chaque push/pull
 
 - `doc/user.adoc` — guide utilisateur complet : chaque onglet, chaque option, scénarios d'utilisation typiques, dépannage.
 - `doc/developer.adoc` — architecture technique : rôle de chaque fichier, flux de données, conventions, pièges connus.
-- `../Specifications/PRD_GUI.md` — spécification fonctionnelle du produit.
-- `../Specifications/architecture_GUI.md` — stack technique, structure du projet, conventions.
