@@ -16,7 +16,8 @@ Map<String, dynamic> _cdx({
       if (dependencies.isNotEmpty) 'dependencies': dependencies,
     };
 
-Map<String, dynamic> _comp(String name, {String purl = '', String ref = ''}) => {
+Map<String, dynamic> _comp(String name, {String purl = '', String ref = ''}) =>
+    {
       'name': name,
       'version': '1.0',
       if (purl.isNotEmpty) 'purl': purl,
@@ -36,7 +37,8 @@ Map<String, dynamic> _spdx({
       'relationships': relationships,
     };
 
-Map<String, dynamic> _spdxPkg(String name, String spdxId, {String purl = ''}) => {
+Map<String, dynamic> _spdxPkg(String name, String spdxId, {String purl = ''}) =>
+    {
       'SPDXID': spdxId,
       'name': name,
       'versionInfo': '1.0',

@@ -88,7 +88,9 @@ class LayeredSbomSet {
     final at = packageAtVersion.lastIndexOf('@');
     final name = at > 0 ? packageAtVersion.substring(0, at) : packageAtVersion;
     final candidates = _byName[name]?.toSet();
-    return candidates != null && candidates.length == 1 ? candidates.first : null;
+    return candidates != null && candidates.length == 1
+        ? candidates.first
+        : null;
   }
 
   LayerRef? layer(int index) {
@@ -222,8 +224,7 @@ Map<int, ({String path, String shortDigest})> layerFilesOf(String globalPath) {
     final lext = m.group(4) ?? '';
     // Global sans extension (sortie à format unique) : couches CycloneDX.
     if (ext.isEmpty ? lext != '.cdx.json' : lext != ext) continue;
-    out[int.parse(m.group(2)!)] =
-        (path: '$dir/$f', shortDigest: m.group(3)!);
+    out[int.parse(m.group(2)!)] = (path: '$dir/$f', shortDigest: m.group(3)!);
   }
   return out;
 }

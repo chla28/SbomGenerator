@@ -93,14 +93,10 @@ void main() {
 
     test('SBOM pauvre : champs manquants → points bloquants', () {
       final gen = CraReportGenerator(
-        sbomPath: 's', sbom: _barecdx(), meta: const CraMetadata());
+          sbomPath: 's', sbom: _barecdx(), meta: const CraMetadata());
       expect(gen.verdict, CraStatus.fail);
-      expect(
-          gen.blockers,
-          contains(contains('relation de dépendance')));
-      expect(
-          gen.blockers,
-          contains(contains('Fournisseur')));
+      expect(gen.blockers, contains(contains('relation de dépendance')));
+      expect(gen.blockers, contains(contains('Fournisseur')));
       final j = gen.toJson();
       expect(j['verdict'], 'fail');
       expect(j['sbom']['machineReadable'], isTrue);
@@ -130,8 +126,8 @@ void main() {
           ],
         },
         exploitById: {
-          'CVE-2021-44228': ExploitInfo(
-              inKev: true, kevDateAdded: DateTime(2021, 12, 10)),
+          'CVE-2021-44228':
+              ExploitInfo(inKev: true, kevDateAdded: DateTime(2021, 12, 10)),
         },
         toolVersions: {'Grype': '0.118.0'},
       );

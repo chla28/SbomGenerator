@@ -115,14 +115,22 @@ void main() {
 
   group('SbomReader — round-trip SPDX 3.0', () {
     final npm = WheelPackage(
-      name: 'lodash', version: '4.17.21', license: 'MIT',
-      url: 'https://example.test/lodash', summary: 'util',
-      vendor: '', arch: 'any', sourceRef: '',
+      name: 'lodash',
+      version: '4.17.21',
+      license: 'MIT',
+      url: 'https://example.test/lodash',
+      summary: 'util',
+      vendor: '',
+      arch: 'any',
+      sourceRef: '',
       hashes: [PackageHash('SHA-512', 'b' * 128)],
-      requires: const [], provides: const ['lodash'], packageType: 'npm',
+      requires: const [],
+      provides: const ['lodash'],
+      packageType: 'npm',
     );
 
-    test('relit les éléments software:Package (nom, version, purl, licence)', () {
+    test('relit les éléments software:Package (nom, version, purl, licence)',
+        () {
       final sbom = Spdx3Generator().generate([npm], []);
       final pkgs = SbomReader().read(sbom);
       expect(pkgs, hasLength(1));
@@ -142,9 +150,17 @@ void main() {
 
     test('licence NOASSERTION relue comme vide', () {
       final bare = WheelPackage(
-        name: 'x', version: '1', license: '', url: '', summary: '',
-        vendor: '', arch: 'any', sourceRef: '',
-        requires: const [], provides: const ['x'], packageType: 'npm',
+        name: 'x',
+        version: '1',
+        license: '',
+        url: '',
+        summary: '',
+        vendor: '',
+        arch: 'any',
+        sourceRef: '',
+        requires: const [],
+        provides: const ['x'],
+        packageType: 'npm',
       );
       final sbom = Spdx3Generator().generate([bare], []);
       expect(SbomReader().read(sbom).single.license, '');
@@ -152,8 +168,7 @@ void main() {
 
     test('round-trip SPDX 3.0 → SPDX 2.3 conserve les checksums', () {
       final spdx3 = Spdx3Generator().generate([npm], []);
-      final spdx2 =
-          SpdxGenerator().generate(SbomReader().read(spdx3), []);
+      final spdx2 = SpdxGenerator().generate(SbomReader().read(spdx3), []);
       final p = (spdx2['packages'] as List)
           .cast<Map<String, dynamic>>()
           .firstWhere((e) => e['name'] == 'lodash');
@@ -166,9 +181,17 @@ void main() {
   group('SbomReader — fournisseur', () {
     test('SPDX 2.3 : supplier "NOASSERTION" relu comme vendor vide', () {
       final bare = WheelPackage(
-        name: 'x', version: '1', license: '', url: '', summary: '',
-        vendor: '', arch: 'any', sourceRef: '',
-        requires: const [], provides: const ['x'], packageType: 'npm',
+        name: 'x',
+        version: '1',
+        license: '',
+        url: '',
+        summary: '',
+        vendor: '',
+        arch: 'any',
+        sourceRef: '',
+        requires: const [],
+        provides: const ['x'],
+        packageType: 'npm',
       );
       final spdx = SpdxGenerator().generate([bare], []);
       // Le générateur écrit "NOASSERTION" ; la relecture ne doit pas en faire

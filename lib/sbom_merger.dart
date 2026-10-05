@@ -1,3 +1,5 @@
+import 'i18n.dart';
+
 /// Fusionne plusieurs documents SBOM JSON (CycloneDX ou SPDX 2.x) en un seul,
 /// dans le même format que le premier document fourni.
 class SbomMerger {
@@ -5,7 +7,10 @@ class SbomMerger {
     List<Map<String, dynamic>> sboms, {
     String? documentName,
   }) {
-    if (sboms.isEmpty) throw ArgumentError('Au moins un SBOM requis');
+    if (sboms.isEmpty) {
+      throw ArgumentError(
+          tr('Au moins un SBOM requis', 'At least one SBOM is required'));
+    }
     if (sboms.length == 1) return sboms.first;
 
     if (sboms.first.containsKey('spdxVersion')) {

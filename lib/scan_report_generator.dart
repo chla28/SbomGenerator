@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'layer_scan.dart';
 import 'vuln_enrichment.dart';
+import 'i18n.dart';
 
 /// Builds a cross-scanner vulnerability *synthesis* report (Markdown /
 /// AsciiDoc) from the normalised results of `sbom_generator scan`.
@@ -64,11 +65,18 @@ class ScanReportGenerator {
   }
 
   String get _layerModeText => switch (layerScanMode) {
-        'each' => 'SBOM de chaque couche scanné séparément : une CVE est '
-            'comptée dans chaque couche qui apporte le paquet vulnérable, '
-            'y compris une version remplacée plus haut dans la pile',
-        _ => 'un seul scan du SBOM global, chaque CVE rattachée à la couche '
-            'qui a introduit son paquet (CVE de l\'image finale uniquement)',
+        'each' => tr(
+            'SBOM de chaque couche scanné séparément : une CVE est '
+                'comptée dans chaque couche qui apporte le paquet vulnérable, '
+                'y compris une version remplacée plus haut dans la pile',
+            'each layer SBOM scanned separately: a CVE is counted in every '
+                'layer that brings the vulnerable package, including a '
+                'version replaced higher in the stack'),
+        _ => tr(
+            'un seul scan du SBOM global, chaque CVE rattachée à la couche '
+                'qui a introduit son paquet (CVE de l\'image finale uniquement)',
+            'a single scan of the global SBOM, each CVE attached to the layer '
+                'that introduced its package (final-image CVEs only)'),
       };
 
   static String _short(String s, int max) =>
@@ -190,12 +198,20 @@ class ScanReportGenerator {
       if (fb == null || fb.isEmpty) continue;
       final vers = <String>{for (final vs in fb.values) ...vs}.toList()..sort();
       final who = fb.keys.map((s) => _scannerLabels[s]).join(' / ');
-      notes[id] = 'Grype ne voit aucun correctif pour la distribution '
-          'installée (« won\'t fix » / « non corrigé »). $who annonce une '
-          'version corrigée (${vers.map((v) => '`$v`').join(', ')}) : pour un '
-          'avis de distribution, il s\'agit en général du correctif porté dans '
-          'les branches *unstable* / *testing*, pas d\'une mise à jour '
-          'disponible pour la release stable en place.';
+      final versTxt = vers.map((v) => '`$v`').join(', ');
+      notes[id] = tr(
+          'Grype ne voit aucun correctif pour la distribution '
+              'installée (« won\'t fix » / « non corrigé »). $who annonce une '
+              'version corrigée ($versTxt) : pour un '
+              'avis de distribution, il s\'agit en général du correctif porté dans '
+              'les branches *unstable* / *testing*, pas d\'une mise à jour '
+              'disponible pour la release stable en place.',
+          'Grype sees no fix for the installed distribution '
+              '("won\'t fix" / "not fixed"). $who reports a '
+              'fixed version ($versTxt): for a '
+              'distribution advisory, this is usually the fix carried in '
+              'the *unstable* / *testing* branches, not an update '
+              'available for the stable release in place.');
     }
     return notes;
   }
@@ -220,7 +236,8 @@ class ScanReportGenerator {
     };
     // Premier paquet non vide rencontré pour chaque CVE (tous scanners).
     final pkgById = _packageById;
-    final all = <String>{for (final ids in idsByScanner.values) ...ids}.toList();
+    final all =
+        <String>{for (final ids in idsByScanner.values) ...ids}.toList();
 
     // Sévérité affichée = la pire rapportée par un scanner quelconque
     // (un CVE "HIGH" chez Trivy et "Unknown" chez Grype reste un HIGH).
@@ -250,15 +267,17 @@ class ScanReportGenerator {
           id: id,
           severity: worstSeverity(id),
           package: pkgById[id] ?? '',
-          present: {for (final s in _scannerOrder) s: idsByScanner[s]?.contains(id) ?? false},
+          present: {
+            for (final s in _scannerOrder)
+              s: idsByScanner[s]?.contains(id) ?? false
+          },
         ),
     ];
   }
 
   /// CVE uniques (toutes sources confondues) dont la pire sévérité est dans
   /// [keep] — pour un affichage d'alerte en console pendant un build.
-  List<ScanAlert> alerts(
-      {Set<String> keep = const {'critical', 'high'}}) {
+  List<ScanAlert> alerts({Set<String> keep = const {'critical', 'high'}}) {
     return [
       for (final r in _crossRows())
         if (keep.contains(r.severity.toLowerCase()))
@@ -279,14 +298,13 @@ class ScanReportGenerator {
   /// Seuil EPSS au-delà duquel une CVE est comptée « à surveiller ».
   static const epssWatchThreshold = 0.10;
 
-  ExploitInfo _exploitFor(String id) =>
-      exploitById[id] ?? ExploitInfo.empty;
+  ExploitInfo _exploitFor(String id) => exploitById[id] ?? ExploitInfo.empty;
 
   /// L'enrichissement a-t-il produit au moins un signal exploitable ?
-  bool get hasExploitData =>
-      exploitById.values.any((e) => e.hasAnySignal);
+  bool get hasExploitData => exploitById.values.any((e) => e.hasAnySignal);
 
-  int get _kevCount => _crossRows().where((r) => _exploitFor(r.id).inKev).length;
+  int get _kevCount =>
+      _crossRows().where((r) => _exploitFor(r.id).inKev).length;
 
   int get _epssWatchCount => _crossRows()
       .where((r) => (_exploitFor(r.id).epssScore ?? 0) >= epssWatchThreshold)
@@ -299,16 +317,13 @@ class ScanReportGenerator {
   /// (KEV, PoC public, ou EPSS au-dessus du seuil de veille.)
   bool _isPrioritised(String id) {
     final e = _exploitFor(id);
-    return e.inKev ||
-        e.pocKnown ||
-        (e.epssScore ?? 0) >= epssWatchThreshold;
+    return e.inKev || e.pocKnown || (e.epssScore ?? 0) >= epssWatchThreshold;
   }
 
   /// Lignes inter-scanners avec au moins un signal d'exploitation notable,
   /// ordonnées par risque décroissant (KEV, puis EPSS, puis sévérité).
   List<_CrossRow> _riskRows() {
-    final rows =
-        _crossRows().where((r) => _isPrioritised(r.id)).toList();
+    final rows = _crossRows().where((r) => _isPrioritised(r.id)).toList();
     rows.sort((a, b) {
       final ra = _exploitFor(a.id).riskScore(a.severity);
       final rb = _exploitFor(b.id).riskScore(b.severity);
@@ -346,8 +361,10 @@ class ScanReportGenerator {
   }
 
   static String _fmtPoc(ExploitInfo e) {
-    if (e.pocCount > 0) return '${e.pocCount} dépôt(s)';
-    if (e.pocKnown) return 'oui';
+    if (e.pocCount > 0) {
+      return tr('${e.pocCount} dépôt(s)', '${e.pocCount} repo(s)');
+    }
+    if (e.pocKnown) return tr('oui', 'yes');
     return '—';
   }
 
@@ -356,55 +373,70 @@ class ScanReportGenerator {
   String toMarkdown() {
     final b = StringBuffer();
     final run = _scannersRun.toList();
-    b.writeln('# Rapport de synthèse — vulnérabilités du SBOM');
+    b.writeln(tr('# Rapport de synthèse — vulnérabilités du SBOM',
+        '# Summary report — SBOM vulnerabilities'));
     b.writeln();
-    b.writeln('- **SBOM analysé :** `${_mdEsc(sbomPath)}`');
-    b.writeln('- **Généré le :** ${_timestamp()}');
+    b.writeln(tr('- **SBOM analysé :** `${_mdEsc(sbomPath)}`',
+        '- **Analysed SBOM:** `${_mdEsc(sbomPath)}`'));
+    b.writeln(tr('- **Généré le :** ${_timestamp()}',
+        '- **Generated on:** ${_timestamp()}'));
     b.writeln();
 
-    b.writeln('## Résumé global');
+    b.writeln(tr('## Résumé global', '## Global summary'));
     b.writeln();
-    b.writeln('| Indicateur | Valeur |');
+    b.writeln(tr('| Indicateur | Valeur |', '| Indicator | Value |'));
     b.writeln('|---|---|');
-    b.writeln('| Scanners exécutés | ${run.length} / 3'
+    b.writeln('| ${tr('Scanners exécutés', 'Scanners run')} | ${run.length} / 3'
         '${run.isEmpty ? "" : " (${run.map((s) => _scannerLabels[s]).join(', ')})"} |');
-    b.writeln('| CVE uniques (tous scanners) | $_uniqueCveCount |');
-    b.writeln('| Résultats bruts cumulés | $_totalFindings |');
+    b.writeln(
+        '| ${tr('CVE uniques (tous scanners)', 'Unique CVEs (all scanners)')} | $_uniqueCveCount |');
+    b.writeln(
+        '| ${tr('Résultats bruts cumulés', 'Cumulated raw results')} | $_totalFindings |');
     if (hasExploitData) {
-      b.writeln('| CVE activement exploitées (CISA KEV) | $_kevCount |');
-      b.writeln('| CVE avec EPSS ≥ '
+      b.writeln(
+          '| ${tr('CVE activement exploitées (CISA KEV)', 'Actively exploited CVEs (CISA KEV)')} | $_kevCount |');
+      b.writeln('| ${tr('CVE avec EPSS ≥', 'CVEs with EPSS ≥')} '
           '${(epssWatchThreshold * 100).round()} % | $_epssWatchCount |');
-      b.writeln('| CVE avec PoC / exploit public | $_pocCount |');
+      b.writeln(
+          '| ${tr('CVE avec PoC / exploit public', 'CVEs with a public PoC / exploit')} | $_pocCount |');
     }
     b.writeln();
 
     if (toolVersions.isNotEmpty) {
-      b.writeln('## Outils');
+      b.writeln(tr('## Outils', '## Tools'));
       b.writeln();
-      b.writeln('| Outil | Version |');
+      b.writeln(tr('| Outil | Version |', '| Tool | Version |'));
       b.writeln('|---|---|');
-      toolVersions.forEach((k, v) =>
-          b.writeln('| ${_mdEsc(k)} | ${_mdEsc(v ?? "inconnue")} |'));
+      toolVersions.forEach((k, v) => b.writeln(
+          '| ${_mdEsc(k)} | ${_mdEsc(v ?? tr("inconnue", "unknown"))} |'));
       b.writeln();
     }
 
-    b.writeln('## Répartition par scanner');
+    b.writeln(tr('## Répartition par scanner', '## Breakdown by scanner'));
     b.writeln();
     for (final s in _scannerOrder) {
       b.writeln('### ${_scannerLabels[s]}');
       b.writeln();
       final vulns = resultsByScanner[s];
       if (vulns == null) {
-        b.writeln('_Non exécuté._');
+        b.writeln(tr('_Non exécuté._', '_Not run._'));
       } else if (vulns.isEmpty) {
-        b.writeln('Aucune vulnérabilité détectée.');
+        b.writeln(
+            tr('Aucune vulnérabilité détectée.', 'No vulnerability detected.'));
       } else {
         final counts = _severityCounts(vulns);
-        b.writeln('| Sévérité | Nombre |');
+        b.writeln(tr('| Sévérité | Nombre |', '| Severity | Count |'));
         b.writeln('|---|---|');
-        for (final sev in const ['critical', 'high', 'medium', 'low', 'autre']) {
+        for (final sev in const [
+          'critical',
+          'high',
+          'medium',
+          'low',
+          'autre'
+        ]) {
           if ((counts[sev] ?? 0) > 0) {
-            b.writeln('| ${sev == 'autre' ? 'Autre' : sev.toUpperCase()} | ${counts[sev]} |');
+            b.writeln(
+                '| ${sev == 'autre' ? tr('Autre', 'Other') : sev.toUpperCase()} | ${counts[sev]} |');
           }
         }
         b.writeln('| **Total** | **${vulns.length}** |');
@@ -413,11 +445,13 @@ class ScanReportGenerator {
     }
 
     if (_hasLayers) {
-      b.writeln('## Couches de l\'image');
+      b.writeln(tr('## Couches de l\'image', '## Image layers'));
       b.writeln();
-      b.writeln('Méthode : $_layerModeText.');
+      b.writeln('${tr('Méthode', 'Method')}: $_layerModeText.');
       b.writeln();
-      b.writeln('| Couche | Digest | Instruction | CVE | Critiques | Élevées |');
+      b.writeln(tr(
+          '| Couche | Digest | Instruction | CVE | Critiques | Élevées |',
+          '| Layer | Digest | Instruction | CVE | Critical | High |'));
       b.writeln('|---|---|---|--:|--:|--:|');
       for (final l in summarizeByLayer(resultsByScanner, layers)) {
         b.writeln('| ${l.layer.index} | `${l.layer.shortDigest}` '
@@ -428,15 +462,18 @@ class ScanReportGenerator {
     }
 
     if (run.length >= 2) {
-      b.writeln('## Comparaison inter-scanners');
+      b.writeln(
+          tr('## Comparaison inter-scanners', '## Cross-scanner comparison'));
       b.writeln();
       final rows = _crossRows();
       final layersById = _layersById;
       if (rows.isEmpty) {
-        b.writeln('_Aucune CVE détectée par les scanners exécutés._');
+        b.writeln(tr('_Aucune CVE détectée par les scanners exécutés._',
+            '_No CVE detected by the scanners that ran._'));
       } else {
-        b.writeln('| Sévérité | CVE / ID | Grype | OSV-Scanner | Trivy |'
-            '${_hasLayers ? ' Couche(s) |' : ''}');
+        b.writeln(
+            '| ${tr('Sévérité', 'Severity')} | CVE / ID | Grype | OSV-Scanner | Trivy |'
+            '${_hasLayers ? ' ${tr('Couche(s)', 'Layer(s)')} |' : ''}');
         b.writeln('|---|---|:-:|:-:|:-:|${_hasLayers ? '---|' : ''}');
         for (final r in rows) {
           b.writeln('| ${r.severity.isEmpty ? "?" : r.severity.toUpperCase()} '
@@ -448,18 +485,25 @@ class ScanReportGenerator {
         }
       }
       b.writeln();
-      b.writeln('> Des comptages très différents entre scanners sur les paquets '
-          'système (Debian/Alpine/RPM) ne signalent pas forcément une erreur : '
-          'OSV-Scanner en mode « scan de SBOM » peut ne trouver aucune CVE sur '
-          'ces paquets, et Grype/Trivy n\'ont pas la même exhaustivité sur les '
-          'avis distro. Voir la documentation, section « Pourquoi Grype, '
-          'OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».');
+      b.writeln(tr(
+          '> Des comptages très différents entre scanners sur les paquets '
+              'système (Debian/Alpine/RPM) ne signalent pas forcément une erreur : '
+              'OSV-Scanner en mode « scan de SBOM » peut ne trouver aucune CVE sur '
+              'ces paquets, et Grype/Trivy n\'ont pas la même exhaustivité sur les '
+              'avis distro. Voir la documentation, section « Pourquoi Grype, '
+              'OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».',
+          '> Very different counts between scanners on system packages '
+              '(Debian/Alpine/RPM) do not necessarily indicate an error: '
+              'OSV-Scanner in "SBOM scan" mode may find no CVE on these '
+              'packages, and Grype/Trivy are not equally exhaustive on '
+              'distro advisories. See the documentation, section "Why Grype, '
+              'OSV-Scanner and Trivy do not find the same CVEs".'));
       b.writeln();
 
       final notes = cveNotes();
       if (notes.isNotEmpty) {
         final pkgById = _packageById;
-        b.writeln('### Notes par CVE');
+        b.writeln(tr('### Notes par CVE', '### Notes per CVE'));
         b.writeln();
         for (final r in rows) {
           final n = notes[r.id];
@@ -474,15 +518,19 @@ class ScanReportGenerator {
 
     if (hasExploitData) {
       final pkgById = _packageById;
-      b.writeln('## Exploitabilité et exploitation active');
+      b.writeln(tr('## Exploitabilité et exploitation active',
+          '## Exploitability and active exploitation'));
       b.writeln();
 
       final kevRows =
           _riskRows().where((r) => _exploitFor(r.id).inKev).toList();
       if (kevRows.isNotEmpty) {
-        b.writeln('### CVE activement exploitées (CISA KEV)');
+        b.writeln(tr('### CVE activement exploitées (CISA KEV)',
+            '### Actively exploited CVEs (CISA KEV)'));
         b.writeln();
-        b.writeln('| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel |');
+        b.writeln(tr(
+            '| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel |',
+            '| CVE / ID | Package | KEV added | Due date | Ransomware |'));
         b.writeln('|---|---|---|---|:-:|');
         for (final r in kevRows) {
           final e = _exploitFor(r.id);
@@ -490,24 +538,33 @@ class ScanReportGenerator {
               '| ${_mdEsc(pkgById[r.id] ?? r.package)} '
               '| ${_fmtDate(e.kevDateAdded)} '
               '| ${_fmtDate(e.kevDueDate)} '
-              '| ${e.kevRansomware ? '⚠️ oui' : '—'} |');
+              '| ${e.kevRansomware ? '⚠️ ${tr('oui', 'yes')}' : '—'} |');
         }
         b.writeln();
       }
 
-      b.writeln('### Priorisation par risque');
+      b.writeln(tr('### Priorisation par risque', '### Risk prioritisation'));
       b.writeln();
       final riskRows = _riskRows();
       if (riskRows.isEmpty) {
-        b.writeln('_Aucune CVE avec signal d\'exploitation notable '
-            '(CISA KEV, PoC public, ou EPSS ≥ '
-            '${(epssWatchThreshold * 100).round()} %)._');
+        b.writeln(tr(
+            '_Aucune CVE avec signal d\'exploitation notable '
+                '(CISA KEV, PoC public, ou EPSS ≥ '
+                '${(epssWatchThreshold * 100).round()} %)._',
+            '_No CVE with a notable exploitation signal '
+                '(CISA KEV, public PoC, or EPSS ≥ '
+                '${(epssWatchThreshold * 100).round()} %)._'));
         b.writeln();
       } else {
-        b.writeln('CVE avec un signal d\'exploitation notable, ordonnées par : '
-            'KEV, puis probabilité EPSS, puis sévérité.');
+        b.writeln(tr(
+            'CVE avec un signal d\'exploitation notable, ordonnées par : '
+                'KEV, puis probabilité EPSS, puis sévérité.',
+            'CVEs with a notable exploitation signal, ordered by: '
+                'KEV, then EPSS probability, then severity.'));
         b.writeln();
-        b.writeln('| CVE / ID | Sévérité | Paquet | KEV | EPSS | Exploitabilité CVSS | PoC public |');
+        b.writeln(tr(
+            '| CVE / ID | Sévérité | Paquet | KEV | EPSS | Exploitabilité CVSS | PoC public |',
+            '| CVE / ID | Severity | Package | KEV | EPSS | CVSS exploitability | Public PoC |'));
         b.writeln('|---|---|---|:-:|---|---|---|');
         for (final r in riskRows) {
           final e = _exploitFor(r.id);
@@ -521,23 +578,34 @@ class ScanReportGenerator {
         }
         b.writeln();
         if (_riskRowsOmitted > 0) {
-          b.writeln('> $_riskRowsOmitted autre(s) CVE sans signal d\'exploitation '
-              'notable ne sont pas listées ici (voir la matrice ci-dessus).');
+          b.writeln(tr(
+              '> $_riskRowsOmitted autre(s) CVE sans signal d\'exploitation '
+                  'notable ne sont pas listées ici (voir la matrice ci-dessus).',
+              '> $_riskRowsOmitted other CVE(s) with no notable exploitation '
+                  'signal are not listed here (see the matrix above).'));
           b.writeln();
         }
       }
-      b.writeln('> **KEV** : CVE au catalogue CISA Known Exploited '
-          'Vulnerabilities — exploitation active confirmée. **EPSS** : '
-          'probabilité d\'exploitation dans les 30 jours (score et percentile, '
-          'FIRST.org). **Exploitabilité CVSS** : sous-score AV/AC/PR/UI (0–3,9) '
-          'et maturité de l\'exploit quand elle est publiée. **PoC public** : '
-          'dépôt(s) d\'exploit recensé(s).');
+      b.writeln(tr(
+          '> **KEV** : CVE au catalogue CISA Known Exploited '
+              'Vulnerabilities — exploitation active confirmée. **EPSS** : '
+              'probabilité d\'exploitation dans les 30 jours (score et percentile, '
+              'FIRST.org). **Exploitabilité CVSS** : sous-score AV/AC/PR/UI (0–3,9) '
+              'et maturité de l\'exploit quand elle est publiée. **PoC public** : '
+              'dépôt(s) d\'exploit recensé(s).',
+          '> **KEV**: CVE in the CISA Known Exploited '
+              'Vulnerabilities catalog — confirmed active exploitation. **EPSS**: '
+              'probability of exploitation within 30 days (score and percentile, '
+              'FIRST.org). **CVSS exploitability**: AV/AC/PR/UI sub-score (0–3.9) '
+              'and exploit maturity when published. **Public PoC**: '
+              'recorded exploit repository(ies).'));
       b.writeln();
     }
 
     b.writeln('---');
     b.writeln();
-    b.writeln('_Généré par sbom-generator._');
+    b.writeln(
+        tr('_Généré par sbom-generator._', '_Generated by sbom-generator._'));
     return b.toString();
   }
 
@@ -547,30 +615,35 @@ class ScanReportGenerator {
     final b = StringBuffer();
     final run = _scannersRun.toList();
     final sbomName = sbomPath.split(RegExp(r'[/\\]')).last;
-    b.writeln('= Rapport de vulnérabilités: Synthèse inter-scanners');
+    b.writeln(tr('= Rapport de vulnérabilités: Synthèse inter-scanners',
+        '= Vulnerability report: Cross-scanner summary'));
     b.writeln('sbom-generator');
     b.writeln(':doctype: article');
     b.writeln(':title-page:');
     b.writeln(':toc:');
-    b.writeln(':toc-title: Sommaire');
+    b.writeln(tr(':toc-title: Sommaire', ':toc-title: Contents'));
     b.writeln(':toclevels: 2');
     b.writeln(':revdate: ${_frenchDate()}');
     b.writeln(':icons: font');
     b.writeln();
 
-    b.writeln('== Résumé exécutif');
+    b.writeln(tr('== Résumé exécutif', '== Executive summary'));
     b.writeln();
-    b.writeln('*SBOM analysé* : `${_adocEsc(sbomName)}` +');
-    b.writeln('*Scanners exécutés* : ${run.length} / 3'
+    b.writeln(
+        '${tr('*SBOM analysé*', '*Analysed SBOM*')} : `${_adocEsc(sbomName)}` +');
+    b.writeln(
+        '${tr('*Scanners exécutés*', '*Scanners run*')} : ${run.length} / 3'
         '${run.isEmpty ? '' : ' (${run.map((s) => _scannerLabels[s]).join(', ')})'}'
-        ' — *$_uniqueCveCount* CVE uniques');
+        ' — *$_uniqueCveCount* ${tr('CVE uniques', 'unique CVEs')}');
     b.writeln();
     final crit = _crossSevCount('critical');
     final high = _crossSevCount('high');
     b.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
     b.writeln('|===');
-    b.writeln('h| Critiques h| Élevées h| CISA KEV h| EPSS >= '
-        '${(epssWatchThreshold * 100).round()} %');
+    b.writeln(tr('h| Critiques h| Élevées h| CISA KEV h| EPSS >= ',
+            'h| Critical h| High h| CISA KEV h| EPSS >= ') +
+        ''
+            '${(epssWatchThreshold * 100).round()} %');
     b.writeln('| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
         '| [.h1-num]*$high* '
         '| [.${_kevCount > 0 ? 'h1-num-alert' : 'h1-num'}]*$_kevCount* '
@@ -582,33 +655,40 @@ class ScanReportGenerator {
     b.writeln();
 
     if (toolVersions.isNotEmpty) {
-      b.writeln('== Outils');
+      b.writeln(tr('== Outils', '== Tools'));
       b.writeln();
       b.writeln('[cols="<3,<1",options="header"]');
       b.writeln('|===');
-      b.writeln('| Outil | Version');
-      toolVersions.forEach((k, v) =>
-          b.writeln('| ${_adocEsc(k)} | ${_adocEsc(v ?? "inconnue")}'));
+      b.writeln(tr('| Outil | Version', '| Tool | Version'));
+      toolVersions.forEach((k, v) => b.writeln(
+          '| ${_adocEsc(k)} | ${_adocEsc(v ?? tr("inconnue", "unknown"))}'));
       b.writeln('|===');
       b.writeln();
     }
 
-    b.writeln('== Répartition par scanner');
+    b.writeln(tr('== Répartition par scanner', '== Breakdown by scanner'));
     b.writeln();
     for (final s in _scannerOrder) {
       b.writeln('=== ${_scannerLabels[s]}');
       b.writeln();
       final vulns = resultsByScanner[s];
       if (vulns == null) {
-        b.writeln('_Non exécuté._');
+        b.writeln(tr('_Non exécuté._', '_Not run._'));
       } else if (vulns.isEmpty) {
-        b.writeln('Aucune vulnérabilité détectée.');
+        b.writeln(
+            tr('Aucune vulnérabilité détectée.', 'No vulnerability detected.'));
       } else {
         final counts = _severityCounts(vulns);
         b.writeln('[cols="<2,<1",options="header"]');
         b.writeln('|===');
-        b.writeln('| Sévérité | Nombre');
-        for (final sev in const ['critical', 'high', 'medium', 'low', 'autre']) {
+        b.writeln(tr('| Sévérité | Nombre', '| Severity | Count'));
+        for (final sev in const [
+          'critical',
+          'high',
+          'medium',
+          'low',
+          'autre'
+        ]) {
           if ((counts[sev] ?? 0) > 0) {
             b.writeln('| ${_sevBadge(sev)} | ${counts[sev]}');
           }
@@ -620,13 +700,15 @@ class ScanReportGenerator {
     }
 
     if (_hasLayers) {
-      b.writeln('== Couches de l\'image');
+      b.writeln(tr('== Couches de l\'image', '== Image layers'));
       b.writeln();
-      b.writeln('Méthode : $_layerModeText.');
+      b.writeln('${tr('Méthode', 'Method')}: $_layerModeText.');
       b.writeln();
       b.writeln('[cols="2,3,7,2,3,3",options="header"]');
       b.writeln('|===');
-      b.writeln('| Couche | Digest | Instruction | CVE | Critiques | Élevées');
+      b.writeln(tr(
+          '| Couche | Digest | Instruction | CVE | Critiques | Élevées',
+          '| Layer | Digest | Instruction | CVE | Critical | High'));
       for (final l in summarizeByLayer(resultsByScanner, layers)) {
         final crit = l.count('critical');
         b.writeln('| ${l.layer.index} | `${l.layer.shortDigest}` '
@@ -639,19 +721,22 @@ class ScanReportGenerator {
     }
 
     if (run.length >= 2) {
-      b.writeln('== Comparaison inter-scanners');
+      b.writeln(
+          tr('== Comparaison inter-scanners', '== Cross-scanner comparison'));
       b.writeln();
       final rows = _crossRows();
       final layersById = _layersById;
       if (rows.isEmpty) {
-        b.writeln('_Aucune CVE détectée par les scanners exécutés._');
+        b.writeln(tr('_Aucune CVE détectée par les scanners exécutés._',
+            '_No CVE detected by the scanners that ran._'));
       } else {
         b.writeln(_hasLayers
             ? '[cols="2,5,1,1,1,2",options="header"]'
             : '[cols="2,5,1,1,1",options="header"]');
         b.writeln('|===');
-        b.writeln('| Sévérité | CVE / ID | Grype | OSV | Trivy'
-            '${_hasLayers ? ' | Couche(s)' : ''}');
+        b.writeln(tr('| Sévérité | CVE / ID | Grype | OSV | Trivy',
+                '| Severity | CVE / ID | Grype | OSV | Trivy') +
+            '${_hasLayers ? ' | ${tr('Couche(s)', 'Layer(s)')}' : ''}');
         for (final r in rows) {
           b.writeln('| ${_sevBadge(r.severity)} '
               '| ${_adocEsc(r.id)} '
@@ -665,23 +750,34 @@ class ScanReportGenerator {
       b.writeln();
       b.writeln('[NOTE]');
       b.writeln('====');
-      b.writeln('Des comptages très différents entre scanners sur les paquets '
-          'système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. '
-          'OSV-Scanner en mode « scan de SBOM » peut ne trouver aucune CVE sur '
-          'ces paquets (son API n\'indexe les avis distro que sous une forme de '
-          'purl absente du SBOM standard). Grype et Trivy n\'ont par ailleurs '
-          'pas la même exhaustivité sur ces mêmes paquets : Grype reprend '
-          'l\'intégralité du Debian Security Tracker (avis « won\'t fix » '
-          'inclus) là où Trivy ne remonte qu\'un sous-ensemble. Voir la '
-          'documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et '
-          'Trivy ne trouvent pas les mêmes CVE ».');
+      b.writeln(tr(
+          'Des comptages très différents entre scanners sur les paquets '
+              'système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. '
+              'OSV-Scanner en mode « scan de SBOM » peut ne trouver aucune CVE sur '
+              'ces paquets (son API n\'indexe les avis distro que sous une forme de '
+              'purl absente du SBOM standard). Grype et Trivy n\'ont par ailleurs '
+              'pas la même exhaustivité sur ces mêmes paquets : Grype reprend '
+              'l\'intégralité du Debian Security Tracker (avis « won\'t fix » '
+              'inclus) là où Trivy ne remonte qu\'un sous-ensemble. Voir la '
+              'documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et '
+              'Trivy ne trouvent pas les mêmes CVE ».',
+          'Very different counts between scanners on system packages '
+              '(Debian/Alpine/RPM) do not necessarily indicate an error. '
+              'OSV-Scanner in "SBOM scan" mode may find no CVE on these '
+              'packages (its API only indexes distro advisories under a purl '
+              'form absent from the standard SBOM). Grype and Trivy are also '
+              'not equally exhaustive on these same packages: Grype takes '
+              'the whole Debian Security Tracker ("won\'t fix" advisories '
+              'included) where Trivy only reports a subset. See the '
+              'user documentation, section "Why Grype, OSV-Scanner and '
+              'Trivy do not find the same CVEs".'));
       b.writeln('====');
       b.writeln();
 
       final notes = cveNotes();
       if (notes.isNotEmpty) {
         final pkgById = _packageById;
-        b.writeln('=== Notes par CVE');
+        b.writeln(tr('=== Notes par CVE', '=== Notes per CVE'));
         b.writeln();
         for (final r in rows) {
           final n = notes[r.id];
@@ -696,45 +792,57 @@ class ScanReportGenerator {
 
     if (hasExploitData) {
       final pkgById = _packageById;
-      b.writeln('== Exploitabilité et exploitation active');
+      b.writeln(tr('== Exploitabilité et exploitation active',
+          '== Exploitability and active exploitation'));
       b.writeln();
 
       final kevRows =
           _riskRows().where((r) => _exploitFor(r.id).inKev).toList();
       if (kevRows.isNotEmpty) {
-        b.writeln('=== CVE activement exploitées (CISA KEV)');
+        b.writeln(tr('=== CVE activement exploitées (CISA KEV)',
+            '=== Actively exploited CVEs (CISA KEV)'));
         b.writeln();
         b.writeln('[cols="3,3,2,2,2",options="header"]');
         b.writeln('|===');
-        b.writeln('| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel');
+        b.writeln(tr(
+            '| CVE / ID | Paquet | Ajout KEV | Échéance | Rançongiciel',
+            '| CVE / ID | Package | KEV added | Due date | Ransomware'));
         for (final r in kevRows) {
           final e = _exploitFor(r.id);
           b.writeln('| ${_adocEsc(r.id)} '
               '| ${_adocEsc(pkgById[r.id] ?? r.package)} '
               '| ${_fmtDate(e.kevDateAdded)} '
               '| ${_fmtDate(e.kevDueDate)} '
-              '| ${e.kevRansomware ? 'oui' : '—'}');
+              '| ${e.kevRansomware ? tr('oui', 'yes') : '—'}');
         }
         b.writeln('|===');
         b.writeln();
       }
 
-      b.writeln('=== Priorisation par risque');
+      b.writeln(tr('=== Priorisation par risque', '=== Risk prioritisation'));
       b.writeln();
       final riskRows = _riskRows();
       if (riskRows.isEmpty) {
-        b.writeln('_Aucune CVE avec signal d\'exploitation notable '
-            '(CISA KEV, PoC public, ou EPSS >= '
-            '${(epssWatchThreshold * 100).round()} %)._');
+        b.writeln(tr(
+            '_Aucune CVE avec signal d\'exploitation notable '
+                '(CISA KEV, PoC public, ou EPSS >= '
+                '${(epssWatchThreshold * 100).round()} %)._',
+            '_No CVE with a notable exploitation signal '
+                '(CISA KEV, public PoC, or EPSS >= '
+                '${(epssWatchThreshold * 100).round()} %)._'));
         b.writeln();
       } else {
-        b.writeln('CVE avec un signal d\'exploitation notable, ordonnées par : '
-            'KEV, puis probabilité EPSS, puis sévérité.');
+        b.writeln(tr(
+            'CVE avec un signal d\'exploitation notable, ordonnées par : '
+                'KEV, puis probabilité EPSS, puis sévérité.',
+            'CVEs with a notable exploitation signal, ordered by: '
+                'KEV, then EPSS probability, then severity.'));
         b.writeln();
         b.writeln('[cols="3,2,4,2,2,3,1",options="header"]');
         b.writeln('|===');
-        b.writeln('| CVE / ID | Sévérité | Paquet | KEV | EPSS '
-            '| Exploit. CVSS | PoC');
+        b.writeln(tr('| CVE / ID | Sévérité | Paquet | KEV | EPSS ',
+                '| CVE / ID | Severity | Package | KEV | EPSS ') +
+            tr('| Exploit. CVSS | PoC', '| CVSS exploit. | PoC'));
         for (final r in riskRows) {
           final e = _exploitFor(r.id);
           b.writeln('| ${_adocEsc(r.id)} '
@@ -748,25 +856,37 @@ class ScanReportGenerator {
         b.writeln('|===');
         b.writeln();
         if (_riskRowsOmitted > 0) {
-          b.writeln('NOTE: $_riskRowsOmitted autre(s) CVE sans signal '
-              'd\'exploitation notable ne sont pas listées ici (voir la '
-              'matrice ci-dessus).');
+          b.writeln(tr(
+              'NOTE: $_riskRowsOmitted autre(s) CVE sans signal '
+                  'd\'exploitation notable ne sont pas listées ici (voir la '
+                  'matrice ci-dessus).',
+              'NOTE: $_riskRowsOmitted other CVE(s) with no notable '
+                  'exploitation signal are not listed here (see the '
+                  'matrix above).'));
           b.writeln();
         }
       }
       b.writeln('[NOTE]');
       b.writeln('====');
-      b.writeln('*KEV* : CVE au catalogue CISA Known Exploited Vulnerabilities '
-          '— exploitation active confirmée. *EPSS* : probabilité d\'exploitation '
-          'dans les 30 jours (score et percentile, FIRST.org). '
-          '*Exploitabilité CVSS* : sous-score AV/AC/PR/UI (0–3,9) et maturité de '
-          'l\'exploit quand elle est publiée. *PoC public* : dépôt(s) d\'exploit '
-          'recensé(s).');
+      b.writeln(tr(
+          '*KEV* : CVE au catalogue CISA Known Exploited Vulnerabilities '
+              '— exploitation active confirmée. *EPSS* : probabilité d\'exploitation '
+              'dans les 30 jours (score et percentile, FIRST.org). '
+              '*Exploitabilité CVSS* : sous-score AV/AC/PR/UI (0–3,9) et maturité de '
+              'l\'exploit quand elle est publiée. *PoC public* : dépôt(s) d\'exploit '
+              'recensé(s).',
+          '*KEV*: CVE in the CISA Known Exploited Vulnerabilities catalog '
+              '— confirmed active exploitation. *EPSS*: probability of exploitation '
+              'within 30 days (score and percentile, FIRST.org). '
+              '*CVSS exploitability*: AV/AC/PR/UI sub-score (0–3.9) and exploit '
+              'maturity when published. *Public PoC*: recorded exploit '
+              'repository(ies).'));
       b.writeln('====');
       b.writeln();
     }
 
-    b.writeln('_Généré par sbom-generator._');
+    b.writeln(
+        tr('_Généré par sbom-generator._', '_Generated by sbom-generator._'));
     return b.toString();
   }
 
@@ -778,11 +898,40 @@ class ScanReportGenerator {
     return '${d.year}-${p(d.month)}-${p(d.day)} ${p(d.hour)}:${p(d.minute)} UTC';
   }
 
-  /// Date longue en français (« 8 septembre 2026 ») pour l'en-tête du rapport.
+  /// Date longue (« 8 septembre 2026 » / « 8 September 2026 ») pour l'en-tête
+  /// du rapport.
   String _frenchDate() {
+    if (currentLang == Lang.en) {
+      const en = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December'
+      ];
+      final d = generatedAt;
+      return '${d.day} ${en[d.month - 1]} ${d.year}';
+    }
     const months = [
-      'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
-      'septembre', 'octobre', 'novembre', 'décembre'
+      'janvier',
+      'février',
+      'mars',
+      'avril',
+      'mai',
+      'juin',
+      'juillet',
+      'août',
+      'septembre',
+      'octobre',
+      'novembre',
+      'décembre'
     ];
     final d = generatedAt;
     return '${d.day} ${months[d.month - 1]} ${d.year}';
@@ -793,11 +942,11 @@ class ScanReportGenerator {
 
   /// Libellé français d'une sévérité (les scanners rapportent l'anglais).
   static String frSeverity(String severity) => switch (severity.toLowerCase()) {
-        'critical' => 'CRITIQUE',
-        'high' => 'ÉLEVÉE',
-        'medium' => 'MOYENNE',
-        'low' => 'FAIBLE',
-        'negligible' => 'NÉGLIGEABLE',
+        'critical' => tr('CRITIQUE', 'CRITICAL'),
+        'high' => tr('ÉLEVÉE', 'HIGH'),
+        'medium' => tr('MOYENNE', 'MEDIUM'),
+        'low' => tr('FAIBLE', 'LOW'),
+        'negligible' => tr('NÉGLIGEABLE', 'NEGLIGIBLE'),
         '' => '?',
         _ => severity.toUpperCase(),
       };
@@ -814,9 +963,8 @@ class ScanReportGenerator {
       '[.${_sevRole(severity)}]#${frSeverity(severity)}#';
 
   /// Nombre de CVE uniques dont la pire sévérité (tous scanners) vaut [level].
-  int _crossSevCount(String level) => _crossRows()
-      .where((r) => r.severity.toLowerCase() == level)
-      .length;
+  int _crossSevCount(String level) =>
+      _crossRows().where((r) => r.severity.toLowerCase() == level).length;
 
   /// Verdict de la page de garde : (rôle de thème, phrase).
   (String, String) _verdict() {
@@ -826,28 +974,39 @@ class ScanReportGenerator {
     if (kev > 0) {
       return (
         'verdict-urgent',
-        'Action immédiate requise. $kev CVE du catalogue CISA KEV '
-            '${kev > 1 ? 'sont exploitées' : 'est exploitée'} activement dans la '
-            'nature — appliquer les correctifs sans délai.'
+        tr(
+            'Action immédiate requise. $kev CVE du catalogue CISA KEV '
+                '${kev > 1 ? 'sont exploitées' : 'est exploitée'} activement dans la '
+                'nature — appliquer les correctifs sans délai.',
+            'Immediate action required. $kev CVE(s) from the CISA KEV catalog '
+                '${kev > 1 ? 'are' : 'is'} actively exploited in the '
+                'wild — apply the fixes without delay.')
       );
     }
     if (crit > 0) {
       return (
         'verdict-urgent',
-        'Action prioritaire. $crit vulnérabilité(s) critique(s) à corriger '
-            'en priorité.'
+        tr(
+            'Action prioritaire. $crit vulnérabilité(s) critique(s) à corriger '
+                'en priorité.',
+            'Priority action. $crit critical vulnerability(ies) to fix '
+                'first.')
       );
     }
     if (high > 0) {
       return (
         'verdict-watch',
-        'À traiter. $high vulnérabilité(s) de sévérité élevée identifiée(s).'
+        tr('À traiter. $high vulnérabilité(s) de sévérité élevée identifiée(s).',
+            'To address. $high high-severity vulnerability(ies) identified.')
       );
     }
     return (
       'verdict-ok',
-      'Aucune vulnérabilité critique ni élevée détectée par les scanners '
-          'exécutés.'
+      tr(
+          'Aucune vulnérabilité critique ni élevée détectée par les scanners '
+              'exécutés.',
+          'No critical or high vulnerability detected by the scanners '
+              'that ran.')
     );
   }
 }
@@ -1030,9 +1189,9 @@ role:
 /// executable is not found — callers keep the `.adoc` and warn.
 Future<ProcessResult> renderAsciiDocToPdf(
     String adocPath, String pdfPath) async {
-  final theme = File(
-      '${Directory.systemTemp.path}/sbom_generator_scan_pdf_theme.yml');
+  final theme =
+      File('${Directory.systemTemp.path}/sbom_generator_scan_pdf_theme.yml');
   await theme.writeAsString(_kPdfThemeYaml);
-  return Process.run(
-      'asciidoctor-pdf', [adocPath, '-o', pdfPath, '-a', 'pdf-theme=${theme.path}']);
+  return Process.run('asciidoctor-pdf',
+      [adocPath, '-o', pdfPath, '-a', 'pdf-theme=${theme.path}']);
 }

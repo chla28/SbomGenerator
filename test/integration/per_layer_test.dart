@@ -44,8 +44,8 @@ Future<String> _layerTar(
   return 'sha256:${sha256.convert(File(tarPath).readAsBytesSync())}';
 }
 
-Future<ProcessResult> _cli(List<String> args) =>
-    Process.run('dart', ['run', 'bin/sbom_generator.dart', ...args]);
+Future<ProcessResult> _cli(List<String> args) => Process.run(
+    'dart', ['run', 'bin/sbom_generator.dart', '--lang', 'fr', ...args]);
 
 void main() {
   late Directory tmp;
@@ -55,27 +55,31 @@ void main() {
   Future<String> buildImage() async {
     final img = Directory('${tmp.path}/img')..createSync();
     final d1 = await _layerTar(tmp.path, '${img.path}/l1.tar', {
-      'lib/apk/db/installed':
-          _apkEntry('musl', '1.2.4-r0') +
-              _apkEntry('zlib', '1.2.13-r0') +
-              _apkEntry('busybox', '1.36.1-r0'),
+      'lib/apk/db/installed': _apkEntry('musl', '1.2.4-r0') +
+          _apkEntry('zlib', '1.2.13-r0') +
+          _apkEntry('busybox', '1.36.1-r0'),
       'etc/obsolete.conf': 'x',
     });
     final d2 = await _layerTar(tmp.path, '${img.path}/l2.tar', {
-      'lib/apk/db/installed':
-          _apkEntry('musl', '1.2.4-r0') +
-              _apkEntry('zlib', '1.3.1-r0') +
-              _apkEntry('curl', '8.9.0-r0'),
+      'lib/apk/db/installed': _apkEntry('musl', '1.2.4-r0') +
+          _apkEntry('zlib', '1.3.1-r0') +
+          _apkEntry('curl', '8.9.0-r0'),
       'etc/.wh.obsolete.conf': '',
     });
     File('${img.path}/config.json').writeAsStringSync(jsonEncode({
       'architecture': 'amd64',
       'os': 'linux',
-      'rootfs': {'type': 'layers', 'diff_ids': [d1, d2]},
+      'rootfs': {
+        'type': 'layers',
+        'diff_ids': [d1, d2]
+      },
       'history': [
         {'created_by': 'ADD rootfs.tar /'},
         {'created_by': 'CMD ["sh"]', 'empty_layer': true},
-        {'created_by': 'RUN apk upgrade zlib && apk del busybox && apk add curl'},
+        {
+          'created_by':
+              'RUN apk upgrade zlib && apk del busybox && apk add curl'
+        },
       ],
     }));
     File('${img.path}/manifest.json').writeAsStringSync(jsonEncode([
@@ -87,8 +91,14 @@ void main() {
     ]));
     final archive = '${tmp.path}/image.tar';
     final r = await Process.run('tar', [
-      '-C', img.path, '-cf', archive,
-      'manifest.json', 'config.json', 'l1.tar', 'l2.tar',
+      '-C',
+      img.path,
+      '-cf',
+      archive,
+      'manifest.json',
+      'config.json',
+      'l1.tar',
+      'l2.tar',
     ]);
     expect(r.exitCode, 0, reason: r.stderr as String);
     return archive;
@@ -103,8 +113,15 @@ void main() {
     final out = '${tmp.path}/out/app';
     Directory('${tmp.path}/out').createSync();
     final r = await _cli([
-      '--image', archive, '--oci-tool', 'skopeo', '--per-layer',
-      '-f', 'cyclonedx,csv', '-o', out,
+      '--image',
+      archive,
+      '--oci-tool',
+      'skopeo',
+      '--per-layer',
+      '-f',
+      'cyclonedx,csv',
+      '-o',
+      out,
     ]);
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
     expect(r.stdout, contains('mode rootfs'));
@@ -125,8 +142,8 @@ void main() {
         .toList();
     expect(written.first, 'app.cdx.json');
 
-    final layer2 = jsonDecode(File('${tmp.path}/out/${names.firstWhere(
-            (n) => n.contains('.layer-02-') && n.endsWith('.cdx.json'))}')
+    final layer2 = jsonDecode(File(
+            '${tmp.path}/out/${names.firstWhere((n) => n.contains('.layer-02-') && n.endsWith('.cdx.json'))}')
         .readAsStringSync()) as Map<String, dynamic>;
     final root = (layer2['metadata'] as Map)['component'] as Map;
     expect(root['description'], contains('apk upgrade zlib'));
@@ -144,30 +161,42 @@ void main() {
             .single['value'],
         contains('busybox'));
 
-    final global = jsonDecode(File('${tmp.path}/out/app.cdx.json')
-        .readAsStringSync()) as Map<String, dynamic>;
+    final global =
+        jsonDecode(File('${tmp.path}/out/app.cdx.json').readAsStringSync())
+            as Map<String, dynamic>;
     final links = ((global['metadata'] as Map)['component']
         as Map)['externalReferences'] as List;
     expect(links, hasLength(2));
     final zlib = (global['components'] as List)
         .firstWhere((c) => c['name'] == 'zlib') as Map;
-    final zp = {for (final p in zlib['properties'] as List) p['name']: p['value']};
+    final zp = {
+      for (final p in zlib['properties'] as List) p['name']: p['value']
+    };
     expect(zp['sbom_generator:layer:index'], '1');
     expect(zp['sbom_generator:layer:modifiedBy'], '2');
   });
 
   group('validation des options', () {
     test('--layer-mode sans --per-layer', () async {
-      final r = await _cli(
-          ['--image', 'x.tar', '--layer-mode', 'rootfs', '-o', '${tmp.path}/o']);
+      final r = await _cli([
+        '--image',
+        'x.tar',
+        '--layer-mode',
+        'rootfs',
+        '-o',
+        '${tmp.path}/o'
+      ]);
       expect(r.exitCode, 1);
       expect(r.stderr, contains('--layer-mode nécessite --per-layer'));
     });
 
     test('--per-layer avec --binary', () async {
       final r = await _cli([
-        '--binary', Platform.resolvedExecutable, '--per-layer',
-        '-o', '${tmp.path}/o',
+        '--binary',
+        Platform.resolvedExecutable,
+        '--per-layer',
+        '-o',
+        '${tmp.path}/o',
       ]);
       expect(r.exitCode, 1);
       expect(r.stderr, contains('pas de couches'));
@@ -175,8 +204,15 @@ void main() {
 
     test('--layer-mode metadata avec skopeo', () async {
       final r = await _cli([
-        '--image', 'x.tar', '--oci-tool', 'skopeo', '--per-layer',
-        '--layer-mode', 'metadata', '-o', '${tmp.path}/o',
+        '--image',
+        'x.tar',
+        '--oci-tool',
+        'skopeo',
+        '--per-layer',
+        '--layer-mode',
+        'metadata',
+        '-o',
+        '${tmp.path}/o',
       ]);
       expect(r.exitCode, 1);
       expect(r.stderr, contains('--layer-mode metadata nécessite'));

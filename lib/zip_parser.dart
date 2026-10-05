@@ -3,6 +3,7 @@ import 'dart:io';
 import 'archive_helpers.dart';
 import 'models.dart';
 import 'wheel_parser.dart';
+import 'i18n.dart';
 
 // ── Python extraction script ─────────────────────────────────────────────────
 //
@@ -69,7 +70,9 @@ class ZipParser {
     final result = await Process.run('python3', ['-c', _extractScript, path]);
 
     if (result.exitCode != 0) {
-      stderr.writeln('Warning: cannot read archive "$path"');
+      stderr.writeln('Warning: ' +
+          tr('lecture impossible de l\'archive "$path"',
+              'cannot read archive "$path"'));
       final err = result.stderr.toString().trim();
       if (err.isNotEmpty) stderr.writeln('  $err');
       return null;
@@ -80,7 +83,9 @@ class ZipParser {
       payload =
           jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
     } catch (_) {
-      stderr.writeln('Warning: unexpected output from python3 for "$path"');
+      stderr.writeln('Warning: ' +
+          tr('sortie inattendue de python3 pour "$path"',
+              'unexpected output from python3 for "$path"'));
       return null;
     }
 
@@ -89,7 +94,8 @@ class ZipParser {
     if (type == 'python') {
       final content = payload['content'] as String? ?? '';
       if (content.isEmpty) {
-        stderr.writeln('Warning: empty metadata for "$path"');
+        stderr.writeln('Warning: ' +
+            tr('métadonnées vides pour "$path"', 'empty metadata for "$path"'));
         return null;
       }
       return _wheelParser.parseMetadataText(path, content);
@@ -103,7 +109,9 @@ class ZipParser {
       );
     }
 
-    stderr.writeln('Warning: extraction failed for "$path"');
+    stderr.writeln('Warning: ' +
+        tr('échec de l\'extraction pour "$path"',
+            'extraction failed for "$path"'));
     return null;
   }
 }

@@ -13,8 +13,8 @@ void main() {
     });
 
     test('maturité E:H extraite du vecteur', () {
-      final r = parseCvssVector(
-          'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H/E:H');
+      final r =
+          parseCvssVector('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H/E:H');
       expect(r.maturity, 'High');
       expect(r.exploitability, closeTo(3.9, 0.05));
     });
@@ -69,7 +69,9 @@ void main() {
         cacheDir: tmp,
         httpClientFactory: () => throw StateError('réseau interdit'),
       );
-      final out = await enricher.enrich({'CVE-2021-44228'}, seed: {
+      final out = await enricher.enrich({
+        'CVE-2021-44228'
+      }, seed: {
         'CVE-2021-44228': const CveSeed(
           kev: true,
           kevRansomware: true,

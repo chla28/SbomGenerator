@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses Maven `pom.xml` files using lightweight regex-based XML extraction.
 ///
@@ -10,7 +11,8 @@ class MavenParser {
   List<WheelPackage> parsePomXml(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: pom.xml not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('pom.xml introuvable : $path', 'pom.xml not found: $path'));
       return [];
     }
 
@@ -23,10 +25,8 @@ class MavenParser {
             RegExp(r'<dependencyManagement>.*?</dependencyManagement>',
                 dotAll: true),
             '')
-        .replaceAll(
-            RegExp(r'<build>.*?</build>', dotAll: true), '')
-        .replaceAll(
-            RegExp(r'<plugin>.*?</plugin>', dotAll: true), '');
+        .replaceAll(RegExp(r'<build>.*?</build>', dotAll: true), '')
+        .replaceAll(RegExp(r'<plugin>.*?</plugin>', dotAll: true), '');
 
     final block = _extractFirst(cleaned, 'dependencies');
     if (block == null) return [];

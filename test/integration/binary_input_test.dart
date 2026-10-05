@@ -35,11 +35,19 @@ void main() {
       return;
     }
     final outPath = '${tmp.path}/out.cdx.json';
-    final r = await Process.run('dart', [
-      'run', 'bin/sbom_generator.dart',
-      '--binary', Platform.resolvedExecutable,
-      '-o', outPath,
-    ], workingDirectory: Directory.current.path);
+    final r = await Process.run(
+        'dart',
+        [
+          'run',
+          'bin/sbom_generator.dart',
+          '--lang',
+          'fr',
+          '--binary',
+          Platform.resolvedExecutable,
+          '-o',
+          outPath,
+        ],
+        workingDirectory: Directory.current.path);
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
     final doc = jsonDecode(File(outPath).readAsStringSync());
     expect(doc, isA<Map>());
@@ -48,11 +56,19 @@ void main() {
 
   test('--binary sur un fichier inexistant → erreur claire, exit != 0',
       () async {
-    final r = await Process.run('dart', [
-      'run', 'bin/sbom_generator.dart',
-      '--binary', '${tmp.path}/nexistepas',
-      '-o', '${tmp.path}/out.cdx.json',
-    ], workingDirectory: Directory.current.path);
+    final r = await Process.run(
+        'dart',
+        [
+          'run',
+          'bin/sbom_generator.dart',
+          '--lang',
+          'fr',
+          '--binary',
+          '${tmp.path}/nexistepas',
+          '-o',
+          '${tmp.path}/out.cdx.json',
+        ],
+        workingDirectory: Directory.current.path);
     expect(r.exitCode, isNot(0));
     expect(r.stderr, contains('fichier introuvable'));
   }, timeout: const Timeout(Duration(seconds: 30)));
@@ -60,24 +76,42 @@ void main() {
   test('--binary + --oci-tool trivy → rejeté (seul syft est supporté)',
       () async {
     final bin = File('${tmp.path}/fake-bin')..writeAsBytesSync([0]);
-    final r = await Process.run('dart', [
-      'run', 'bin/sbom_generator.dart',
-      '--binary', bin.path,
-      '--oci-tool', 'trivy',
-      '-o', '${tmp.path}/out.cdx.json',
-    ], workingDirectory: Directory.current.path);
+    final r = await Process.run(
+        'dart',
+        [
+          'run',
+          'bin/sbom_generator.dart',
+          '--lang',
+          'fr',
+          '--binary',
+          bin.path,
+          '--oci-tool',
+          'trivy',
+          '-o',
+          '${tmp.path}/out.cdx.json',
+        ],
+        workingDirectory: Directory.current.path);
     expect(r.exitCode, isNot(0));
     expect(r.stderr, contains('--oci-tool syft'));
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('--binary et --image ensemble → rejeté', () async {
     final bin = File('${tmp.path}/fake-bin')..writeAsBytesSync([0]);
-    final r = await Process.run('dart', [
-      'run', 'bin/sbom_generator.dart',
-      '--binary', bin.path,
-      '--image', 'nginx:latest',
-      '-o', '${tmp.path}/out.cdx.json',
-    ], workingDirectory: Directory.current.path);
+    final r = await Process.run(
+        'dart',
+        [
+          'run',
+          'bin/sbom_generator.dart',
+          '--lang',
+          'fr',
+          '--binary',
+          bin.path,
+          '--image',
+          'nginx:latest',
+          '-o',
+          '${tmp.path}/out.cdx.json',
+        ],
+        workingDirectory: Directory.current.path);
     expect(r.exitCode, isNot(0));
     expect(r.stderr, contains('exclusifs'));
   }, timeout: const Timeout(Duration(seconds: 30)));

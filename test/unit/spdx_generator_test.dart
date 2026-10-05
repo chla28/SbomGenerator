@@ -38,8 +38,8 @@ void main() {
     });
 
     test('utilise le nom de document fourni', () {
-      final sbom = generator.generate([_pkg(name: 'foo')], [],
-          documentName: 'Mon SBOM');
+      final sbom =
+          generator.generate([_pkg(name: 'foo')], [], documentName: 'Mon SBOM');
       expect(sbom['name'], 'Mon SBOM');
     });
 
@@ -53,17 +53,20 @@ void main() {
           sdkTools: {'flutter': '3.47.2', 'dart': '3.9.0'});
       final creators =
           (sbom['creationInfo'] as Map)['creators'] as List<dynamic>;
-      expect(creators, containsAll([
-        'Tool: sbom_generator-1.6.0',
-        'Tool: flutter-3.47.2',
-        'Tool: dart-3.9.0',
-      ]));
+      expect(
+          creators,
+          containsAll([
+            'Tool: sbom_generator-1.6.0',
+            'Tool: flutter-3.47.2',
+            'Tool: dart-3.9.0',
+          ]));
     });
   });
 
   group('SpdxGenerator.generate — paquets', () {
     test('génère un package par paquet, avec purl en externalRefs', () {
-      final sbom = generator.generate([_pkg(name: 'foo', version: '1.2.3')], []);
+      final sbom =
+          generator.generate([_pkg(name: 'foo', version: '1.2.3')], []);
       final packages = sbom['packages'] as List;
       expect(packages, hasLength(1));
       final pkg = packages.single as Map<String, dynamic>;
@@ -75,8 +78,7 @@ void main() {
     });
 
     test('licence normalisée en expression SPDX', () {
-      final sbom = generator.generate(
-          [_pkg(name: 'foo', license: 'MIT')], []);
+      final sbom = generator.generate([_pkg(name: 'foo', license: 'MIT')], []);
       final pkg = (sbom['packages'] as List).single as Map<String, dynamic>;
       expect(pkg['licenseConcluded'], isNot('NOASSERTION'));
     });
@@ -101,9 +103,10 @@ void main() {
       expect(pkg['downloadLocation'], 'https://example.org/foo');
     });
 
-    test('supplier: "Organization: <vendor>" si présent, sinon NOASSERTION', () {
-      final withVendor = generator
-          .generate([_pkg(name: 'foo', vendor: 'ACME')], []);
+    test('supplier: "Organization: <vendor>" si présent, sinon NOASSERTION',
+        () {
+      final withVendor =
+          generator.generate([_pkg(name: 'foo', vendor: 'ACME')], []);
       final pkgWith =
           (withVendor['packages'] as List).single as Map<String, dynamic>;
       expect(pkgWith['supplier'], 'Organization: ACME');
@@ -116,13 +119,24 @@ void main() {
 
     test('checksums émis depuis Package.hashes, libellés SPDX', () {
       final pkg = WheelPackage(
-        name: 'lib', version: '1.0', license: 'MIT', url: '', summary: '',
-        vendor: '', arch: 'any', sourceRef: '',
-        hashes: [PackageHash('SHA-256', 'a' * 64), PackageHash('SHA-512', 'b' * 128)],
-        requires: const [], provides: const [], packageType: 'npm',
+        name: 'lib',
+        version: '1.0',
+        license: 'MIT',
+        url: '',
+        summary: '',
+        vendor: '',
+        arch: 'any',
+        sourceRef: '',
+        hashes: [
+          PackageHash('SHA-256', 'a' * 64),
+          PackageHash('SHA-512', 'b' * 128)
+        ],
+        requires: const [],
+        provides: const [],
+        packageType: 'npm',
       );
-      final p = (generator.generate([pkg], [])['packages'] as List)
-          .single as Map<String, dynamic>;
+      final p = (generator.generate([pkg], [])['packages'] as List).single
+          as Map<String, dynamic>;
       expect(p['checksums'], [
         {'algorithm': 'SHA256', 'checksumValue': 'a' * 64},
         {'algorithm': 'SHA512', 'checksumValue': 'b' * 128},
@@ -130,20 +144,30 @@ void main() {
     });
 
     test('pas de clé checksums si aucun hash', () {
-      final p = (generator.generate([_pkg(name: 'foo')], [])['packages'] as List)
-          .single as Map<String, dynamic>;
+      final p =
+          (generator.generate([_pkg(name: 'foo')], [])['packages'] as List)
+              .single as Map<String, dynamic>;
       expect(p.containsKey('checksums'), isFalse);
     });
 
     test('hash d\'en-tête RPM → annotation, jamais checksums', () {
       final pkg = RpmPackage(
-        name: 'bash', version: '5.2', release: '1.el9', arch: 'x86_64',
-        epoch: '(none)', license: 'GPL', vendor: '', url: '', buildTime: '',
-        summary: '', requires: const [], provides: const [],
+        name: 'bash',
+        version: '5.2',
+        release: '1.el9',
+        arch: 'x86_64',
+        epoch: '(none)',
+        license: 'GPL',
+        vendor: '',
+        url: '',
+        buildTime: '',
+        summary: '',
+        requires: const [],
+        provides: const [],
         headerSha256: 'f' * 64,
       );
-      final p = (generator.generate([pkg], [])['packages'] as List)
-          .single as Map<String, dynamic>;
+      final p = (generator.generate([pkg], [])['packages'] as List).single
+          as Map<String, dynamic>;
       expect(p.containsKey('checksums'), isFalse);
       expect((p['annotations'] as List).first['comment'],
           contains('rpm:header-sha256=${'f' * 64}'));
@@ -152,14 +176,15 @@ void main() {
 
   group('SpdxGenerator.generate — relations', () {
     test('une relation DESCRIBES par paquet', () {
-      final sbom = generator
-          .generate([_pkg(name: 'foo'), _pkg(name: 'bar')], []);
+      final sbom =
+          generator.generate([_pkg(name: 'foo'), _pkg(name: 'bar')], []);
       final rels = (sbom['relationships'] as List)
           .cast<Map<String, dynamic>>()
           .where((r) => r['relationshipType'] == 'DESCRIBES')
           .toList();
       expect(rels, hasLength(2));
-      expect(rels.every((r) => r['spdxElementId'] == 'SPDXRef-DOCUMENT'), isTrue);
+      expect(
+          rels.every((r) => r['spdxElementId'] == 'SPDXRef-DOCUMENT'), isTrue);
     });
 
     test('les dépendances produisent des relations DEPENDS_ON', () {
@@ -205,8 +230,8 @@ void main() {
       final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
       final packages = (sbom['packages'] as List).cast<Map<String, dynamic>>();
 
-      final osPkg = packages.firstWhere(
-          (p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM');
+      final osPkg = packages
+          .firstWhere((p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM');
       // Le préfixe SPDXRef-OperatingSystem- (et non SPDXRef-Package-) est
       // ce que Trivy reconnaît pour la classe "os-pkgs" en mode
       // `trivy sbom` — vérifié empiriquement, voir spdx_generator.dart.
@@ -219,11 +244,9 @@ void main() {
 
     test('ajoute une relation DESCRIBES vers le paquet OS', () {
       final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
-      final packages =
-          (sbom['packages'] as List).cast<Map<String, dynamic>>();
-      final osSpdxId = packages
-          .firstWhere((p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM')
-          ['SPDXID'];
+      final packages = (sbom['packages'] as List).cast<Map<String, dynamic>>();
+      final osSpdxId = packages.firstWhere(
+          (p) => p['primaryPackagePurpose'] == 'OPERATING-SYSTEM')['SPDXID'];
 
       final describes = (sbom['relationships'] as List)
           .cast<Map<String, dynamic>>()

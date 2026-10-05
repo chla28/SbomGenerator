@@ -28,14 +28,20 @@ OciPackage _apk(String name, String version,
       packageType: 'apk',
     );
 
-const _d1 = 'sha256:1111111111111111111111111111111111111111111111111111111111111111';
-const _d2 = 'sha256:2222222222222222222222222222222222222222222222222222222222222222';
-const _d3 = 'sha256:3333333333333333333333333333333333333333333333333333333333333333';
+const _d1 =
+    'sha256:1111111111111111111111111111111111111111111111111111111111111111';
+const _d2 =
+    'sha256:2222222222222222222222222222222222222222222222222222222222222222';
+const _d3 =
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333';
 
 void main() {
   group('layersFromConfig', () {
     test('ignore les entrées history empty_layer', () {
-      final layers = layersFromConfig([_d1, _d2], [
+      final layers = layersFromConfig([
+        _d1,
+        _d2
+      ], [
         {'created_by': 'ADD rootfs.tar /'},
         {'created_by': 'ENV A=1', 'empty_layer': true},
         {'created_by': 'RUN apk add curl'},
@@ -47,7 +53,10 @@ void main() {
     });
 
     test('history incohérent : pas d\'instruction', () {
-      final layers = layersFromConfig([_d1, _d2], [
+      final layers = layersFromConfig([
+        _d1,
+        _d2
+      ], [
         {'created_by': 'seul'},
       ]);
       expect(layers.every((l) => l.createdBy == null), isTrue);
@@ -61,7 +70,9 @@ void main() {
 
     test('docker-archive : manifest.json + config', () {
       File('${tmp.path}/cfg.json').writeAsStringSync(jsonEncode({
-        'rootfs': {'diff_ids': [_d1, _d2]},
+        'rootfs': {
+          'diff_ids': [_d1, _d2]
+        },
         'history': [
           {'created_by': 'base'},
           {'created_by': 'app'},
@@ -93,7 +104,9 @@ void main() {
         ],
       });
       blob('sha256:cfg', {
-        'rootfs': {'diff_ids': [_d1]},
+        'rootfs': {
+          'diff_ids': [_d1]
+        },
       });
       File('${tmp.path}/index.json').writeAsStringSync(jsonEncode({
         'manifests': [
@@ -149,7 +162,8 @@ void main() {
       expect(File('$root/etc/.wh.gone').existsSync(), isFalse);
     });
 
-    test('un lien symbolique d\'une couche n\'ouvre pas de chemin hors du rootfs',
+    test(
+        'un lien symbolique d\'une couche n\'ouvre pas de chemin hors du rootfs',
         () {
       final outside = Directory('${tmp.path}/outside')..createSync();
       Link('$root/evil').createSync(outside.path);
@@ -211,10 +225,12 @@ void main() {
         LayerDelta.addedOnly([_apk('curl', '8.0')]),
       ]);
       final o = analysis.origins();
-      expect(o.keys, unorderedEquals([
-        _apk('zlib', '1.3').bomRef,
-        _apk('curl', '8.0').bomRef,
-      ]));
+      expect(
+          o.keys,
+          unorderedEquals([
+            _apk('zlib', '1.3').bomRef,
+            _apk('curl', '8.0').bomRef,
+          ]));
       final zlib = o[_apk('zlib', '1.3').bomRef]!;
       expect(zlib.index, 1);
       expect(zlib.modifiedBy, [2]);
@@ -223,16 +239,21 @@ void main() {
 
     test('metadataLayerAnalysis : répartition par couche d\'origine', () {
       final pkgs = [_apk('a', '1'), _apk('b', '1'), _apk('c', '1')];
-      final a = metadataLayerAnalysis(layers, {
-        pkgs[0].bomRef: 1,
-        pkgs[1].bomRef: 3,
-      }, pkgs);
+      final a = metadataLayerAnalysis(
+          layers,
+          {
+            pkgs[0].bomRef: 1,
+            pkgs[1].bomRef: 3,
+          },
+          pkgs);
       expect(a.deltas.map((d) => d.added.length), [1, 0, 1]);
       expect(a.origins().length, 2);
     });
 
     test('map applique la transformation à tous les composants', () {
-      final a = LayerAnalysis(mode: 'rootfs', layers: layers.take(1).toList(),
+      final a = LayerAnalysis(
+          mode: 'rootfs',
+          layers: layers.take(1).toList(),
           deltas: [
             LayerDelta(
               added: [_apk('a', '1')],
@@ -241,8 +262,10 @@ void main() {
             ),
           ]).map((p) => p.copyWith(license: 'X'));
       final d = a.deltas.single;
-      expect([...d.added, d.modified.single.after, ...d.removed]
-          .every((p) => p.license == 'X'), isTrue);
+      expect(
+          [...d.added, d.modified.single.after, ...d.removed]
+              .every((p) => p.license == 'X'),
+          isTrue);
     });
   });
 
@@ -268,14 +291,22 @@ void main() {
           {
             'Type': 'alpine',
             'Packages': [
-              {'Name': 'musl', 'Version': '1.0', 'Layer': {'DiffID': _d1}},
-              {'Name': 'curl', 'Version': '8.0', 'Layer': {'DiffID': _d2}},
+              {
+                'Name': 'musl',
+                'Version': '1.0',
+                'Layer': {'DiffID': _d1}
+              },
+              {
+                'Name': 'curl',
+                'Version': '8.0',
+                'Layer': {'DiffID': _d2}
+              },
             ],
           },
         ],
       }, 'img');
-      expect(r.layers.map((l) => l.createdBy),
-          ['ADD base', 'RUN apk add curl']);
+      expect(
+          r.layers.map((l) => l.createdBy), ['ADD base', 'RUN apk add curl']);
       expect(r.layerOf.values, unorderedEquals([1, 2]));
     });
 
@@ -319,7 +350,10 @@ void main() {
   });
 
   group('générateurs', () {
-    final layers = layersFromConfig([_d1, _d2], [
+    final layers = layersFromConfig([
+      _d1,
+      _d2
+    ], [
       {'created_by': 'ADD base'},
       {'created_by': 'RUN apk upgrade'},
     ]);
@@ -358,8 +392,8 @@ void main() {
     test('CycloneDX — SBOM de couche', () {
       final bom = CycloneDxGenerator()
           .generate(delta.packages, const [], layers: layerDoc);
-      expect(bom['serialNumber'],
-          'urn:uuid:aaaaaaaa-0000-4000-8000-000000000002');
+      expect(
+          bom['serialNumber'], 'urn:uuid:aaaaaaaa-0000-4000-8000-000000000002');
       final root = (bom['metadata'] as Map)['component'] as Map;
       expect(root['version'], _d2);
       expect(root['description'], 'RUN apk upgrade');
@@ -367,7 +401,8 @@ void main() {
           'urn:cdx:bbbbbbbb-0000-4000-8000-000000000000/1');
       final props = {
         for (final p in root['properties'] as List)
-          if (p['name'] != 'sbom_generator:layer:removed') p['name']: p['value'],
+          if (p['name'] != 'sbom_generator:layer:removed')
+            p['name']: p['value'],
       };
       expect(props['sbom_generator:layer:index'], '2');
       expect(props['sbom_generator:layer:removedCount'], '1');
@@ -378,7 +413,9 @@ void main() {
           contains('busybox'));
       final zlib = (bom['components'] as List)
           .firstWhere((c) => c['name'] == 'zlib') as Map;
-      final zp = {for (final p in zlib['properties'] as List) p['name']: p['value']};
+      final zp = {
+        for (final p in zlib['properties'] as List) p['name']: p['value']
+      };
       expect(zp['sbom_generator:layer:change'], 'modified');
       expect(zp['sbom_generator:layer:previousVersion'], '1.2');
     });
@@ -393,14 +430,16 @@ void main() {
       expect(s['file'], 'app.layer-02-222222222222');
       expect(s['bomLink'], 'urn:cdx:aaaaaaaa-0000-4000-8000-000000000002/1');
       final comp = (bom['components'] as List).single as Map;
-      final cp = {for (final p in comp['properties'] as List) p['name']: p['value']};
+      final cp = {
+        for (final p in comp['properties'] as List) p['name']: p['value']
+      };
       expect(cp['sbom_generator:layer:index'], '1');
       expect(cp['sbom_generator:layer:modifiedBy'], '2');
     });
 
     test('SPDX 2.3 — commentaire et annotation', () {
-      final doc = SpdxGenerator()
-          .generate(delta.packages, const [], layers: layerDoc);
+      final doc =
+          SpdxGenerator().generate(delta.packages, const [], layers: layerDoc);
       expect(doc['documentNamespace'],
           endsWith('aaaaaaaa-0000-4000-8000-000000000002'));
       expect(doc['name'], contains('couche 2/2'));

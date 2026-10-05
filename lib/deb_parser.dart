@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses Debian .deb archives using the system `dpkg-deb` binary.
 ///
@@ -12,7 +13,8 @@ class DebParser {
     final result = await Process.run('dpkg-deb', ['-f', path]);
 
     if (result.exitCode != 0) {
-      stderr.writeln('Warning: cannot read "$path"');
+      stderr.writeln('Warning: ' +
+          tr('lecture impossible de "$path"', 'cannot read "$path"'));
       final err = result.stderr.toString().trim();
       if (err.isNotEmpty) stderr.writeln('  $err');
       return null;
@@ -22,7 +24,9 @@ class DebParser {
 
     final name = fields['package'] ?? '';
     if (name.isEmpty) {
-      stderr.writeln('Warning: no Package field in "$path"');
+      stderr.writeln('Warning: ' +
+          tr('aucun champ Package dans "$path"',
+              'no Package field in "$path"'));
       return null;
     }
 

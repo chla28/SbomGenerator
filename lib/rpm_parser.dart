@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'hash_utils.dart';
 import 'models.dart';
+import 'i18n.dart';
 
 /// Queries RPM metadata using the system `rpm` binary.
 ///
@@ -30,7 +31,9 @@ class RpmParser {
 
     final infoResult = results[0];
     if (infoResult.exitCode != 0) {
-      stderr.writeln('Warning: cannot query "$packageRef"');
+      stderr.writeln('Warning: ' +
+          tr('interrogation impossible de "$packageRef"',
+              'cannot query "$packageRef"'));
       final errMsg = infoResult.stderr.toString().trim();
       if (errMsg.isNotEmpty) stderr.writeln('  $errMsg');
       return null;
@@ -38,7 +41,9 @@ class RpmParser {
 
     final rawOutput = infoResult.stdout.toString().trim();
     if (rawOutput.isEmpty) {
-      stderr.writeln('Warning: empty output for "$packageRef"');
+      stderr.writeln('Warning: ' +
+          tr('sortie vide pour "$packageRef"',
+              'empty output for "$packageRef"'));
       return null;
     }
 
@@ -46,8 +51,9 @@ class RpmParser {
     final line = rawOutput.split('\n').first;
     final allParts = line.split('|');
     if (allParts.length < 13) {
-      stderr
-          .writeln('Warning: unexpected query output for "$packageRef": $line');
+      stderr.writeln('Warning: ' +
+          tr('sortie de requête inattendue pour "$packageRef" : $line',
+              'unexpected query output for "$packageRef": $line'));
       return null;
     }
 

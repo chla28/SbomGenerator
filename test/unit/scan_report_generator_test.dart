@@ -2,8 +2,13 @@ import 'package:sbom_generator/scan_report_generator.dart';
 import 'package:sbom_generator/vuln_enrichment.dart';
 import 'package:test/test.dart';
 
-Map<String, dynamic> _v(String id, String sev) =>
-    {'id': id, 'severity': sev, 'package': 'p@1', 'published': null, 'modified': null};
+Map<String, dynamic> _v(String id, String sev) => {
+      'id': id,
+      'severity': sev,
+      'package': 'p@1',
+      'published': null,
+      'modified': null
+    };
 
 void main() {
   group('ScanReportGenerator', () {
@@ -25,7 +30,8 @@ void main() {
       expect(md, contains('_Non exécuté._'));
     });
 
-    test('normalise les CVE préfixées distro d\'OSV-Scanner pour le comptage', () {
+    test('normalise les CVE préfixées distro d\'OSV-Scanner pour le comptage',
+        () {
       final gen = ScanReportGenerator(
         sbomPath: 's',
         resultsByScanner: {
@@ -40,7 +46,8 @@ void main() {
       expect(adoc, isNot(contains('DEBIAN-CVE-2026-13221')));
     });
 
-    test('matrice inter-scanners : ✓/— par scanner, pire sévérité affichée', () {
+    test('matrice inter-scanners : ✓/— par scanner, pire sévérité affichée',
+        () {
       final gen = ScanReportGenerator(
         sbomPath: 's',
         resultsByScanner: {
@@ -79,7 +86,8 @@ void main() {
         },
       );
 
-      expect(gen.cveNotes(), containsPair('CVE-2026-8376', contains('5.40.1-8')));
+      expect(
+          gen.cveNotes(), containsPair('CVE-2026-8376', contains('5.40.1-8')));
       final md = gen.toMarkdown();
       expect(md, contains('### Notes par CVE'));
       expect(md, contains('**CVE-2026-8376** (`perl-base@5.40.1-6`)'));
@@ -101,8 +109,12 @@ void main() {
             },
           ],
           'osv': [
-            {'id': 'CVE-2026-1', 'severity': 'High', 'package': 'foo@1',
-             'fixedVersions': ['2']},
+            {
+              'id': 'CVE-2026-1',
+              'severity': 'High',
+              'package': 'foo@1',
+              'fixedVersions': ['2']
+            },
           ],
         },
       );
@@ -110,17 +122,27 @@ void main() {
       expect(gen.toMarkdown(), isNot(contains('Notes par CVE')));
     });
 
-    test('pas de note si aucun autre scanner n\'annonce de version corrigée', () {
+    test('pas de note si aucun autre scanner n\'annonce de version corrigée',
+        () {
       final gen = ScanReportGenerator(
         sbomPath: 's',
         resultsByScanner: {
           'grype': [
-            {'id': 'CVE-2026-2', 'severity': 'High', 'package': 'bar@1',
-             'fixState': 'wont-fix', 'fixedVersions': <String>[]},
+            {
+              'id': 'CVE-2026-2',
+              'severity': 'High',
+              'package': 'bar@1',
+              'fixState': 'wont-fix',
+              'fixedVersions': <String>[]
+            },
           ],
           'osv': [
-            {'id': 'CVE-2026-2', 'severity': 'High', 'package': 'bar@1',
-             'fixedVersions': <String>[]},
+            {
+              'id': 'CVE-2026-2',
+              'severity': 'High',
+              'package': 'bar@1',
+              'fixedVersions': <String>[]
+            },
           ],
         },
       );
@@ -265,7 +287,10 @@ void main() {
             exploitMaturity: 'High',
           ),
           'CVE-2021-45046': ExploitInfo(
-            epssScore: 0.30, epssPercentile: 0.98, pocKnown: true, pocCount: 3),
+              epssScore: 0.30,
+              epssPercentile: 0.98,
+              pocKnown: true,
+              pocCount: 3),
           // Aucun signal notable → écartée de la priorisation.
           'CVE-2020-9999': ExploitInfo(epssScore: 0.02),
         },

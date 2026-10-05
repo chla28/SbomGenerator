@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'models.dart';
+import 'i18n.dart';
 
 /// Résultat d'une violation de politique de licence.
 class LicenseViolation {
@@ -48,16 +49,22 @@ class PolicyChecker {
   Future<double?> runSbomqs(String sbomPath, {bool verbose = false}) async {
     final check = await Process.run('sbomqs', ['version']);
     if (check.exitCode != 0) {
-      stderr.writeln('policy: sbomqs introuvable — vérification qualité ignorée.');
+      stderr.writeln(tr(
+          'policy: sbomqs introuvable — vérification qualité ignorée.',
+          'policy: sbomqs not found — quality check skipped.'));
       return null;
     }
 
-    if (verbose) print('sbomqs : évaluation de $sbomPath…');
+    if (verbose) {
+      print(tr(
+          'sbomqs : évaluation de $sbomPath…', 'sbomqs: assessing $sbomPath…'));
+    }
     // --basic force une sortie sur une seule ligne (score en premier champ) ;
     // sans ce flag, sbomqs >= 2.0 imprime un tableau détaillé illisible ici.
     final result = await Process.run('sbomqs', ['score', '--basic', sbomPath]);
     if (result.exitCode != 0) {
-      stderr.writeln('sbomqs: échec (code ${result.exitCode})');
+      stderr.writeln(tr('sbomqs: échec (code ${result.exitCode})',
+          'sbomqs: failed (code ${result.exitCode})'));
       return null;
     }
 

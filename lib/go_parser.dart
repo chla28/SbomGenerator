@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses Go module files: `go.sum` and `go.mod`.
 class GoParser {
@@ -10,7 +11,9 @@ class GoParser {
   List<WheelPackage> parseGoSum(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: go.sum file not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('fichier go.sum introuvable : $path',
+              'go.sum file not found: $path'));
       return [];
     }
 
@@ -56,7 +59,9 @@ class GoParser {
   List<WheelPackage> parseGoMod(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: go.mod file not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('fichier go.mod introuvable : $path',
+              'go.mod file not found: $path'));
       return [];
     }
 
@@ -79,7 +84,9 @@ class GoParser {
         continue;
       }
       // Start of any other block ends a require block
-      if (!inRequireBlock && line.endsWith('(') && !line.startsWith('require')) {
+      if (!inRequireBlock &&
+          line.endsWith('(') &&
+          !line.startsWith('require')) {
         continue;
       }
       if (inRequireBlock && line == ')') {

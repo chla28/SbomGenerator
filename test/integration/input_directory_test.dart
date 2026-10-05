@@ -31,7 +31,8 @@ void main() {
   setUp(() => tmp = Directory.systemTemp.createTempSync('input_dir_test_'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
-  test('--input <dossier> scanne récursivement jar + requirements.txt et ignore le reste',
+  test(
+      '--input <dossier> scanne récursivement jar + requirements.txt et ignore le reste',
       () async {
     if (!hasUnzip) {
       markTestSkipped('unzip absent — test d\'intégration ignoré');
@@ -50,14 +51,23 @@ void main() {
     final outPath = '${tmp.path}/out.cdx.json';
     final result = await Process.run(
       'dart',
-      ['run', 'bin/sbom_generator.dart', '--input', tmp.path, '-o', outPath],
+      [
+        'run',
+        'bin/sbom_generator.dart',
+        '--lang',
+        'fr',
+        '--input',
+        tmp.path,
+        '-o',
+        outPath
+      ],
       workingDirectory: Directory.current.path,
     );
 
     expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
 
-    final doc = jsonDecode(await File(outPath).readAsString())
-        as Map<String, dynamic>;
+    final doc =
+        jsonDecode(await File(outPath).readAsString()) as Map<String, dynamic>;
     // Les composants Maven séparent groupId (champ `group`) et artifactId
     // (`name`), suivant la convention CycloneDX — recombinés ici pour
     // comparaison, comme le fait SbomReader à la relecture.

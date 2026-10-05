@@ -40,7 +40,7 @@ Future<void> _extractKeycloakRpmDb(String dest) async {
   await Process.run('bash', [
     '-c',
     'tar -xOf $_keycloakTar $_keycloakLayer 2>/dev/null'
-    ' | tar -xf - -C $dest var/lib/rpm/ 2>/dev/null',
+        ' | tar -xf - -C $dest var/lib/rpm/ 2>/dev/null',
   ]);
 }
 
@@ -66,9 +66,7 @@ void main() {
       await _extractKeycloakRpmDb(tmpDir.path);
     });
 
-    test(
-        '--dbpath seul (fix) → retourne les paquets',
-        () async {
+    test('--dbpath seul (fix) → retourne les paquets', () async {
       if (!_keycloakAvailable) {
         markTestSkipped('$_keycloakTar absent');
         return;
@@ -108,31 +106,26 @@ void main() {
         () async {
       final rpmDir = '${tmpDir.path}/var/lib/rpm';
       await Directory(rpmDir).create(recursive: true);
-      final initR =
-          await Process.run('rpm', ['--initdb', '--dbpath', rpmDir]);
+      final initR = await Process.run('rpm', ['--initdb', '--dbpath', rpmDir]);
       if (initR.exitCode != 0) {
         markTestSkipped('rpm --initdb a échoué (rpm absent ?)');
         return;
       }
       // DB vide → 0 paquets, mais pas d'exception
-      final pkgs =
-          await ociParserParseRpmRoot(tmpDir.path, 'test-image');
+      final pkgs = await ociParserParseRpmRoot(tmpDir.path, 'test-image');
       expect(pkgs, isA<List<Package>>());
     });
 
-    test(
-        'usr/lib/sysimage/rpm/rpmdb.sqlite → chemin RHEL 8.4+/9 détecté',
+    test('usr/lib/sysimage/rpm/rpmdb.sqlite → chemin RHEL 8.4+/9 détecté',
         () async {
       final rpmDir = '${tmpDir.path}/usr/lib/sysimage/rpm';
       await Directory(rpmDir).create(recursive: true);
-      final initR =
-          await Process.run('rpm', ['--initdb', '--dbpath', rpmDir]);
+      final initR = await Process.run('rpm', ['--initdb', '--dbpath', rpmDir]);
       if (initR.exitCode != 0) {
         markTestSkipped('rpm --initdb a échoué');
         return;
       }
-      final pkgs =
-          await ociParserParseRpmRoot(tmpDir.path, 'test-image');
+      final pkgs = await ociParserParseRpmRoot(tmpDir.path, 'test-image');
       expect(pkgs, isA<List<Package>>());
     });
 
@@ -141,20 +134,17 @@ void main() {
         () async {
       // Crée le dossier mais sans rpmdb.sqlite ni Packages
       await Directory('${tmpDir.path}/var/lib/rpm').create(recursive: true);
-      final pkgs =
-          await ociParserParseRpmRoot(tmpDir.path, 'test-image');
+      final pkgs = await ociParserParseRpmRoot(tmpDir.path, 'test-image');
       expect(pkgs, isEmpty);
     });
 
     test('aucun répertoire RPM → liste vide sans exception', () async {
       // rootDir vide, aucune DB
-      final pkgs =
-          await ociParserParseRpmRoot(tmpDir.path, 'test-image');
+      final pkgs = await ociParserParseRpmRoot(tmpDir.path, 'test-image');
       expect(pkgs, isEmpty);
     });
 
-    test(
-        'keycloak layer → paquets RPM retournés avec métadonnées cohérentes',
+    test('keycloak layer → paquets RPM retournés avec métadonnées cohérentes',
         () async {
       if (!_keycloakAvailable) {
         markTestSkipped('$_keycloakTar absent');
@@ -162,8 +152,7 @@ void main() {
       }
       await _extractKeycloakRpmDb(tmpDir.path);
 
-      final pkgs =
-          await ociParserParseRpmRoot(tmpDir.path, 'keycloak_26.tar');
+      final pkgs = await ociParserParseRpmRoot(tmpDir.path, 'keycloak_26.tar');
 
       expect(pkgs.length, greaterThan(5),
           reason: 'L\'image keycloak doit contenir plusieurs paquets RPM');
@@ -197,9 +186,7 @@ void main() {
       skopeoAvailable = await _toolAvailable('skopeo');
     });
 
-    test(
-        'keycloak_26.tar via skopeo → paquets RPM cohérents',
-        () async {
+    test('keycloak_26.tar via skopeo → paquets RPM cohérents', () async {
       if (!skopeoAvailable) {
         markTestSkipped('skopeo absent du PATH');
         return;
@@ -220,8 +207,7 @@ void main() {
       expect(pkgs.length, greaterThan(40));
 
       final rpmPkgs = pkgs.where((p) => p.packageType == 'rpm').toList();
-      final javaPkgs =
-          pkgs.where((p) => p.packageType == 'java').toList();
+      final javaPkgs = pkgs.where((p) => p.packageType == 'java').toList();
       expect(rpmPkgs, isNotEmpty, reason: 'Paquets RPM UBI 9 attendus');
       expect(javaPkgs, isNotEmpty, reason: 'JARs Keycloak attendus');
 

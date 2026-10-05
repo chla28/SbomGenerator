@@ -2,13 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'hash_utils.dart' show packageHashFromSri;
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses npm `package-lock.json` files (lockfileVersion 1, 2, and 3).
 class NpmParser {
   List<WheelPackage> parsePackageLock(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: package-lock.json not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('package-lock.json introuvable : $path',
+              'package-lock.json not found: $path'));
       return [];
     }
 
@@ -16,7 +19,8 @@ class NpmParser {
     try {
       root = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     } catch (e) {
-      stderr.writeln('Warning: cannot parse $path: $e');
+      stderr.writeln('Warning: ' +
+          tr('analyse impossible de $path : $e', 'cannot parse $path: $e'));
       return [];
     }
 
@@ -51,7 +55,8 @@ class NpmParser {
     final result = <WheelPackage>[];
     for (final entry in deps.entries) {
       final data = entry.value as Map<String, dynamic>;
-      result.add(_make(entry.key, (data['version'] as String?) ?? '', data, path));
+      result.add(
+          _make(entry.key, (data['version'] as String?) ?? '', data, path));
       final nested = data['dependencies'] as Map<String, dynamic>?;
       if (nested != null) result.addAll(_parseDependenciesField(nested, path));
     }

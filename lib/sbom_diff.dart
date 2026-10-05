@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'i18n.dart';
 
 /// Résultat de la comparaison entre deux SBOMs CycloneDX.
 class SbomDiffResult {
@@ -106,7 +107,8 @@ class SbomDiffer {
     return _indexCycloneDxComponents(sbom);
   }
 
-  Map<String, SbomComponent> _indexCycloneDxComponents(Map<String, dynamic> sbom) {
+  Map<String, SbomComponent> _indexCycloneDxComponents(
+      Map<String, dynamic> sbom) {
     final result = <String, SbomComponent>{};
     final components = (sbom['components'] as List?) ?? [];
     for (final raw in components) {
@@ -177,11 +179,15 @@ class SbomDiffer {
   /// Charge un SBOM depuis un fichier JSON (CycloneDX ou SPDX JSON).
   static Future<Map<String, dynamic>> loadFile(String path) async {
     final file = File(path);
-    if (!await file.exists()) throw Exception('Fichier introuvable : $path');
+    if (!await file.exists()) {
+      throw Exception(
+          tr('Fichier introuvable : $path', 'File not found: $path'));
+    }
     try {
       return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('Impossible de parser "$path" : $e');
+      throw Exception(tr(
+          'Impossible de parser "$path" : $e', 'Unable to parse "$path": $e'));
     }
   }
 
@@ -194,18 +200,20 @@ class SbomDiffer {
     final bold = color ? '\x1B[1m' : '';
 
     if (result.isEmpty) {
-      print('${bold}Aucun changement détecté.$reset');
+      print(
+          '$bold${tr('Aucun changement détecté.', 'No change detected.')}$reset');
       return;
     }
 
-    print('${bold}Résumé : '
-        '${green}+${result.added.length} ajouté(s)$reset  '
-        '${red}-${result.removed.length} supprimé(s)$reset  '
-        '${yellow}~${result.updated.length} mis à jour$reset');
+    print('$bold${tr('Résumé', 'Summary')}: '
+        '$green+${result.added.length} ${tr('ajouté(s)', 'added')}$reset  '
+        '$red-${result.removed.length} ${tr('supprimé(s)', 'removed')}$reset  '
+        '$yellow~${result.updated.length} ${tr('mis à jour', 'updated')}$reset');
     stdout.writeln();
 
     if (result.added.isNotEmpty) {
-      print('${bold}${green}── Ajoutés (${result.added.length}) ──$reset');
+      print(
+          '$bold$green── ${tr('Ajoutés', 'Added')} (${result.added.length}) ──$reset');
       for (final c in result.added) {
         final purl = c.purl.isNotEmpty ? '  ${c.purl}' : '';
         print('${green}  + ${c.name} ${c.version}$reset$purl');
@@ -214,7 +222,8 @@ class SbomDiffer {
     }
 
     if (result.removed.isNotEmpty) {
-      print('${bold}${red}── Supprimés (${result.removed.length}) ──$reset');
+      print(
+          '$bold$red── ${tr('Supprimés', 'Removed')} (${result.removed.length}) ──$reset');
       for (final c in result.removed) {
         final purl = c.purl.isNotEmpty ? '  ${c.purl}' : '';
         print('${red}  - ${c.name} ${c.version}$reset$purl');
@@ -223,7 +232,8 @@ class SbomDiffer {
     }
 
     if (result.updated.isNotEmpty) {
-      print('${bold}${yellow}── Mis à jour (${result.updated.length}) ──$reset');
+      print(
+          '$bold$yellow── ${tr('Mis à jour', 'Updated')} (${result.updated.length}) ──$reset');
       for (final c in result.updated) {
         print('${yellow}  ~ ${c.name}  '
             '${c.oldVersion} → ${c.newVersion}$reset');

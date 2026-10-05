@@ -4,6 +4,7 @@ import 'image_layers.dart';
 import 'nested_archive.dart';
 import 'license_normalizer.dart';
 import 'models.dart';
+import 'i18n.dart';
 
 /// A patent assertion to attach to a matching package's component, per the
 /// CycloneDX 1.7 `patentAssertions` / `definitions.patents` structures.
@@ -35,14 +36,30 @@ class PatentAssertion {
   });
 
   static const validLegalStatuses = [
-    'pending', 'granted', 'revoked', 'expired', 'lapsed', 'withdrawn',
-    'abandoned', 'suspended', 'reinstated', 'opposed', 'terminated',
-    'invalidated', 'in-force',
+    'pending',
+    'granted',
+    'revoked',
+    'expired',
+    'lapsed',
+    'withdrawn',
+    'abandoned',
+    'suspended',
+    'reinstated',
+    'opposed',
+    'terminated',
+    'invalidated',
+    'in-force',
   ];
 
   static const validAssertionTypes = [
-    'ownership', 'license', 'third-party-claim', 'standards-inclusion',
-    'prior-art', 'exclusive-rights', 'non-assertion', 'research-or-evaluation',
+    'ownership',
+    'license',
+    'third-party-claim',
+    'standards-inclusion',
+    'prior-art',
+    'exclusive-rights',
+    'non-assertion',
+    'research-or-evaluation',
   ];
 }
 
@@ -56,7 +73,11 @@ class CycloneDxGenerator {
 
   /// Traffic Light Protocol classifications accepted by `--tlp` (1.7 only).
   static const validTlpClassifications = [
-    'CLEAR', 'GREEN', 'AMBER', 'AMBER_AND_STRICT', 'RED',
+    'CLEAR',
+    'GREEN',
+    'AMBER',
+    'AMBER_AND_STRICT',
+    'RED',
   ];
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -90,39 +111,46 @@ class CycloneDxGenerator {
     LayerAnnotations? layers,
   }) {
     if (!supportedSpecVersions.contains(specVersion)) {
-      throw ArgumentError(
-          'specVersion non supporté : "$specVersion" (valides : ${supportedSpecVersions.join(', ')})');
+      throw ArgumentError(tr(
+          'specVersion non supporté : "$specVersion" (valides : ${supportedSpecVersions.join(', ')})',
+          'unsupported specVersion: "$specVersion" (valid: ${supportedSpecVersions.join(', ')})'));
     }
     final is17 = specVersion == '1.7';
     final patents = patentsByPackageName ?? const {};
 
-    if (!is17 && (tlp != null || citationSource != null || patents.isNotEmpty)) {
-      throw ArgumentError(
+    if (!is17 &&
+        (tlp != null || citationSource != null || patents.isNotEmpty)) {
+      throw ArgumentError(tr(
           'tlp / citationSource / patentsByPackageName nécessitent specVersion="1.7" '
-          '(CycloneDX 1.6 n\'a pas ces champs : le schéma 1.6 rejette les propriétés inconnues)');
+              '(CycloneDX 1.6 n\'a pas ces champs : le schéma 1.6 rejette les propriétés inconnues)',
+          'tlp / citationSource / patentsByPackageName require specVersion="1.7" '
+              '(CycloneDX 1.6 lacks these fields: the 1.6 schema rejects unknown properties)'));
     }
     if (tlp != null && !validTlpClassifications.contains(tlp)) {
-      throw ArgumentError(
-          'tlp invalide : "$tlp" (valides : ${validTlpClassifications.join(', ')})');
+      throw ArgumentError(tr(
+          'tlp invalide : "$tlp" (valides : ${validTlpClassifications.join(', ')})',
+          'invalid tlp: "$tlp" (valid: ${validTlpClassifications.join(', ')})'));
     }
     for (final p in patents.values) {
       if (!RegExp(r'^[A-Z]{2}$').hasMatch(p.jurisdiction)) {
-        throw ArgumentError(
-            'jurisdiction de brevet invalide : "${p.jurisdiction}" (2 lettres majuscules attendues, ex: US)');
+        throw ArgumentError(tr(
+            'jurisdiction de brevet invalide : "${p.jurisdiction}" (2 lettres majuscules attendues, ex: US)',
+            'invalid patent jurisdiction: "${p.jurisdiction}" (2 uppercase letters expected, e.g. US)'));
       }
       if (!PatentAssertion.validLegalStatuses.contains(p.legalStatus)) {
-        throw ArgumentError(
-            'legalStatus de brevet invalide : "${p.legalStatus}" (valides : ${PatentAssertion.validLegalStatuses.join(', ')})');
+        throw ArgumentError(tr(
+            'legalStatus de brevet invalide : "${p.legalStatus}" (valides : ${PatentAssertion.validLegalStatuses.join(', ')})',
+            'invalid patent legalStatus: "${p.legalStatus}" (valid: ${PatentAssertion.validLegalStatuses.join(', ')})'));
       }
       if (!PatentAssertion.validAssertionTypes.contains(p.assertionType)) {
-        throw ArgumentError(
-            'assertionType de brevet invalide : "${p.assertionType}" (valides : ${PatentAssertion.validAssertionTypes.join(', ')})');
+        throw ArgumentError(tr(
+            'assertionType de brevet invalide : "${p.assertionType}" (valides : ${PatentAssertion.validAssertionTypes.join(', ')})',
+            'invalid patent assertionType: "${p.assertionType}" (valid: ${PatentAssertion.validAssertionTypes.join(', ')})'));
       }
     }
 
     final now = DateTime.now().toUtc().toIso8601String();
-    final serialNumber =
-        'urn:uuid:${layers?.documentUuid ?? generateUuidV4()}';
+    final serialNumber = 'urn:uuid:${layers?.documentUuid ?? generateUuidV4()}';
     final orgName = organization ?? 'local';
 
     final depIndex = <String, List<String>>{
@@ -422,8 +450,8 @@ class CycloneDxGenerator {
 
   // ── Component ──────────────────────────────────────────────────────────────
 
-  Map<String, dynamic> _packageToComponent(Package pkg,
-      PatentAssertion? patent, String orgName, LayerAnnotations? layers) {
+  Map<String, dynamic> _packageToComponent(Package pkg, PatentAssertion? patent,
+      String orgName, LayerAnnotations? layers) {
     // Maven coordinates are stored as "groupId:artifactId" in pkg.name.
     // CycloneDX has a dedicated `group` field for exactly this (matching
     // what tools such as syft emit) — split it out instead of leaving the

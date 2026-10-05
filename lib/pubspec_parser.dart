@@ -2,6 +2,7 @@ import 'dart:io';
 import 'archive_helpers.dart' show identifyArchiveLicense;
 import 'hash_utils.dart' show packageHash;
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses Dart/Flutter dependency files: `pubspec.lock` and `pubspec.yaml`
 /// (pure Dart, no `yaml` package dependency).
@@ -48,7 +49,9 @@ class PubspecParser {
       String? flutterRoot}) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: pubspec.lock not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('pubspec.lock introuvable : $path',
+              'pubspec.lock not found: $path'));
       return [];
     }
 
@@ -56,8 +59,16 @@ class PubspecParser {
     final seen = <String>{};
     var inPackages = false;
 
-    String? key, dependency, source, version, sha256, descName, url, sdkName,
-        resolvedRef, descPath;
+    String? key,
+        dependency,
+        source,
+        version,
+        sha256,
+        descName,
+        url,
+        sdkName,
+        resolvedRef,
+        descPath;
 
     void flush() {
       if (key != null && dependency != 'direct dev') {
@@ -105,8 +116,8 @@ class PubspecParser {
           ));
         }
       }
-      key = dependency = source = version = sha256 = descName = url = sdkName =
-          resolvedRef = descPath = null;
+      key = dependency = source = version =
+          sha256 = descName = url = sdkName = resolvedRef = descPath = null;
     }
 
     for (final raw in file.readAsLinesSync()) {
@@ -230,7 +241,9 @@ class PubspecParser {
       {Map<String, String> sdkVersions = const {}}) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: pubspec.yaml not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('pubspec.yaml introuvable : $path',
+              'pubspec.yaml not found: $path'));
       return [];
     }
 
@@ -291,7 +304,8 @@ class PubspecParser {
         final colon = content.indexOf(':');
         if (colon < 0) continue;
         pendingName = _unquote(content.substring(0, colon));
-        pendingVersion = _constraintToVersion(content.substring(colon + 1).trim());
+        pendingVersion =
+            _constraintToVersion(content.substring(colon + 1).trim());
       } else if (pendingName != null && content.startsWith('sdk:')) {
         // nested `sdk: flutter` under a dependency → SDK-sourced
         pendingSdk = _unquote(content.substring('sdk:'.length));

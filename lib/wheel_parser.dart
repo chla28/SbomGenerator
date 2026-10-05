@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
+import 'i18n.dart';
 
 String _normalizePyName(String name) =>
     name.toLowerCase().replaceAll(RegExp(r'[-_.]+'), '-');
@@ -24,7 +25,9 @@ sys.stdout.buffer.write(z.read(name))
     final result = await Process.run('python3', ['-c', _extractScript, path]);
 
     if (result.exitCode != 0) {
-      stderr.writeln('Warning: cannot read wheel "$path"');
+      stderr.writeln('Warning: ' +
+          tr('lecture impossible de la wheel "$path"',
+              'cannot read wheel "$path"'));
       final err = result.stderr.toString().trim();
       if (err.isNotEmpty) stderr.writeln('  $err');
       return null;
@@ -32,7 +35,8 @@ sys.stdout.buffer.write(z.read(name))
 
     final text = result.stdout.toString();
     if (text.isEmpty) {
-      stderr.writeln('Warning: empty METADATA for "$path"');
+      stderr.writeln('Warning: ' +
+          tr('METADATA vide pour "$path"', 'empty METADATA for "$path"'));
       return null;
     }
 
@@ -52,7 +56,9 @@ sys.stdout.buffer.write(z.read(name))
       {String packageType = 'pypi', List<PackageHash> hashes = const []}) {
     final name = headers['name']?.first ?? '';
     if (name.isEmpty) {
-      stderr.writeln('Warning: no Name in METADATA for "$path"');
+      stderr.writeln('Warning: ' +
+          tr('aucun Name dans METADATA pour "$path"',
+              'no Name in METADATA for "$path"'));
       return null;
     }
 

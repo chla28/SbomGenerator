@@ -1,13 +1,15 @@
 import 'dart:io';
 import 'hash_utils.dart' show packageHash, packageHashFromSri;
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses `yarn.lock` files (yarn v1 classic and yarn v2+ Berry formats).
 class YarnParser {
   List<WheelPackage> parseYarnLock(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: yarn.lock not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('yarn.lock introuvable : $path', 'yarn.lock not found: $path'));
       return [];
     }
     final content = file.readAsStringSync();
@@ -47,7 +49,9 @@ class YarnParser {
         continue;
       }
 
-      if (!line.startsWith(' ') && !line.startsWith('\t') && line.endsWith(':')) {
+      if (!line.startsWith(' ') &&
+          !line.startsWith('\t') &&
+          line.endsWith(':')) {
         flush();
         final name = _nameFromHeader(line, classic: true);
         current = _YarnBlock(name);
@@ -60,7 +64,8 @@ class YarnParser {
         current!.version =
             trimmed.substring('version '.length).replaceAll('"', '').trim();
       } else if (trimmed.startsWith('resolved ')) {
-        var r = trimmed.substring('resolved '.length).replaceAll('"', '').trim();
+        var r =
+            trimmed.substring('resolved '.length).replaceAll('"', '').trim();
         final h = r.indexOf('#');
         if (h > 0) {
           // Le fragment `#<hex>` d'un `resolved` yarn v1 est le SHA-1 du tarball.
@@ -113,7 +118,9 @@ class YarnParser {
         continue;
       }
 
-      if (!line.startsWith(' ') && !line.startsWith('\t') && line.endsWith(':')) {
+      if (!line.startsWith(' ') &&
+          !line.startsWith('\t') &&
+          line.endsWith(':')) {
         flush();
         if (line.startsWith('__metadata:')) {
           skip = true;

@@ -93,8 +93,7 @@ PackageHash? packageHashFromSri(String? sri) {
     final alg = token.substring(0, dash);
     try {
       final bytes = base64.decode(base64.normalize(token.substring(dash + 1)));
-      final hex =
-          bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       final h = packageHash(alg, hex);
       if (h != null) return h;
     } catch (_) {

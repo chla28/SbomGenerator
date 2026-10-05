@@ -35,19 +35,31 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   Future<ProcessResult> runCra(List<String> extra) {
-    final sbom = File('${tmp.path}/sbom.cdx.json')..writeAsStringSync(_richSbom);
+    final sbom = File('${tmp.path}/sbom.cdx.json')
+      ..writeAsStringSync(_richSbom);
     return Process.run('dart', [
-      'run', 'bin/sbom_generator.dart', 'cra',
-      '--sbom', sbom.path, '--no-scan', ...extra,
+      'run',
+      'bin/sbom_generator.dart',
+      '--lang',
+      'fr',
+      'cra',
+      '--sbom',
+      sbom.path,
+      '--no-scan',
+      ...extra,
     ]);
   }
 
   test('--format json : structure + verdict, métadonnées via CLI', () async {
     final r = await runCra([
-      '--format', 'json',
-      '--manufacturer', 'ACME Corp',
-      '--product', 'WidgetOS',
-      '--product-version', '3.2.1',
+      '--format',
+      'json',
+      '--manufacturer',
+      'ACME Corp',
+      '--product',
+      'WidgetOS',
+      '--product-version',
+      '3.2.1',
     ]);
     // Pas de point bloquant sur ce SBOM riche → exit 0 (partiel car pas de scan).
     expect(r.exitCode, 0);
@@ -62,9 +74,10 @@ void main() {
   });
 
   test('cra.yaml : métadonnées lues depuis le fichier', () async {
-    File('${tmp.path}/cra.yaml').writeAsStringSync(
-        'manufacturer: "Depuis YAML"\nproduct: FromYaml\n');
-    final r = await runCra(['--format', 'json', '--config', '${tmp.path}/cra.yaml']);
+    File('${tmp.path}/cra.yaml')
+        .writeAsStringSync('manufacturer: "Depuis YAML"\nproduct: FromYaml\n');
+    final r =
+        await runCra(['--format', 'json', '--config', '${tmp.path}/cra.yaml']);
     final j = jsonDecode((r.stdout as String)) as Map<String, dynamic>;
     expect(j['product']['manufacturer'], 'Depuis YAML');
     expect(j['product']['name'], 'FromYaml');
@@ -75,8 +88,16 @@ void main() {
       ..writeAsStringSync(
           '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[{"type":"library","name":"x","version":"1"}]}');
     final r = await Process.run('dart', [
-      'run', 'bin/sbom_generator.dart', 'cra',
-      '--sbom', sbom.path, '--no-scan', '--format', 'json',
+      'run',
+      'bin/sbom_generator.dart',
+      '--lang',
+      'fr',
+      'cra',
+      '--sbom',
+      sbom.path,
+      '--no-scan',
+      '--format',
+      'json',
     ]);
     expect(r.exitCode, 2);
     final j = jsonDecode((r.stdout as String)) as Map<String, dynamic>;

@@ -125,8 +125,10 @@ void main() {
 
     test('deux paquets de types différents avec le même nom ne fusionnent pas',
         () {
-      final before = _cdx([_comp(name: 'foo', version: '1.0', type: 'library')]);
-      final after = _cdx([_comp(name: 'foo', version: '1.0', type: 'application')]);
+      final before =
+          _cdx([_comp(name: 'foo', version: '1.0', type: 'library')]);
+      final after =
+          _cdx([_comp(name: 'foo', version: '1.0', type: 'application')]);
       final result = differ.diff(before, after);
       expect(result.added, hasLength(1));
       expect(result.removed, hasLength(1));

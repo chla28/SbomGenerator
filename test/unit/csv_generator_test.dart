@@ -42,7 +42,8 @@ void main() {
       final out = '${tmp.path}/sbom.csv';
       await CsvGenerator().writeToFile(_makePackages(), out);
       final lines = File(out).readAsLinesSync();
-      expect(lines.first, 'name,version,architecture,license,type,purl,url,vendor');
+      expect(lines.first,
+          'name,version,architecture,license,type,purl,url,vendor');
     });
 
     test('génère une ligne par paquet', () async {

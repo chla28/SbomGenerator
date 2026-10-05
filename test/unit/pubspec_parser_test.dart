@@ -186,7 +186,8 @@ packages:
       expect(pkgs.firstWhere((p) => p.name == 'mime').license, '');
     });
 
-    test('sans --pub-cache : licence vide (le lockfile n\'en contient pas)', () {
+    test('sans --pub-cache : licence vide (le lockfile n\'en contient pas)',
+        () {
       final f = _write('pubspec.lock', '''
 packages:
   args:
@@ -225,7 +226,8 @@ packages:
           'Permission is hereby granted, free of charge, ... without restriction');
 
       final pkgs = parser.parsePubspecLock(f.path, flutterRoot: fr.path);
-      expect(pkgs.firstWhere((p) => p.name == 'flutter').license, 'BSD-3-Clause');
+      expect(
+          pkgs.firstWhere((p) => p.name == 'flutter').license, 'BSD-3-Clause');
       expect(pkgs.firstWhere((p) => p.name == 'sky_engine').license, 'MIT');
     });
 
@@ -251,8 +253,8 @@ packages:
     source: hosted
     version: "6.1.2"
 ''');
-      final pkgs = parser
-          .parsePubspecLock(f.path, sdkVersions: {'flutter': '3.47.2'});
+      final pkgs =
+          parser.parsePubspecLock(f.path, sdkVersions: {'flutter': '3.47.2'});
       expect(pkgs.firstWhere((p) => p.name == 'flutter').purl,
           'pkg:pub/flutter@3.47.2');
       // les paquets bundlés avec le SDK Flutter héritent de sa version
@@ -276,7 +278,8 @@ packages:
     version: "4.2.0"
 ''');
       final pkgs = parser.parsePubspecLock(f.path);
-      expect(pkgs.single.url, 'https://pub.acme.internal/packages/internal_lib');
+      expect(
+          pkgs.single.url, 'https://pub.acme.internal/packages/internal_lib');
     });
 
     test('fichier absent → liste vide', () {
@@ -304,7 +307,8 @@ dev_dependencies:
 ''');
       final pkgs = parser.parsePubspecYaml(f.path);
       final byName = {for (final p in pkgs) p.name: p};
-      expect(byName.keys, containsAll(['args', 'http', 'collection', 'flutter']));
+      expect(
+          byName.keys, containsAll(['args', 'http', 'collection', 'flutter']));
       expect(byName.keys, isNot(contains('test')));
       expect(byName.keys, isNot(contains('lints')));
 

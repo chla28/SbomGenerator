@@ -73,15 +73,15 @@ void main() {
       expect(expr, 'LGPL-2.1-or-later OR GPL-2.0-or-later');
     });
 
-    test('échappe un token inconnu en LicenseRef- pour rester une '
+    test(
+        'échappe un token inconnu en LicenseRef- pour rester une '
         'expression SPDX valide', () {
       // "curl" n'est pas un identifiant SPDX listé — un validateur SPDX
       // strict rejetterait l'expression si on le laissait tel quel.
       expect(LicenseNormalizer.toSpdxExpression('curl'), 'LicenseRef-curl');
     });
 
-    test('échappe seulement le token inconnu dans une expression composée',
-        () {
+    test('échappe seulement le token inconnu dans une expression composée', () {
       final expr = LicenseNormalizer.toSpdxExpression('GPLv2 and curl');
       expect(expr, 'GPL-2.0-only AND LicenseRef-curl');
     });
@@ -99,7 +99,8 @@ void main() {
       expect(expr, 'GPL-3.0-only WITH Classpath-exception-2.0');
     });
 
-    test('échappe en bloc une clause WITH mal formée (espace dans '
+    test(
+        'échappe en bloc une clause WITH mal formée (espace dans '
         "l'exception)", () {
       final expr = LicenseNormalizer.toSpdxExpression(
           'GPL-3.0-only WITH Bison exception');
@@ -187,8 +188,7 @@ void main() {
 
   group('LicenseNormalizer.toCycloneDxLicensesConcluded', () {
     test('retourne [] pour (none)', () {
-      expect(LicenseNormalizer.toCycloneDxLicensesConcluded('(none)'),
-          isEmpty);
+      expect(LicenseNormalizer.toCycloneDxLicensesConcluded('(none)'), isEmpty);
     });
 
     test('licence simple : une entrée declared + une concluded', () {
@@ -200,7 +200,8 @@ void main() {
       expect(result[1]['license']['acknowledgement'], 'concluded');
     });
 
-    test('expression AND pure : declared (brute) + une concluded par '
+    test(
+        'expression AND pure : declared (brute) + une concluded par '
         'licence individuelle', () {
       final result = LicenseNormalizer.toCycloneDxLicensesConcluded(
           'GPLv2 and MIT and curl');
@@ -209,7 +210,9 @@ void main() {
       expect(result[0]['license']['acknowledgement'], 'declared');
 
       final concluded = result.skip(1);
-      expect(concluded.every((e) => e['license']['acknowledgement'] == 'concluded'),
+      expect(
+          concluded
+              .every((e) => e['license']['acknowledgement'] == 'concluded'),
           isTrue);
       expect(concluded.map((e) => e['license']['id'] ?? e['license']['name']),
           containsAll(['GPL-2.0-only', 'MIT', 'curl']));
@@ -219,10 +222,11 @@ void main() {
       expect(curlEntry['license'].containsKey('id'), isFalse);
     });
 
-    test('expression avec OR : conserve la forme expression unique '
+    test(
+        'expression avec OR : conserve la forme expression unique '
         "existante (pas de scission declared/concluded)", () {
-      final result = LicenseNormalizer.toCycloneDxLicensesConcluded(
-          'MIT or GPLv2');
+      final result =
+          LicenseNormalizer.toCycloneDxLicensesConcluded('MIT or GPLv2');
       expect(result, hasLength(1));
       expect(result[0].containsKey('expression'), isTrue);
     });

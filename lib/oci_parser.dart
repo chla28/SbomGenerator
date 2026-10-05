@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 import 'hash_utils.dart'
-    show hashesFromCycloneDx, hashesFromSyftMetadata, packageHashFromDigestString;
+    show
+        hashesFromCycloneDx,
+        hashesFromSyftMetadata,
+        packageHashFromDigestString;
 import 'image_layers.dart';
 import 'models.dart';
+import 'i18n.dart';
 
 /// Format de la référence OCI fournie par l'utilisateur.
 enum OciRefType {
@@ -66,7 +70,8 @@ class OciParser {
           case 'cdxgen':
             return _parseCdxgen(resolvedRef, verbose: verbose);
           default:
-            throw ArgumentError('Outil OCI inconnu : $tool');
+            throw ArgumentError(
+                tr('Outil OCI inconnu : $tool', 'Unknown OCI tool: $tool'));
         }
       });
 
@@ -111,19 +116,24 @@ class OciParser {
           _withResolvedRef(imageRef, verbose, (ref) async {
             switch (tool) {
               case 'trivy':
-                if (verbose) print('trivy : attribution des couches de $ref…');
+                if (verbose)
+                  print(tr('trivy : attribution des couches de $ref…',
+                      'trivy: attributing the layers of $ref…'));
                 return _trivyLayerAttribution(
                     await _runTrivyJson(_trivyImageArgs(ref)), ref);
               case 'syft':
                 if (verbose) {
-                  print('syft : analyse de toutes les couches de $ref…');
+                  print(tr('syft : analyse de toutes les couches de $ref…',
+                      'syft: analysing all the layers of $ref…'));
                 }
                 return _syftLayerAttribution(
-                    await _runSyftJson([_syftRef(ref), '--scope', 'all-layers']),
+                    await _runSyftJson(
+                        [_syftRef(ref), '--scope', 'all-layers']),
                     ref);
               default:
-                throw ArgumentError(
-                    '--layer-mode metadata non pris en charge par $tool');
+                throw ArgumentError(tr(
+                    '--layer-mode metadata non pris en charge par $tool',
+                    '--layer-mode metadata is not supported by $tool'));
             }
           });
 
@@ -133,8 +143,8 @@ class OciParser {
     final diffIds = [
       for (final d in meta['DiffIDs'] as List? ?? const []) d.toString(),
     ];
-    final layers = layersFromConfig(
-        diffIds, (meta['ImageConfig'] as Map?)?['history']);
+    final layers =
+        layersFromConfig(diffIds, (meta['ImageConfig'] as Map?)?['history']);
     final indexOf = {for (final l in layers) l.diffId: l.index};
     final layerOf = <String, int>{};
     for (final e in _trivyPackagesWithLayer(data, imageRef)) {
@@ -198,10 +208,11 @@ class OciParser {
       {bool verbose = false, void Function(String message)? log}) async {
     final work = await Directory.systemTemp.createTemp('sbom_layers_');
     try {
-      final layers = await _materializeLayers(imageRef, work.path,
-          verbose: verbose);
+      final layers =
+          await _materializeLayers(imageRef, work.path, verbose: verbose);
       if (layers.isEmpty) {
-        throw StateError('aucune couche trouvée dans $imageRef');
+        throw StateError(tr('aucune couche trouvée dans $imageRef',
+            'no layer found in $imageRef'));
       }
       return await analyzeRootfsLayers(
         layers: layers,
@@ -231,7 +242,8 @@ class OciParser {
         final x = await Process.run(
             'tar', ['-C', save.path, '--warning=none', '-xf', ref]);
         if (x.exitCode != 0) {
-          throw Exception('extraction de $ref échouée : ${x.stderr}');
+          throw Exception(tr('extraction de $ref échouée : ${x.stderr}',
+              'extraction of $ref failed: ${x.stderr}'));
         }
         if (File('${save.path}/manifest.json').existsSync()) {
           return readDockerArchiveLayers(save.path);
@@ -239,8 +251,11 @@ class OciParser {
         if (File('${save.path}/index.json').existsSync()) {
           return readOciLayoutLayers(save.path);
         }
-        throw Exception('$ref : ni manifest.json ni index.json — '
-            'archive d\'image non reconnue');
+        throw Exception(tr(
+            '$ref : ni manifest.json ni index.json — '
+                'archive d\'image non reconnue',
+            '$ref: neither manifest.json nor index.json — '
+                'unrecognised image archive'));
       case OciRefType.ociLayout:
         return readOciLayoutLayers(ref);
       case OciRefType.registry:
@@ -248,7 +263,8 @@ class OciParser {
             ref, '$workDir/oci_layout',
             verbose: verbose));
       case OciRefType.binary:
-        throw ArgumentError('un binaire autonome n\'a pas de couches');
+        throw ArgumentError(tr('un binaire autonome n\'a pas de couches',
+            'a standalone binary has no layers'));
     }
   }
 
@@ -265,15 +281,21 @@ class OciParser {
         return _syftJsonToResult(
                 await _runSyftJson([
                   'dir:$dir',
-                  '--base-path', dir,
-                  '--override-default-catalogers', 'image',
+                  '--base-path',
+                  dir,
+                  '--override-default-catalogers',
+                  'image',
                 ]),
                 imageRef)
             .packages;
       case 'trivy':
         return _trivyJsonToResult(
                 await _runTrivyJson([
-                  'rootfs', '--format', 'json', '--quiet', '--list-all-pkgs',
+                  'rootfs',
+                  '--format',
+                  'json',
+                  '--quiet',
+                  '--list-all-pkgs',
                   dir,
                 ]),
                 imageRef)
@@ -282,14 +304,17 @@ class OciParser {
         return _scanExtractedRootfs(dir, imageRef, verbose: verbose);
       case 'cdxgen':
         return (await _cdxgenRun([
-          '--type', 'rootfs',
-          '--output', '-',
+          '--type',
+          'rootfs',
+          '--output',
+          '-',
           '--no-progress',
           dir,
         ], imageRef))
             .packages;
       default:
-        throw ArgumentError('Outil OCI inconnu : $tool');
+        throw ArgumentError(
+            tr('Outil OCI inconnu : $tool', 'Unknown OCI tool: $tool'));
     }
   }
 
@@ -306,13 +331,17 @@ class OciParser {
     String workDir, {
     bool verbose = false,
   }) async {
-    if (verbose) print('OCI : décompression de $imageRef…');
+    if (verbose)
+      print(tr('OCI : décompression de $imageRef…',
+          'OCI: decompressing $imageRef…'));
 
     final step1 = '$workDir/image.tar';
     final zcatRes = await Process.run(
         'sh', ['-c', 'zcat "\$1" > "\$2"', '--', imageRef, step1]);
     if (zcatRes.exitCode != 0) {
-      throw Exception('Décompression de $imageRef échouée : ${zcatRes.stderr}');
+      throw Exception(tr(
+          'Décompression de $imageRef échouée : ${zcatRes.stderr}',
+          'Decompression of $imageRef failed: ${zcatRes.stderr}'));
     }
 
     // Cas 1 : gzip direct → manifest.json est à la racine
@@ -324,7 +353,9 @@ class OciParser {
         .toSet();
 
     if (entries.contains('manifest.json')) {
-      if (verbose) print('OCI : gzip direct détecté, utilisation de $step1');
+      if (verbose)
+        print(tr('OCI : gzip direct détecté, utilisation de $step1',
+            'OCI: direct gzip detected, using $step1'));
       return step1;
     }
 
@@ -334,18 +365,23 @@ class OciParser {
       orElse: () => '',
     );
     if (inner.isEmpty) {
-      throw Exception(
+      throw Exception(tr(
           'Format .tgz non reconnu : manifest.json absent et aucun .tar '
-          'imbriqué trouvé. Contenu : ${entries.take(5).join(', ')}');
+              'imbriqué trouvé. Contenu : ${entries.take(5).join(', ')}',
+          'Unrecognised .tgz format: manifest.json missing and no nested '
+              '.tar found. Content: ${entries.take(5).join(', ')}'));
     }
 
-    if (verbose) print('OCI : tar-de-tar détecté, extraction de $inner…');
+    if (verbose)
+      print(tr('OCI : tar-de-tar détecté, extraction de $inner…',
+          'OCI: nested tar detected, extracting $inner…'));
     final step2 = '$workDir/inner.tar';
-    final extractRes = await Process.run(
-        'sh', ['-c', 'tar -xOf "\$1" "\$2" > "\$3"', '--', step1, inner, step2]);
+    final extractRes = await Process.run('sh',
+        ['-c', 'tar -xOf "\$1" "\$2" > "\$3"', '--', step1, inner, step2]);
     if (extractRes.exitCode != 0) {
-      throw Exception(
-          'Extraction du tar imbriqué ($inner) échouée : ${extractRes.stderr}');
+      throw Exception(tr(
+          'Extraction du tar imbriqué ($inner) échouée : ${extractRes.stderr}',
+          'Extraction of the nested tar ($inner) failed: ${extractRes.stderr}'));
     }
 
     return step2;
@@ -356,7 +392,8 @@ class OciParser {
   Future<OciParseResult> _parseSyft(String imageRef,
       {bool verbose = false}) async {
     final syftRef = _syftRef(imageRef);
-    if (verbose) print('syft : analyse de $syftRef…');
+    if (verbose)
+      print(tr('syft : analyse de $syftRef…', 'syft: analysing $syftRef…'));
     return _syftJsonToResult(await _runSyftJson([syftRef]), imageRef);
   }
 
@@ -372,18 +409,19 @@ class OciParser {
   Future<Map<String, dynamic>> _runSyftJson(List<String> args) async {
     final result = await Process.run('syft', [...args, '--output', 'json']);
     if (result.exitCode != 0) {
-      throw Exception(
-          'syft a échoué (code ${result.exitCode}) : ${result.stderr}');
+      throw Exception(tr(
+          'syft a échoué (code ${result.exitCode}) : ${result.stderr}',
+          'syft failed (code ${result.exitCode}): ${result.stderr}'));
     }
     try {
       return jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('syft : impossible de parser le JSON : $e');
+      throw Exception(tr('syft : impossible de parser le JSON : $e',
+          'syft: unable to parse the JSON: $e'));
     }
   }
 
-  OciParseResult _syftJsonToResult(
-      Map<String, dynamic> data, String imageRef) {
+  OciParseResult _syftJsonToResult(Map<String, dynamic> data, String imageRef) {
     final distro = data['distro'] as Map<String, dynamic>?;
     final codename = (distro?['versionCodename'] as String?)?.trim();
 
@@ -449,7 +487,12 @@ class OciParser {
     if (!purl.startsWith('pkg:')) purl = '';
 
     final vendor = _firstNonEmpty(meta, const [
-      'Vendor', 'vendor', 'maintainer', 'Maintainer', 'author', 'Author',
+      'Vendor',
+      'vendor',
+      'maintainer',
+      'Maintainer',
+      'author',
+      'Author',
     ]);
 
     return OciPackage(
@@ -543,8 +586,7 @@ class OciParser {
   String _toTrivyOsFamily(String id) =>
       _trivyOsFamilyById[id.toLowerCase()] ?? id.toLowerCase();
 
-  OciPackage? _syftArtifactToPackage(
-      Map<String, dynamic> a, String imageRef,
+  OciPackage? _syftArtifactToPackage(Map<String, dynamic> a, String imageRef,
       {String? distroCodename}) {
     final name = (a['name'] as String?) ?? '';
     final version = (a['version'] as String?) ?? '';
@@ -586,20 +628,36 @@ class OciParser {
     // exposent des clés en minuscules (`architecture`, `maintainer`), rpm
     // `arch`/`vendor`, d'autres la casse Pascal.
     final arch = _firstNonEmpty(metadata, const [
-      'Architecture', 'architecture', 'Arch', 'arch',
+      'Architecture',
+      'architecture',
+      'Arch',
+      'arch',
     ]);
     // `supplier`/`vendor` du composant : le mainteneur dpkg/apk fait un
     // fournisseur tout à fait valable à défaut d'un champ Vendor rpm.
     final vendor = _firstNonEmpty(metadata, const [
-      'Vendor', 'vendor', 'maintainer', 'Maintainer', 'author', 'Author',
+      'Vendor',
+      'vendor',
+      'maintainer',
+      'Maintainer',
+      'author',
+      'Author',
     ]);
     final metaSummary = _firstNonEmpty(metadata, const [
-      'Summary', 'summary', 'Description', 'description',
+      'Summary',
+      'summary',
+      'Description',
+      'description',
     ]);
-    final summary =
-        metaSummary.isNotEmpty ? metaSummary : ((a['description'] as String?) ?? '');
+    final summary = metaSummary.isNotEmpty
+        ? metaSummary
+        : ((a['description'] as String?) ?? '');
     final url = _firstNonEmpty(metadata, const [
-      'URL', 'url', 'HomePageURL', 'homepage', 'Homepage',
+      'URL',
+      'url',
+      'HomePageURL',
+      'homepage',
+      'Homepage',
     ]);
 
     return OciPackage(
@@ -669,7 +727,8 @@ class OciParser {
 
   Future<OciParseResult> _parseTrivy(String imageRef,
       {bool verbose = false}) async {
-    if (verbose) print('trivy : analyse de $imageRef…');
+    if (verbose)
+      print(tr('trivy : analyse de $imageRef…', 'trivy: analysing $imageRef…'));
     return _trivyJsonToResult(
         await _runTrivyJson(_trivyImageArgs(imageRef)), imageRef);
   }
@@ -683,13 +742,15 @@ class OciParser {
       result = await Process.run('trivy', args);
     }
     if (result.exitCode > 1) {
-      throw Exception(
-          'trivy a échoué (code ${result.exitCode}) : ${result.stderr}');
+      throw Exception(tr(
+          'trivy a échoué (code ${result.exitCode}) : ${result.stderr}',
+          'trivy failed (code ${result.exitCode}): ${result.stderr}'));
     }
     try {
       return jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('trivy : impossible de parser le JSON : $e');
+      throw Exception(tr('trivy : impossible de parser le JSON : $e',
+          'trivy: unable to parse the JSON: $e'));
     }
   }
 
@@ -766,13 +827,15 @@ class OciParser {
     // tronquée (release/epoch manquants) le fait comparer par ex. "1.8.12" à
     // la place de "2:1.8.12-1", ce qui la fait paraître bien plus ancienne
     // qu'elle ne l'est et remonte des CVE en réalité déjà corrigées.
-    final version = _debFullVersion(
-        (p['Version'] as String?) ?? '', (p['Release'] as String?) ?? '', p['Epoch']);
+    final version = _debFullVersion((p['Version'] as String?) ?? '',
+        (p['Release'] as String?) ?? '', p['Epoch']);
     if (version.isEmpty) return null;
 
     final licenses = (p['Licenses'] as List?) ?? [];
-    final licenseStr =
-        licenses.map((l) => l.toString()).where((s) => s.isNotEmpty).join(' AND ');
+    final licenseStr = licenses
+        .map((l) => l.toString())
+        .where((s) => s.isNotEmpty)
+        .join(' AND ');
 
     final arch = (p['Arch'] as String?) ?? '';
     final vendor = (p['Maintainer'] as String?) ?? '';
@@ -792,7 +855,9 @@ class OciParser {
     // ignore silencieusement la vulnérabilité pour tout paquet binaire dont le
     // nom ou la version diffère de son paquet source — trivy expose pourtant
     // cette info via SrcName/SrcVersion/SrcRelease/SrcEpoch.
-    if (packageType == 'deb' && purlStr.isNotEmpty && !purlStr.contains('upstream=')) {
+    if (packageType == 'deb' &&
+        purlStr.isNotEmpty &&
+        !purlStr.contains('upstream=')) {
       final upstream = _debUpstreamQualifier(p, name, version);
       if (upstream != null) {
         final sep = purlStr.contains('?') ? '&' : '?';
@@ -855,8 +920,14 @@ class OciParser {
 
   String _normalizeTrivyType(String type) => switch (type.toLowerCase()) {
         'debian' || 'ubuntu' => 'deb',
-        'centos' || 'redhat' || 'fedora' || 'rhel' || 'rocky' || 'alma' ||
-            'sles' || 'opensuse' =>
+        'centos' ||
+        'redhat' ||
+        'fedora' ||
+        'rhel' ||
+        'rocky' ||
+        'alma' ||
+        'sles' ||
+        'opensuse' =>
           'rpm',
         'alpine' => 'apk',
         'pip' || 'python-pkg' || 'pipenv' || 'poetry' || 'python-pkg' => 'pypi',
@@ -889,8 +960,7 @@ class OciParser {
     try {
       final ociLayoutDir = refType == OciRefType.ociLayout
           ? imageRef
-          : await _copyToOciLayout(
-              imageRef, '${tempDir.path}/oci_layout',
+          : await _copyToOciLayout(imageRef, '${tempDir.path}/oci_layout',
               verbose: verbose);
 
       final fsDir = '${tempDir.path}/rootfs';
@@ -900,8 +970,9 @@ class OciParser {
       final packages =
           await _scanExtractedRootfs(fsDir, imageRef, verbose: verbose);
       if (packages.isEmpty && verbose) {
-        stderr.writeln(
-            'skopeo : aucune base de paquets reconnue dans les layers.');
+        stderr.writeln(tr(
+            'skopeo : aucune base de paquets reconnue dans les layers.',
+            'skopeo: no recognised package database in the layers.'));
       }
 
       return (packages: packages, os: null);
@@ -935,7 +1006,8 @@ class OciParser {
     };
     final errors = <String>[];
     for (final src in sources) {
-      if (verbose) print('skopeo : copie de $src…');
+      if (verbose)
+        print(tr('skopeo : copie de $src…', 'skopeo: copying $src…'));
       final copyResult = await Process.run('skopeo', [
         'copy',
         '--insecure-policy',
@@ -945,7 +1017,8 @@ class OciParser {
       if (copyResult.exitCode == 0) return destDir;
       errors.add('$src : ${(copyResult.stderr as String).trim()}');
     }
-    throw Exception('skopeo copy a échoué :\n  ${errors.join('\n  ')}');
+    throw Exception(tr('skopeo copy a échoué :\n  ${errors.join('\n  ')}',
+        'skopeo copy failed:\n  ${errors.join('\n  ')}'));
   }
 
   /// Paquets d'un rootfs déjà extrait dans [fsDir] (backend skopeo) : bases
@@ -956,7 +1029,8 @@ class OciParser {
 
     final dpkgStatus = File('$fsDir/var/lib/dpkg/status');
     if (await dpkgStatus.exists()) {
-      if (verbose) print('skopeo : base dpkg trouvée');
+      if (verbose)
+        print(tr('skopeo : base dpkg trouvée', 'skopeo: dpkg database found'));
       packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef, fsDir));
     }
 
@@ -965,13 +1039,15 @@ class OciParser {
     final rpmDb = Directory('$fsDir/var/lib/rpm');
     final rpmDbNew = Directory('$fsDir/usr/lib/sysimage/rpm');
     if (await rpmDb.exists() || await rpmDbNew.exists()) {
-      if (verbose) print('skopeo : base RPM trouvée');
+      if (verbose)
+        print(tr('skopeo : base RPM trouvée', 'skopeo: RPM database found'));
       packages.addAll(await _parseRpmRoot(fsDir, imageRef, verbose: verbose));
     }
 
     final apkDb = File('$fsDir/lib/apk/db/installed');
     if (await apkDb.exists()) {
-      if (verbose) print('skopeo : base APK trouvée');
+      if (verbose)
+        print(tr('skopeo : base APK trouvée', 'skopeo: APK database found'));
       packages.addAll(await _parseApkInstalled(apkDb, imageRef));
     }
 
@@ -984,13 +1060,14 @@ class OciParser {
 
   Future<void> _extractOciLayers(String ociDir, String destDir,
       {bool verbose = false}) async {
-    final indexData = jsonDecode(
-            await File('$ociDir/index.json').readAsString())
-        as Map<String, dynamic>;
+    final indexData =
+        jsonDecode(await File('$ociDir/index.json').readAsString())
+            as Map<String, dynamic>;
 
     final manifests = (indexData['manifests'] as List?) ?? [];
     if (manifests.isEmpty) {
-      throw Exception('skopeo : aucun manifest dans le layout OCI');
+      throw Exception(tr('skopeo : aucun manifest dans le layout OCI',
+          'skopeo: no manifest in the OCI layout'));
     }
 
     // Premier manifest (on prend la première plateforme disponible)
@@ -1011,13 +1088,15 @@ class OciParser {
 
       if (verbose) {
         print(
-            '  layer ${i + 1}/${layers.length} : ${layerDigestPath.split('/').last.substring(0, 12)}…');
+            '  ${tr('couche', 'layer')} ${i + 1}/${layers.length} : ${layerDigestPath.split('/').last.substring(0, 12)}…');
       }
 
       final result = await Process.run('tar', [
         '--extract',
-        '--file', layerFile,
-        '--directory', destDir,
+        '--file',
+        layerFile,
+        '--directory',
+        destDir,
         '--overwrite',
         '--ignore-zeros',
         '--exclude=.wh.*',
@@ -1026,10 +1105,10 @@ class OciParser {
       ]);
       // Les erreurs tar (fichiers spéciaux, whiteouts) sont non bloquantes
       if (result.exitCode != 0 && verbose) {
-        final firstErr =
-            (result.stderr as String).split('\n').first.trim();
+        final firstErr = (result.stderr as String).split('\n').first.trim();
         if (firstErr.isNotEmpty) {
-          stderr.writeln('  Warning (tar layer $i) : $firstErr');
+          stderr.writeln(tr('  Warning (tar layer $i) : $firstErr',
+              '  Warning (tar layer $i): $firstErr'));
         }
       }
     }
@@ -1179,23 +1258,31 @@ class OciParser {
     }
     if (dbPath == null) {
       if (verbose) {
-        stderr.writeln('skopeo/rpm : base RPM trouvée mais vide dans $rootDir');
+        stderr.writeln(tr(
+            'skopeo/rpm : base RPM trouvée mais vide dans $rootDir',
+            'skopeo/rpm: RPM database found but empty in $rootDir'));
       }
       return [];
     }
 
-    if (verbose) print('skopeo : requête RPM sur $dbPath');
+    if (verbose)
+      print(tr(
+          'skopeo : requête RPM sur $dbPath', 'skopeo: RPM query on $dbPath'));
 
     final result = await Process.run('rpm', [
-      '--dbpath', dbPath,
+      '--dbpath',
+      dbPath,
       '-qa',
-      '--queryformat', queryFormat,
+      '--queryformat',
+      queryFormat,
     ]);
 
     if (result.exitCode != 0) {
-      stderr.writeln(
+      stderr.writeln(tr(
           'skopeo/rpm : échec (code ${result.exitCode}) : '
-          '${(result.stderr as String).split('\n').first.trim()}');
+              '${(result.stderr as String).split('\n').first.trim()}',
+          'skopeo/rpm: failed (code ${result.exitCode}): '
+              '${(result.stderr as String).split('\n').first.trim()}'));
       return [];
     }
 
@@ -1236,7 +1323,8 @@ class OciParser {
     if (jarFiles.isEmpty) return [];
 
     if (verbose) {
-      print('skopeo : ${jarFiles.length} JARs trouvés, extraction Maven…');
+      print(tr('skopeo : ${jarFiles.length} JARs trouvés, extraction Maven…',
+          'skopeo: ${jarFiles.length} JARs found, Maven extraction…'));
     }
 
     final packages = <Package>[];
@@ -1259,8 +1347,10 @@ class OciParser {
           String? groupId, artifactId, version;
 
           void flush() {
-            if (groupId == null || artifactId == null || version == null) return;
-            if (groupId!.isEmpty || artifactId!.isEmpty || version!.isEmpty) return;
+            if (groupId == null || artifactId == null || version == null)
+              return;
+            if (groupId!.isEmpty || artifactId!.isEmpty || version!.isEmpty)
+              return;
             final key = '$groupId:$artifactId:$version';
             if (!seen.add(key)) return;
             packages.add(OciPackage(
@@ -1309,7 +1399,8 @@ class OciParser {
       // Fallback : pas de pom.properties → déduire les coordonnées depuis le nom
       // de fichier (convention <groupId>.<artifactId>-<version>.jar).
       if (!foundViaPom) {
-        final basename = jarPath.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
+        final basename =
+            jarPath.split('/').last.replaceAll(RegExp(r'\.jar$'), '');
         final match = _versionSep.firstMatch(basename);
         if (match != null) {
           final prefix = basename.substring(0, match.start);
@@ -1343,7 +1434,8 @@ class OciParser {
     }
 
     if (verbose && packages.isNotEmpty) {
-      print('skopeo : ${packages.length} paquets Maven extraits');
+      print(tr('skopeo : ${packages.length} paquets Maven extraits',
+          'skopeo: ${packages.length} Maven packages extracted'));
     }
     return packages;
   }
@@ -1351,8 +1443,16 @@ class OciParser {
   Future<List<Package>> _parsePythonPackages(String rootDir, String imageRef,
       {bool verbose = false}) async {
     final findResult = await Process.run('find', [
-      rootDir, '-type', 'f',
-      '(', '-path', '*.dist-info/METADATA', '-o', '-path', '*.egg-info/PKG-INFO', ')',
+      rootDir,
+      '-type',
+      'f',
+      '(',
+      '-path',
+      '*.dist-info/METADATA',
+      '-o',
+      '-path',
+      '*.egg-info/PKG-INFO',
+      ')',
     ]);
     if (findResult.exitCode != 0) return [];
 
@@ -1362,7 +1462,9 @@ class OciParser {
         .toList();
     if (metaFiles.isEmpty) return [];
 
-    if (verbose) print('skopeo : ${metaFiles.length} métadonnées Python trouvées…');
+    if (verbose)
+      print(tr('skopeo : ${metaFiles.length} métadonnées Python trouvées…',
+          'skopeo: ${metaFiles.length} Python metadata files found…'));
 
     final packages = <Package>[];
     final seen = <String>{};
@@ -1377,21 +1479,28 @@ class OciParser {
 
       String? name, version, summary, license_, url;
       for (final rawLine in content.split('\n')) {
-        if (rawLine.isEmpty) break; // En-têtes RFC 822 — fin à la première ligne vide
+        if (rawLine.isEmpty)
+          break; // En-têtes RFC 822 — fin à la première ligne vide
         final colon = rawLine.indexOf(':');
         if (colon <= 0) continue;
         final key = rawLine.substring(0, colon).trim().toLowerCase();
         final value = rawLine.substring(colon + 1).trim();
         switch (key) {
-          case 'name': name = value;
-          case 'version': version = value;
-          case 'summary': summary = value;
-          case 'license': license_ = value;
-          case 'home-page': url = value;
+          case 'name':
+            name = value;
+          case 'version':
+            version = value;
+          case 'summary':
+            summary = value;
+          case 'license':
+            license_ = value;
+          case 'home-page':
+            url = value;
         }
       }
 
-      if (name == null || name.isEmpty || version == null || version.isEmpty) continue;
+      if (name == null || name.isEmpty || version == null || version.isEmpty)
+        continue;
       final normName = name.toLowerCase().replaceAll(RegExp(r'[-_.]+'), '-');
       if (!seen.add('pypi:$normName:$version')) continue;
 
@@ -1412,7 +1521,8 @@ class OciParser {
     }
 
     if (verbose && packages.isNotEmpty) {
-      print('skopeo : ${packages.length} paquets Python extraits');
+      print(tr('skopeo : ${packages.length} paquets Python extraits',
+          'skopeo: ${packages.length} Python packages extracted'));
     }
     return packages;
   }
@@ -1422,9 +1532,16 @@ class OciParser {
     // Cherche package.json dans node_modules, un seul niveau de profondeur
     // (évite les node_modules imbriqués qui sont des dépendances de dépendances).
     final findResult = await Process.run('find', [
-      rootDir, '-type', 'f', '-name', 'package.json',
-      '-path', '*/node_modules/*',
-      '-not', '-path', '*/node_modules/*/node_modules/*',
+      rootDir,
+      '-type',
+      'f',
+      '-name',
+      'package.json',
+      '-path',
+      '*/node_modules/*',
+      '-not',
+      '-path',
+      '*/node_modules/*/node_modules/*',
     ]);
     if (findResult.exitCode != 0) return [];
 
@@ -1434,7 +1551,9 @@ class OciParser {
         .toList();
     if (pkgFiles.isEmpty) return [];
 
-    if (verbose) print('skopeo : ${pkgFiles.length} package.json npm trouvés…');
+    if (verbose)
+      print(tr('skopeo : ${pkgFiles.length} package.json npm trouvés…',
+          'skopeo: ${pkgFiles.length} npm package.json files found…'));
 
     final packages = <Package>[];
     final seen = <String>{};
@@ -1491,13 +1610,13 @@ class OciParser {
     }
 
     if (verbose && packages.isNotEmpty) {
-      print('skopeo : ${packages.length} paquets npm extraits');
+      print(tr('skopeo : ${packages.length} paquets npm extraits',
+          'skopeo: ${packages.length} npm packages extracted'));
     }
     return packages;
   }
 
-  Future<List<Package>> _parseApkInstalled(
-      File apkDb, String imageRef) async {
+  Future<List<Package>> _parseApkInstalled(File apkDb, String imageRef) async {
     final packages = <Package>[];
     var name = '';
     var version = '';
@@ -1590,11 +1709,14 @@ class OciParser {
       OciRefType.registry => imageRef,
     };
 
-    if (verbose) print('cdxgen : analyse de $target…');
+    if (verbose)
+      print(tr('cdxgen : analyse de $target…', 'cdxgen: analysing $target…'));
 
     return _cdxgenRun([
-      '--type', 'docker',
-      '--output', '-',
+      '--type',
+      'docker',
+      '--output',
+      '-',
       '--no-progress',
       target,
     ], imageRef);
@@ -1603,8 +1725,9 @@ class OciParser {
   Future<OciParseResult> _cdxgenRun(List<String> args, String imageRef) async {
     final result = await Process.run('cdxgen', args);
     if (result.exitCode != 0) {
-      throw Exception(
-          'cdxgen a échoué (code ${result.exitCode}) : ${result.stderr}');
+      throw Exception(tr(
+          'cdxgen a échoué (code ${result.exitCode}) : ${result.stderr}',
+          'cdxgen failed (code ${result.exitCode}): ${result.stderr}'));
     }
 
     // cdxgen écrit le BOM sur stdout (--output -) et ses logs sur stderr ;
@@ -1613,14 +1736,16 @@ class OciParser {
     final out = result.stdout as String;
     final start = out.indexOf('{');
     if (start < 0) {
-      throw Exception('cdxgen : aucune sortie JSON reçue.');
+      throw Exception(tr('cdxgen : aucune sortie JSON reçue.',
+          'cdxgen: no JSON output received.'));
     }
 
     final Map<String, dynamic> data;
     try {
       data = jsonDecode(out.substring(start)) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('cdxgen : impossible de parser le JSON : $e');
+      throw Exception(tr('cdxgen : impossible de parser le JSON : $e',
+          'cdxgen: unable to parse the JSON: $e'));
     }
 
     final components = (data['components'] as List?) ?? [];
@@ -1692,10 +1817,10 @@ class OciParser {
         .where((s) => s.isNotEmpty)
         .join(' AND ');
 
-    final vendor = ((c['supplier'] as Map<String, dynamic>?)?['name']
-            as String?) ??
-        (c['publisher'] as String?) ??
-        '';
+    final vendor =
+        ((c['supplier'] as Map<String, dynamic>?)?['name'] as String?) ??
+            (c['publisher'] as String?) ??
+            '';
 
     var url = '';
     for (final r in ((c['externalReferences'] as List?) ?? const [])
@@ -1758,8 +1883,8 @@ class OciParser {
 // ── Helpers exposés pour les tests du paquet ──────────────────────────────────
 
 /// Appelle [OciParser._parseRpmRoot] depuis les tests sans passer par skopeo.
-Future<List<Package>> ociParserParseRpmRoot(
-        String rootDir, String imageRef, {bool verbose = false}) =>
+Future<List<Package>> ociParserParseRpmRoot(String rootDir, String imageRef,
+        {bool verbose = false}) =>
     OciParser()._parseRpmRoot(rootDir, imageRef, verbose: verbose);
 
 /// Appelle [OciParser._trivyPkgToPackage] depuis les tests sans passer par
@@ -1801,8 +1926,8 @@ OciPackage? ociParserSyftArtifactToPackage(
 OciPackage? ociParserSyftSourcePackage(
         Map<String, dynamic> artifact, String? distroCodename, String imageRef,
         {Set<String> existingNames = const {}}) =>
-    OciParser()._syftSourcePackage(
-        artifact, distroCodename, imageRef, existingNames);
+    OciParser()
+        ._syftSourcePackage(artifact, distroCodename, imageRef, existingNames);
 
 /// Appelle [OciParser._cdxgenComponentToPackage] depuis les tests, sur un
 /// composant CycloneDX (élément de `components[]`) déjà décodé, sans lancer

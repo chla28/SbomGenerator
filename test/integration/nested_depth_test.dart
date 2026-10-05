@@ -63,7 +63,16 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   Future<ProcessResult> gen(List<String> extra) => Process.run(
-      'dart', ['run', 'bin/sbom_generator.dart', '-i', archive, ...extra],
+      'dart',
+      [
+        'run',
+        'bin/sbom_generator.dart',
+        '--lang',
+        'fr',
+        '-i',
+        archive,
+        ...extra
+      ],
       workingDirectory: Directory.current.path);
 
   test('--depth 0 : seul l\'objet racine, aucun SBOM imbriqué', () async {
@@ -130,7 +139,17 @@ void main() {
 
   test('--depth invalide ou sans --input → erreur', () async {
     final bad = await Process.run(
-        'dart', ['run', 'bin/sbom_generator.dart', '-i', 'x', '--depth', 'abc'],
+        'dart',
+        [
+          'run',
+          'bin/sbom_generator.dart',
+          '--lang',
+          'fr',
+          '-i',
+          'x',
+          '--depth',
+          'abc'
+        ],
         workingDirectory: Directory.current.path);
     expect(bad.exitCode, isNot(0));
     expect('${bad.stderr}${bad.stdout}', contains('--depth'));

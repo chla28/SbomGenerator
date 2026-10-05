@@ -34,7 +34,8 @@ void main() {
     });
   });
 
-  group('OciParser (backend trivy) — reconstruction version & PURL upstream', () {
+  group('OciParser (backend trivy) — reconstruction version & PURL upstream',
+      () {
     // Régression : grype compare les versions sur le champ `version` du
     // composant CycloneDX (pas sur le PURL). Sans release/epoch, un paquet à
     // jour paraît bien plus ancien qu'il ne l'est et remonte des CVE déjà
@@ -46,7 +47,8 @@ void main() {
         'Release': '5',
         'Epoch': 1,
         'Identifier': {
-          'PURL': 'pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1',
+          'PURL':
+              'pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1',
         },
         'SrcName': 'util-linux',
         'SrcVersion': '2.41',
@@ -56,14 +58,17 @@ void main() {
       expect(pkg.version, '1:2.41-5');
     });
 
-    test('ajoute upstream=<srcName>@<version> quand nom et version source diffèrent', () {
+    test(
+        'ajoute upstream=<srcName>@<version> quand nom et version source diffèrent',
+        () {
       final pkg = ociParserTrivyPkgToPackage({
         'Name': 'bsdutils',
         'Version': '2.41',
         'Release': '5',
         'Epoch': 1,
         'Identifier': {
-          'PURL': 'pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1',
+          'PURL':
+              'pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1',
         },
         'SrcName': 'util-linux',
         'SrcVersion': '2.41',
@@ -73,13 +78,15 @@ void main() {
       expect(pkg.purl, contains('upstream=util-linux%402.41-5'));
     });
 
-    test('ajoute upstream=<srcName> sans version quand seul le nom diffère', () {
+    test('ajoute upstream=<srcName> sans version quand seul le nom diffère',
+        () {
       final pkg = ociParserTrivyPkgToPackage({
         'Name': 'libc6',
         'Version': '2.41',
         'Release': '12+deb13u3',
         'Identifier': {
-          'PURL': 'pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13',
+          'PURL':
+              'pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13',
         },
         'SrcName': 'glibc',
         'SrcVersion': '2.41',
@@ -89,13 +96,16 @@ void main() {
       expect(pkg.purl, endsWith('upstream=glibc'));
     });
 
-    test('n\'ajoute pas upstream quand paquet binaire == paquet source (nom et version)', () {
+    test(
+        'n\'ajoute pas upstream quand paquet binaire == paquet source (nom et version)',
+        () {
       final pkg = ociParserTrivyPkgToPackage({
         'Name': 'sed',
         'Version': '4.9',
         'Release': '2+deb13u1',
         'Identifier': {
-          'PURL': 'pkg:deb/debian/sed@4.9-2%2Bdeb13u1?arch=amd64&distro=debian-13',
+          'PURL':
+              'pkg:deb/debian/sed@4.9-2%2Bdeb13u1?arch=amd64&distro=debian-13',
         },
         'SrcName': 'sed',
         'SrcVersion': '4.9',
@@ -105,14 +115,17 @@ void main() {
       expect(pkg.purl, isNot(contains('upstream=')));
     });
 
-    test('ajoute quand même la version dans upstream si seule la release binaire diffère (binNMU +bN)', () {
+    test(
+        'ajoute quand même la version dans upstream si seule la release binaire diffère (binNMU +bN)',
+        () {
       final pkg = ociParserTrivyPkgToPackage({
         'Name': 'libcap2',
         'Version': '2.75',
         'Release': '10+deb13u1+b1',
         'Epoch': 1,
         'Identifier': {
-          'PURL': 'pkg:deb/debian/libcap2@2.75-10%2Bdeb13u1%2Bb1?arch=amd64&distro=debian-13&epoch=1',
+          'PURL':
+              'pkg:deb/debian/libcap2@2.75-10%2Bdeb13u1%2Bb1?arch=amd64&distro=debian-13&epoch=1',
         },
         'SrcName': 'libcap2',
         'SrcVersion': '2.75',
@@ -130,7 +143,8 @@ void main() {
         'Release': '5',
         'Epoch': 1,
         'Identifier': {
-          'PURL': 'pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1&upstream=util-linux',
+          'PURL':
+              'pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1&upstream=util-linux',
         },
         'SrcName': 'util-linux',
         'SrcVersion': '2.41',
@@ -183,8 +197,7 @@ void main() {
       expect(os.version, '9.6');
     });
 
-    test('retourne null quand syft n\'a détecté aucune base OS (scratch)',
-        () {
+    test('retourne null quand syft n\'a détecté aucune base OS (scratch)', () {
       expect(ociParserSyftDistroToOsInfo({}), isNull);
       expect(ociParserSyftDistroToOsInfo({'distro': null}), isNull);
     });
@@ -201,17 +214,16 @@ void main() {
       expect(os.version, '9.6');
     });
 
-    test('retourne null quand trivy n\'a détecté aucune base OS (scratch)',
-        () {
+    test('retourne null quand trivy n\'a détecté aucune base OS (scratch)', () {
       expect(ociParserTrivyMetadataToOsInfo({}), isNull);
-      expect(
-          ociParserTrivyMetadataToOsInfo({'Metadata': <String, dynamic>{}}),
+      expect(ociParserTrivyMetadataToOsInfo({'Metadata': <String, dynamic>{}}),
           isNull);
     });
   });
 
   group('OciParser (backend syft) — champs de composant', () {
-    test('reprend le mainteneur dpkg (clé minuscule) comme vendor/supplier', () {
+    test('reprend le mainteneur dpkg (clé minuscule) comme vendor/supplier',
+        () {
       final pkg = ociParserSyftArtifactToPackage({
         'name': 'apt',
         'version': '3.0.3',
@@ -262,7 +274,10 @@ void main() {
         'name': 'zlib1g',
         'version': '1:1.3.dfsg+really1.3.1-1+b1',
         'type': 'deb',
-        'metadata': {'source': 'zlib', 'sourceVersion': '1:1.3.dfsg+really1.3.1-1'},
+        'metadata': {
+          'source': 'zlib',
+          'sourceVersion': '1:1.3.dfsg+really1.3.1-1'
+        },
         'purl': 'pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1'
             '?arch=amd64&distro=debian-13&upstream=zlib%401%3A1.3.dfsg&distro_name=trixie',
       }, 'debian.tar')!;
@@ -290,8 +305,9 @@ void main() {
         'version': '5.40.1-6',
         'type': 'deb',
         'metadata': {'source': 'perl'},
-        'purl': 'pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6'
-            '&upstream=perl',
+        'purl':
+            'pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6'
+                '&upstream=perl',
       }, 'trixie', 'debian.tar')!;
 
       expect(src.name, 'perl');
@@ -306,7 +322,10 @@ void main() {
         'name': 'zlib1g',
         'version': '1:1.3.dfsg+really1.3.1-1+b1',
         'type': 'deb',
-        'metadata': {'source': 'zlib', 'sourceVersion': '1:1.3.dfsg+really1.3.1-1'},
+        'metadata': {
+          'source': 'zlib',
+          'sourceVersion': '1:1.3.dfsg+really1.3.1-1'
+        },
         'purl': 'pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1'
             '?arch=amd64&distro=debian-13&upstream=zlib%401%3A1.3',
       }, 'trixie', 'debian.tar')!;
@@ -318,19 +337,29 @@ void main() {
     test('_syftSourcePackage : null si source == nom, non-deb, ou déjà présent',
         () {
       expect(
-          ociParserSyftSourcePackage(
-              {'name': 'bash', 'type': 'deb', 'metadata': {'source': 'bash'}},
-              'trixie', 'i.tar'),
+          ociParserSyftSourcePackage({
+            'name': 'bash',
+            'type': 'deb',
+            'metadata': {'source': 'bash'}
+          }, 'trixie', 'i.tar'),
+          isNull);
+      expect(
+          ociParserSyftSourcePackage({
+            'name': 'foo',
+            'type': 'npm',
+            'metadata': {'source': 'bar'}
+          }, 'trixie', 'i.tar'),
           isNull);
       expect(
           ociParserSyftSourcePackage(
-              {'name': 'foo', 'type': 'npm', 'metadata': {'source': 'bar'}},
-              'trixie', 'i.tar'),
-          isNull);
-      expect(
-          ociParserSyftSourcePackage(
-              {'name': 'perl-base', 'type': 'deb', 'metadata': {'source': 'perl'}},
-              'trixie', 'i.tar', existingNames: {'perl'}),
+              {
+                'name': 'perl-base',
+                'type': 'deb',
+                'metadata': {'source': 'perl'}
+              },
+              'trixie',
+              'i.tar',
+              existingNames: {'perl'}),
           isNull);
     });
 
@@ -396,7 +425,8 @@ void main() {
         ociParserCdxgenComponentToPackage({
           'type': 'file',
           'name': 'AdduserCommon.pm',
-          'purl': 'pkg:generic/AdduserCommon.pm#usr/share/perl5/Debian/AdduserCommon.pm',
+          'purl':
+              'pkg:generic/AdduserCommon.pm#usr/share/perl5/Debian/AdduserCommon.pm',
         }, 'debian.tar'),
         isNull,
       );

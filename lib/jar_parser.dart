@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses standalone Java `.jar` files to recover Maven coordinates.
 ///
@@ -142,10 +143,14 @@ class JarParser {
     }
 
     if (ownPackage == null && embedded.isEmpty) {
-      stderr.writeln(
-          'Warning: impossible de déterminer les coordonnées Maven de "$path" '
-          '(pas de META-INF/maven/*/*/pom.properties exploitable, et aucun '
-          'suffixe de version reconnaissable dans le nom de fichier)');
+      stderr.writeln('Warning: ' +
+          tr(
+              'impossible de déterminer les coordonnées Maven de "$path" '
+                  '(pas de META-INF/maven/*/*/pom.properties exploitable, et aucun '
+                  'suffixe de version reconnaissable dans le nom de fichier)',
+              'cannot determine the Maven coordinates of "$path" '
+                  '(no usable META-INF/maven/*/*/pom.properties, and no '
+                  'recognisable version suffix in the file name)'));
       return const [];
     }
 
@@ -156,8 +161,8 @@ class JarParser {
     ];
   }
 
-  WheelPackage _toPackage(String path, String groupId, String artifactId,
-      String version,
+  WheelPackage _toPackage(
+      String path, String groupId, String artifactId, String version,
       [List<PackageHash> hashes = const []]) {
     final name = groupId.isNotEmpty ? '$groupId:$artifactId' : artifactId;
 
@@ -255,8 +260,7 @@ class JarParser {
   Future<String?> _groupIdFromManifest(String path) async {
     final ProcessResult result;
     try {
-      result =
-          await Process.run('unzip', ['-p', path, 'META-INF/MANIFEST.MF']);
+      result = await Process.run('unzip', ['-p', path, 'META-INF/MANIFEST.MF']);
     } on ProcessException {
       return null;
     }

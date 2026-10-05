@@ -35,6 +35,7 @@ import 'tar_parser.dart';
 import 'wheel_parser.dart';
 import 'yarn_parser.dart';
 import 'zip_parser.dart';
+import 'i18n.dart';
 
 /// Profondeur maximale (`--depth all`) : garde-fou contre les archives
 /// auto-référentes ou démesurément imbriquées.
@@ -174,7 +175,8 @@ class NestedExplorer {
         try {
           pkgs = await _parse(abs);
         } catch (e) {
-          out.warnings.add('$location : analyse impossible ($e)');
+          out.warnings.add(tr('$location : analyse impossible ($e)',
+              '$location: analysis failed ($e)'));
           pkgs = const [];
         }
         pkgs = [for (final p in pkgs) p.copyWith(sourceRef: location)];
@@ -260,13 +262,15 @@ class NestedExplorer {
         '$_maxMemberBytes',
       ]);
     } on ProcessException {
-      out.warnings.add('python3 introuvable : impossible de descendre dans '
-          '$label.');
+      out.warnings.add(tr(
+          'python3 introuvable : impossible de descendre dans $label.',
+          'python3 not found: cannot descend into $label.'));
       return const [];
     }
     if (r.exitCode != 0) {
       final err = r.stderr.toString().trim().split('\n').last;
-      out.warnings.add('$label : extraction impossible ($err)');
+      out.warnings.add(tr('$label : extraction impossible ($err)',
+          '$label: extraction failed ($err)'));
       return const [];
     }
     try {
@@ -276,7 +280,8 @@ class NestedExplorer {
       }
       return [for (final f in (json['files'] as List)) f as String];
     } catch (_) {
-      out.warnings.add('$label : sortie d\'extraction illisible');
+      out.warnings.add(tr('$label : sortie d\'extraction illisible',
+          '$label: unreadable extraction output'));
       return const [];
     }
   }
@@ -633,7 +638,7 @@ try:
         else:
             do_tar(path=src)
     except Limit as e:
-        warnings.append(str(e) + ' — extraction tronquée')
+        warnings.append(str(e) + ' — extraction tronquée / extraction truncated')
     print(json.dumps({'files': out, 'warnings': warnings}))
 except Exception as e:
     print('%s: %s' % (type(e).__name__, e), file=sys.stderr)

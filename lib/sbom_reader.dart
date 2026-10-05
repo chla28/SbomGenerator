@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'hash_utils.dart'
-    show hashesFromCycloneDx, packageHash;
+import 'hash_utils.dart' show hashesFromCycloneDx, packageHash;
 import 'models.dart';
+import 'i18n.dart';
 
 /// Detected format of a SBOM file.
 enum SbomFormat { cyclonedx, spdx2, spdx3, unknown }
@@ -31,8 +31,9 @@ class SbomReader {
         SbomFormat.cyclonedx => _readCycloneDx(json),
         SbomFormat.spdx2 => _readSpdx2(json),
         SbomFormat.spdx3 => _readSpdx3(json),
-        SbomFormat.unknown =>
-          throw Exception('Format SBOM non reconnu dans le fichier fourni.'),
+        SbomFormat.unknown => throw Exception(tr(
+            'Format SBOM non reconnu dans le fichier fourni.',
+            'Unrecognised SBOM format in the given file.')),
       };
 
   /// Extracts the document name from the SBOM metadata.
@@ -190,8 +191,8 @@ class SbomReader {
     if (node is! List) return const [];
     final out = <PackageHash>[];
     for (final c in node.whereType<Map<String, dynamic>>()) {
-      final h = packageHash(
-          (c['algorithm'] as String?) ?? '', (c['checksumValue'] as String?) ?? '');
+      final h = packageHash((c['algorithm'] as String?) ?? '',
+          (c['checksumValue'] as String?) ?? '');
       if (h != null && !out.contains(h)) out.add(h);
     }
     return out;
@@ -228,10 +229,9 @@ class SbomReader {
     // Le générateur émet les champs `software:` préfixés (forme du contexte
     // JSON-LD) ; on tolère aussi la forme aplatie `software_` et sans préfixe.
     String prop(String local) =>
-        (node['software:$local'] ??
-                node['software_$local'] ??
-                node[local]) as String? ??
-            '';
+        (node['software:$local'] ?? node['software_$local'] ?? node[local])
+            as String? ??
+        '';
     final name = (node['name'] as String?) ?? '';
     final version = prop('packageVersion');
     final license = _spdxLicense((node['concludedLicense'] as String?) ??

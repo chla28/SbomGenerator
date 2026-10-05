@@ -32,7 +32,8 @@ void main() {
     test('rejette une valeur non hexadécimale ou de mauvaise longueur', () {
       expect(packageHash('SHA-256', 'deadbeef'), isNull);
       expect(packageHash('SHA-256', 'z' * 64), isNull);
-      expect(packageHash('SHA-256', sha256Hex), PackageHash('SHA-256', sha256Hex));
+      expect(
+          packageHash('SHA-256', sha256Hex), PackageHash('SHA-256', sha256Hex));
     });
 
     test('normalise la casse de la valeur', () {
@@ -100,9 +101,9 @@ void main() {
 
   group('hashLocalFile', () {
     test('calcule SHA-256 + SHA-512 d\'un fichier', () {
-      final tmp = File(
-          '${Directory.systemTemp.createTempSync('hash_').path}/data.bin')
-        ..writeAsStringSync('hello');
+      final tmp =
+          File('${Directory.systemTemp.createTempSync('hash_').path}/data.bin')
+            ..writeAsStringSync('hello');
       final out = hashLocalFile(tmp.path);
       expect(out.map((h) => h.alg), ['SHA-256', 'SHA-512']);
       expect(out.first.content,

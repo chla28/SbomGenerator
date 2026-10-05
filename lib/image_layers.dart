@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'models.dart';
+import 'i18n.dart';
 
 /// Préfixe des propriétés CycloneDX ajoutées par `--per-layer`.
 const layerPropertyPrefix = 'sbom_generator:layer:';
@@ -90,7 +91,8 @@ List<ImageLayer> layersFromConfig(
       ImageLayer(
         index: i + 1,
         diffId: diffIds[i],
-        blobPath: blobPaths != null && i < blobPaths.length ? blobPaths[i] : null,
+        blobPath:
+            blobPaths != null && i < blobPaths.length ? blobPaths[i] : null,
         createdBy: withHistory ? hist[i]['created_by']?.toString() : null,
         created: withHistory ? hist[i]['created']?.toString() : null,
       ),
@@ -128,7 +130,8 @@ Map<String, dynamic>? _readJson(File f) {
 List<ImageLayer> readDockerArchiveLayers(String dir) {
   final manifest = jsonDecode(File('$dir/manifest.json').readAsStringSync());
   if (manifest is! List || manifest.isEmpty || manifest.first is! Map) {
-    throw const FormatException('manifest.json inattendu (tableau attendu)');
+    throw FormatException(tr('manifest.json inattendu (tableau attendu)',
+        'unexpected manifest.json (array expected)'));
   }
   final entry = manifest.first as Map;
   final paths = [
@@ -151,7 +154,9 @@ List<ImageLayer> readOciLayoutLayers(String dir) {
 
   var node = _readJson(File('$dir/index.json'));
   // Descend les index imbriqués jusqu'à un manifeste d'image.
-  for (var depth = 0; depth < 4 && node != null && node['layers'] == null; depth++) {
+  for (var depth = 0;
+      depth < 4 && node != null && node['layers'] == null;
+      depth++) {
     final manifests = [
       for (final m in node['manifests'] as List? ?? const [])
         if (m is Map<String, dynamic>) m,
@@ -167,7 +172,8 @@ List<ImageLayer> readOciLayoutLayers(String dir) {
     node = _readJson(File(blob(pick['digest'] as String)));
   }
   if (node == null || node['layers'] is! List) {
-    throw StateError('layout OCI sans manifeste d\'image exploitable : $dir');
+    throw StateError(tr('layout OCI sans manifeste d\'image exploitable : $dir',
+        'OCI layout without a usable image manifest: $dir'));
   }
   final paths = [
     for (final l in node['layers'] as List)
@@ -398,9 +404,10 @@ Future<LayerAnalysis> analyzeRootfsLayers({
   for (final layer in layers) {
     final blob = layer.blobPath;
     if (blob == null || !File(blob).existsSync()) {
-      throw StateError('tar de la couche ${layer.index} introuvable : $blob');
+      throw StateError(tr('tar de la couche ${layer.index} introuvable : $blob',
+          'tar of layer ${layer.index} not found: $blob'));
     }
-    log?.call('  couche ${layer.index}/${layers.length} '
+    log?.call('  ${tr('couche', 'layer')} ${layer.index}/${layers.length} '
         '(${layer.shortDigest})'
         '${layer.createdBy != null ? ' — ${_truncate(layer.createdBy!, 70)}' : ''}');
     final layerDir = Directory('$workDir/layer')..createSync();
@@ -408,14 +415,21 @@ Future<LayerAnalysis> analyzeRootfsLayers({
     // entrées impossibles à créer sans privilèges (périphériques) sont
     // ignorées : tar poursuit et renvoie un code d'erreur non bloquant.
     final x = await Process.run('tar', [
-      '-C', layerDir.path,
-      '--no-same-owner', '--no-same-permissions',
-      '--delay-directory-restore', '--warning=none',
-      '-xf', blob,
+      '-C',
+      layerDir.path,
+      '--no-same-owner',
+      '--no-same-permissions',
+      '--delay-directory-restore',
+      '--warning=none',
+      '-xf',
+      blob,
     ]);
     if (x.exitCode != 0) {
       final first = (x.stderr as String).split('\n').first.trim();
-      if (first.isNotEmpty) log?.call('    avertissement tar : $first');
+      if (first.isNotEmpty) {
+        log?.call(
+            tr('    avertissement tar : $first', '    tar warning: $first'));
+      }
     }
     // Rend tout déplaçable/supprimable (répertoires 0555 d'une image…).
     await Process.run('chmod', ['-R', 'u+rwX', layerDir.path]);
@@ -429,7 +443,7 @@ Future<LayerAnalysis> analyzeRootfsLayers({
     ];
     final delta = diffPackages(previous, current);
     log?.call('    +${delta.added.length} ~${delta.modified.length} '
-        '-${delta.removed.length} (${current.length} au total)');
+        '-${delta.removed.length} (${current.length} ${tr('au total', 'in total')})');
     deltas.add(delta);
     previous = current;
   }
@@ -440,8 +454,8 @@ Future<LayerAnalysis> analyzeRootfsLayers({
 /// indiquée par le backend ([layerOf] : `bomRef` → index de couche) pour les
 /// composants [packages] de l'image. Les composants sans couche connue ne
 /// figurent dans aucun SBOM de couche.
-LayerAnalysis metadataLayerAnalysis(List<ImageLayer> layers,
-    Map<String, int> layerOf, List<Package> packages) {
+LayerAnalysis metadataLayerAnalysis(
+    List<ImageLayer> layers, Map<String, int> layerOf, List<Package> packages) {
   final byLayer = <int, List<Package>>{};
   for (final p in packages) {
     final i = layerOf[p.bomRef];
@@ -451,7 +465,8 @@ LayerAnalysis metadataLayerAnalysis(List<ImageLayer> layers,
     mode: 'metadata',
     layers: layers,
     deltas: [
-      for (final l in layers) LayerDelta.addedOnly(byLayer[l.index] ?? const []),
+      for (final l in layers)
+        LayerDelta.addedOnly(byLayer[l.index] ?? const []),
     ],
   );
 }
@@ -566,7 +581,8 @@ class LayerSummary {
         'index': layer.index,
         'total': total,
         'digest': layer.diffId,
-        if (layer.createdBy != null) 'createdBy': _truncate(layer.createdBy!, 300),
+        if (layer.createdBy != null)
+          'createdBy': _truncate(layer.createdBy!, 300),
         'added': added,
         'modified': modified,
         'removed': removed,
@@ -653,7 +669,8 @@ class LayerAnnotations {
       final change = changeByRef[pkg.bomRef];
       return {
         if (change != null) 'change': change.name,
-        if (previousVersionByRef[pkg.bomRef] case final v?) 'previousVersion': v,
+        if (previousVersionByRef[pkg.bomRef] case final v?)
+          'previousVersion': v,
       };
     }
     final o = originByRef[pkg.bomRef];

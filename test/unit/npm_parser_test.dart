@@ -10,8 +10,7 @@ void main() {
 
   File _write(String name, Object content) {
     final f = File('${tmp.path}/$name');
-    f.writeAsStringSync(
-        content is String ? content : jsonEncode(content));
+    f.writeAsStringSync(content is String ? content : jsonEncode(content));
     return f;
   }
 
@@ -28,7 +27,8 @@ void main() {
           'node_modules/lodash': {
             'version': '4.17.21',
             'license': 'MIT',
-            'resolved': 'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz',
+            'resolved':
+                'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz',
           },
           'node_modules/@babel/core': {
             'version': '7.22.0',
@@ -101,7 +101,8 @@ void main() {
         'dependencies': {
           'lodash': {
             'version': '4.17.21',
-            'resolved': 'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz',
+            'resolved':
+                'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz',
           },
           'express': {'version': '4.18.2'},
         },
@@ -131,7 +132,8 @@ void main() {
     final parser = NpmParser();
 
     test('fichier inexistant → liste vide', () {
-      expect(parser.parsePackageLock('/nonexistent/package-lock.json'), isEmpty);
+      expect(
+          parser.parsePackageLock('/nonexistent/package-lock.json'), isEmpty);
     });
 
     test('JSON invalide → liste vide + warning stderr', () {
@@ -150,7 +152,8 @@ void main() {
     }
 
     test('author objet {name} et chaîne "Nom <email>" → nom seul', () {
-      writePkgJson('node_modules/lodash', 'John-David Dalton <j@d.com> (d.com)');
+      writePkgJson(
+          'node_modules/lodash', 'John-David Dalton <j@d.com> (d.com)');
       writePkgJson('node_modules/@babel/core', {'name': 'The Babel Team'});
       final f = _write('package-lock.json', {
         'lockfileVersion': 3,

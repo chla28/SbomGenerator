@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'models.dart';
+import 'i18n.dart';
 
 /// Parses Python `requirements.txt` files (PEP 508 subset).
 ///
@@ -23,7 +24,9 @@ class RequirementsParser {
   List<WheelPackage> parseFile(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      stderr.writeln('Warning: requirements file not found: $path');
+      stderr.writeln('Warning: ' +
+          tr('fichier requirements introuvable : $path',
+              'requirements file not found: $path'));
       return [];
     }
 

@@ -32,7 +32,8 @@ List<Map<String, dynamic>> _graph(Map<String, dynamic> sbom) =>
 Map<String, dynamic> _findType(Map<String, dynamic> sbom, String type) =>
     _graph(sbom).firstWhere((e) => e['type'] == type);
 
-List<Map<String, dynamic>> _findAllType(Map<String, dynamic> sbom, String type) =>
+List<Map<String, dynamic>> _findAllType(
+        Map<String, dynamic> sbom, String type) =>
     _graph(sbom).where((e) => e['type'] == type).toList();
 
 void main() {
@@ -41,10 +42,18 @@ void main() {
   group('Spdx3Generator.generate — verifiedUsing', () {
     test('Package.hashes → verifiedUsing avec libellés HashAlgorithm', () {
       final pkg = WheelPackage(
-        name: 'lib', version: '1.0', license: '', url: '', summary: '',
-        vendor: '', arch: 'any', sourceRef: '',
+        name: 'lib',
+        version: '1.0',
+        license: '',
+        url: '',
+        summary: '',
+        vendor: '',
+        arch: 'any',
+        sourceRef: '',
         hashes: [PackageHash('SHA-256', 'a' * 64)],
-        requires: const [], provides: const ['lib'], packageType: 'npm',
+        requires: const [],
+        provides: const ['lib'],
+        packageType: 'npm',
       );
       final elem = _findType(generator.generate([pkg], []), 'software:Package');
       expect(elem['verifiedUsing'], [
@@ -53,8 +62,8 @@ void main() {
     });
 
     test('aucun verifiedUsing sans hash', () {
-      final elem =
-          _findType(generator.generate([_pkg(name: 'foo')], []), 'software:Package');
+      final elem = _findType(
+          generator.generate([_pkg(name: 'foo')], []), 'software:Package');
       expect(elem.containsKey('verifiedUsing'), isFalse);
     });
   });
@@ -67,8 +76,8 @@ void main() {
     });
 
     test('contient un élément SpdxDocument avec le nom fourni', () {
-      final sbom = generator
-          .generate([_pkg(name: 'foo')], [], documentName: 'Mon SBOM');
+      final sbom =
+          generator.generate([_pkg(name: 'foo')], [], documentName: 'Mon SBOM');
       final doc = _findType(sbom, 'SpdxDocument');
       expect(doc['name'], 'Mon SBOM');
       expect(doc['profileConformance'], containsAll(['core', 'software']));
@@ -101,7 +110,8 @@ void main() {
 
   group('Spdx3Generator.generate — paquets', () {
     test('génère un software:Package par paquet avec purl', () {
-      final sbom = generator.generate([_pkg(name: 'foo', version: '1.2.3')], []);
+      final sbom =
+          generator.generate([_pkg(name: 'foo', version: '1.2.3')], []);
       final pkgs = _findAllType(sbom, 'software:Package');
       expect(pkgs, hasLength(1));
       final pkg = pkgs.single;
@@ -125,8 +135,7 @@ void main() {
       expect(pkg['summary'], 'Un paquet');
     });
 
-    test('vendor produit un élément Organization référencé par suppliedBy',
-        () {
+    test('vendor produit un élément Organization référencé par suppliedBy', () {
       final sbom = generator.generate([_pkg(name: 'foo', vendor: 'ACME')], []);
       final orgs = _findAllType(sbom, 'Organization');
       expect(orgs, hasLength(1));
@@ -146,8 +155,8 @@ void main() {
 
   group('Spdx3Generator.generate — relations', () {
     test('une relation "describes" reliant le document aux paquets', () {
-      final sbom = generator
-          .generate([_pkg(name: 'foo'), _pkg(name: 'bar')], []);
+      final sbom =
+          generator.generate([_pkg(name: 'foo'), _pkg(name: 'bar')], []);
       final describes = _findAllType(sbom, 'Relationship')
           .where((r) => r['relationshipType'] == 'describes')
           .toList();
@@ -203,13 +212,11 @@ void main() {
       expect(elem['summary'], os.prettyName);
     });
 
-    test('inclut l\'élément OS dans rootElement et la relation describes',
-        () {
+    test('inclut l\'élément OS dans rootElement et la relation describes', () {
       final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
       final doc = _findType(sbom, 'SpdxDocument');
-      final osSpdxId = _findAllType(sbom, 'software:Package')
-          .firstWhere((e) => e['software:primaryPurpose'] == 'operatingSystem')
-          ['spdxId'];
+      final osSpdxId = _findAllType(sbom, 'software:Package').firstWhere(
+          (e) => e['software:primaryPurpose'] == 'operatingSystem')['spdxId'];
 
       expect(doc['rootElement'], contains(osSpdxId));
 

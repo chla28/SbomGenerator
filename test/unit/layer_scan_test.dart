@@ -5,7 +5,8 @@ import 'package:sbom_generator/layer_scan.dart';
 import 'package:sbom_generator/scan_report_generator.dart';
 import 'package:test/test.dart';
 
-const _d1 = 'sha256:1111111111111111111111111111111111111111111111111111111111111111';
+const _d1 =
+    'sha256:1111111111111111111111111111111111111111111111111111111111111111';
 
 Map<String, dynamic> _cdxComp(String name, String version, int layer) => {
       'name': name,
@@ -69,7 +70,10 @@ void main() {
             'name': 'musl',
             'versionInfo': '1.2',
             'annotations': [
-              {'comment': 'sbom_generator:layer:index=3; sbom_generator:layer:digest=x'},
+              {
+                'comment':
+                    'sbom_generator:layer:index=3; sbom_generator:layer:digest=x'
+              },
             ],
           },
         ],
@@ -118,7 +122,11 @@ void main() {
       {'id': 'CVE-2026-0003', 'severity': 'Low', 'package': 'inconnu@1'},
     ];
     final osv = <Map<String, dynamic>>[
-      {'id': 'DEBIAN-CVE-2026-0002', 'severity': 'Critical', 'package': 'curl@8.0'},
+      {
+        'id': 'DEBIAN-CVE-2026-0002',
+        'severity': 'Critical',
+        'package': 'curl@8.0'
+      },
     ];
     expect(attributeLayers(grype, set), 1);
     attributeLayers(osv, set);
@@ -136,10 +144,20 @@ void main() {
       sbomPath: 'image app.tar',
       resultsByScanner: {
         'grype': [
-          {'id': 'CVE-2026-0001', 'severity': 'Critical', 'package': 'zlib@1', 'layer': 1},
+          {
+            'id': 'CVE-2026-0001',
+            'severity': 'Critical',
+            'package': 'zlib@1',
+            'layer': 1
+          },
         ],
         'trivy': [
-          {'id': 'CVE-2026-0001', 'severity': 'High', 'package': 'zlib@1', 'layer': 1},
+          {
+            'id': 'CVE-2026-0001',
+            'severity': 'High',
+            'package': 'zlib@1',
+            'layer': 1
+          },
         ],
       },
       layers: const [

@@ -17,9 +17,10 @@ void main() {
     final parser = GoParser();
 
     test('extrait module et version, supprime le v majuscule', () {
-      final f = _write('go.sum',
+      final f = _write(
+          'go.sum',
           'github.com/gorilla/mux v1.8.0 h1:abc=\n'
-          'github.com/gorilla/mux v1.8.0/go.mod h1:def=\n');
+              'github.com/gorilla/mux v1.8.0/go.mod h1:def=\n');
       final pkgs = parser.parseGoSum(f.path);
       expect(pkgs, hasLength(1));
       expect(pkgs[0].name, 'github.com/gorilla/mux');
@@ -28,24 +29,26 @@ void main() {
     });
 
     test('ignore les lignes /go.mod', () {
-      final f = _write('go.sum',
+      final f = _write(
+          'go.sum',
           'github.com/lib/pq v1.10.7 h1:xyz=\n'
-          'github.com/lib/pq v1.10.7/go.mod h1:abc=\n');
+              'github.com/lib/pq v1.10.7/go.mod h1:abc=\n');
       final pkgs = parser.parseGoSum(f.path);
       expect(pkgs, hasLength(1));
     });
 
     test('déduplique les entrées', () {
-      final f = _write('go.sum',
+      final f = _write(
+          'go.sum',
           'github.com/foo/bar v1.0.0 h1:aaa=\n'
-          'github.com/foo/bar v1.0.0 h1:bbb=\n');
+              'github.com/foo/bar v1.0.0 h1:bbb=\n');
       final pkgs = parser.parseGoSum(f.path);
       expect(pkgs, hasLength(1));
     });
 
     test('ignore les lignes vides et commentaires', () {
-      final f = _write('go.sum',
-          '\n// commentaire\ngithub.com/x/y v0.1.0 h1:z=\n\n');
+      final f =
+          _write('go.sum', '\n// commentaire\ngithub.com/x/y v0.1.0 h1:z=\n\n');
       final pkgs = parser.parseGoSum(f.path);
       expect(pkgs, hasLength(1));
     });
@@ -96,8 +99,8 @@ require github.com/pkg/errors v0.9.1
     });
 
     test('supprime le préfixe v du numéro de version', () {
-      final f = _write('go.mod',
-          'module x\nrequire golang.org/x/tools v0.15.0\n');
+      final f =
+          _write('go.mod', 'module x\nrequire golang.org/x/tools v0.15.0\n');
       final pkgs = parser.parseGoMod(f.path);
       expect(pkgs[0].version, '0.15.0');
     });

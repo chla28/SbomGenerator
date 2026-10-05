@@ -49,6 +49,8 @@ packages:
       [
         'run',
         'bin/sbom_generator.dart',
+        '--lang',
+        'fr',
         ...extraArgs,
         '-o',
         outPath,
@@ -90,7 +92,17 @@ dependencies:
     final outPath = '${tmp.path}/out.$ext';
     final r = await Process.run(
       'dart',
-      ['run', 'bin/sbom_generator.dart', '-f', fmt, ...extra, '-o', outPath],
+      [
+        'run',
+        'bin/sbom_generator.dart',
+        '--lang',
+        'fr',
+        '-f',
+        fmt,
+        ...extra,
+        '-o',
+        outPath
+      ],
       workingDirectory: Directory.current.path,
     );
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
@@ -109,8 +121,8 @@ dependencies:
   test('--supplier : repli appliqué aux composants sans éditeur', () async {
     final f = File('${tmp.path}/pubspec.lock')..writeAsStringSync(lock);
 
-    final cdx = await _gen(
-        'cyclonedx', ['--input', f.path, '--supplier', 'ACME Corp']);
+    final cdx =
+        await _gen('cyclonedx', ['--input', f.path, '--supplier', 'ACME Corp']);
     for (final c in (cdx['components'] as List).cast<Map<String, dynamic>>()) {
       expect((c['supplier'] as Map)['name'], 'ACME Corp');
       expect(c['publisher'], 'ACME Corp');

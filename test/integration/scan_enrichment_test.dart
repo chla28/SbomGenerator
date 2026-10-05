@@ -49,8 +49,19 @@ void main() {
     final sbom = File('${tmp.path}/sbom.cdx.json')..writeAsStringSync(_sbom);
     return Process.run(
       'dart',
-      ['run', 'bin/sbom_generator.dart', 'scan', '--sbom', sbom.path,
-        '--scanner', 'grype', '--no-enrich', ...extra],
+      [
+        'run',
+        'bin/sbom_generator.dart',
+        '--lang',
+        'fr',
+        'scan',
+        '--sbom',
+        sbom.path,
+        '--scanner',
+        'grype',
+        '--no-enrich',
+        ...extra
+      ],
       environment: {'NO_COLOR': '1'},
     );
   }

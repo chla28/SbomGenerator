@@ -53,10 +53,18 @@ void main() {
 
     test('Package.hashes → tableau hashes multi-algorithme', () {
       final pkg = WheelPackage(
-        name: 'lib', version: '1.0', license: '', url: '', summary: '',
-        vendor: '', arch: 'any', sourceRef: '',
+        name: 'lib',
+        version: '1.0',
+        license: '',
+        url: '',
+        summary: '',
+        vendor: '',
+        arch: 'any',
+        sourceRef: '',
         hashes: [PackageHash('SHA-512', 'b' * 128)],
-        requires: const [], provides: const ['lib'], packageType: 'npm',
+        requires: const [],
+        provides: const ['lib'],
+        packageType: 'npm',
       );
       expect(component([pkg])['hashes'], [
         {'alg': 'SHA-512', 'content': 'b' * 128},
@@ -69,9 +77,18 @@ void main() {
 
     test('hash d\'en-tête RPM → propriété rpm:header-sha256, pas hashes', () {
       final pkg = RpmPackage(
-        name: 'bash', version: '5.2', release: '1.el9', arch: 'x86_64',
-        epoch: '(none)', license: 'GPL', vendor: '', url: '', buildTime: '',
-        summary: '', requires: const [], provides: const [],
+        name: 'bash',
+        version: '5.2',
+        release: '1.el9',
+        arch: 'x86_64',
+        epoch: '(none)',
+        license: 'GPL',
+        vendor: '',
+        url: '',
+        buildTime: '',
+        summary: '',
+        requires: const [],
+        provides: const [],
         headerSha256: 'f' * 64,
       );
       final c = component([pkg]);
@@ -101,8 +118,7 @@ void main() {
 
     test('rejette une specVersion inconnue', () {
       expect(
-        () => generator.generate([_rpm(name: 'bash')], [],
-            specVersion: '2.0'),
+        () => generator.generate([_rpm(name: 'bash')], [], specVersion: '2.0'),
         throwsArgumentError,
       );
     });
@@ -116,23 +132,24 @@ void main() {
 
     test('rejette un citationSource en 1.6', () {
       expect(
-        () => generator.generate([_rpm(name: 'bash')], [],
-            citationSource: 'syft'),
+        () => generator
+            .generate([_rpm(name: 'bash')], [], citationSource: 'syft'),
         throwsArgumentError,
       );
     });
 
     test('rejette une carte de brevets non vide en 1.6', () {
       expect(
-        () => generator.generate([_rpm(name: 'bash')], [],
-            patentsByPackageName: {
-              'bash': const PatentAssertion(
-                patentNumber: 'US1234567',
-                jurisdiction: 'US',
-                legalStatus: 'granted',
-                assertionType: 'license',
-              ),
-            }),
+        () => generator.generate([
+          _rpm(name: 'bash')
+        ], [], patentsByPackageName: {
+          'bash': const PatentAssertion(
+            patentNumber: 'US1234567',
+            jurisdiction: 'US',
+            legalStatus: 'granted',
+            assertionType: 'license',
+          ),
+        }),
         throwsArgumentError,
       );
     });
@@ -188,8 +205,12 @@ void main() {
       final tools = ((sbom['metadata'] as Map)['tools'] as Map)['components']
           as List<dynamic>;
       final byName = {for (final t in tools) t['name']: t};
-      expect(byName['flutter'],
-          {'type': 'platform', 'bom-ref': 'tool-sdk-flutter', 'name': 'flutter', 'version': '3.47.2'});
+      expect(byName['flutter'], {
+        'type': 'platform',
+        'bom-ref': 'tool-sdk-flutter',
+        'name': 'flutter',
+        'version': '3.47.2'
+      });
       expect(byName['dart']!['version'], '3.9.0');
       // sbom_generator lui-même reste présent
       expect(byName.containsKey('sbom_generator'), isTrue);
@@ -204,7 +225,8 @@ void main() {
   });
 
   group('CycloneDxGenerator.generate — patentAssertions (1.7)', () {
-    test('ajoute patentAssertions au composant correspondant + definitions.patents',
+    test(
+        'ajoute patentAssertions au composant correspondant + definitions.patents',
         () {
       final sbom = generator.generate(
         [_rpm(name: 'bash'), _rpm(name: 'coreutils')],
@@ -297,13 +319,17 @@ void main() {
 
   group('CycloneDxGenerator.generate — champ group (composants Maven)', () {
     test('sépare groupId/artifactId dans les champs group/name dédiés', () {
-      final sbom = generator.generate(
-          [_maven(groupId: 'com.sun.xml.fastinfoset', artifactId: 'FastInfoset', version: '1.2.15')],
-          []);
+      final sbom = generator.generate([
+        _maven(
+            groupId: 'com.sun.xml.fastinfoset',
+            artifactId: 'FastInfoset',
+            version: '1.2.15')
+      ], []);
       final component = (sbom['components'] as List).single as Map;
       expect(component['group'], 'com.sun.xml.fastinfoset');
       expect(component['name'], 'FastInfoset');
-      expect(component['purl'], 'pkg:maven/com.sun.xml.fastinfoset/FastInfoset@1.2.15');
+      expect(component['purl'],
+          'pkg:maven/com.sun.xml.fastinfoset/FastInfoset@1.2.15');
     });
 
     test('n\'ajoute pas de champ group pour les paquets non-Maven', () {
@@ -324,8 +350,7 @@ void main() {
 
     test('ajoute un composant type: operating-system en tête de components',
         () {
-      final sbom =
-          generator.generate([_rpm(name: 'bash')], [], osInfo: os);
+      final sbom = generator.generate([_rpm(name: 'bash')], [], osInfo: os);
       final components = sbom['components'] as List;
 
       // En tête : c'est ce composant que Trivy (et les autres consommateurs)
@@ -340,7 +365,8 @@ void main() {
       expect(components.length, 2); // OS + 1 paquet
     });
 
-    test('aucun composant OS quand osInfo est absent (image sans base OS '
+    test(
+        'aucun composant OS quand osInfo est absent (image sans base OS '
         'détectée, ex. scratch, ou source non-image)', () {
       final sbom = generator.generate([_rpm(name: 'bash')], []);
       final components = sbom['components'] as List;

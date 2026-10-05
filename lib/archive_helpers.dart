@@ -6,6 +6,7 @@ library;
 
 import 'dart:io';
 import 'models.dart';
+import 'i18n.dart';
 
 // ── Data class ───────────────────────────────────────────────────────────────
 
@@ -30,8 +31,9 @@ WheelPackage? buildGenericArchivePackage(
   final info = parseArchiveFilename(path);
 
   if (info.name.isEmpty) {
-    stderr.writeln(
-        'Warning: cannot determine package name from "$path"; skipping.');
+    stderr.writeln('Warning: ' +
+        tr('nom de paquet indéterminable à partir de "$path" ; ignoré.',
+            'cannot determine package name from "$path"; skipping.'));
     return null;
   }
 
@@ -39,8 +41,11 @@ WheelPackage? buildGenericArchivePackage(
       licenseContent.isNotEmpty ? identifyArchiveLicense(licenseContent) : '';
 
   if (licenseFile.isNotEmpty && license.isEmpty) {
-    stderr.writeln('Info: found "$licenseFile" in "${path.split('/').last}" '
-        'but could not identify a known SPDX license.');
+    stderr.writeln(tr(
+        'Info : "$licenseFile" trouvé dans "${path.split('/').last}" '
+            'mais aucune licence SPDX connue n\'a pu être identifiée.',
+        'Info: found "$licenseFile" in "${path.split('/').last}" '
+            'but could not identify a known SPDX license.'));
   }
 
   return WheelPackage(
