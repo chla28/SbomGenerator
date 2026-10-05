@@ -550,3 +550,11 @@ sbom_generator/
 | npm / yarn (`package-lock.json`, `yarn.lock`, or OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
 | Dart/Flutter (`pubspec.lock` / `pubspec.yaml`) | `pkg:pub/<name>@<ver>` | `pkg:pub/provider@6.1.2` |
 | Container image (`--image`) | PURL provided by the analysis tool (syft/trivy/cdxgen), or rebuilt from the detected ecosystem | `pkg:apk/alpine/musl@1.2.4-r2` |
+
+## License
+
+Distributed under the **GNU LGPL v3** (`LGPL-3.0-only`) — see [`LICENSE`](LICENSE); the LGPL v3 supplements the GPL v3, whose text is in [`COPYING`](COPYING). The GUI (`gui/`) is covered by the same license.
+
+## Security
+
+To report a vulnerability, see [`SECURITY.md`](SECURITY.md).

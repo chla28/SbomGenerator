@@ -80,3 +80,7 @@ Run automatically by `../.github/workflows/ci.yml` on every push/pull request to
 
 - `doc/user.en.adoc` — complete user guide: each tab, each option, typical usage scenarios, troubleshooting (French: `doc/user.adoc`).
 - `doc/developer.en.adoc` — technical architecture: role of each file, data flows, conventions, known pitfalls (French: `doc/developer.adoc`).
+
+## License
+
+GNU LGPL v3 (`LGPL-3.0-only`) — see `../LICENSE` and `../COPYING`.

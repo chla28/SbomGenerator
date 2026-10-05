@@ -80,3 +80,7 @@ Exécuté automatiquement par `../.github/workflows/ci.yml` sur chaque push/pull
 
 - `doc/user.adoc` — guide utilisateur complet : chaque onglet, chaque option, scénarios d'utilisation typiques, dépannage (anglais : `doc/user.en.adoc`).
 - `doc/developer.adoc` — architecture technique : rôle de chaque fichier, flux de données, conventions, pièges connus (anglais : `doc/developer.en.adoc`).
+
+## Licence
+
+GNU LGPL v3 (`LGPL-3.0-only`) — voir `../LICENSE` et `../COPYING`.
