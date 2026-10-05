@@ -2407,6 +2407,14 @@ du CLI eux-mêmes sont traduits par `lib/i18n.dart` (`tr(fr, en)`,
 État : toute l'interface, les rapports exportés (AsciiDoc/PDF/HTML), l'aide
 en ligne et les messages du CLI existent dans les deux langues.
 
+*Copies d'écran du README* : `test/screenshot_test.dart` (lancé seulement si
+`SCREENSHOT_DIR` est défini) rend hors affichage la configuration/progression,
+le tableau de bord, un scan Grype, le rapport CRA et la qualité SBOM, en
+français (`doc/screenshots/`) et en anglais (`doc/screenshots/en/`), avec les
+polices système. Les onglets CRA et Qualité exécutent le vrai CLI et `sbomqs` :
+`PATH=<dossier du CLI>:$PATH SCREENSHOT_DIR=../doc/screenshots flutter test
+test/screenshot_test.dart` (depuis `gui/`).
+
 == Concepts Flutter pour débutant
 
 [[sec-flutter-stateful]]

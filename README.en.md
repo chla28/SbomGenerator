@@ -136,6 +136,23 @@ supplier). In SPDX 2.3, an unknown supplier is written `NOASSERTION`
 
 ---
 
+## Graphical interface
+
+A Linux interface (Flutter, [`gui/`](gui/README.en.md) folder) drives the CLI and the scanners without a command line; it is available in French and English.
+
+![Configuration and progress of an SBOM generation](doc/screenshots/en/generation.png)
+
+![Vulnerability dashboard: Grype, OSV-Scanner and Trivy compared](doc/screenshots/en/tableau-de-bord.png)
+
+![Grype scan: CVE table, CISA KEV / EPSS / PoC signals and CVE detail](doc/screenshots/en/scan-grype.png)
+
+![Cyber Resilience Act compliance report](doc/screenshots/en/cra.png)
+
+![SBOM quality assessment (sbomqs)](doc/screenshots/en/qualite.png)
+
+These screenshots (English in `doc/screenshots/en/`, French in `doc/screenshots/`) are regenerated with
+`PATH=<CLI folder>:$PATH SCREENSHOT_DIR=../doc/screenshots flutter test test/screenshot_test.dart` (from `gui/`); the CRA and Quality tabs run the real CLI and `sbomqs`.
+
 ## Installation
 
 ### Prerequisites

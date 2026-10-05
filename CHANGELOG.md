@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Copies d'écran de la GUI dans les README** (`doc/screenshots/`, français et anglais), générées par `gui/test/screenshot_test.dart` ; sections « Interface graphique » des README.
+
+### Fixed
+- **GUI — export AsciiDoc/PDF et CSV des onglets de scan** : le rapport (titres, résumé, tableaux, couches, note de filtre de date) et le champ « oui » des colonnes KEV/PoC restaient en français ; ils suivent maintenant la langue de l'interface. Libellé du champ « Fichier SBOM » d'OSV-Scanner et police des boutons du filtre de date corrigés.
+
 ## [1.6.2] - 2026-10-05
 
 ### Added

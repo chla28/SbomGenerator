@@ -138,6 +138,23 @@ qu'omis.
 
 ---
 
+## Interface graphique
+
+Une interface Linux (Flutter, dossier [`gui/`](gui/README.md)) pilote le CLI et les scanners sans ligne de commande ; elle existe en français et en anglais.
+
+![Configuration et progression d'une génération de SBOM](doc/screenshots/generation.png)
+
+![Tableau de bord des vulnérabilités : Grype, OSV-Scanner et Trivy comparés](doc/screenshots/tableau-de-bord.png)
+
+![Scan Grype : tableau des CVE, signaux CISA KEV / EPSS / PoC et détail d'une CVE](doc/screenshots/scan-grype.png)
+
+![Rapport de conformité Cyber Resilience Act](doc/screenshots/cra.png)
+
+![Évaluation de la qualité d'un SBOM (sbomqs)](doc/screenshots/qualite.png)
+
+Ces captures (français dans `doc/screenshots/`, anglais dans `doc/screenshots/en/`) se régénèrent avec
+`PATH=<dossier du CLI>:$PATH SCREENSHOT_DIR=../doc/screenshots flutter test test/screenshot_test.dart` (depuis `gui/`) ; les onglets CRA et Qualité lancent le vrai CLI et `sbomqs`.
+
 ## Installation
 
 ### Prérequis

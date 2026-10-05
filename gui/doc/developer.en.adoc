@@ -2377,6 +2377,14 @@ GUI forwards its language through `SettingsService.cliEnvironment`.
 State: the whole interface, the exported reports (AsciiDoc/PDF/HTML), the
 online help and the CLI messages are available in both languages.
 
+*README screenshots*: `test/screenshot_test.dart` (run only when
+`SCREENSHOT_DIR` is set) renders off-screen the configuration/progress, the
+dashboard, a Grype scan, the CRA report and the SBOM quality, in French
+(`doc/screenshots/`) and English (`doc/screenshots/en/`), with the system
+fonts. The CRA and Quality tabs run the real CLI and `sbomqs`:
+`PATH=<CLI folder>:$PATH SCREENSHOT_DIR=../doc/screenshots flutter test
+test/screenshot_test.dart` (from `gui/`).
+
 == Flutter concepts for beginners
 
 [[sec-flutter-stateful]]
