@@ -918,6 +918,14 @@ rien écrire hors du répertoire temporaire.
 #          sbom.spdx.json + sbom.spdx.json.bundle
 ----
 
+=== CycloneDX 1.7 avec classification TLP et déclarations de brevets
+
+[source,bash]
+----
+./sbom_generator -i packages.txt --cyclonedx-version 1.7 --tlp AMBER \
+  --patent-map patents.txt -o sbom.cdx.json
+----
+
 === Rapport CSV
 
 [source,bash]

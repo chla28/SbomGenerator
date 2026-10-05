@@ -3407,6 +3407,14 @@ case 'mon-format':
 . Dans chaque générateur : ajouter `else if (pkg is MonPackage) { … }` pour les
   propriétés spécifiques
 
+=== Ajouter un nouveau scanner à la sous-commande `scan`
+
+. Ajouter son nom à `_validScanners` (`bin/sbom_generator.dart`).
+. Créer `_runMonScanner()` : lance le binaire via `Process.run()`, parse le
+  JSON en `List<Map<String, dynamic>>` normalisé
+  (`{id, severity, package, published, modified}`).
+. Ajouter un `case` dans `_runScanner()`.
+
 == Pièges et décisions de conception
 
 === 1. Séparateur `|` dans SUMMARY (RPM)
