@@ -3,6 +3,11 @@
 🇫🇷 **Français** · 🇬🇧 [English](README.en.md)
 
 Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn, Maven, Dart/Flutter), d'archives génériques, ou d'une **image de conteneur** (OCI).
+L'outil est également capable de lancer des scans de CVE sur des SBOM, des conteneurs, etc., en utilisant Grype, Trivy et OSV-Scanner.
+
+IMPORTANT: Je suis développeur dans le monde de la cybersécurité et j'ai besoin de nombreux outils pour mon travail.
+Jusqu'à maintenant j'utilisais du Bash et Python3 pour "agréger" ces différents outils et il y a quelques mois maintenant, je me suis tourné vers l'IA pour voir si l'IA pouvait m'aider pour me simplifier la vie.
+Ce repo github (ainsi que plusieurs autres) est le résultat de cette recherche. La totalité des fichiers présents dans cette arborescence est générée par Claude Code en suivant mes directives et mes nombreuses interactions avec l'IA. Le résultat est impressionnant pour moi car je peux désormais faire des choses très vite.
 
 ---
 
