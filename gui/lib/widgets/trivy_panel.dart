@@ -53,25 +53,25 @@ class TrivyVuln implements VulnRow {
   /// Reconstruit cette entrée avec un nombre d'occurrences fusionnées — voir
   /// [dedupeVulns].
   TrivyVuln withOccurrenceCount(int count) => TrivyVuln(
-        id: id,
-        severity: severity,
-        packageName: packageName,
-        installedVersion: installedVersion,
-        fixedVersion: fixedVersion,
-        title: title,
-        publishedDate: publishedDate,
-        modifiedDate: modifiedDate,
-        occurrenceCount: count,
-      );
+    id: id,
+    severity: severity,
+    packageName: packageName,
+    installedVersion: installedVersion,
+    fixedVersion: fixedVersion,
+    title: title,
+    publishedDate: publishedDate,
+    modifiedDate: modifiedDate,
+    occurrenceCount: count,
+  );
 
   static int _order(String s) => switch (s.toLowerCase()) {
-        'critical' => 0,
-        'high' => 1,
-        'medium' => 2,
-        'low' => 3,
-        'unknown' => 4,
-        _ => 5,
-      };
+    'critical' => 0,
+    'high' => 1,
+    'medium' => 2,
+    'low' => 3,
+    'unknown' => 4,
+    _ => 5,
+  };
 
   static DateTime? _parseDate(String? s) {
     if (s == null || s.isEmpty) return null;
@@ -90,16 +90,18 @@ class TrivyVuln implements VulnRow {
     final data = jsonDecode(raw) as Map<String, dynamic>;
     for (final result in (data['Results'] as List? ?? [])) {
       for (final v in ((result['Vulnerabilities'] as List?) ?? [])) {
-        vulns.add(TrivyVuln(
-          id: v['VulnerabilityID'] as String? ?? '',
-          severity: v['Severity'] as String? ?? 'Unknown',
-          packageName: v['PkgName'] as String? ?? '',
-          installedVersion: v['InstalledVersion'] as String? ?? '',
-          fixedVersion: v['FixedVersion'] as String? ?? '',
-          title: v['Title'] as String? ?? '',
-          publishedDate: _parseDate(v['PublishedDate'] as String?),
-          modifiedDate: _parseDate(v['LastModifiedDate'] as String?),
-        ));
+        vulns.add(
+          TrivyVuln(
+            id: v['VulnerabilityID'] as String? ?? '',
+            severity: v['Severity'] as String? ?? 'Unknown',
+            packageName: v['PkgName'] as String? ?? '',
+            installedVersion: v['InstalledVersion'] as String? ?? '',
+            fixedVersion: v['FixedVersion'] as String? ?? '',
+            title: v['Title'] as String? ?? '',
+            publishedDate: _parseDate(v['PublishedDate'] as String?),
+            modifiedDate: _parseDate(v['LastModifiedDate'] as String?),
+          ),
+        );
       }
     }
     vulns.sort((a, b) => _order(a.severity).compareTo(_order(b.severity)));
@@ -186,10 +188,12 @@ class _TrivyPanelState extends State<TrivyPanel>
     super.initState();
     _resultTabs = TabController(length: 2, vsync: this);
     _updateAutoFile();
-    SettingsService.loadScanEnrichOnline()
-        .then((v) { if (mounted) setState(() => _enrichOnline = v); });
-    VersionService.checkTrivy()
-        .then((info) { if (mounted) setState(() => _versionInfo = info); });
+    SettingsService.loadScanEnrichOnline().then((v) {
+      if (mounted) setState(() => _enrichOnline = v);
+    });
+    VersionService.checkTrivy().then((info) {
+      if (mounted) setState(() => _versionInfo = info);
+    });
   }
 
   /// Enrichit les CVE trouvées avec les signaux d'exploitabilité. Trivy
@@ -239,8 +243,9 @@ class _TrivyPanelState extends State<TrivyPanel>
   void _updateAutoFile() {
     if (widget.outputFiles.isEmpty || _fileCtrl.text.isNotEmpty) return;
     final preferred = widget.outputFiles
-        .where((f) =>
-            f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'))
+        .where(
+          (f) => f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'),
+        )
         .firstOrNull;
     final fallback = widget.outputFiles
         .where((f) => f.path.endsWith('.json') || f.path.endsWith('.jsonld'))
@@ -253,7 +258,7 @@ class _TrivyPanelState extends State<TrivyPanel>
     final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
-      dialogTitle: 'Choisir un fichier SBOM',
+      dialogTitle: context.l10n.scanPickSbomTitle,
     );
     if (r?.files.single.path != null) {
       setState(() => _fileCtrl.text = r!.files.single.path!);
@@ -264,7 +269,7 @@ class _TrivyPanelState extends State<TrivyPanel>
     final r = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['tar', 'gz', 'tgz'],
-      dialogTitle: 'Choisir une archive image (docker save / OCI)',
+      dialogTitle: context.l10n.scanPickImageArchiveTitle,
     );
     if (r?.files.single.path != null) {
       setState(() => _imageCtrl.text = r!.files.single.path!);
@@ -273,7 +278,7 @@ class _TrivyPanelState extends State<TrivyPanel>
 
   Future<void> _pickImageOciDir() async {
     final dir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Choisir un répertoire OCI layout',
+      dialogTitle: context.l10n.scanSourcePickOciDir,
     );
     if (dir != null) setState(() => _imageCtrl.text = dir);
   }
@@ -282,7 +287,7 @@ class _TrivyPanelState extends State<TrivyPanel>
     final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['yaml', 'yml'] : null,
-      dialogTitle: 'Choisir trivy.yaml',
+      dialogTitle: context.l10n.trivyPickConfigTitle,
     );
     if (r?.files.single.path != null) {
       setState(() => _configCtrl.text = r!.files.single.path!);
@@ -307,23 +312,26 @@ class _TrivyPanelState extends State<TrivyPanel>
     final useImage = _sourceKind == ScanSourceKind.image;
     final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
     if (target.isEmpty) {
-      setState(() => _error = useImage
-          ? 'Veuillez indiquer une image à analyser.'
-          : 'Veuillez sélectionner un fichier SBOM.');
+      setState(
+        () => _error = useImage
+            ? context.l10n.scanSourceMissingImage
+            : context.l10n.scanSourceMissingSbom,
+      );
       return;
     }
     // Une référence de registre (nginx:latest) n'est pas un chemin local :
     // on ne vérifie l'existence que pour un fichier SBOM ou une archive/
     // répertoire OCI local explicitement désigné comme tel (préfixe ./, /, ~).
-    if ((!useImage || looksLikeLocalPath(target)) && !File(target).existsSync()
-        && !Directory(target).existsSync()) {
-      setState(() => _error = 'Fichier introuvable : $target');
+    if ((!useImage || looksLikeLocalPath(target)) &&
+        !File(target).existsSync() &&
+        !Directory(target).existsSync()) {
+      setState(() => _error = context.l10n.commonFileNotFound(target));
       return;
     }
 
     final targetLabel = useImage
-        ? 'image « $target »'
-        : 'SBOM ${target.split(RegExp(r'[/\\]')).last}';
+        ? context.l10n.scanTargetImage(target)
+        : context.l10n.scanTargetSbom(target.split(RegExp(r'[/\\]')).last);
     _launch(target, useImage, targetLabel);
   }
 
@@ -406,7 +414,10 @@ class _TrivyPanelState extends State<TrivyPanel>
               // être détectée à plusieurs emplacements (ex. jar autonome +
               // copie shadée dans un autre jar) avec la même sévérité/CVE/
               // paquet/version — voir dedupeVulns dans vuln_shared.dart.
-              final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
+              final vulns = dedupeVulns(
+                raw,
+                (v, n) => v.withOccurrenceCount(n),
+              );
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
@@ -419,7 +430,7 @@ class _TrivyPanelState extends State<TrivyPanel>
                 _jsonOutput = jsonOutput;
                 _vulns = [];
                 _parseFailed = true;
-                _error = 'Sortie trivy illisible (JSON invalide) : $e';
+                _error = context.l10n.scanUnreadableOutput('trivy', '$e');
               });
             }
           case TrivyDoneEvent(:final exitCode, :final stderr):
@@ -443,76 +454,88 @@ class _TrivyPanelState extends State<TrivyPanel>
   }
 
   Stream<TrivyEvent> _start(String target, bool useImage) => _runner.run(
-        target: target,
-        useImage: useImage,
-        platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
-            ? _imagePlatformCtrl.text.trim()
-            : null,
-        severities: _selectedSeverities.toList(),
-        ignoreUnfixed: _ignoreUnfixed,
-        skipDbUpdate: _skipDbUpdate,
-        configFile:
-            _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-      );
+    target: target,
+    useImage: useImage,
+    platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
+        ? _imagePlatformCtrl.text.trim()
+        : null,
+    severities: _selectedSeverities.toList(),
+    ignoreUnfixed: _ignoreUnfixed,
+    skipDbUpdate: _skipDbUpdate,
+    configFile: _configCtrl.text.trim().isEmpty
+        ? null
+        : _configCtrl.text.trim(),
+  );
 
   /// Commandes du popup « CLI Commande » pour le paramétrage courant.
   List<CliCommandSection> _cliSections() {
     if (_sourceKind != ScanSourceKind.package) return _scanCliSections();
     final raw = _packageCtrl.text.trim();
-    final pkg = raw.isNotEmpty ? raw : '<paquet>';
+    final pkg = raw.isNotEmpty ? raw : context.l10n.cliPlaceholderPackage;
     final l10n = context.l10n;
     return [
       CliCommandSection(
         l10n.cliCommandPackagePrepare,
-        shellCommand(SettingsService.cliBinary,
-            PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom)),
+        shellCommand(
+          SettingsService.cliBinary,
+          PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom),
+        ),
         note: l10n.cliCommandPackageNote,
       ),
       ..._scanCliSections(sbomTarget: cliPackageSbom, packageTarget: pkg),
     ];
   }
 
-  List<CliCommandSection> _scanCliSections(
-      {String? sbomTarget, String? packageTarget}) {
+  List<CliCommandSection> _scanCliSections({
+    String? sbomTarget,
+    String? packageTarget,
+  }) {
     final useImage = _sourceKind == ScanSourceKind.image;
-    final raw = sbomTarget ??
-        (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
-    final target =
-        raw.isNotEmpty ? raw : (useImage ? '<image>' : '<sbom.cdx.json>');
-    final config =
-        _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim();
+    final raw =
+        sbomTarget ?? (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    final target = raw.isNotEmpty
+        ? raw
+        : (useImage ? '<image>' : '<sbom.cdx.json>');
+    final config = _configCtrl.text.trim().isEmpty
+        ? null
+        : _configCtrl.text.trim();
     final platform = _imagePlatformCtrl.text.trim();
     List<String> args(String t, bool image) => TrivyRunner.buildArgs(
-          target: t,
-          useImage: image,
-          platform: image && platform.isNotEmpty ? platform : null,
-          severities: _selectedSeverities.toList(),
-          ignoreUnfixed: _ignoreUnfixed,
-          skipDbUpdate: _skipDbUpdate,
-          configFile: config,
-        );
+      target: t,
+      useImage: image,
+      platform: image && platform.isNotEmpty ? platform : null,
+      severities: _selectedSeverities.toList(),
+      ignoreUnfixed: _ignoreUnfixed,
+      skipDbUpdate: _skipDbUpdate,
+      configFile: config,
+    );
     final layered = useImage && _layerSettings.enabled;
     return [
       layered
           ? CliCommandSection(
-              'Commandes exécutées par l\'onglet (analyse par couche)',
+              context.l10n.cliCommandExecutedLayered,
               layeredCliSequence(
                 cliBinary: SettingsService.cliBinary,
-                prepareArgs: LayerScanService.prepareArgs(target,
-                    _layerSettings.layerMode, '$cliLayerDir/image.cdx.json'),
+                prepareArgs: LayerScanService.prepareArgs(
+                  target,
+                  _layerSettings.layerMode,
+                  '$cliLayerDir/image.cdx.json',
+                ),
                 layers: _layerSettings,
                 imageScan: shellCommand('trivy', args(target, true)),
-                layerScan: (f) =>
-                    shellCommand('trivy', args('LAYER_SBOM', false))
-                        .replaceAll('LAYER_SBOM', f),
+                layerScan: (f) => shellCommand(
+                  'trivy',
+                  args('LAYER_SBOM', false),
+                ).replaceAll('LAYER_SBOM', f),
               ),
-              note: 'Le jeu de SBOM par couche est généré dans un répertoire '
-                  'temporaire (ici $cliLayerDir).',
+              note: context.l10n.cliCommandLayerDirNote(cliLayerDir),
             )
-          : CliCommandSection('Commande exécutée par l\'onglet',
-              shellCommand('trivy', args(target, useImage))),
+          : CliCommandSection(
+              context.l10n.cliCommandExecuted,
+              shellCommand('trivy', args(target, useImage)),
+            ),
       CliCommandSection(
-        'Équivalent sbom-generator scan',
+        context.l10n.cliCommandEquivalent,
         shellCommand(
           SettingsService.cliBinary,
           sbomGeneratorScanArgs(
@@ -530,8 +553,9 @@ class _TrivyPanelState extends State<TrivyPanel>
           if (_selectedSeverities.isNotEmpty) '--severity',
           if (_ignoreUnfixed) '--ignore-unfixed',
           if (_skipDbUpdate) '--skip-db-update',
-          if (config != null) 'fichier de config',
-          if (useImage && platform.isNotEmpty) 'plateforme',
+          if (config != null) context.l10n.trivyCliConfigNote,
+          if (useImage && platform.isNotEmpty)
+            context.l10n.trivyCliPlatformNote,
         ]),
       ),
     ];
@@ -580,11 +604,13 @@ class _TrivyPanelState extends State<TrivyPanel>
       if (r.json.isNotEmpty) {
         try {
           vulns = dedupeVulns(
-              TrivyVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
+            TrivyVuln.fromJson(r.json),
+            (v, n) => v.withOccurrenceCount(n),
+          );
           error = null;
         } catch (e) {
           parseFailed = true;
-          error = 'Sortie trivy illisible (JSON invalide) : $e';
+          error = context.l10n.scanUnreadableOutput('trivy', '$e');
         }
       }
       setState(() {
@@ -671,8 +697,7 @@ class _TrivyPanelState extends State<TrivyPanel>
           const LinearProgressIndicator(minHeight: 3),
           ScanStatusLine(_status!),
         ],
-        if (hasDone && _error != null)
-          ErrorBanner(message: _error!),
+        if (hasDone && _error != null) ErrorBanner(message: _error!),
         if (hasDone && _error == null)
           _TrivyBanner(vulns: _vulns, exitCode: _exitCode!),
         if (hasDone)
@@ -680,14 +705,14 @@ class _TrivyPanelState extends State<TrivyPanel>
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: TabBar(
               controller: _resultTabs,
-              tabs: const [
+              tabs: [
                 Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.security_outlined, size: 16),
-                      SizedBox(width: 6),
-                      Text('Vulnérabilités'),
+                      const Icon(Icons.security_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.scanTabVulns),
                     ],
                   ),
                 ),
@@ -695,9 +720,9 @@ class _TrivyPanelState extends State<TrivyPanel>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.data_object, size: 16),
-                      SizedBox(width: 6),
-                      Text('JSON brut'),
+                      const Icon(Icons.data_object, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.scanTabRawJson),
                     ],
                   ),
                 ),
@@ -712,16 +737,20 @@ class _TrivyPanelState extends State<TrivyPanel>
                 VulnTableView<TrivyVuln>(
                   vulns: _vulns,
                   parseFailed: _parseFailed,
-                  parseFailedMessage:
-                      'Sortie trivy illisible : voir le message d\'erreur ci-dessus',
+                  parseFailedMessage: context.l10n.scanUnreadableOutputShort(
+                    'Trivy',
+                  ),
                   severityOrder: const [
-                    'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'
+                    'CRITICAL',
+                    'HIGH',
+                    'MEDIUM',
+                    'LOW',
+                    'UNKNOWN',
                   ],
                   toolName: 'Trivy',
-                  csvDialogTitle: 'Exporter les vulnérabilités Trivy',
+                  csvDialogTitle: context.l10n.scanExportCsvDialog('Trivy'),
                   csvFileName: 'trivy_vulns.csv',
-                  csvHeader:
-                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Titre,Emplacements',
+                  csvHeader: context.l10n.vulnCsvHeaderTrivy,
                   csvRow: (v) => [
                     v.severity,
                     v.id,
@@ -846,13 +875,15 @@ class _ConfigSection extends StatelessWidget {
           // ── Version ──
           Row(
             children: [
-              Text('trivy',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.5))),
+              Text(
+                'trivy',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
               const SizedBox(width: 8),
               ToolVersionBadge(info: versionInfo),
             ],
@@ -871,14 +902,16 @@ class _ConfigSection extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: fileCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Fichier SBOM',
-                      hintText: 'chemin/vers/sbom.cdx.json',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.scanSourceSbom,
+                      hintText: context.l10n.commonSbomFileHint,
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 13),
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -910,19 +943,16 @@ class _ConfigSection extends StatelessWidget {
               child: TextField(
                 controller: imagePlatformCtrl,
                 enabled: !isRunning,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   label: HelpLabel(
-                    'Plateforme',
-                    'Optionnel. Force la plateforme cible sur une\n'
-                        'image multi-architecture, ex. linux/arm64.\n'
-                        'Laisser vide = détection automatique par trivy.',
+                    context.l10n.commonPlatform,
+                    context.l10n.scanPlatformHelp('trivy'),
                   ),
-                  hintText: 'linux/amd64, linux/arm64…',
-                  border: OutlineInputBorder(),
+                  hintText: context.l10n.commonPlatformHint,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
-                style:
-                    const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               ),
             ),
             const SizedBox(height: 6),
@@ -937,15 +967,13 @@ class _ConfigSection extends StatelessWidget {
           // --severity checkboxes
           Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('--severity (laisser vide = tout)',
-                  style: TextStyle(fontSize: 11, color: Colors.grey)),
-              SizedBox(width: 4),
-              HelpIcon(
-                'Filtres de sévérité. Seules les vulnérabilités\n'
-                'dont la sévérité est cochée sont affichées.\n'
-                'Laisser vide = toutes les sévérités.',
+            children: [
+              Text(
+                context.l10n.trivySeverityLabel,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
+              const SizedBox(width: 4),
+              HelpIcon(context.l10n.trivySeverityHelp),
             ],
           ),
           const SizedBox(height: 4),
@@ -961,8 +989,9 @@ class _ConfigSection extends StatelessWidget {
                         ? Colors.white
                         : _sevColors[s],
                   ),
-                  backgroundColor:
-                      (_sevColors[s] ?? Colors.grey).withValues(alpha: 0.1),
+                  backgroundColor: (_sevColors[s] ?? Colors.grey).withValues(
+                    alpha: 0.1,
+                  ),
                   selectedColor: _sevColors[s] ?? Colors.grey,
                   selected: selectedSeverities.contains(s),
                   onSelected: (v) => onSeverityChanged(s, v),
@@ -980,15 +1009,13 @@ class _ConfigSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Text('--ignore-unfixed',
-                          style: TextStyle(fontSize: 12)),
-                      SizedBox(width: 4),
-                      HelpIcon(
-                        'Masque les vulnérabilités sans version\n'
-                        'corrigée disponible. Réduit le bruit\n'
-                        'dans les résultats.',
+                    children: [
+                      const Text(
+                        '--ignore-unfixed',
+                        style: TextStyle(fontSize: 12),
                       ),
+                      const SizedBox(width: 4),
+                      HelpIcon(context.l10n.trivyIgnoreUnfixedHelp),
                     ],
                   ),
                   value: ignoreUnfixed,
@@ -1002,15 +1029,13 @@ class _ConfigSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Text('--skip-db-update',
-                          style: TextStyle(fontSize: 12)),
-                      SizedBox(width: 4),
-                      HelpIcon(
-                        'Utilise la base CVE locale sans la mettre\n'
-                        'à jour. Accélère les analyses successives,\n'
-                        'mais la base peut être obsolète.',
+                    children: [
+                      const Text(
+                        '--skip-db-update',
+                        style: TextStyle(fontSize: 12),
                       ),
+                      const SizedBox(width: 4),
+                      HelpIcon(context.l10n.trivySkipDbHelp),
                     ],
                   ),
                   value: skipDbUpdate,
@@ -1027,19 +1052,16 @@ class _ConfigSection extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: configCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     label: HelpLabel(
-                      'trivy.yaml (optionnel)',
-                      'Fichier de configuration Trivy (YAML).\n'
-                          'Permet de définir des politiques, des\n'
-                          'exceptions ou des sources personnalisées.',
+                      context.l10n.trivyConfigLabel,
+                      context.l10n.trivyConfigHelp,
                     ),
-                    hintText: '/chemin/vers/trivy.yaml',
-                    border: OutlineInputBorder(),
+                    hintText: context.l10n.trivyConfigHint,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  style:
-                      const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1064,7 +1086,7 @@ class _ConfigSection extends StatelessWidget {
                         ),
                         onPressed: onStop,
                         icon: const Icon(Icons.stop),
-                        label: const Text('Arrêter'),
+                        label: Text(context.l10n.commonStopAction),
                       )
                     : FilledButton.icon(
                         style: FilledButton.styleFrom(
@@ -1072,7 +1094,7 @@ class _ConfigSection extends StatelessWidget {
                         ),
                         onPressed: onRun,
                         icon: const Icon(Icons.search),
-                        label: const Text('Analyser avec trivy'),
+                        label: Text(context.l10n.scanRunButton('trivy')),
                       ),
               ),
               const SizedBox(width: 8),
@@ -1104,9 +1126,11 @@ class _TrivyBanner extends StatelessWidget {
             const Icon(Icons.verified_user, color: Colors.green, size: 18),
             const SizedBox(width: 8),
             Text(
-              'Aucune vulnérabilité trouvée',
+              context.l10n.scanNoVulnFound,
               style: TextStyle(
-                  color: Colors.green[800], fontWeight: FontWeight.w500),
+                color: Colors.green[800],
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -1134,7 +1158,7 @@ class _TrivyBanner extends StatelessWidget {
           const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
           const SizedBox(width: 8),
           Text(
-            '${vulns.length} vulnérabilité${vulns.length > 1 ? 's' : ''} — ',
+            context.l10n.scanBannerCount(vulns.length),
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           Expanded(
@@ -1166,35 +1190,41 @@ class _EmptyHint extends StatelessWidget {
   const _EmptyHint();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.shield_outlined, size: 56, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('Sélectionnez un SBOM ou une image et lancez l\'analyse',
-                style: TextStyle(color: Colors.grey, fontSize: 15)),
-            SizedBox(height: 4),
-            Text('trivy — Aqua Security vulnerability scanner',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ],
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.shield_outlined, size: 56, color: Colors.grey),
+        const SizedBox(height: 12),
+        Text(
+          context.l10n.scanHintPick,
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
-      );
+        const SizedBox(height: 4),
+        const Text(
+          'trivy — Aqua Security vulnerability scanner',
+          style: TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RunningHint extends StatelessWidget {
   const _RunningHint();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Analyse trivy en cours…',
-                style: TextStyle(color: Colors.grey, fontSize: 15)),
-          ],
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text(
+          context.l10n.scanRunningTool('trivy'),
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
-      );
+      ],
+    ),
+  );
 }

@@ -9,8 +9,7 @@ final _distroCveRe = RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$');
 /// Retire un préfixe d'avis de distribution (`DEBIAN-CVE-2026-1` → `CVE-2026-1`)
 /// pour dédupliquer entre scanners — même logique que le CLI et le tableau de
 /// bord.
-String normalizeCveId(String id) =>
-    _distroCveRe.firstMatch(id)?.group(1) ?? id;
+String normalizeCveId(String id) => _distroCveRe.firstMatch(id)?.group(1) ?? id;
 
 /// Enrichit [ids] (identifiants normalisés) avec les signaux d'exploitabilité.
 /// [online] `false` → cache local seulement, aucune requête réseau.
@@ -21,8 +20,10 @@ Future<Map<String, ExploitInfo>> enrichCves(
 }) {
   final cves = ids.where((c) => c.isNotEmpty).toSet();
   if (cves.isEmpty) return Future.value(const {});
-  return VulnEnricher(enableNetwork: online, enablePoc: online)
-      .enrich(cves, seed: seed);
+  return VulnEnricher(
+    enableNetwork: online,
+    enablePoc: online,
+  ).enrich(cves, seed: seed);
 }
 
 // ── Extraction des graines depuis le JSON brut des scanners ────────────────
@@ -50,8 +51,8 @@ Map<String, CveSeed> seedsFromGrypeJson(String raw) {
         kevDueDate: _tryDate(kev0?['dueDate'] as String?),
         kevRansomware:
             ((kev0?['knownRansomwareCampaignUse'] as String?) ?? '')
-                    .toLowerCase() ==
-                'known',
+                .toLowerCase() ==
+            'known',
         epssScore: (epss0?['epss'] as num?)?.toDouble(),
         epssPercentile: (epss0?['percentile'] as num?)?.toDouble(),
       );
@@ -74,8 +75,10 @@ Map<String, CveSeed> seedsFromOsvJson(String raw) {
             in ((pkg as Map)['vulnerabilities'] as List? ?? const [])) {
           final m = v as Map<String, dynamic>;
           final aliases = (m['aliases'] as List?)?.cast<String>() ?? const [];
-          final cve = aliases.firstWhere((a) => a.startsWith('CVE-'),
-              orElse: () => m['id'] as String? ?? '');
+          final cve = aliases.firstWhere(
+            (a) => a.startsWith('CVE-'),
+            orElse: () => m['id'] as String? ?? '',
+          );
           final id = normalizeCveId(cve);
           if (id.isEmpty) continue;
           final vector = _cvssVectorFromList(m['severity'] as List?);
@@ -124,7 +127,10 @@ Map<String, CveSeed> seedsFromTrivyJson(String raw) {
   }
   if (best == null) return (null, null);
   final metrics = best['metrics'] as Map<String, dynamic>? ?? const {};
-  return (best['vector'] as String?, (metrics['baseScore'] as num?)?.toDouble());
+  return (
+    best['vector'] as String?,
+    (metrics['baseScore'] as num?)?.toDouble(),
+  );
 }
 
 String? _cvssVectorFromList(List? severity) {
@@ -141,14 +147,15 @@ String? _cvssVectorFromList(List? severity) {
 (String?, double?) _cvssFromTrivy(Map? cvss) {
   if (cvss == null || cvss.isEmpty) return (null, null);
   Map<String, dynamic>? src = (cvss['nvd'] as Map?)?.cast<String, dynamic>();
-  src ??= cvss.values
-      .whereType<Map>()
-      .cast<Map<String, dynamic>>()
-      .firstWhere((m) => (m['V3Vector'] as String?)?.isNotEmpty == true,
-          orElse: () => const {});
+  src ??= cvss.values.whereType<Map>().cast<Map<String, dynamic>>().firstWhere(
+    (m) => (m['V3Vector'] as String?)?.isNotEmpty == true,
+    orElse: () => const {},
+  );
   final vec = src['V3Vector'] as String?;
-  return ((vec?.isNotEmpty == true) ? vec : null,
-      (src['V3Score'] as num?)?.toDouble());
+  return (
+    (vec?.isNotEmpty == true) ? vec : null,
+    (src['V3Score'] as num?)?.toDouble(),
+  );
 }
 
 DateTime? _tryDate(String? s) {

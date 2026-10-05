@@ -20,24 +20,27 @@ void main() {
     });
   });
 
-  testWidgets('ScanSourceToggle bascule entre les deux sources',
-      (tester) async {
+  testWidgets('ScanSourceToggle bascule entre les deux sources', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     var selected = ScanSourceKind.sbomFile;
-    await tester.pumpWidget(StatefulBuilder(
-      builder: (context, setState) => MaterialApp(
-        home: Scaffold(
-          body: ScanSourceToggle(
-            kind: selected,
-            enabled: true,
-            onChanged: (k) => setState(() => selected = k),
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) => MaterialApp(
+          home: Scaffold(
+            body: ScanSourceToggle(
+              kind: selected,
+              enabled: true,
+              onChanged: (k) => setState(() => selected = k),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(selected, ScanSourceKind.sbomFile);
@@ -47,30 +50,32 @@ void main() {
   });
 
   testWidgets(
-      'GrypePanel : basculer sur "Image de conteneur" remplace le champ '
-      'fichier SBOM par le champ image', (tester) async {
-    tester.view.physicalSize = const Size(1400, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    'GrypePanel : basculer sur "Image de conteneur" remplace le champ '
+    'fichier SBOM par le champ image',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: GrypePanel(outputFiles: <OutputFile>[]),
-      ),
-    ));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: GrypePanel(outputFiles: <OutputFile>[])),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('chemin/vers/sbom.cdx.json'), findsOneWidget);
+      expect(find.text('chemin/vers/sbom.cdx.json'), findsOneWidget);
 
-    await tester.tap(find.text('Image de conteneur'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Image de conteneur'));
+      await tester.pumpAndSettle();
 
-    // Le champ "Fichier SBOM" (identifié par son hint) a disparu au profit
-    // du champ image + plateforme.
-    expect(find.text('chemin/vers/sbom.cdx.json'), findsNothing);
-    expect(find.textContaining('nginx:latest'), findsOneWidget);
-    expect(find.text('Plateforme'), findsOneWidget);
-  });
+      // Le champ "Fichier SBOM" (identifié par son hint) a disparu au profit
+      // du champ image + plateforme.
+      expect(find.text('chemin/vers/sbom.cdx.json'), findsNothing);
+      expect(find.textContaining('nginx:latest'), findsOneWidget);
+      expect(find.text('Plateforme'), findsOneWidget);
+    },
+  );
 
   testWidgets('GrypePanel : « CLI Commande » reflète le paramétrage de '
       'l\'onglet', (tester) async {
@@ -78,57 +83,70 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: GrypePanel(outputFiles: <OutputFile>[]),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: GrypePanel(outputFiles: <OutputFile>[])),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(
-        find.widgetWithText(TextField, 'Fichier SBOM'), '/tmp/mon sbom.cdx.json');
+      find.widgetWithText(TextField, 'Fichier SBOM'),
+      '/tmp/mon sbom.cdx.json',
+    );
     await tester.tap(find.text('CLI Commande'));
     await tester.pumpAndSettle();
 
     expect(find.text('Commande exécutée par l\'onglet'), findsOneWidget);
     expect(
-        find.textContaining("grype '/tmp/mon sbom.cdx.json' --output json"),
-        findsOneWidget);
+      find.textContaining("grype '/tmp/mon sbom.cdx.json' --output json"),
+      findsOneWidget,
+    );
     expect(
-        find.textContaining(
-            "scan --sbom '/tmp/mon sbom.cdx.json' --scanner grype"),
-        findsOneWidget);
+      find.textContaining(
+        "scan --sbom '/tmp/mon sbom.cdx.json' --scanner grype",
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
-      'GrypePanel : source « Paquet / archive » → champ paquet, profondeur et '
-      'commandes CLI', (tester) async {
-    tester.view.physicalSize = const Size(1400, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+    'GrypePanel : source « Paquet / archive » → champ paquet, profondeur et '
+    'commandes CLI',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: GrypePanel(outputFiles: <OutputFile>[]),
-      ),
-    ));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: GrypePanel(outputFiles: <OutputFile>[])),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Paquet / archive'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Paquet / archive'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('chemin/vers/sbom.cdx.json'), findsNothing);
-    expect(find.text('Profondeur'), findsOneWidget);
+      expect(find.text('chemin/vers/sbom.cdx.json'), findsNothing);
+      expect(find.text('Profondeur'), findsOneWidget);
 
-    await tester.enterText(
-        find.widgetWithText(TextField, 'Paquet / archive'), '/tmp/app.rpm');
-    await tester.tap(find.text('CLI Commande'));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Paquet / archive'),
+        '/tmp/app.rpm',
+      );
+      await tester.tap(find.text('CLI Commande'));
+      await tester.pumpAndSettle();
 
-    // Génération du SBOM puis scan du SBOM produit.
-    expect(find.textContaining('--input /tmp/app.rpm --depth 0'),
-        findsOneWidget);
-    expect(find.textContaining('scan --package /tmp/app.rpm --scanner grype'),
-        findsOneWidget);
-  });
+      // Génération du SBOM puis scan du SBOM produit.
+      expect(
+        find.textContaining('--input /tmp/app.rpm --depth 0'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('scan --package /tmp/app.rpm --scanner grype'),
+        findsOneWidget,
+      );
+    },
+  );
 }

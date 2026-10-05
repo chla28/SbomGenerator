@@ -53,16 +53,16 @@ class OsvVuln implements VulnRow {
   /// Reconstruit cette entrée avec un nombre d'occurrences fusionnées — voir
   /// [dedupeVulns].
   OsvVuln withOccurrenceCount(int count) => OsvVuln(
-        id: id,
-        severity: severity,
-        packageName: packageName,
-        installedVersion: installedVersion,
-        fixedVersion: fixedVersion,
-        ecosystem: ecosystem,
-        publishedDate: publishedDate,
-        modifiedDate: modifiedDate,
-        occurrenceCount: count,
-      );
+    id: id,
+    severity: severity,
+    packageName: packageName,
+    installedVersion: installedVersion,
+    fixedVersion: fixedVersion,
+    ecosystem: ecosystem,
+    publishedDate: publishedDate,
+    modifiedDate: modifiedDate,
+    occurrenceCount: count,
+  );
 
   static String _normalizeSeverity(String s) {
     return switch (s.toLowerCase()) {
@@ -75,12 +75,12 @@ class OsvVuln implements VulnRow {
   }
 
   static int _order(String s) => switch (s.toLowerCase()) {
-        'critical' => 0,
-        'high' => 1,
-        'medium' => 2,
-        'low' => 3,
-        _ => 4,
-      };
+    'critical' => 0,
+    'high' => 1,
+    'medium' => 2,
+    'low' => 3,
+    _ => 4,
+  };
 
   static String _cvssToSeverity(String? score) {
     final v = double.tryParse(score ?? '') ?? 0.0;
@@ -158,16 +158,18 @@ class OsvVuln implements VulnRow {
             if (fixedVersion.isNotEmpty) break;
           }
 
-          vulns.add(OsvVuln(
-            id: displayId,
-            severity: severity,
-            packageName: name,
-            installedVersion: version,
-            fixedVersion: fixedVersion,
-            ecosystem: ecosystem,
-            publishedDate: _parseDate(v['published'] as String?),
-            modifiedDate: _parseDate(v['modified'] as String?),
-          ));
+          vulns.add(
+            OsvVuln(
+              id: displayId,
+              severity: severity,
+              packageName: name,
+              installedVersion: version,
+              fixedVersion: fixedVersion,
+              ecosystem: ecosystem,
+              publishedDate: _parseDate(v['published'] as String?),
+              modifiedDate: _parseDate(v['modified'] as String?),
+            ),
+          );
         }
       }
     }
@@ -249,10 +251,12 @@ class _OsvPanelState extends State<OsvPanel>
     super.initState();
     _resultTabs = TabController(length: 2, vsync: this);
     _updateAutoFile();
-    SettingsService.loadScanEnrichOnline()
-        .then((v) { if (mounted) setState(() => _enrichOnline = v); });
-    VersionService.checkOsv()
-        .then((info) { if (mounted) setState(() => _versionInfo = info); });
+    SettingsService.loadScanEnrichOnline().then((v) {
+      if (mounted) setState(() => _enrichOnline = v);
+    });
+    VersionService.checkOsv().then((info) {
+      if (mounted) setState(() => _versionInfo = info);
+    });
   }
 
   /// Enrichit les CVE trouvées avec les signaux d'exploitabilité. OSV n'expose
@@ -300,8 +304,9 @@ class _OsvPanelState extends State<OsvPanel>
   void _updateAutoFile() {
     if (widget.outputFiles.isEmpty || _fileCtrl.text.isNotEmpty) return;
     final preferred = widget.outputFiles
-        .where((f) =>
-            f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'))
+        .where(
+          (f) => f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'),
+        )
         .firstOrNull;
     final fallback = widget.outputFiles
         .where((f) => f.path.endsWith('.json') || f.path.endsWith('.jsonld'))
@@ -314,7 +319,7 @@ class _OsvPanelState extends State<OsvPanel>
     final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
-      dialogTitle: 'Choisir un fichier SBOM',
+      dialogTitle: context.l10n.scanPickSbomTitle,
     );
     if (r?.files.single.path != null) {
       setState(() => _fileCtrl.text = r!.files.single.path!);
@@ -325,7 +330,7 @@ class _OsvPanelState extends State<OsvPanel>
     final r = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['tar', 'gz', 'tgz'],
-      dialogTitle: 'Choisir une archive image (docker save / OCI)',
+      dialogTitle: context.l10n.scanPickImageArchiveTitle,
     );
     if (r?.files.single.path != null) {
       setState(() => _imageCtrl.text = r!.files.single.path!);
@@ -336,7 +341,7 @@ class _OsvPanelState extends State<OsvPanel>
     final r = await FilePicker.pickFiles(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['toml'] : null,
-      dialogTitle: 'Choisir osv-scanner.toml',
+      dialogTitle: context.l10n.osvPickConfigTitle,
     );
     if (r?.files.single.path != null) {
       setState(() => _configCtrl.text = r!.files.single.path!);
@@ -361,9 +366,11 @@ class _OsvPanelState extends State<OsvPanel>
     final useImage = _sourceKind == ScanSourceKind.image;
     final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
     if (target.isEmpty) {
-      setState(() => _error = useImage
-          ? 'Veuillez indiquer une image à analyser.'
-          : 'Veuillez sélectionner un fichier SBOM.');
+      setState(
+        () => _error = useImage
+            ? context.l10n.scanSourceMissingImage
+            : context.l10n.scanSourceMissingSbom,
+      );
       return;
     }
     // Une référence de registre (nginx:latest) n'est pas un chemin local :
@@ -371,13 +378,13 @@ class _OsvPanelState extends State<OsvPanel>
     // locale explicitement désignée comme telle (préfixe ./, /, ~).
     if ((!useImage || looksLikeLocalPath(target)) &&
         !File(target).existsSync()) {
-      setState(() => _error = 'Fichier introuvable : $target');
+      setState(() => _error = context.l10n.commonFileNotFound(target));
       return;
     }
 
     final targetLabel = useImage
-        ? 'image « $target »'
-        : 'SBOM ${target.split(RegExp(r'[/\\]')).last}';
+        ? context.l10n.scanTargetImage(target)
+        : context.l10n.scanTargetSbom(target.split(RegExp(r'[/\\]')).last);
     _launch(target, useImage, targetLabel);
   }
 
@@ -460,7 +467,10 @@ class _OsvPanelState extends State<OsvPanel>
               // être détectée à plusieurs emplacements (ex. jar autonome +
               // copie shadée dans un autre jar) avec la même sévérité/CVE/
               // paquet/version — voir dedupeVulns dans vuln_shared.dart.
-              final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
+              final vulns = dedupeVulns(
+                raw,
+                (v, n) => v.withOccurrenceCount(n),
+              );
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
@@ -473,7 +483,7 @@ class _OsvPanelState extends State<OsvPanel>
                 _jsonOutput = jsonOutput;
                 _vulns = [];
                 _parseFailed = true;
-                _error = 'Sortie osv-scanner illisible (JSON invalide) : $e';
+                _error = context.l10n.scanUnreadableOutput('OSV-Scanner', '$e');
               });
             }
           case OsvDoneEvent(:final exitCode, :final stderr):
@@ -497,62 +507,74 @@ class _OsvPanelState extends State<OsvPanel>
   }
 
   Stream<OsvEvent> _start(String target, bool useImage) => _runner.run(
-        target: target,
-        useImage: useImage,
-        configFile:
-            _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-      );
+    target: target,
+    useImage: useImage,
+    configFile: _configCtrl.text.trim().isEmpty
+        ? null
+        : _configCtrl.text.trim(),
+  );
 
   /// Commandes du popup « CLI Commande » pour le paramétrage courant.
   List<CliCommandSection> _cliSections() {
     if (_sourceKind != ScanSourceKind.package) return _scanCliSections();
     final raw = _packageCtrl.text.trim();
-    final pkg = raw.isNotEmpty ? raw : '<paquet>';
+    final pkg = raw.isNotEmpty ? raw : context.l10n.cliPlaceholderPackage;
     final l10n = context.l10n;
     return [
       CliCommandSection(
         l10n.cliCommandPackagePrepare,
-        shellCommand(SettingsService.cliBinary,
-            PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom)),
+        shellCommand(
+          SettingsService.cliBinary,
+          PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom),
+        ),
         note: l10n.cliCommandPackageNote,
       ),
       ..._scanCliSections(sbomTarget: cliPackageSbom, packageTarget: pkg),
     ];
   }
 
-  List<CliCommandSection> _scanCliSections(
-      {String? sbomTarget, String? packageTarget}) {
+  List<CliCommandSection> _scanCliSections({
+    String? sbomTarget,
+    String? packageTarget,
+  }) {
     final useImage = _sourceKind == ScanSourceKind.image;
-    final raw = sbomTarget ??
-        (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
-    final target =
-        raw.isNotEmpty ? raw : (useImage ? '<image.tar>' : '<sbom.cdx.json>');
-    final config =
-        _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim();
+    final raw =
+        sbomTarget ?? (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    final target = raw.isNotEmpty
+        ? raw
+        : (useImage ? '<image.tar>' : '<sbom.cdx.json>');
+    final config = _configCtrl.text.trim().isEmpty
+        ? null
+        : _configCtrl.text.trim();
     List<String> args(String t, bool image) =>
         OsvRunner.buildArgs(target: t, useImage: image, configFile: config);
     final layered = useImage && _layerSettings.enabled;
     return [
       layered
           ? CliCommandSection(
-              'Commandes exécutées par l\'onglet (analyse par couche)',
+              context.l10n.cliCommandExecutedLayered,
               layeredCliSequence(
                 cliBinary: SettingsService.cliBinary,
-                prepareArgs: LayerScanService.prepareArgs(target,
-                    _layerSettings.layerMode, '$cliLayerDir/image.cdx.json'),
+                prepareArgs: LayerScanService.prepareArgs(
+                  target,
+                  _layerSettings.layerMode,
+                  '$cliLayerDir/image.cdx.json',
+                ),
                 layers: _layerSettings,
                 imageScan: shellCommand('osv-scanner', args(target, true)),
-                layerScan: (f) =>
-                    shellCommand('osv-scanner', args('LAYER_SBOM', false))
-                        .replaceAll('LAYER_SBOM', f),
+                layerScan: (f) => shellCommand(
+                  'osv-scanner',
+                  args('LAYER_SBOM', false),
+                ).replaceAll('LAYER_SBOM', f),
               ),
-              note: 'Le jeu de SBOM par couche est généré dans un répertoire '
-                  'temporaire (ici $cliLayerDir).',
+              note: context.l10n.cliCommandLayerDirNote(cliLayerDir),
             )
-          : CliCommandSection('Commande exécutée par l\'onglet',
-              shellCommand('osv-scanner', args(target, useImage))),
+          : CliCommandSection(
+              context.l10n.cliCommandExecuted,
+              shellCommand('osv-scanner', args(target, useImage)),
+            ),
       CliCommandSection(
-        'Équivalent sbom-generator scan',
+        context.l10n.cliCommandEquivalent,
         shellCommand(
           SettingsService.cliBinary,
           sbomGeneratorScanArgs(
@@ -566,8 +588,9 @@ class _OsvPanelState extends State<OsvPanel>
             enrichOnline: _enrichOnline,
           ),
         ),
-        note: equivalentScanNote(context.l10n,
-            useImage, [if (config != null) 'fichier de config (toml)']),
+        note: equivalentScanNote(context.l10n, useImage, [
+          if (config != null) context.l10n.osvCliConfigNote,
+        ]),
       ),
     ];
   }
@@ -615,11 +638,13 @@ class _OsvPanelState extends State<OsvPanel>
       if (r.json.isNotEmpty) {
         try {
           vulns = dedupeVulns(
-              OsvVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
+            OsvVuln.fromJson(r.json),
+            (v, n) => v.withOccurrenceCount(n),
+          );
           error = null;
         } catch (e) {
           parseFailed = true;
-          error = 'Sortie osv-scanner illisible (JSON invalide) : $e';
+          error = context.l10n.scanUnreadableOutput('OSV-Scanner', '$e');
         }
       }
       setState(() {
@@ -690,8 +715,7 @@ class _OsvPanelState extends State<OsvPanel>
           const LinearProgressIndicator(minHeight: 3),
           ScanStatusLine(_status!),
         ],
-        if (hasDone && _error != null)
-          ErrorBanner(message: _error!),
+        if (hasDone && _error != null) ErrorBanner(message: _error!),
         if (hasDone && _error == null)
           _OsvBanner(vulns: _vulns, exitCode: _exitCode!),
         if (hasDone)
@@ -699,14 +723,14 @@ class _OsvPanelState extends State<OsvPanel>
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: TabBar(
               controller: _resultTabs,
-              tabs: const [
+              tabs: [
                 Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.security_outlined, size: 16),
-                      SizedBox(width: 6),
-                      Text('Vulnérabilités'),
+                      const Icon(Icons.security_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.scanTabVulns),
                     ],
                   ),
                 ),
@@ -714,9 +738,9 @@ class _OsvPanelState extends State<OsvPanel>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.data_object, size: 16),
-                      SizedBox(width: 6),
-                      Text('JSON brut'),
+                      const Icon(Icons.data_object, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.scanTabRawJson),
                     ],
                   ),
                 ),
@@ -731,16 +755,22 @@ class _OsvPanelState extends State<OsvPanel>
                 VulnTableView<OsvVuln>(
                   vulns: _vulns,
                   parseFailed: _parseFailed,
-                  parseFailedMessage:
-                      'Sortie osv-scanner illisible : voir le message d\'erreur ci-dessus',
+                  parseFailedMessage: context.l10n.scanUnreadableOutputShort(
+                    'OSV-Scanner',
+                  ),
                   severityOrder: const [
-                    'Critical', 'High', 'Medium', 'Low', 'Unknown'
+                    'Critical',
+                    'High',
+                    'Medium',
+                    'Low',
+                    'Unknown',
                   ],
                   toolName: 'OSV-Scanner',
-                  csvDialogTitle: 'Exporter les vulnérabilités OSV-Scanner',
+                  csvDialogTitle: context.l10n.scanExportCsvDialog(
+                    'OSV-Scanner',
+                  ),
                   csvFileName: 'osv_vulns.csv',
-                  csvHeader:
-                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Écosystème,Emplacements',
+                  csvHeader: context.l10n.vulnCsvHeaderOsv,
                   csvRow: (v) => [
                     v.severity,
                     v.id,
@@ -750,7 +780,7 @@ class _OsvPanelState extends State<OsvPanel>
                     v.ecosystem,
                     '${v.occurrenceCount}',
                   ],
-                  extraColumnHeader: 'ÉCOSYSTÈME',
+                  extraColumnHeader: context.l10n.osvEcosystemColumn,
                   extraOf: (v) => v.ecosystem,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
@@ -840,13 +870,15 @@ class _ConfigSection extends StatelessWidget {
           // ── Version ──
           Row(
             children: [
-              Text('osv-scanner',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.5))),
+              Text(
+                'osv-scanner',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
               const SizedBox(width: 8),
               ToolVersionBadge(info: versionInfo),
             ],
@@ -871,8 +903,10 @@ class _ConfigSection extends StatelessWidget {
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -911,15 +945,13 @@ class _ConfigSection extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: configCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     label: HelpLabel(
-                      'Fichier de config (optionnel)',
-                      'Fichier TOML de configuration osv-scanner.\n'
-                          'Permet d\'exclure des CVE, de configurer\n'
-                          'des sources ou de définir des politiques.',
+                      context.l10n.osvConfigLabel,
+                      context.l10n.osvConfigHelp,
                     ),
                     hintText: 'osv-scanner.toml',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
@@ -946,7 +978,7 @@ class _ConfigSection extends StatelessWidget {
                         ),
                         onPressed: onStop,
                         icon: const Icon(Icons.stop),
-                        label: const Text('Arrêter'),
+                        label: Text(context.l10n.commonStopAction),
                       )
                     : FilledButton.icon(
                         style: FilledButton.styleFrom(
@@ -954,7 +986,7 @@ class _ConfigSection extends StatelessWidget {
                         ),
                         onPressed: onRun,
                         icon: const Icon(Icons.search),
-                        label: const Text('Analyser avec osv-scanner'),
+                        label: Text(context.l10n.scanRunButton('osv-scanner')),
                       ),
               ),
               const SizedBox(width: 8),
@@ -986,9 +1018,11 @@ class _OsvBanner extends StatelessWidget {
             const Icon(Icons.verified_user, color: Colors.green, size: 18),
             const SizedBox(width: 8),
             Text(
-              'Aucune vulnérabilité trouvée',
+              context.l10n.scanNoVulnFound,
               style: TextStyle(
-                  color: Colors.green[800], fontWeight: FontWeight.w500),
+                color: Colors.green[800],
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -1009,7 +1043,7 @@ class _OsvBanner extends StatelessWidget {
           const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
           const SizedBox(width: 8),
           Text(
-            '${vulns.length} vulnérabilité${vulns.length > 1 ? 's' : ''} — ',
+            context.l10n.scanBannerCount(vulns.length),
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           Expanded(
@@ -1035,12 +1069,12 @@ class _OsvBanner extends StatelessWidget {
   }
 
   static Color _severityColor(String s) => switch (s.toLowerCase()) {
-        'critical' => const Color(0xFFB71C1C),
-        'high' => const Color(0xFFBF360C),
-        'medium' => const Color(0xFFE65100),
-        'low' => const Color(0xFF2E7D32),
-        _ => Colors.grey,
-      };
+    'critical' => const Color(0xFFB71C1C),
+    'high' => const Color(0xFFBF360C),
+    'medium' => const Color(0xFFE65100),
+    'low' => const Color(0xFF2E7D32),
+    _ => Colors.grey,
+  };
 }
 
 // ─── Hints ────────────────────────────────────────────────────────────────────
@@ -1049,35 +1083,41 @@ class _EmptyHint extends StatelessWidget {
   const _EmptyHint();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.plagiarism_outlined, size: 56, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('Sélectionnez un SBOM ou une image et lancez l\'analyse',
-                style: TextStyle(color: Colors.grey, fontSize: 15)),
-            SizedBox(height: 4),
-            Text('osv-scanner — Google Open Source Vulnerability Database',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ],
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.plagiarism_outlined, size: 56, color: Colors.grey),
+        const SizedBox(height: 12),
+        Text(
+          context.l10n.scanHintPick,
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
-      );
+        const SizedBox(height: 4),
+        const Text(
+          'osv-scanner — Google Open Source Vulnerability Database',
+          style: TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RunningHint extends StatelessWidget {
   const _RunningHint();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Analyse osv-scanner en cours…',
-                style: TextStyle(color: Colors.grey, fontSize: 15)),
-          ],
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text(
+          context.l10n.scanRunningTool('osv-scanner'),
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
-      );
+      ],
+    ),
+  );
 }

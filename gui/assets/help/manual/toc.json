@@ -210,7 +210,7 @@
     "_comparaison_inter_scanners": 12,
     "sec-cve-detail": 12,
     "sec-dashboard-couches": 12,
-    "_pourquoi_grype_osv_scanner_et_trivy_ne_trouvent_pas_les_mêmes_cve": 12,
+    "sec-pourquoi-ecarts-scanners": 12,
     "sec-dashboard-export": 12,
     "_onglet_arborescence_sbom": 13,
     "_sélection_du_fichier_sbom": 13,

@@ -1,0 +1,208 @@
+
+<h2 id="_requirements_installation">2. Requirements &amp; installation</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_requirements">2.1. Requirements</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Component</th>
+<th class="tableblock halign-left valign-top">Mandatory</th>
+<th class="tableblock halign-left valign-top">Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-generator</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Yes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM file generation</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>syft</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OCI image analysis (Configuration panel — default OCI tool)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>skopeo</code> / <code>trivy</code> / <code>cdxgen</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OCI image analysis — alternative backends (Configuration panel — OCI tool);
+<code>cdxgen</code> requires Node.js</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> (CVE analysis)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Trivy tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Grype tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>osv-scanner</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (OSV-Scanner tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Trivy tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>asciidoctor-pdf</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Automatic PDF conversion of the AsciiDoc report (SBOM, or vulnerability
+export from Grype/OSV-Scanner/Trivy)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM quality score (option in Configuration)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="sect3">
+<h4 id="_checking_that_the_tools_are_available">2.1.1. Checking that the tools are available</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator --version
+syft version
+grype version
+osv-scanner --version
+trivy --version
+cdxgen --version
+asciidoctor-pdf --version
+sbomqs version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_syft_optional">2.1.2. Installing syft (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Anchore script
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+syft version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_cdxgen_optional">2.1.3. Installing cdxgen (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Via npm (requires Node.js ≥ 20)
+npm install -g @cyclonedx/cdxgen
+
+# Check
+cdxgen --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_grype">2.1.4. Installing grype</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Anchore script
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+grype version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_osv_scanner_optional">2.1.5. Installing osv-scanner (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Google script
+curl -sSfL \
+  https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Or via Go (if Go is installed)
+go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+# Check
+osv-scanner --version</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<code>osv-scanner</code> must be reachable in the PATH when the GUI is launched.
+If the tool is installed through Go in <code>~/go/bin</code>, add that folder to the PATH
+of your graphical session (<code>~/.profile</code> or <code>~/.bash_profile</code>).
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_trivy_optional">2.1.6. Installing trivy (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Aqua Security script
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Or via the package manager (Fedora/RHEL)
+sudo rpm -ivh https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.rpm
+
+# Check
+trivy --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_asciidoctor_pdf_optional">2.1.7. Installing asciidoctor-pdf (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">gem install asciidoctor-pdf</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_sbomqs_optional">2.1.8. Installing sbomqs (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Download the latest release from GitHub
+# https://github.com/interlynk-io/sbomqs/releases
+curl -sSfL https://raw.githubusercontent.com/interlynk-io/sbomqs/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+sbomqs version</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_starting_the_interface">2.2. Starting the interface</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom_generator_gui</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If the binary is not in the PATH, run it directly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">/path/to/sbom_generator_gui</code></pre>
+</div>
+</div>
+</div>
+</div>

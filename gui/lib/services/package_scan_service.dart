@@ -33,18 +33,20 @@ class PackageScanService {
   /// Arguments de `sbom-generator` pour produire le SBOM CycloneDX de
   /// [packagePath] dans [outputPath] (profondeur [depth]).
   static List<String> prepareArgs(
-          String packagePath, String depth, String outputPath) =>
-      [
-        '--input',
-        packagePath,
-        '--depth',
-        depth,
-        '--no-nested-files',
-        '--format',
-        'cyclonedx',
-        '--output',
-        outputPath,
-      ];
+    String packagePath,
+    String depth,
+    String outputPath,
+  ) => [
+    '--input',
+    packagePath,
+    '--depth',
+    depth,
+    '--no-nested-files',
+    '--format',
+    'cyclonedx',
+    '--output',
+    outputPath,
+  ];
 
   /// Chemin du SBOM CycloneDX de [packagePath] à la profondeur [depth],
   /// généré au besoin dans un répertoire temporaire. Lève une
@@ -54,9 +56,12 @@ class PackageScanService {
     final key = '$packagePath\u0000$mtime\u0000$depth';
     final pending = _cache[key] ??= _generate(packagePath, depth);
     // Un échec n'est pas mis en cache : l'utilisateur peut relancer.
-    pending.then((_) {}, onError: (Object _) {
-      _cache.remove(key);
-    });
+    pending.then(
+      (_) {},
+      onError: (Object _) {
+        _cache.remove(key);
+      },
+    );
     return pending;
   }
 
@@ -64,7 +69,10 @@ class PackageScanService {
     final dir = await Directory.systemTemp.createTemp('sbomgen_gui_package_');
     final out = '${dir.path}/package.cdx.json';
     final p = await Process.start(
-        SettingsService.cliBinary, prepareArgs(packagePath, depth, out));
+      SettingsService.cliBinary,
+      prepareArgs(packagePath, depth, out),
+      environment: SettingsService.cliEnvironment,
+    );
     _process = p;
     final err = StringBuffer();
     await Future.wait([

@@ -3,19 +3,16 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../l10n/l10n.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
 
 class ToolVersionInfo {
-  final String? installed;  // ex. '0.87.0', null = non installé
-  final String? latest;     // ex. '0.88.1', null = vérification échouée
+  final String? installed; // ex. '0.87.0', null = non installé
+  final String? latest; // ex. '0.88.1', null = vérification échouée
   final String? releaseUrl; // URL de la page de release GitHub
 
-  const ToolVersionInfo({
-    this.installed,
-    this.latest,
-    this.releaseUrl,
-  });
+  const ToolVersionInfo({this.installed, this.latest, this.releaseUrl});
 
   bool get isInstalled => installed != null;
 
@@ -44,23 +41,20 @@ class ToolVersionInfo {
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 class VersionService {
-  static Future<ToolVersionInfo> checkGrype() => _check(
-        command: 'grype',
-        args: ['version'],
-        githubRepo: 'anchore/grype',
-      );
+  static Future<ToolVersionInfo> checkGrype() =>
+      _check(command: 'grype', args: ['version'], githubRepo: 'anchore/grype');
 
   static Future<ToolVersionInfo> checkOsv() => _check(
-        command: 'osv-scanner',
-        args: ['--version'],
-        githubRepo: 'google/osv-scanner',
-      );
+    command: 'osv-scanner',
+    args: ['--version'],
+    githubRepo: 'google/osv-scanner',
+  );
 
   static Future<ToolVersionInfo> checkTrivy() => _check(
-        command: 'trivy',
-        args: ['--version'],
-        githubRepo: 'aquasecurity/trivy',
-      );
+    command: 'trivy',
+    args: ['--version'],
+    githubRepo: 'aquasecurity/trivy',
+  );
 
   static Future<ToolVersionInfo> _check({
     required String command,
@@ -77,7 +71,9 @@ class VersionService {
   }
 
   static Future<String?> _installedVersion(
-      String command, List<String> args) async {
+    String command,
+    List<String> args,
+  ) async {
     try {
       final result = await Process.run(command, args);
       final output = '${result.stdout}${result.stderr}';
@@ -92,8 +88,9 @@ class VersionService {
       final client = HttpClient()
         ..connectionTimeout = const Duration(seconds: 5);
       final req = await client
-          .getUrl(Uri.parse(
-              'https://api.github.com/repos/$repo/releases/latest'))
+          .getUrl(
+            Uri.parse('https://api.github.com/repos/$repo/releases/latest'),
+          )
           .timeout(const Duration(seconds: 5));
       req.headers
         ..set('Accept', 'application/vnd.github+json')
@@ -129,13 +126,15 @@ class ToolVersionBadge extends StatelessWidget {
     if (v == null) return const SizedBox.shrink();
 
     if (!v.isInstalled) {
-      return const Row(
+      return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, size: 13, color: Colors.red),
-          SizedBox(width: 4),
-          Text('non installé',
-              style: TextStyle(fontSize: 11, color: Colors.red)),
+          const Icon(Icons.error_outline, size: 13, color: Colors.red),
+          const SizedBox(width: 4),
+          Text(
+            context.l10n.svcNotInstalled,
+            style: const TextStyle(fontSize: 11, color: Colors.red),
+          ),
         ],
       );
     }
@@ -144,22 +143,25 @@ class ToolVersionBadge extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_outline,
-              size: 13, color: Colors.green[600]),
+          Icon(Icons.check_circle_outline, size: 13, color: Colors.green[600]),
           const SizedBox(width: 4),
-          Text('v${v.installed}',
-              style: TextStyle(fontSize: 11, color: Colors.green[600])),
+          Text(
+            'v${v.installed}',
+            style: TextStyle(fontSize: 11, color: Colors.green[600]),
+          ),
         ],
       );
     }
 
     // Mise à jour disponible — lien cliquable vers la release GitHub
     return Tooltip(
-      message: 'Mise à jour disponible — cliquez pour accéder à la release',
+      message: context.l10n.svcUpdateAvailable,
       child: InkWell(
         onTap: v.releaseUrl != null
-            ? () => launchUrl(Uri.parse(v.releaseUrl!),
-                mode: LaunchMode.externalApplication)
+            ? () => launchUrl(
+                Uri.parse(v.releaseUrl!),
+                mode: LaunchMode.externalApplication,
+              )
             : null,
         borderRadius: BorderRadius.circular(4),
         child: Padding(

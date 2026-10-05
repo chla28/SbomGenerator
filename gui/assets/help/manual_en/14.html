@@ -1,0 +1,138 @@
+
+<h2 id="_sbom_viewer_tab">15. SBOM Viewer tab</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>SBOM Viewer</strong> tab lets you open and explore any CycloneDX or SPDX SBOM
+file from the file system, independently of a generation in progress.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  [📂 Open an SBOM file…]                                                │
+  │  CycloneDX 1.6  •  Keycloak 26.0.0  •  453 components                  │
+  │                                                                         │
+  │  [ Search name, version, license… ]  [ All types ▼ ]                   │
+  │                                                                         │
+  │  Name ▲         Version        Type    License           PURL           │
+  │  ─────────────────────────────────────────────────────────────────────  │
+  │  snakeyaml      2.0            java    Apache-2.0        pkg:maven/…    │
+  │  requests       2.31.0         pypi    Apache-2.0        pkg:pypi/…     │
+  │  bash           5.1.8-6.el9    rpm     GPL-3.0-or-later  pkg:rpm/…      │
+  │  ...                                                                    │
+  │                               ┌─ Details ────────────────────────────┐  │
+  │                               │  Name     snakeyaml                  │  │
+  │                               │  Version  2.0                        │  │
+  │                               │  Type     java                       │  │
+  │                               │  License  Apache-2.0                 │  │
+  │                               │  PURL     pkg:maven/org.yaml/…       │  │
+  │                               └──────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_opening_a_file">15.1. Opening a file</h3>
+<div class="paragraph">
+<p>Click <strong>📂 Open an SBOM file…</strong> to browse the file system. The picker offers the
+<code>.json</code>, <code>.jsonld</code>, <code>.cdx.json</code>, <code>.spdx.json</code> extensions.</p>
+</div>
+<div class="paragraph">
+<p>Supported formats:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>CycloneDX 1.6</strong> — <code>components[]</code> with the fields <code>name</code>, <code>version</code>, <code>type</code>,
+<code>purl</code>, <code>licenses</code>, <code>description</code></p>
+</li>
+<li>
+<p><strong>SPDX 2.x</strong> — <code>packages[]</code> with the fields <code>name</code>, <code>versionInfo</code>,
+<code>licenseConcluded</code>, <code>summary</code>, <code>externalRefs[purl]</code></p>
+</li>
+<li>
+<p><strong>SPDX 3.0 JSON-LD</strong> — <code>software:Package</code> elements of the <code>@graph</code>, with the
+fields <code>name</code>, <code>software:packageVersion</code>, <code>concludedLicense</code>/<code>declaredLicense</code>,
+<code>summary</code>, <code>externalIdentifier[purl]</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The information bar displays the detected format, the document name and the
+total number of loaded components.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_per_layer_navigation">15.2. Per-layer navigation</h3>
+<div class="paragraph">
+<p>For an SBOM produced with <code>--per-layer</code>, the layer banner described in
+<a href="#sec-nav-couches">Per-layer navigation (<code>--per-layer</code>)</a> is displayed under the header: it lets you switch from the
+global SBOM to each layer SBOM without going back to the file picker.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_filter_and_search">15.3. Filter and search</h3>
+<div class="paragraph">
+<p>The search field filters the components in real time on:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the package name</p>
+</li>
+<li>
+<p>the version</p>
+</li>
+<li>
+<p>the license</p>
+</li>
+<li>
+<p>the PURL</p>
+</li>
+<li>
+<p>the layer (SBOM produced with <code>--per-layer</code>)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The <strong>All types</strong> drop-down menu filters by ecosystem type (<code>rpm</code>, <code>java</code>,
+<code>pypi</code>, <code>npm</code>, <code>deb</code>, <code>apk</code>…). The two filters combine.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_components_table">15.4. Components table</h3>
+<div class="paragraph">
+<p>The table displays the columns <strong>Name</strong>, <strong>Version</strong>, <strong>Type</strong>, <strong>License</strong> and
+<strong>PURL</strong>, plus, for an SBOM produced with <code>--per-layer</code>, a <strong>Layer</strong> column
+(global SBOM: originating layer and layers that modified the component) or
+<strong>Change</strong> (layer SBOM: <code>added</code>, <code>modified (was &lt;version&gt;)</code>). Click a column
+header to sort in ascending order, click again to reverse the order.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_details_panel">15.5. Details panel</h3>
+<div class="paragraph">
+<p>Click a table row to display a details panel on the right, summarizing all the
+fields of the selected component: name, version, type, license, description
+and PURL.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_persistence">15.6. Persistence</h3>
+<div class="paragraph">
+<p>The opened file and the active filters are remembered when navigating between
+tabs. The file is not reloaded automatically if its content changes on disk.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The SBOM Viewer is a standalone tab — it can be used with any SBOM file,
+not only those generated by sbom_generator.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>

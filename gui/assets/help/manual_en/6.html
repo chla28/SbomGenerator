@@ -1,0 +1,75 @@
+
+<h2 id="_preview_tab_sbom_preview">7. Preview tab — SBOM preview</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>Preview (N)</strong> tab shows the raw content of the generated SBOM files
+directly in the interface, without having to open an external editor.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ File: [ sbom.cdx.json ▼ ]                         [📋] ─┐
+  │                                                            │
+  │  {                                                         │
+  │    "bomFormat": "CycloneDX",                               │
+  │    "specVersion": "1.6",                                   │
+  │    "version": 1,                                           │
+  │    "metadata": {                                           │
+  │      "component": {                                        │
+  │        "name": "My Application 2.1.0",                    │
+  │        ...                                                 │
+  └────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_file_selection">7.1. File selection</h3>
+<div class="paragraph">
+<p>A drop-down menu at the top of the tab lists all the non-PDF files generated
+in the current session. The first file is selected automatically at the end
+of the generation.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_rendering_behavior">7.2. Rendering behavior</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>The content is displayed in a monospace font on a dark background, like the terminal.</p>
+</li>
+<li>
+<p>JSON files (CycloneDX, SPDX) are displayed as is.</p>
+</li>
+<li>
+<p>Markdown and AsciiDoc files are also displayed as plain text.</p>
+</li>
+<li>
+<p>Beyond <strong>50,000 characters</strong>, the content is truncated with a note
+indicating the real total size.</p>
+</li>
+<li>
+<p>The text is selectable.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_copying_the_content">7.3. Copying the content</h3>
+<div class="paragraph">
+<p>The 📋 button at the top right copies the whole displayed content to the
+clipboard.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The Preview tab does not replace a dedicated tool for exploring large
+JSON files. For very large files, use the ↗ button (Results tab) to open the
+file in your system application.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>

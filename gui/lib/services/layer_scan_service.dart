@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/layer_scan.dart';
 import '../widgets/vuln_shared.dart' show VulnRow;
 import 'settings_service.dart';
+import '../l10n/l10n.dart';
 
 /// Sortie d'une exécution de scanner.
 typedef ScanOutput = ({String json, int exitCode, String? stderr});
@@ -56,33 +57,45 @@ class LayerScanService {
     final key = '$image\u0000$layerMode';
     final pending = _cache[key] ??= _generate(image, layerMode);
     // Un échec n'est pas mis en cache : l'utilisateur peut relancer.
-    pending.then((_) {}, onError: (Object _) {
-      _cache.remove(key);
-    });
+    pending.then(
+      (_) {},
+      onError: (Object _) {
+        _cache.remove(key);
+      },
+    );
     return pending;
   }
 
-  static Future<LayeredSbomSet> _generate(String image, String layerMode) async {
+  static Future<LayeredSbomSet> _generate(
+    String image,
+    String layerMode,
+  ) async {
     final dir = await Directory.systemTemp.createTemp('sbomgen_gui_layers_');
     final out = '${dir.path}/image.cdx.json';
     final p = await Process.start(
-        SettingsService.cliBinary, prepareArgs(image, layerMode, out));
+      SettingsService.cliBinary,
+      prepareArgs(image, layerMode, out),
+      environment: SettingsService.cliEnvironment,
+    );
     _process = p;
     final err = StringBuffer();
     await Future.wait([
       p.stdout.drain<void>(),
-      p.stderr.transform(const Utf8Decoder(allowMalformed: true)).forEach(err.write),
+      p.stderr
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .forEach(err.write),
     ]);
     final code = await p.exitCode;
     _process = null;
     if (code != 0 || !File(out).existsSync()) {
-      throw Exception('génération des SBOM de couche impossible '
-          '(code $code) : ${err.toString().trim()}');
+      throw Exception(
+        appL10n().svcLayerSbomFailed(code, err.toString().trim()),
+      );
     }
     final json = jsonDecode(await File(out).readAsString());
     final set = LayeredSbomSet.parse(out, json as Map<String, dynamic>);
     if (set.layers.isEmpty) {
-      throw Exception('aucune couche trouvée dans $image');
+      throw Exception(appL10n().svcNoLayer(image));
     }
     return set;
   }
@@ -90,14 +103,22 @@ class LayerScanService {
   /// Arguments de `sbom-generator` qui produisent le jeu de SBOM par couche
   /// de [image] dans [output] (partagés avec l'aperçu « CLI Commande »).
   static List<String> prepareArgs(
-          String image, String layerMode, String output) =>
-      [
-        '--image', image,
-        '--oci-tool', 'syft',
-        '--per-layer', '--layer-mode', layerMode,
-        '-f', 'cyclonedx',
-        '-o', output,
-      ];
+    String image,
+    String layerMode,
+    String output,
+  ) => [
+    '--image',
+    image,
+    '--oci-tool',
+    'syft',
+    '--per-layer',
+    '--layer-mode',
+    layerMode,
+    '-f',
+    'cyclonedx',
+    '-o',
+    output,
+  ];
 
   /// Interrompt la génération en cours, s'il y en a une.
   static void kill() {
@@ -161,7 +182,10 @@ class LayerScanService {
         exitCode: exitCode,
         stderr: errors.isEmpty ? null : errors.join('\n'),
         layerScan: LayerScanResult(
-            mode: LayerScanMode.each, layers: set.layers, layersByKey: byKey),
+          mode: LayerScanMode.each,
+          layers: set.layers,
+          layersByKey: byKey,
+        ),
       );
     }
 
@@ -174,7 +198,8 @@ class LayerScanService {
       for (final v in parse(out.json)) {
         final key = vulnLayerKey(v.id, v.packageName, v.installedVersion);
         final d = native[key];
-        final i = (d != null ? set.layerOfDigest(d) : null) ??
+        final i =
+            (d != null ? set.layerOfDigest(d) : null) ??
             set.layerOf(v.packageName, v.installedVersion);
         if (i == null) {
           unknown++;

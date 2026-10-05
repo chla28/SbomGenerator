@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../models/sbom_result.dart';
 import 'help_icon.dart';
+import '../l10n/l10n.dart';
 
 // ─── Modèles sbomqs ──────────────────────────────────────────────────────────
 
@@ -35,15 +36,17 @@ class _SbomqsCheck {
     return double.tryParse(v.toString()) ?? 0;
   }
 
-  static _SbomqsCheck _fromFeature(String category, Map<String, dynamic> feat) =>
-      _SbomqsCheck(
-        category: category,
-        name: (feat['key'] ?? '').toString(),
-        score: _num(feat['score']),
-        maxScore: 10,
-        description: (feat['description'] ?? '').toString().trim(),
-        isRequired: feat['required'] as bool? ?? false,
-      );
+  static _SbomqsCheck _fromFeature(
+    String category,
+    Map<String, dynamic> feat,
+  ) => _SbomqsCheck(
+    category: category,
+    name: (feat['key'] ?? '').toString(),
+    score: _num(feat['score']),
+    maxScore: 10,
+    description: (feat['description'] ?? '').toString().trim(),
+    isRequired: feat['required'] as bool? ?? false,
+  );
 }
 
 class _SbomqsProfile {
@@ -64,15 +67,14 @@ class _SbomqsProfile {
   bool get hasFeatures => features.isNotEmpty;
 
   static _SbomqsProfile fromJson(Map<String, dynamic> p) => _SbomqsProfile(
-        name: (p['profile'] ?? '').toString(),
-        score: _SbomqsCheck._num(p['score']),
-        grade: (p['grade'] ?? '').toString(),
-        message: (p['message'] ?? '').toString(),
-        features: (p['features'] as List? ?? [])
-            .map((f) =>
-                _SbomqsCheck._fromFeature('', f as Map<String, dynamic>))
-            .toList(),
-      );
+    name: (p['profile'] ?? '').toString(),
+    score: _SbomqsCheck._num(p['score']),
+    grade: (p['grade'] ?? '').toString(),
+    message: (p['message'] ?? '').toString(),
+    features: (p['features'] as List? ?? [])
+        .map((f) => _SbomqsCheck._fromFeature('', f as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class _SbomqsResult {
@@ -107,8 +109,9 @@ class _SbomqsResult {
         final c = cat as Map<String, dynamic>;
         final catName = (c['category'] ?? '').toString();
         for (final feat in (c['features'] as List? ?? [])) {
-          checks.add(_SbomqsCheck._fromFeature(
-              catName, feat as Map<String, dynamic>));
+          checks.add(
+            _SbomqsCheck._fromFeature(catName, feat as Map<String, dynamic>),
+          );
         }
       }
 
@@ -152,8 +155,14 @@ class _ScorecardResult {
 
     // On ignore les lignes de métadonnées connues
     const metaKeys = {
-      'spec', 'specversion', 'filename', 'packages',
-      'score for', 'file', 'name', 'format'
+      'spec',
+      'specversion',
+      'filename',
+      'packages',
+      'score for',
+      'file',
+      'name',
+      'format',
     };
 
     for (final raw in lines) {
@@ -161,22 +170,27 @@ class _ScorecardResult {
       if (line.isEmpty) continue;
 
       // Ligne "Total : 69" ou "Total: 69"
-      final tMatch =
-          RegExp(r'^total\s*:?\s*(\d+)', caseSensitive: false).firstMatch(line);
+      final tMatch = RegExp(
+        r'^total\s*:?\s*(\d+)',
+        caseSensitive: false,
+      ).firstMatch(line);
       if (tMatch != null) {
         total = int.tryParse(tMatch.group(1)!) ?? 0;
         continue;
       }
 
       // Ligne "  Quality : 75" ou "NTIA-minimum : 88"
-      final cMatch = RegExp(r'^([a-z][a-z0-9\-\s]+?)\s*:+\s*(\d+)\s*$',
-              caseSensitive: false)
-          .firstMatch(line);
+      final cMatch = RegExp(
+        r'^([a-z][a-z0-9\-\s]+?)\s*:+\s*(\d+)\s*$',
+        caseSensitive: false,
+      ).firstMatch(line);
       if (cMatch != null) {
         final label = cMatch.group(1)!.trim().toLowerCase();
         if (!metaKeys.any((k) => label.startsWith(k))) {
           final score = int.tryParse(cMatch.group(2)!) ?? 0;
-          categories.add(_ScorecardCategory(label: cMatch.group(1)!.trim(), score: score));
+          categories.add(
+            _ScorecardCategory(label: cMatch.group(1)!.trim(), score: score),
+          );
         }
       }
     }
@@ -248,20 +262,24 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   void _updateAutoFile() {
-    final f = widget.outputFiles
-        .where((f) =>
-            f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'))
-        .firstOrNull ??
+    final f =
         widget.outputFiles
-        .where((f) =>
-            f.path.endsWith('.json') || f.path.endsWith('.jsonld'))
-        .firstOrNull;
+            .where(
+              (f) =>
+                  f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'),
+            )
+            .firstOrNull ??
+        widget.outputFiles
+            .where(
+              (f) => f.path.endsWith('.json') || f.path.endsWith('.jsonld'),
+            )
+            .firstOrNull;
     if (f != null) setState(() => _fileCtrl.text = f.path);
   }
 
   Future<void> _pickFile({bool filtered = true}) async {
     final result = await FilePicker.pickFiles(
-      dialogTitle: 'Sélectionner un fichier SBOM',
+      dialogTitle: context.l10n.qualityPickTitle,
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
     );
@@ -287,6 +305,7 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   Future<void> _runSbomqs(String path) async {
+    final l = context.l10n;
     try {
       final args = ['score', '--json'];
       if (_selectedProfiles.isNotEmpty) {
@@ -299,25 +318,28 @@ class _QualityPanelState extends State<QualityPanel>
       if (result.exitCode == 0 || result.exitCode == 1) {
         _SbomqsResult? parsed;
         try {
-          parsed =
-              _SbomqsResult.fromJson(jsonDecode(stdout) as Map<String, dynamic>);
+          parsed = _SbomqsResult.fromJson(
+            jsonDecode(stdout) as Map<String, dynamic>,
+          );
         } catch (_) {}
         setState(() {
           _sbomqsRaw = stdout;
           _sbomqsResult = parsed;
           if (parsed == null && stdout.isEmpty) {
-            _sbomqsError = 'Aucun résultat retourné par sbomqs';
+            _sbomqsError = context.l10n.qualitySbomqsNoResult;
           }
         });
       } else {
         final stderr = (result.stderr as String).trim();
-        setState(() => _sbomqsError =
-            stderr.isNotEmpty ? stderr : 'Erreur sbomqs (exit ${result.exitCode})');
+        setState(
+          () => _sbomqsError = stderr.isNotEmpty
+              ? stderr
+              : l.qualitySbomqsError(result.exitCode),
+        );
       }
     } on ProcessException {
       if (mounted) {
-        setState(() => _sbomqsError =
-            'sbomqs introuvable — installez-le et ajoutez-le au PATH');
+        setState(() => _sbomqsError = l.qualitySbomqsMissing);
       }
     } catch (e) {
       if (mounted) setState(() => _sbomqsError = e.toString());
@@ -325,9 +347,9 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   Future<void> _runScorecard(String path) async {
+    final l = context.l10n;
     try {
-      final result =
-          await Process.run('sbom-scorecard', ['score', path]);
+      final result = await Process.run('sbom-scorecard', ['score', path]);
       final stdout = (result.stdout as String).trim();
       if (!mounted) return;
       if (result.exitCode == 0) {
@@ -335,7 +357,8 @@ class _QualityPanelState extends State<QualityPanel>
         // Essai JSON
         try {
           parsed = _ScorecardResult.fromJson(
-              jsonDecode(stdout) as Map<String, dynamic>);
+            jsonDecode(stdout) as Map<String, dynamic>,
+          );
         } catch (_) {}
         parsed ??= _ScorecardResult.parse(stdout);
         setState(() {
@@ -344,14 +367,15 @@ class _QualityPanelState extends State<QualityPanel>
         });
       } else {
         final stderr = (result.stderr as String).trim();
-        setState(() => _scorecardError = stderr.isNotEmpty
-            ? stderr
-            : 'Erreur sbom-scorecard (exit ${result.exitCode})');
+        setState(
+          () => _scorecardError = stderr.isNotEmpty
+              ? stderr
+              : l.qualityScorecardError(result.exitCode),
+        );
       }
     } on ProcessException {
       if (mounted) {
-        setState(() => _scorecardError =
-            'sbom-scorecard introuvable — installez-le et ajoutez-le au PATH');
+        setState(() => _scorecardError = l.qualityScorecardMissing);
       }
     } catch (e) {
       if (mounted) setState(() => _scorecardError = e.toString());
@@ -385,8 +409,10 @@ class _QualityPanelState extends State<QualityPanel>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_sbomqsRaw == null && _sbomqsError == null &&
-                    _scorecardRaw == null && _scorecardError == null &&
+                if (_sbomqsRaw == null &&
+                    _sbomqsError == null &&
+                    _scorecardRaw == null &&
+                    _scorecardError == null &&
                     !_isRunning)
                   const _HintCard(),
                 if (_sbomqsRaw != null || _sbomqsError != null)
@@ -463,7 +489,7 @@ class _ConfigSection extends StatelessWidget {
                 child: TextFormField(
                   controller: fileCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Fichier SBOM',
+                    labelText: context.l10n.qualityFileLabel,
                     isDense: true,
                     suffixIcon: _SplitPickButton(onPick: onPick),
                   ),
@@ -473,7 +499,7 @@ class _ConfigSection extends StatelessWidget {
               FilledButton.icon(
                 onPressed: isRunning ? null : onAnalyze,
                 icon: const Icon(Icons.analytics_outlined, size: 18),
-                label: const Text('Analyser'),
+                label: Text(context.l10n.qualityAnalyze),
               ),
             ],
           ),
@@ -487,22 +513,16 @@ class _ConfigSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Profils :',
+                    context.l10n.qualityProfiles,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const HelpIcon(
-                    'Profils de conformité SBOM évalués par sbomqs.\n'
-                    'Chaque profil vérifie un ensemble de critères\n'
-                    'spécifiques (NTIA, BSI, OpenChain, Interlynk…).\n'
-                    'Aucun profil sélectionné = tous évalués.',
-                  ),
+                  HelpIcon(context.l10n.qualityProfilesHelp),
                 ],
               ),
               for (final (key, label) in _profiles)
@@ -532,19 +552,21 @@ class _HintCard extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Icon(Icons.verified_outlined,
-                size: 48, color: Theme.of(context).colorScheme.primary),
+            Icon(
+              Icons.verified_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             const SizedBox(height: 12),
-            const Text(
-              'Évaluation de la qualité SBOM',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Text(
+              context.l10n.qualityTitle,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Sélectionnez un fichier SBOM puis cliquez sur Analyser.\n'
-              'L\'analyse utilise sbomqs (Interlynk) et sbom-scorecard (eBay).',
+            Text(
+              context.l10n.qualityIntro,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13),
+              style: const TextStyle(fontSize: 13),
             ),
           ],
         ),
@@ -560,8 +582,11 @@ class _SbomqsSection extends StatefulWidget {
   final String? rawOutput;
   final String? error;
 
-  const _SbomqsSection(
-      {required this.result, required this.rawOutput, required this.error});
+  const _SbomqsSection({
+    required this.result,
+    required this.rawOutput,
+    required this.error,
+  });
 
   @override
   State<_SbomqsSection> createState() => _SbomqsSectionState();
@@ -587,25 +612,30 @@ class _SbomqsSectionState extends State<_SbomqsSection> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.verified_outlined,
-                    size: 20,
-                    color: theme.colorScheme.onPrimaryContainer),
+                Icon(
+                  Icons.verified_outlined,
+                  size: 20,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'sbomqs',
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: theme.colorScheme.onPrimaryContainer),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
                 ),
                 if (result != null) ...[
                   const SizedBox(width: 8),
                   Text(
                     '${result.spec} ${result.specVersion}',
                     style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onPrimaryContainer
-                            .withValues(alpha: 0.7)),
+                      fontSize: 12,
+                      color: theme.colorScheme.onPrimaryContainer.withValues(
+                        alpha: 0.7,
+                      ),
+                    ),
                   ),
                 ],
                 const Spacer(),
@@ -618,19 +648,23 @@ class _SbomqsSectionState extends State<_SbomqsSection> {
                 if (widget.rawOutput != null) ...[
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: Icon(_showRaw ? Icons.table_chart : Icons.code,
-                        size: 18),
-                    tooltip: _showRaw ? 'Vue tableau' : 'JSON brut',
+                    icon: Icon(
+                      _showRaw ? Icons.table_chart : Icons.code,
+                      size: 18,
+                    ),
+                    tooltip: _showRaw
+                        ? context.l10n.qualityTableView
+                        : context.l10n.qualityRawJson,
                     color: theme.colorScheme.onPrimaryContainer,
-                    onPressed: () =>
-                        setState(() => _showRaw = !_showRaw),
+                    onPressed: () => setState(() => _showRaw = !_showRaw),
                   ),
                   IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    tooltip: 'Copier',
+                    tooltip: context.l10n.commonCopy,
                     color: theme.colorScheme.onPrimaryContainer,
                     onPressed: () => Clipboard.setData(
-                        ClipboardData(text: widget.rawOutput!)),
+                      ClipboardData(text: widget.rawOutput!),
+                    ),
                   ),
                 ],
               ],
@@ -665,9 +699,9 @@ class _SbomqsSectionState extends State<_SbomqsSection> {
                 activeFilters: _activeFilters,
               ),
             ] else
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Aucun critère détaillé disponible.'),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(context.l10n.qualityNoCriteria),
               ),
           ] else if (widget.rawOutput != null)
             _RawOutput(text: widget.rawOutput!),
@@ -701,15 +735,20 @@ class _CategoryFilter extends StatelessWidget {
         children: [
           for (final cat in categories)
             FilterChip(
-              label: Text(cat.isEmpty ? 'Autre' : cat,
-                  style: const TextStyle(fontSize: 12)),
+              label: Text(
+                cat.isEmpty ? context.l10n.qualityOther : cat,
+                style: const TextStyle(fontSize: 12),
+              ),
               selected: activeFilters.contains(cat),
               onSelected: (_) => onToggle(cat),
               visualDensity: VisualDensity.compact,
             ),
           if (activeFilters.isNotEmpty)
             ActionChip(
-              label: const Text('Tout voir', style: TextStyle(fontSize: 12)),
+              label: Text(
+                context.l10n.qualityShowAll,
+                style: const TextStyle(fontSize: 12),
+              ),
               onPressed: () {
                 for (final c in List.of(activeFilters)) {
                   onToggle(c);
@@ -729,8 +768,7 @@ class _SbomqsTable extends StatelessWidget {
   final List<_SbomqsCheck> checks;
   final Set<String> activeFilters;
 
-  const _SbomqsTable(
-      {required this.checks, required this.activeFilters});
+  const _SbomqsTable({required this.checks, required this.activeFilters});
 
   @override
   Widget build(BuildContext context) {
@@ -753,21 +791,27 @@ class _SbomqsTable extends StatelessWidget {
             color: check.passed ? Colors.green[600] : Colors.red[400],
             size: 20,
           ),
-          title: Text(check.name,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          title: Text(
+            check.name,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
           subtitle: check.description.isNotEmpty
-              ? Text(check.description,
+              ? Text(
+                  check.description,
                   style: const TextStyle(fontSize: 11),
                   maxLines: 2,
-                  overflow: TextOverflow.ellipsis)
+                  overflow: TextOverflow.ellipsis,
+                )
               : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (check.category.isNotEmpty)
                 Chip(
-                  label: Text(check.category,
-                      style: const TextStyle(fontSize: 10)),
+                  label: Text(
+                    check.category,
+                    style: const TextStyle(fontSize: 10),
+                  ),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
                 ),
@@ -777,8 +821,7 @@ class _SbomqsTable extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color:
-                      check.passed ? Colors.green[700] : Colors.red[400],
+                  color: check.passed ? Colors.green[700] : Colors.red[400],
                 ),
               ),
             ],
@@ -796,8 +839,11 @@ class _ScorecardSection extends StatefulWidget {
   final String? rawOutput;
   final String? error;
 
-  const _ScorecardSection(
-      {required this.result, required this.rawOutput, required this.error});
+  const _ScorecardSection({
+    required this.result,
+    required this.rawOutput,
+    required this.error,
+  });
 
   @override
   State<_ScorecardSection> createState() => _ScorecardSectionState();
@@ -819,20 +865,22 @@ class _ScorecardSectionState extends State<_ScorecardSection> {
           // En-tête
           Container(
             color: theme.colorScheme.secondaryContainer,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.score_outlined,
-                    size: 20,
-                    color: theme.colorScheme.onSecondaryContainer),
+                Icon(
+                  Icons.score_outlined,
+                  size: 20,
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'sbom-scorecard',
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: theme.colorScheme.onSecondaryContainer),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
                 ),
                 const Spacer(),
                 if (result != null)
@@ -844,19 +892,23 @@ class _ScorecardSectionState extends State<_ScorecardSection> {
                 if (widget.rawOutput != null) ...[
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: Icon(_showRaw ? Icons.bar_chart : Icons.code,
-                        size: 18),
-                    tooltip: _showRaw ? 'Vue graphique' : 'Sortie brute',
+                    icon: Icon(
+                      _showRaw ? Icons.bar_chart : Icons.code,
+                      size: 18,
+                    ),
+                    tooltip: _showRaw
+                        ? context.l10n.qualityChartView
+                        : context.l10n.qualityRawOutput,
                     color: theme.colorScheme.onSecondaryContainer,
-                    onPressed: () =>
-                        setState(() => _showRaw = !_showRaw),
+                    onPressed: () => setState(() => _showRaw = !_showRaw),
                   ),
                   IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    tooltip: 'Copier',
+                    tooltip: context.l10n.commonCopy,
                     color: theme.colorScheme.onSecondaryContainer,
                     onPressed: () => Clipboard.setData(
-                        ClipboardData(text: widget.rawOutput!)),
+                      ClipboardData(text: widget.rawOutput!),
+                    ),
                   ),
                 ],
               ],
@@ -883,7 +935,10 @@ class _ScorecardSectionState extends State<_ScorecardSection> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _ScoreBar(
-                          label: cat.label, score: cat.score, maxScore: 100),
+                        label: cat.label,
+                        score: cat.score,
+                        maxScore: 100,
+                      ),
                     ),
                   const Divider(),
                   _ScoreBar(
@@ -976,8 +1031,11 @@ class _ScoreBadge extends StatelessWidget {
   final double maxScore;
   final bool large;
 
-  const _ScoreBadge(
-      {required this.score, required this.maxScore, this.large = false});
+  const _ScoreBadge({
+    required this.score,
+    required this.maxScore,
+    this.large = false,
+  });
 
   Color _color() {
     final pct = maxScore > 0 ? score / maxScore : 0.0;
@@ -989,8 +1047,10 @@ class _ScoreBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          EdgeInsets.symmetric(horizontal: large ? 10 : 6, vertical: large ? 4 : 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: large ? 10 : 6,
+        vertical: large ? 4 : 2,
+      ),
       decoration: BoxDecoration(
         color: _color(),
         borderRadius: BorderRadius.circular(8),
@@ -1025,7 +1085,10 @@ class _RawOutput extends StatelessWidget {
         child: SelectableText(
           text,
           style: const TextStyle(
-              fontFamily: 'monospace', fontSize: 12, color: Colors.white70),
+            fontFamily: 'monospace',
+            fontSize: 12,
+            color: Colors.white70,
+          ),
         ),
       ),
     );
@@ -1039,12 +1102,12 @@ class _GradeBadge extends StatelessWidget {
   const _GradeBadge({required this.grade});
 
   Color _color() => switch (grade) {
-        'A' => Colors.green[700]!,
-        'B' => Colors.lightGreen[700]!,
-        'C' => Colors.orange[700]!,
-        'D' => Colors.deepOrange[700]!,
-        _ => Colors.red[700]!,
-      };
+    'A' => Colors.green[700]!,
+    'B' => Colors.lightGreen[700]!,
+    'C' => Colors.orange[700]!,
+    'D' => Colors.deepOrange[700]!,
+    _ => Colors.red[700]!,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1075,18 +1138,20 @@ class _ProfilesCard extends StatelessWidget {
   const _ProfilesCard({required this.profiles});
 
   Color _gradeColor(String grade) => switch (grade) {
-        'A' => Colors.green[700]!,
-        'B' => Colors.lightGreen[700]!,
-        'C' => Colors.orange[700]!,
-        'D' => Colors.deepOrange[700]!,
-        _ => Colors.red[700]!,
-      };
+    'A' => Colors.green[700]!,
+    'B' => Colors.lightGreen[700]!,
+    'C' => Colors.orange[700]!,
+    'D' => Colors.deepOrange[700]!,
+    _ => Colors.red[700]!,
+  };
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasAnyFeatures = profiles.any((p) => p.hasFeatures);
-    final hasRequired = profiles.any((p) => p.features.any((f) => f.isRequired));
+    final hasRequired = profiles.any(
+      (p) => p.features.any((f) => f.isRequired),
+    );
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -1096,16 +1161,17 @@ class _ProfilesCard extends StatelessWidget {
           // En-tête
           Container(
             color: theme.colorScheme.tertiaryContainer,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.workspace_premium_outlined,
-                    size: 20,
-                    color: theme.colorScheme.onTertiaryContainer),
+                Icon(
+                  Icons.workspace_premium_outlined,
+                  size: 20,
+                  color: theme.colorScheme.onTertiaryContainer,
+                ),
                 const SizedBox(width: 8),
                 Text(
-                  'Profils d\'industrie',
+                  context.l10n.qualityIndustryProfiles,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -1115,13 +1181,14 @@ class _ProfilesCard extends StatelessWidget {
                 if (!hasAnyFeatures) ...[
                   const SizedBox(width: 8),
                   Tooltip(
-                    message:
-                        'Sélectionnez des profils dans la barre de configuration\n'
-                        'pour afficher le détail des critères',
-                    child: Icon(Icons.info_outline,
-                        size: 14,
-                        color: theme.colorScheme.onTertiaryContainer
-                            .withValues(alpha: 0.6)),
+                    message: context.l10n.qualityIndustryHint,
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 14,
+                      color: theme.colorScheme.onTertiaryContainer.withValues(
+                        alpha: 0.6,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -1161,10 +1228,12 @@ class _ProfileTile extends StatelessWidget {
         dense: true,
         leading: _GradeBadge(grade: profile.grade),
         title: Text(profile.name, style: const TextStyle(fontSize: 13)),
-        subtitle: Text(profile.message,
-            style: const TextStyle(fontSize: 11),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          profile.message,
+          style: const TextStyle(fontSize: 11),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         trailing: Text(
           '${profile.score.toStringAsFixed(1)}/10',
           style: TextStyle(
@@ -1181,18 +1250,26 @@ class _ProfileTile extends StatelessWidget {
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         leading: _GradeBadge(grade: profile.grade),
-        title: Text(profile.name,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        title: Text(
+          profile.name,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
         subtitle: Text(
-          '${profile.score.toStringAsFixed(1)}/10  ·  $passed/${profile.features.length} critères',
+          context.l10n.qualityProfileSummary(
+            profile.score.toStringAsFixed(1),
+            passed,
+            profile.features.length,
+          ),
           style: const TextStyle(fontSize: 11),
         ),
         children: [
           for (final feat in profile.features)
             ListTile(
               dense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 0,
+              ),
               leading: Icon(
                 feat.passed
                     ? Icons.check_circle_outline
@@ -1205,10 +1282,12 @@ class _ProfileTile extends StatelessWidget {
                 style: const TextStyle(fontSize: 12),
               ),
               subtitle: feat.description.isNotEmpty
-                  ? Text(feat.description,
+                  ? Text(
+                      feat.description,
                       style: const TextStyle(fontSize: 11),
                       maxLines: 2,
-                      overflow: TextOverflow.ellipsis)
+                      overflow: TextOverflow.ellipsis,
+                    )
                   : null,
               trailing: Text(
                 '${feat.score.toStringAsFixed(0)}/10',
@@ -1223,13 +1302,12 @@ class _ProfileTile extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(32, 0, 32, 10),
               child: Text(
-                '* critère obligatoire',
+                context.l10n.qualityRequiredNote,
                 style: TextStyle(
                   fontSize: 10,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.45),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.45),
                 ),
               ),
             ),
@@ -1283,17 +1361,17 @@ class _SplitPickButton extends StatelessWidget {
       controller: controller,
       menuChildren: [
         MenuItemButton(
-          child: const Text('Type filtré (.json, .jsonld)'),
+          child: Text(context.l10n.commonPickFiltered('.json, .jsonld')),
           onPressed: () => onPick(filtered: true),
         ),
         MenuItemButton(
-          child: const Text('Tous les fichiers'),
+          child: Text(context.l10n.commonPickAllFiles),
           onPressed: () => onPick(filtered: false),
         ),
       ],
       child: IconButton(
         icon: const Icon(Icons.folder_open_outlined, size: 20),
-        tooltip: 'Choisir',
+        tooltip: context.l10n.commonBrowse,
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
       ),

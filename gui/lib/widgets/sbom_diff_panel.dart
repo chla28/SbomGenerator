@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models/sbom_result.dart';
+import '../l10n/l10n.dart';
 
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
@@ -29,8 +30,11 @@ class _SbomInfo {
   final String format;
   final List<_Comp> components;
 
-  const _SbomInfo(
-      {required this.label, required this.format, required this.components});
+  const _SbomInfo({
+    required this.label,
+    required this.format,
+    required this.components,
+  });
 
   static _SbomInfo? parse(String raw) {
     try {
@@ -115,7 +119,8 @@ class _SbomInfo {
           break;
         }
       }
-      final license = p['concludedLicense'] as String? ??
+      final license =
+          p['concludedLicense'] as String? ??
           p['declaredLicense'] as String? ??
           '';
       return _Comp(
@@ -235,13 +240,16 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
   }
 
   List<OutputFile> get _sbomFiles => widget.outputFiles
-      .where((f) =>
-          f.path.endsWith('.cdx.json') ||
-          f.path.endsWith('.spdx.json') ||
-          f.path.endsWith('.spdx3.jsonld'))
+      .where(
+        (f) =>
+            f.path.endsWith('.cdx.json') ||
+            f.path.endsWith('.spdx.json') ||
+            f.path.endsWith('.spdx3.jsonld'),
+      )
       .toList();
 
   Future<void> _loadA(String path) async {
+    final l = context.l10n;
     setState(() {
       _loadingA = true;
       _errorA = null;
@@ -254,7 +262,7 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
         _loadingA = false;
         _pathA = path;
         _infoA = info;
-        _errorA = info == null ? 'Format non reconnu.' : null;
+        _errorA = info == null ? l.diffFormatUnknown : null;
       });
     } catch (e) {
       setState(() {
@@ -265,6 +273,7 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
   }
 
   Future<void> _loadB(String path) async {
+    final l = context.l10n;
     setState(() {
       _loadingB = true;
       _errorB = null;
@@ -277,7 +286,7 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
         _loadingB = false;
         _pathB = path;
         _infoB = info;
-        _errorB = info == null ? 'Format non reconnu.' : null;
+        _errorB = info == null ? l.diffFormatUnknown : null;
       });
     } catch (e) {
       setState(() {
@@ -289,8 +298,7 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
 
   Future<void> _pickFile(bool isA, {bool filtered = true}) async {
     final r = await FilePicker.pickFiles(
-      dialogTitle:
-          'Sélectionner SBOM ${isA ? "A (référence)" : "B (comparé)"}',
+      dialogTitle: isA ? context.l10n.diffPickA : context.l10n.diffPickB,
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
     );
@@ -332,12 +340,15 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
         ? null
         : {
             _Status.added: diff.where((e) => e.status == _Status.added).length,
-            _Status.removed:
-                diff.where((e) => e.status == _Status.removed).length,
-            _Status.changed:
-                diff.where((e) => e.status == _Status.changed).length,
-            _Status.unchanged:
-                diff.where((e) => e.status == _Status.unchanged).length,
+            _Status.removed: diff
+                .where((e) => e.status == _Status.removed)
+                .length,
+            _Status.changed: diff
+                .where((e) => e.status == _Status.changed)
+                .length,
+            _Status.unchanged: diff
+                .where((e) => e.status == _Status.unchanged)
+                .length,
           };
 
     return Column(
@@ -354,8 +365,10 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
           errorB: _errorB,
           sbomFiles: _sbomFiles,
           canCompare: _infoA != null && _infoB != null,
-          onPickA: ({bool filtered = true}) => _pickFile(true, filtered: filtered),
-          onPickB: ({bool filtered = true}) => _pickFile(false, filtered: filtered),
+          onPickA: ({bool filtered = true}) =>
+              _pickFile(true, filtered: filtered),
+          onPickB: ({bool filtered = true}) =>
+              _pickFile(false, filtered: filtered),
           onSelectA: _loadA,
           onSelectB: _loadB,
           onCompare: _compare,
@@ -389,40 +402,40 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
 
         // ── Tableau de comparaison ──
         if (diff != null)
-          _DiffHeader(showUnchanged: _shownStatuses.contains(_Status.unchanged)),
+          _DiffHeader(
+            showUnchanged: _shownStatuses.contains(_Status.unchanged),
+          ),
 
         Expanded(
           child: diff == null
-              ? _DiffEmpty(
-                  infoA: _infoA,
-                  infoB: _infoB,
-                  onCompare: _compare,
-                )
+              ? _DiffEmpty(infoA: _infoA, infoB: _infoB, onCompare: _compare)
               : filtered.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.search_off,
-                              size: 40, color: Colors.grey),
-                          const SizedBox(height: 8),
-                          Text(
-                            _searchTerm.isNotEmpty
-                                ? 'Aucun résultat pour "$_searchTerm"'
-                                : 'Aucun élément pour les filtres sélectionnés.',
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                        ],
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 40,
+                        color: Colors.grey,
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) => _DiffRow(
-                        entry: filtered[i],
-                        showUnchanged:
-                            _shownStatuses.contains(_Status.unchanged),
+                      const SizedBox(height: 8),
+                      Text(
+                        _searchTerm.isNotEmpty
+                            ? context.l10n.diffNoMatch(_searchTerm)
+                            : context.l10n.diffNoItems,
+                        style: const TextStyle(color: Colors.grey),
                       ),
-                    ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) => _DiffRow(
+                    entry: filtered[i],
+                    showUnchanged: _shownStatuses.contains(_Status.unchanged),
+                  ),
+                ),
         ),
       ],
     );
@@ -477,7 +490,7 @@ class _FileSelectorBar extends StatelessWidget {
           // ── SBOM A ──
           Expanded(
             child: _FileSlot(
-              label: 'A – Référence',
+              label: context.l10n.diffSlotA,
               path: pathA,
               info: infoA,
               loading: loadingA,
@@ -501,11 +514,15 @@ class _FileSelectorBar extends StatelessWidget {
                   onPressed: canCompare ? onCompare : null,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Comparer',
-                      style: TextStyle(fontSize: 12)),
+                  child: Text(
+                    context.l10n.diffCompare,
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -514,7 +531,7 @@ class _FileSelectorBar extends StatelessWidget {
           // ── SBOM B ──
           Expanded(
             child: _FileSlot(
-              label: 'B – Comparé',
+              label: context.l10n.diffSlotB,
               path: pathB,
               info: infoB,
               loading: loadingB,
@@ -560,24 +577,26 @@ class _FileSlot extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         border: Border.all(
-            color: error != null
-                ? Colors.red[300]!
-                : info != null
-                    ? color.withValues(alpha: 0.5)
-                    : Colors.grey[300]!),
+          color: error != null
+              ? Colors.red[300]!
+              : info != null
+              ? color.withValues(alpha: 0.5)
+              : Colors.grey[300]!,
+        ),
         borderRadius: BorderRadius.circular(6),
-        color: info != null
-            ? color.withValues(alpha: 0.05)
-            : null,
+        color: info != null ? color.withValues(alpha: 0.05) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -586,20 +605,22 @@ class _FileSlot extends StatelessWidget {
                     ? const SizedBox(
                         height: 14,
                         width: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : Text(
                         error != null
                             ? '⚠ $error'
                             : path != null
-                                ? (info?.label ?? path!.split('/').last)
-                                : 'Aucun fichier sélectionné',
+                            ? (info?.label ?? path!.split('/').last)
+                            : context.l10n.diffNoFile,
                         style: TextStyle(
-                            fontSize: 12,
-                            color: error != null
-                                ? Colors.red
-                                : path != null
-                                    ? null
-                                    : Colors.grey),
+                          fontSize: 12,
+                          color: error != null
+                              ? Colors.red
+                              : path != null
+                              ? null
+                              : Colors.grey,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
               ),
@@ -608,9 +629,8 @@ class _FileSlot extends StatelessWidget {
                 MenuAnchor(
                   builder: (ctx, ctrl, child) => IconButton(
                     icon: const Icon(Icons.folder_outlined, size: 16),
-                    tooltip: 'Fichiers générés',
-                    onPressed: () =>
-                        ctrl.isOpen ? ctrl.close() : ctrl.open(),
+                    tooltip: context.l10n.commonGeneratedFiles,
+                    onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -618,8 +638,10 @@ class _FileSlot extends StatelessWidget {
                     for (final f in sbomFiles)
                       MenuItemButton(
                         onPressed: () => onSelect(f.path),
-                        child: Text(f.path.split('/').last,
-                            style: const TextStyle(fontSize: 12)),
+                        child: Text(
+                          f.path.split('/').last,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                   ],
                 ),
@@ -628,8 +650,14 @@ class _FileSlot extends StatelessWidget {
           ),
           if (info != null)
             Text(
-              '${info!.format} · ${info!.components.length} composants',
-              style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8)),
+              context.l10n.diffComponentsInfo(
+                info!.format,
+                info!.components.length,
+              ),
+              style: TextStyle(
+                fontSize: 10,
+                color: color.withValues(alpha: 0.8),
+              ),
             ),
         ],
       ),
@@ -669,12 +697,12 @@ class _FilePickButtonState extends State<_FilePickButton> {
             _menu.close();
             widget.onPick(filtered: false);
           },
-          child: const Text('Tous les fichiers'),
+          child: Text(context.l10n.mergeAllFiles),
         ),
       ],
       builder: (context, ctrl, _) => IconButton(
         icon: const Icon(Icons.file_open_outlined, size: 16),
-        tooltip: 'Ouvrir un fichier…',
+        tooltip: context.l10n.diffOpenFile,
         onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
@@ -698,28 +726,32 @@ class _SummaryBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _SummaryChip(
-              icon: Icons.add_circle_outline,
-              label: 'Ajoutés',
-              value: counts[_Status.added] ?? 0,
-              color: Colors.green[700]!),
+            icon: Icons.add_circle_outline,
+            label: context.l10n.diffAdded,
+            value: counts[_Status.added] ?? 0,
+            color: Colors.green[700]!,
+          ),
           const SizedBox(width: 16),
           _SummaryChip(
-              icon: Icons.remove_circle_outline,
-              label: 'Supprimés',
-              value: counts[_Status.removed] ?? 0,
-              color: Colors.red[700]!),
+            icon: Icons.remove_circle_outline,
+            label: context.l10n.diffRemoved,
+            value: counts[_Status.removed] ?? 0,
+            color: Colors.red[700]!,
+          ),
           const SizedBox(width: 16),
           _SummaryChip(
-              icon: Icons.change_circle_outlined,
-              label: 'Modifiés',
-              value: counts[_Status.changed] ?? 0,
-              color: Colors.orange[700]!),
+            icon: Icons.change_circle_outlined,
+            label: context.l10n.diffChanged,
+            value: counts[_Status.changed] ?? 0,
+            color: Colors.orange[700]!,
+          ),
           const SizedBox(width: 16),
           _SummaryChip(
-              icon: Icons.check_circle_outline,
-              label: 'Inchangés',
-              value: counts[_Status.unchanged] ?? 0,
-              color: Colors.grey[600]!),
+            icon: Icons.check_circle_outline,
+            label: context.l10n.diffUnchanged,
+            value: counts[_Status.unchanged] ?? 0,
+            color: Colors.grey[600]!,
+          ),
         ],
       ),
     );
@@ -731,11 +763,12 @@ class _SummaryChip extends StatelessWidget {
   final String label;
   final int value;
   final Color color;
-  const _SummaryChip(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -744,15 +777,26 @@ class _SummaryChip extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 4),
-        Text('$value',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 14, color: color)),
+        Text(
+          '$value',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: color,
+          ),
+        ),
         const SizedBox(width: 3),
         Text(label, style: TextStyle(fontSize: 11, color: color)),
       ],
     );
   }
 }
+
+const _hdrStyle = TextStyle(
+  fontSize: 10,
+  fontWeight: FontWeight.bold,
+  color: Colors.grey,
+);
 
 // ─── Barre de filtres ─────────────────────────────────────────────────────────
 
@@ -787,28 +831,30 @@ class _FilterBar extends StatelessWidget {
       child: Row(
         children: [
           _FilterChip2(
-            label: '➕ Ajoutés (${counts[_Status.added]})',
+            label: context.l10n.diffChipAdded(counts[_Status.added] ?? 0),
             selected: shownStatuses.contains(_Status.added),
             selectedColor: Colors.green[700]!,
             onTap: () => onStatusToggle(_Status.added),
           ),
           const SizedBox(width: 6),
           _FilterChip2(
-            label: '➖ Supprimés (${counts[_Status.removed]})',
+            label: context.l10n.diffChipRemoved(counts[_Status.removed] ?? 0),
             selected: shownStatuses.contains(_Status.removed),
             selectedColor: Colors.red[700]!,
             onTap: () => onStatusToggle(_Status.removed),
           ),
           const SizedBox(width: 6),
           _FilterChip2(
-            label: '🔄 Modifiés (${counts[_Status.changed]})',
+            label: context.l10n.diffChipChanged(counts[_Status.changed] ?? 0),
             selected: shownStatuses.contains(_Status.changed),
             selectedColor: Colors.orange[700]!,
             onTap: () => onStatusToggle(_Status.changed),
           ),
           const SizedBox(width: 6),
           _FilterChip2(
-            label: '✓ Inchangés (${counts[_Status.unchanged]})',
+            label: context.l10n.diffChipUnchanged(
+              counts[_Status.unchanged] ?? 0,
+            ),
             selected: shownStatuses.contains(_Status.unchanged),
             selectedColor: Colors.grey[600]!,
             onTap: () => onStatusToggle(_Status.unchanged),
@@ -819,7 +865,7 @@ class _FilterBar extends StatelessWidget {
               controller: searchCtrl,
               onChanged: onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Filtrer par nom…',
+                hintText: context.l10n.diffFilterHint,
                 isDense: true,
                 prefixIcon: const Icon(Icons.search, size: 16),
                 suffixIcon: searchTerm.isNotEmpty
@@ -829,8 +875,10 @@ class _FilterBar extends StatelessWidget {
                         padding: EdgeInsets.zero,
                       )
                     : null,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
                 border: const OutlineInputBorder(),
               ),
               style: const TextStyle(fontSize: 12),
@@ -880,8 +928,9 @@ class _FilterChip2 extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-              fontSize: 11,
-              color: selected ? selectedColor : Colors.grey[600]),
+            fontSize: 11,
+            color: selected ? selectedColor : Colors.grey[600],
+          ),
         ),
       ),
     );
@@ -902,45 +951,25 @@ class _DiffHeader extends StatelessWidget {
       child: Row(
         children: [
           const SizedBox(width: 24),
-          const SizedBox(
+          SizedBox(
             width: 72,
-            child: Text('STATUT',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
+            child: Text(context.l10n.diffHdrStatus, style: _hdrStyle),
           ),
-          const Expanded(
+          Expanded(
             flex: 3,
-            child: Text('NOM',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
+            child: Text(context.l10n.diffHdrName, style: _hdrStyle),
           ),
-          const Expanded(
+          Expanded(
             flex: 2,
-            child: Text('VERSION A',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
+            child: Text(context.l10n.diffHdrVersionA, style: _hdrStyle),
           ),
-          const Expanded(
+          Expanded(
             flex: 2,
-            child: Text('VERSION B',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
+            child: Text(context.l10n.diffHdrVersionB, style: _hdrStyle),
           ),
-          const Expanded(
+          Expanded(
             flex: 2,
-            child: Text('LICENCE',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
+            child: Text(context.l10n.diffHdrLicense, style: _hdrStyle),
           ),
         ],
       ),
@@ -978,15 +1007,28 @@ class _DiffRow extends StatelessWidget {
     final compA = entry.compA;
     final compB = entry.compB;
 
+    final l = context.l10n;
     final (icon, iconColor, statusLabel) = switch (s) {
-      _Status.added => (Icons.add_circle, Colors.green[700]!, 'Ajouté'),
-      _Status.removed => (Icons.remove_circle, Colors.red[700]!, 'Supprimé'),
-      _Status.changed => (Icons.change_circle, Colors.orange[700]!, 'Modifié'),
+      _Status.added => (
+        Icons.add_circle,
+        Colors.green[700]!,
+        l.diffStatusAdded,
+      ),
+      _Status.removed => (
+        Icons.remove_circle,
+        Colors.red[700]!,
+        l.diffStatusRemoved,
+      ),
+      _Status.changed => (
+        Icons.change_circle,
+        Colors.orange[700]!,
+        l.diffStatusChanged,
+      ),
       _Status.unchanged => (
-          Icons.check_circle,
-          Colors.grey[400]!,
-          'Inchangé'
-        ),
+        Icons.check_circle,
+        Colors.grey[400]!,
+        l.diffStatusUnchanged,
+      ),
     };
 
     final versionA = compA?.version ?? '';
@@ -1012,9 +1054,10 @@ class _DiffRow extends StatelessWidget {
               child: Text(
                 statusLabel,
                 style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: iconColor),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: iconColor,
+                ),
               ),
             ),
             Expanded(
@@ -1022,7 +1065,9 @@ class _DiffRow extends StatelessWidget {
               child: Text(
                 entry.name,
                 style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w500),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1032,9 +1077,12 @@ class _DiffRow extends StatelessWidget {
               child: Text(
                 versionA,
                 style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: entry.versionChanged ? Colors.red[700] : Colors.grey[600]),
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: entry.versionChanged
+                      ? Colors.red[700]
+                      : Colors.grey[600],
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1044,11 +1092,12 @@ class _DiffRow extends StatelessWidget {
               child: Text(
                 versionB,
                 style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: entry.versionChanged
-                        ? Colors.green[700]
-                        : Colors.grey[600]),
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: entry.versionChanged
+                      ? Colors.green[700]
+                      : Colors.grey[600],
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1059,22 +1108,28 @@ class _DiffRow extends StatelessWidget {
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(licA,
-                            style: TextStyle(
-                                fontSize: 10,
-                                decoration: TextDecoration.lineThrough,
-                                color: Colors.red[700]),
-                            overflow: TextOverflow.ellipsis),
-                        Text(licB,
-                            style: TextStyle(
-                                fontSize: 10, color: Colors.green[700]),
-                            overflow: TextOverflow.ellipsis),
+                        Text(
+                          licA,
+                          style: TextStyle(
+                            fontSize: 10,
+                            decoration: TextDecoration.lineThrough,
+                            color: Colors.red[700],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          licB,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.green[700],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     )
                   : Text(
                       licB.isNotEmpty ? licB : licA,
-                      style: const TextStyle(
-                          fontSize: 10, color: Colors.grey),
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
                       overflow: TextOverflow.ellipsis,
                     ),
             ),
@@ -1092,8 +1147,11 @@ class _DiffEmpty extends StatelessWidget {
   final _SbomInfo? infoB;
   final VoidCallback onCompare;
 
-  const _DiffEmpty(
-      {required this.infoA, required this.infoB, required this.onCompare});
+  const _DiffEmpty({
+    required this.infoA,
+    required this.infoB,
+    required this.onCompare,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1102,13 +1160,12 @@ class _DiffEmpty extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.compare_arrows,
-              size: 56, color: Colors.grey[300]),
+          Icon(Icons.compare_arrows, size: 56, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
             bothReady
-                ? 'Cliquez sur "Comparer" pour lancer l\'analyse.'
-                : 'Sélectionnez deux fichiers SBOM (A et B) pour les comparer.',
+                ? context.l10n.diffEmptyReady
+                : context.l10n.diffEmptyPick,
             style: const TextStyle(color: Colors.grey, fontSize: 14),
             textAlign: TextAlign.center,
           ),
@@ -1116,7 +1173,7 @@ class _DiffEmpty extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton.icon(
               icon: const Icon(Icons.compare_arrows, size: 16),
-              label: const Text('Comparer'),
+              label: Text(context.l10n.diffCompare),
               onPressed: onCompare,
             ),
           ],

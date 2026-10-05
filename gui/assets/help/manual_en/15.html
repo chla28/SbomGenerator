@@ -1,0 +1,102 @@
+
+<h2 id="_sbom_comparison_tab">16. SBOM Comparison tab</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>SBOM Comparison</strong> tab highlights the differences between two SBOM files
+(for example before / after an update).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
+  │ [ /path/to/before.cdx.json ] [📂]     │  │ [ /path/to/after.cdx.json ] [📂]     │
+  └───────────────────────────────────────┘  └──────────────────────────────────────┘
+                                                                    [Compare]
+
+  Added: 5  │  Removed: 3  │  Modified: 8  │  Unchanged: 230
+
+  Filter : [✓ Added] [✓ Removed] [✓ Modified] [ Unchanged]
+  Search : [ openssl…                                ]
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
+  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
+  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
+  └─────────────────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_loading_the_files">16.1. Loading the files</h3>
+<div class="paragraph">
+<p>Select a file in each slot (SBOM A and SBOM B) through the 📂 button or by
+typing a path. The CycloneDX, SPDX 2.x and SPDX 3.0 JSON-LD formats are
+supported (same formats as the Tree tab); the two compared files do not need
+to be in the same format.</p>
+</div>
+<div class="paragraph">
+<p>Click <strong>Compare</strong> to start the comparison. The button is only active if both
+files are selected.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_counter_bar">16.2. Counter bar</h3>
+<div class="paragraph">
+<p>Displays the number of components in each category:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 20%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">+  (green)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Added</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Present in B, absent from A</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">−  (red)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Removed</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Present in A, absent from B</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">~  (orange)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Modified</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Present in A and B, but with a different version or license</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">=  (grey)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Unchanged</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Identical in A and B</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_filters_and_search">16.3. Filters and search</h3>
+<div class="paragraph">
+<p>The filter chips let you show or hide each category. By default, <strong>Unchanged</strong>
+components are hidden to focus on the differences.</p>
+</div>
+<div class="paragraph">
+<p>The search field filters on the component name in real time, in combination
+with the category filters.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_differences_column">16.4. Differences column</h3>
+<div class="paragraph">
+<p>For <strong>Modified</strong> components:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The <strong>version</strong> shows the old value struck through and the new value in green</p>
+</li>
+<li>
+<p>The <strong>license</strong> shows the old value struck through and the new value in green</p>
+</li>
+</ul>
+</div>
+</div>
+</div>

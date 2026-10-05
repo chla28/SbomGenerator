@@ -1,0 +1,114 @@
+
+<h2 id="sec-onglet-cra">11. CRA Compliance tab — Cyber Resilience Act</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>CRA Compliance</strong> tab produces a compliance report with <strong>Regulation (EU)
+2024/2847</strong> (Cyber Resilience Act) from an SBOM. It drives the
+<code>sbom-generator cra</code> subcommand (the binary configured in the settings) and
+displays its result.</p>
+</div>
+<div class="admonitionblock important">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>The report only covers the CRA requirements that can be <strong>verified
+automatically</strong> from an SBOM and a known-vulnerability analysis:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>SBOM format and completeness</strong> — commonly used machine-readable format,
+dependency coverage (Annex I §2 point 1), data fields per component (BSI
+TR-03183-2: name, version, supplier, unique PURL/CPE identifier, hash,
+license), NTIA 2021 minimum elements;</p>
+</li>
+<li>
+<p><strong>vulnerability management</strong> — inventory of known vulnerabilities and
+availability of fixes (Annex I §2 points 1-2);</p>
+</li>
+<li>
+<p><strong>actively exploited vulnerabilities</strong> — any CVE in the CISA KEV catalog is
+flagged as triggering the obligation to notify ENISA <strong>within 24 h</strong>
+(art. 14).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The other CRA obligations (secure distribution of updates, effective
+coordinated disclosure policy, secure-by-default design, regular testing,
+regulatory notifications, EU declaration of conformity) are the manufacturer’s
+responsibility and are only listed. <strong>This report is not a declaration of
+conformity.</strong></p>
+</div>
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="sect2">
+<h3 id="_filling_in_the_form">11.1. Filling in the form</h3>
+<div class="paragraph">
+<p><strong>SBOM file to assess</strong>: pre-filled with the first generated SBOM
+(<code>.cdx.json</code> / <code>.spdx.json</code>, otherwise <code>.json</code>). The <strong>Choose</strong> button opens a
+file picker.</p>
+</div>
+<div class="paragraph">
+<p><strong>Product metadata (optional)</strong>: collapsible section — Manufacturer, Product,
+Product version, End of support (<code>YYYY-MM-DD</code>), Vulnerability reporting
+contact, URL of the coordinated disclosure policy. The <strong>Load a cra.yaml</strong>
+button imports these values from a file (<code>key: value</code> per line). The fields
+entered here take precedence over the file; missing values are deduced from
+the <code>metadata.component</code> of the SBOM.</p>
+</div>
+<div class="paragraph">
+<p><strong>Scan for known vulnerabilities</strong>: checked by default. Runs a scanner (<strong>Grype</strong>
+by default, or OSV-Scanner / Trivy / all three) to assess the vulnerability
+inventory and the availability of fixes, with CISA KEV / EPSS enrichment.
+Unchecked, the report is limited to the SBOM analysis and states that
+vulnerability management could not be attested.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_running_and_exporting">11.2. Running and exporting</h3>
+<div class="paragraph">
+<p><strong>Assess</strong>: runs the analysis and displays the result under the form:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>verdict banner</strong> — Compliant / Partial / Non-compliant on the verified
+scope, with the summary sentence;</p>
+</li>
+<li>
+<p><strong>four indicators</strong> — compliant SBOM fields, NTIA elements, vulnerabilities
+without a fix, actively exploited CVEs (KEV);</p>
+</li>
+<li>
+<p><strong>blocking items</strong> — list of the reasons for non-compliance, if any;</p>
+</li>
+<li>
+<p><strong>table of SBOM data fields</strong> (BSI TR-03183-2) with coverage and status per
+field;</p>
+</li>
+<li>
+<p>reminder of the SBOM format, the number of components and dependency
+relationships, and the vulnerability count.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><strong>Export the PDF report</strong>: regenerates the complete report as a PDF (cover
+page, executive summary, product identification, detailed SBOM analysis,
+vulnerability management, manufacturer requirements, conclusion) and saves it
+at the chosen location. The PDF conversion requires <code>asciidoctor-pdf</code>.</p>
+</div>
+<div class="paragraph">
+<p>A <strong>Non-compliant</strong> report is not an error: it lists the points to fix. Blocking
+reasons: non-machine-readable format, insufficiently filled mandatory field,
+vulnerability without an available fix, CVE in the CISA KEV catalog.</p>
+</div>
+</div>
+</div>

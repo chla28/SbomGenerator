@@ -67,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _saveSettings() => SettingsService.saveConfig(_config);
 
   void _startScan() {
+    final l = context.l10n;
     _saveSettings();
     final cmdLine = _config.toCommandLine(SettingsService.cliBinary);
     setState(() {
@@ -87,85 +88,93 @@ class _HomeScreenState extends State<HomeScreen> {
     _runner
         .run(args: _config.toArgs())
         .listen(
-      (event) {
-        if (!mounted) return;
-        switch (event) {
-          case SbomProgressEvent(:final current, :final total,
-                :final percent, :final label):
-            setState(() {
-              _progressCurrent = current;
-              _progressTotal = total;
-              _progressPercent = percent;
-              _progressLabel = label;
-            });
+          (event) {
+            if (!mounted) return;
+            switch (event) {
+              case SbomProgressEvent(
+                :final current,
+                :final total,
+                :final percent,
+                :final label,
+              ):
+                setState(() {
+                  _progressCurrent = current;
+                  _progressTotal = total;
+                  _progressPercent = percent;
+                  _progressLabel = label;
+                });
 
-          case SbomLogEvent(:final line, :final isError, :final isWarning):
-            setState(() {
-              _logLines.add(line);
-              if (isError && _fatalError == null) {
-                _fatalError = line.replaceFirst('Error: ', '');
-              }
-              if (isWarning) _warnings.add(line);
-            });
+              case SbomLogEvent(:final line, :final isError, :final isWarning):
+                setState(() {
+                  _logLines.add(line);
+                  if (isError && _fatalError == null) {
+                    _fatalError = line.replaceFirst('Error: ', '');
+                  }
+                  if (isWarning) _warnings.add(line);
+                });
 
-          case SbomOutputFileEvent(:final file):
-            setState(() => _outputFiles.add(file));
+              case SbomOutputFileEvent(:final file):
+                setState(() => _outputFiles.add(file));
 
-          case SbomDoneEvent(:final exitCode):
-            setState(() {
-              _isRunning = false;
-              _exitCode = exitCode;
-              if (exitCode != 0 && _fatalError == null) {
-                _fatalError = 'Génération échouée (exit $exitCode)';
-              }
-            });
-            if (exitCode == 0) {
-              if (_config.generatePdf) {
-                String? adocPath;
-                for (final f in _outputFiles) {
-                  if (f.path.endsWith('.adoc')) {
-                    adocPath = f.path;
-                    break;
+              case SbomDoneEvent(:final exitCode):
+                setState(() {
+                  _isRunning = false;
+                  _exitCode = exitCode;
+                  if (exitCode != 0 && _fatalError == null) {
+                    _fatalError = l.homeGenerationFailed(exitCode);
+                  }
+                });
+                if (exitCode == 0) {
+                  if (_config.generatePdf) {
+                    String? adocPath;
+                    for (final f in _outputFiles) {
+                      if (f.path.endsWith('.adoc')) {
+                        adocPath = f.path;
+                        break;
+                      }
+                    }
+                    if (adocPath != null) _generatePdf(adocPath);
+                  }
+                  if (_config.enableSbomqs) {
+                    _runSbomqs();
                   }
                 }
-                if (adocPath != null) _generatePdf(adocPath);
-              }
-              if (_config.enableSbomqs) {
-                _runSbomqs();
-              }
             }
-        }
-      },
-      onError: (Object e) {
-        if (mounted) {
-          setState(() {
-            _isRunning = false;
-            _fatalError = e.toString();
-            _exitCode = 1;
-          });
-        }
-      },
-    );
+          },
+          onError: (Object e) {
+            if (mounted) {
+              setState(() {
+                _isRunning = false;
+                _fatalError = e.toString();
+                _exitCode = 1;
+              });
+            }
+          },
+        );
   }
 
   Future<void> _generatePdf(String adocPath) async {
+    final l = context.l10n;
     final pdfPath = _config.pdfOutputPath.isNotEmpty
         ? _config.pdfOutputPath
         : adocPath.endsWith('.adoc')
-            ? '${adocPath.substring(0, adocPath.length - 5)}.pdf'
-            : '$adocPath.pdf';
+        ? '${adocPath.substring(0, adocPath.length - 5)}.pdf'
+        : '$adocPath.pdf';
 
     setState(() {
       _isPdfRunning = true;
       _logLines.add('');
-      _logLines.add('Conversion PDF (asciidoctor-pdf)…');
+      _logLines.add(l.homePdfHeader);
       _logLines.add('  ← $adocPath');
       _logLines.add('  → $pdfPath');
     });
 
     try {
-      final result =
-          await Process.run('asciidoctor-pdf', [adocPath, '-o', pdfPath]);
+      final result = await Process.run('asciidoctor-pdf', [
+        adocPath,
+        '-o',
+        pdfPath,
+      ]);
 
       if (!mounted) return;
 
@@ -182,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final stderr = (result.stderr as String).trim();
         setState(() {
           _isPdfRunning = false;
-          _logLines.add('Erreur asciidoctor-pdf (exit ${result.exitCode})');
+          _logLines.add(l.homePdfError(result.exitCode));
           if (stderr.isNotEmpty) _logLines.add('  $stderr');
         });
       }
@@ -191,8 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isPdfRunning = false;
         _logLines.add('');
-        _logLines.add('Erreur : asciidoctor-pdf introuvable.');
-        _logLines.add('  Installez avec : gem install asciidoctor-pdf');
+        _logLines.add(l.homePdfMissing);
+        _logLines.add(l.homePdfInstall);
       });
     }
   }
@@ -200,10 +209,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _runSbomqs() async {
     // Cible le premier SBOM JSON généré
     final target = _outputFiles
-        .where((f) =>
-            f.path.endsWith('.cdx.json') ||
-            f.path.endsWith('.spdx.json') ||
-            f.path.endsWith('.jsonld'))
+        .where(
+          (f) =>
+              f.path.endsWith('.cdx.json') ||
+              f.path.endsWith('.spdx.json') ||
+              f.path.endsWith('.jsonld'),
+        )
         .map((f) => f.path)
         .firstOrNull;
     if (target == null) return;
@@ -224,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _runner.kill();
     setState(() {
       _isRunning = false;
-      _logLines.add('[Génération interrompue par l\'utilisateur]');
+      _logLines.add(context.l10n.homeInterrupted);
     });
   }
 
@@ -239,8 +250,10 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.assignment_outlined, size: 22),
             SizedBox(width: 10),
-            Text('SBOM Generator',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'SBOM Generator',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         actions: [
@@ -250,20 +263,22 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Center(
                 child: Tooltip(
                   message: _isPdfRunning
-                      ? 'Conversion PDF en cours…'
-                      : 'Génération SBOM en cours…',
+                      ? context.l10n.homePdfRunning
+                      : context.l10n.homeSbomRunning,
                   child: const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
             ),
           IconButton(
             icon: const Icon(Icons.help_outline),
-            tooltip: 'Aide — Manuel utilisateur',
+            tooltip: context.l10n.homeHelpTooltip,
             onPressed: () => _showHelp(context),
           ),
           PopupMenuButton<AppLanguage>(
@@ -287,17 +302,19 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.palette_outlined),
-            tooltip: 'Couleur du thème',
+            tooltip: context.l10n.homeThemeColor,
             onPressed: () => _showThemePicker(context),
           ),
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            tooltip: isDark ? 'Mode clair' : 'Mode sombre',
+            tooltip: isDark
+                ? context.l10n.homeLightMode
+                : context.l10n.homeDarkMode,
             onPressed: widget.onThemeToggle,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            tooltip: 'À propos',
+            tooltip: context.l10n.homeAbout,
             onPressed: () => _showAbout(context),
           ),
         ],
@@ -335,9 +352,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showHelp(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const HelpViewerScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const HelpViewerScreen()));
   }
 
   void _showThemePicker(BuildContext context) {
@@ -359,17 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
       applicationName: 'SBOM Generator',
       applicationVersion: kGuiVersion,
       applicationIcon: const Icon(Icons.assignment_outlined, size: 48),
-      children: const [
-        Text(
-          'Interface graphique pour l\'outil sbom_generator.\n\n'
-          'Génère des SBOM (Software Bill of Materials) depuis des listes '
-          'de paquets RPM, .whl, .tar.gz, .deb, .zip, .jar, ou de manifestes '
-          '(requirements.txt, go.sum, package-lock.json, pom.xml, pubspec.lock…) '
-          '— fichier liste, paquet unique, ou dossier scanné récursivement.\n\n'
-          'Formats supportés : CycloneDX 1.6/1.7, SPDX 2.3, SPDX 3.0 JSON-LD, '
-          'JSON personnalisé, Markdown, AsciiDoc.',
-        ),
-      ],
+      children: [Text(context.l10n.homeAboutText)],
     );
   }
 }
@@ -388,11 +395,11 @@ class _ThemePickerDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.palette_outlined, size: 20),
-          SizedBox(width: 8),
-          Text('Couleur du thème'),
+          const Icon(Icons.palette_outlined, size: 20),
+          const SizedBox(width: 8),
+          Text(context.l10n.homeThemeColor),
         ],
       ),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
@@ -414,7 +421,7 @@ class _ThemePickerDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(context.l10n.homeCancel),
         ),
       ],
     );
@@ -435,7 +442,7 @@ class _ThemeSwatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: theme.label,
+      message: themeLabel(context.l10n, theme),
       child: InkWell(
         borderRadius: BorderRadius.circular(32),
         onTap: onTap,
@@ -471,11 +478,10 @@ class _ThemeSwatch extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              theme.label,
+              themeLabel(context.l10n, theme),
               style: TextStyle(
                 fontSize: 11,
-                fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ],
@@ -484,3 +490,16 @@ class _ThemeSwatch extends StatelessWidget {
     );
   }
 }
+
+/// Nom d'une couleur de thème dans la langue courante (les libellés de
+/// [kAppThemes] sont en français, langue de référence).
+String themeLabel(AppLocalizations l, AppTheme t) => switch (t.label) {
+  'Bleu' => l.themeBlue,
+  'Violet' => l.themePurple,
+  'Vert' => l.themeGreen,
+  'Rouge' => l.themeRed,
+  'Rose' => l.themePink,
+  'Ardoise' => l.themeSlate,
+  'Marron' => l.themeBrown,
+  _ => t.label,
+};

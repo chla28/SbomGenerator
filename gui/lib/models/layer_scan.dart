@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'layer_nav.dart';
+import '../l10n/l10n.dart';
 
 // Analyse de vulnérabilités par couche d'image (onglets Grype, OSV-Scanner,
 // Trivy, source « Image de conteneur »). Le jeu de SBOM par couche est
@@ -31,13 +32,15 @@ class LayerScanSettings {
     this.layerMode = 'metadata',
   });
 
-  LayerScanSettings copyWith(
-          {bool? enabled, LayerScanMode? mode, String? layerMode}) =>
-      LayerScanSettings(
-        enabled: enabled ?? this.enabled,
-        mode: mode ?? this.mode,
-        layerMode: layerMode ?? this.layerMode,
-      );
+  LayerScanSettings copyWith({
+    bool? enabled,
+    LayerScanMode? mode,
+    String? layerMode,
+  }) => LayerScanSettings(
+    enabled: enabled ?? this.enabled,
+    mode: mode ?? this.mode,
+    layerMode: layerMode ?? this.layerMode,
+  );
 }
 
 /// Une couche d'image.
@@ -111,7 +114,10 @@ class LayeredSbomSet {
 
   /// Construit le jeu depuis le SBOM global CycloneDX ([globalJson], chemin
   /// [globalPath]) ; les SBOM de couche sont retrouvés par leur nom.
-  static LayeredSbomSet parse(String globalPath, Map<String, dynamic> globalJson) {
+  static LayeredSbomSet parse(
+    String globalPath,
+    Map<String, dynamic> globalJson,
+  ) {
     final byPkg = <String, int>{};
     for (final c in globalJson['components'] as List? ?? const []) {
       if (c is! Map<String, dynamic>) continue;
@@ -136,7 +142,8 @@ class LayeredSbomSet {
       }
     }
     final files = {
-      for (final f in LayerNav.discover(globalPath)?.layers ?? const <LayerFile>[])
+      for (final f
+          in LayerNav.discover(globalPath)?.layers ?? const <LayerFile>[])
         f.index: f,
     };
     final indexes = {...summaries.keys, ...files.keys}.toList()..sort();
@@ -147,7 +154,8 @@ class LayeredSbomSet {
         for (final i in indexes)
           LayerInfo(
             index: i,
-            digest: summaries[i]?['digest'] as String? ??
+            digest:
+                summaries[i]?['digest'] as String? ??
                 files[i]?.shortDigest ??
                 '?',
             createdBy: summaries[i]?['createdBy'] as String?,
@@ -182,8 +190,7 @@ class LayerScanResult {
   });
 
   List<int> layersOf(String id, String packageName, String version) =>
-      (layersByKey[vulnLayerKey(id, packageName, version)]?.toList() ??
-          <int>[])
+      (layersByKey[vulnLayerKey(id, packageName, version)]?.toList() ?? <int>[])
         ..sort();
 
   /// Libellé de colonne : `2`, `1, 3`, ou `?`.
@@ -199,9 +206,11 @@ class LayerScanResult {
     return null;
   }
 
-  String get modeLabel => mode == LayerScanMode.each
-      ? 'SBOM de chaque couche scanné'
-      : 'rattachement à la couche d\'origine du paquet';
+  String modeLabelFor(AppLocalizations l) => mode == LayerScanMode.each
+      ? l.layerScanModeEach
+      : l.layerScanModeAttribute;
+
+  String get modeLabel => modeLabelFor(lookupAppLocalizations(fallbackLocale));
 }
 
 // ── Fusion des sorties JSON (mode « chaque couche ») ────────────────────────
@@ -251,8 +260,12 @@ Map<String, String> trivyLayerDigests(String raw) {
       final m = v as Map;
       final d = (m['Layer'] as Map?)?['DiffID'] as String?;
       if (d == null || d.isEmpty) continue;
-      out[vulnLayerKey('${m['VulnerabilityID'] ?? ''}', '${m['PkgName'] ?? ''}',
-          '${m['InstalledVersion'] ?? ''}')] = d;
+      out[vulnLayerKey(
+            '${m['VulnerabilityID'] ?? ''}',
+            '${m['PkgName'] ?? ''}',
+            '${m['InstalledVersion'] ?? ''}',
+          )] =
+          d;
     }
   }
   return out;
@@ -280,10 +293,16 @@ Map<String, String> osvLayerDigests(String raw) {
       for (final v in p['vulnerabilities'] as List? ?? const []) {
         final m = v as Map;
         final aliases = (m['aliases'] as List?)?.cast<String>() ?? const [];
-        final cve = aliases.firstWhere((a) => a.startsWith('CVE-'),
-            orElse: () => '');
-        out[vulnLayerKey(cve.isNotEmpty ? cve : '${m['id'] ?? ''}',
-            '${pkg['name'] ?? ''}', '${pkg['version'] ?? ''}')] = diffId;
+        final cve = aliases.firstWhere(
+          (a) => a.startsWith('CVE-'),
+          orElse: () => '',
+        );
+        out[vulnLayerKey(
+              cve.isNotEmpty ? cve : '${m['id'] ?? ''}',
+              '${pkg['name'] ?? ''}',
+              '${pkg['version'] ?? ''}',
+            )] =
+            diffId;
       }
     }
   }

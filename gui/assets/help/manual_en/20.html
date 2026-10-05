@@ -1,0 +1,122 @@
+
+<h2 id="_scan_subcommand_cve_analysis_from_the_command_line">21. <code>scan</code> subcommand — CVE analysis from the command line</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <code>scan</code> subcommand runs the same CVE analyses as the GUI directly from the
+terminal, with built-in date filtering. It does not require a graphical
+interface.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator scan --sbom &lt;file.cdx.json&gt; [options]</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_options">21.1. Options</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 16.6666%;">
+<col style="width: 50.0001%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Option</th>
+<th class="tableblock halign-left valign-top">Default</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--sbom &lt;path&gt;</code> (or <code>-s</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>required</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM file to analyze (CycloneDX, SPDX…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--scanner &lt;name&gt;</code> (or <code>-S</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Scanner to use: <code>grype</code>, <code>osv</code>, <code>trivy</code>, or <code>all</code> (the three)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-after &lt;YYYY-MM-DD&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>none</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Only show the CVEs whose date is after this value (inclusive)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-before &lt;YYYY-MM-DD&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>none</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Only show the CVEs whose date is before this value (inclusive, end of day)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-date-field &lt;field&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>published</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Date field used: <code>published</code>, <code>modified</code>, or <code>latest</code> (the more recent of
+the two)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--include-undated</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>disabled</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Include the CVEs whose date field is absent from the scanner data</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--help</code> (or <code>-h</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">—</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Display the help of the subcommand</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_exit_codes">21.2. Exit codes</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>0</strong> — no CVE in the requested range (or no CVE found at all)</p>
+</li>
+<li>
+<p><strong>1</strong> — at least one CVE found in the range, or a scanner error</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_examples">21.3. Examples</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># All Grype CVEs since January 1st, 2024
+sbom-generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# OSV-Scanner CVEs between two dates
+sbom-generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# All scanners, modification date, undated CVEs included
+sbom-generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Use in a CI script (returns 1 if recent CVEs are detected)
+sbom-generator scan --sbom sbom.cdx.json \
+  --cve-after "$(date -d '90 days ago' +%F)" &amp;&amp; echo "OK" || echo "Recent CVEs!"</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_output_format">21.4. Output format</h3>
+<div class="paragraph">
+<p>For each scanner, the command prints a text table sorted by decreasing
+severity:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>── Grype ──────────────────────────────────────────
+  3 CVE(s) found  Filter: field=published  after=2024-01-01
+
+SEVERITY      CVE / ID              PACKAGE
+------------  --------------------  ------------------------------------
+Critical      CVE-2024-1234         openssl@1.1.1k
+High          CVE-2024-5678         bash@5.0.17
+Medium        CVE-2024-9012         zlib@1.2.11</pre>
+</div>
+</div>
+</div>
+</div>

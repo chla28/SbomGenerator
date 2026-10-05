@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../l10n/l10n.dart';
 
 sealed class TrivyEvent {}
 
@@ -53,45 +54,50 @@ class TrivyRunner {
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
 
-    Process.start('trivy', args).then((process) {
-      _process = process;
-      unawaited(process.stdin.close());
+    Process.start('trivy', args)
+        .then((process) {
+          _process = process;
+          unawaited(process.stdin.close());
 
-      process.stdout
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen((c) {
-        if (!controller.isClosed) jsonBuf.write(c);
-      });
+          process.stdout
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .listen((c) {
+                if (!controller.isClosed) jsonBuf.write(c);
+              });
 
-      process.stderr
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen((c) {
-        if (!controller.isClosed) stderrBuf.write(c);
-      });
+          process.stderr
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .listen((c) {
+                if (!controller.isClosed) stderrBuf.write(c);
+              });
 
-      process.exitCode.then((code) {
-        _process = null;
-        if (controller.isClosed) return;
+          process.exitCode.then((code) {
+            _process = null;
+            if (controller.isClosed) return;
 
-        if (jsonBuf.isNotEmpty) {
-          controller.add(TrivyOutputEvent(jsonBuf.toString()));
-        }
+            if (jsonBuf.isNotEmpty) {
+              controller.add(TrivyOutputEvent(jsonBuf.toString()));
+            }
 
-        final stderr = stderrBuf.isNotEmpty ? stderrBuf.toString().trim() : null;
-        controller.add(TrivyDoneEvent(code, stderr: code > 1 ? stderr : null));
-        controller.close();
-      });
-    }).catchError((Object e) {
-      _process = null;
-      if (!controller.isClosed) {
-        final msg = e.toString().contains('No such file')
-            ? 'trivy introuvable — '
-              'https://github.com/aquasecurity/trivy'
-            : e.toString();
-        controller.add(TrivyDoneEvent(127, stderr: msg));
-        controller.close();
-      }
-    });
+            final stderr = stderrBuf.isNotEmpty
+                ? stderrBuf.toString().trim()
+                : null;
+            controller.add(
+              TrivyDoneEvent(code, stderr: code > 1 ? stderr : null),
+            );
+            controller.close();
+          });
+        })
+        .catchError((Object e) {
+          _process = null;
+          if (!controller.isClosed) {
+            final msg = e.toString().contains('No such file')
+                ? appL10n().svcTrivyMissing
+                : e.toString();
+            controller.add(TrivyDoneEvent(127, stderr: msg));
+            controller.close();
+          }
+        });
 
     return controller.stream;
   }
@@ -107,7 +113,12 @@ class TrivyRunner {
     bool skipDbUpdate = false,
     String? configFile,
   }) {
-    final args = <String>[useImage ? 'image' : 'sbom', '--format', 'json', '--quiet'];
+    final args = <String>[
+      useImage ? 'image' : 'sbom',
+      '--format',
+      'json',
+      '--quiet',
+    ];
     if (severities.isNotEmpty) {
       args.addAll(['--severity', severities.join(',')]);
     }

@@ -795,5 +795,2792 @@
   "cliCommandPackageNote": "Le SBOM est généré dans un répertoire temporaire ; chaque CVE est rattachée à l'objet qui contient le paquet vulnérable (colonne OBJET) dans l'équivalent sbom-generator scan.",
   "@cliCommandPackageNote": {
     "description": "Remarque : SBOM de paquet temporaire."
+  },
+  "layerGlobalSbom": "SBOM global",
+  "@layerGlobalSbom": {
+    "description": "Entrée du sélecteur de couche : le SBOM global de l'image."
+  },
+  "layerOption": "Couche {index}/{total} ({digest})",
+  "@layerOption": {
+    "description": "Entrée du sélecteur de couche : couche numéro index sur total.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "digest": {
+        "type": "String"
+      }
+    }
+  },
+  "layerCount": "{count, plural, one{{count} couche :} other{{count} couches :}}",
+  "@layerCount": {
+    "description": "Libellé devant le sélecteur de couche (nombre de couches du jeu).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "layerRemovedChip": "{count, plural, one{{count} supprimé} other{{count} supprimés}}",
+  "@layerRemovedChip": {
+    "description": "Pastille : nombre de composants supprimés par la couche.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "cveCopyId": "Copier l'identifiant",
+  "@cveCopyId": {
+    "description": "Info-bulle du bouton de copie de l'identifiant d'une CVE."
+  },
+  "cveCopied": "CVE copié",
+  "@cveCopied": {
+    "description": "Message : l'identifiant de CVE a été copié dans le presse-papiers."
+  },
+  "cveReportedBy": "Rapporté par",
+  "@cveReportedBy": {
+    "description": "Titre de section : scanners qui rapportent la CVE."
+  },
+  "cveThSeverity": "Sévérité",
+  "@cveThSeverity": {
+    "description": "En-tête de colonne : sévérité."
+  },
+  "cveThPublishedModified": "Publié / modifié",
+  "@cveThPublishedModified": {
+    "description": "En-tête de colonne : dates de publication / modification."
+  },
+  "cveExploitTitle": "Exploitabilité et exploitation active",
+  "@cveExploitTitle": {
+    "description": "Titre de section : signaux d'exploitabilité d'une CVE."
+  },
+  "cveNoSignal": "Aucun signal d'exploitation connu.",
+  "@cveNoSignal": {
+    "description": "Message : aucun signal d'exploitation pour cette CVE."
+  },
+  "cveKevLine": "CISA KEV — exploitée activement dans la nature",
+  "@cveKevLine": {
+    "description": "Ligne de détail : la CVE est au catalogue CISA KEV."
+  },
+  "cveKevAddedOn": " · ajoutée le {date}",
+  "@cveKevAddedOn": {
+    "description": "Suite de la ligne KEV : date d'ajout au catalogue.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cveKevDueOn": " · échéance {date}",
+  "@cveKevDueOn": {
+    "description": "Suite de la ligne KEV : échéance de remédiation.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cveKevRansomware": " · usage par rançongiciel",
+  "@cveKevRansomware": {
+    "description": "Suite de la ligne KEV : exploitée par un rançongiciel."
+  },
+  "cveEpssLine": "EPSS {score} (percentile p{pct}) — probabilité d'exploitation à 30 jours",
+  "@cveEpssLine": {
+    "description": "Ligne de détail : score EPSS et percentile.",
+    "placeholders": {
+      "score": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "cveExploitability": "exploitabilité {score}/3.9",
+  "@cveExploitability": {
+    "description": "Sous-score d'exploitabilité CVSS (0 à 3,9).",
+    "placeholders": {
+      "score": {
+        "type": "String"
+      }
+    }
+  },
+  "cveMaturity": "maturité {value}",
+  "@cveMaturity": {
+    "description": "Maturité de l'exploit (vecteur CVSS).",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "cvePocRepos": "{n, plural, one{{n} dépôt PoC public recensé} other{{n} dépôts PoC publics recensés}}",
+  "@cvePocRepos": {
+    "description": "Ligne de détail : nombre de dépôts PoC publics.",
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "cvePocKnown": "Exploit / PoC public recensé",
+  "@cvePocKnown": {
+    "description": "Ligne de détail : un exploit public existe."
+  },
+  "cveReferences": "Références",
+  "@cveReferences": {
+    "description": "Titre de section : liens externes d'une CVE."
+  },
+  "adocPackage": "Paquet",
+  "@adocPackage": {
+    "description": "Rapport AsciiDoc, détail d'une CVE : libellé de la ligne « paquet »."
+  },
+  "adocDates": "Dates",
+  "@adocDates": {
+    "description": "Rapport AsciiDoc, détail d'une CVE : libellé de la ligne « dates »."
+  },
+  "adocDateEntry": "{scanner} : publié {published}, modifié {modified}",
+  "@adocDateEntry": {
+    "description": "Rapport AsciiDoc : dates de publication et modification vues par un scanner.",
+    "placeholders": {
+      "scanner": {
+        "type": "String"
+      },
+      "published": {
+        "type": "String"
+      },
+      "modified": {
+        "type": "String"
+      }
+    }
+  },
+  "adocDescription": "Description",
+  "@adocDescription": {
+    "description": "Rapport AsciiDoc : libellé de la ligne « description »."
+  },
+  "adocKevYes": "Oui — {details}",
+  "@adocKevYes": {
+    "description": "Rapport AsciiDoc : la CVE est au catalogue KEV, avec le détail.",
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "adocKevAdded": "ajoutée {date}",
+  "@adocKevAdded": {
+    "description": "Rapport AsciiDoc : date d'ajout au catalogue KEV.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "adocKevDue": "échéance {date}",
+  "@adocKevDue": {
+    "description": "Rapport AsciiDoc : échéance de remédiation KEV.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "adocKevRansomware": "usage par rançongiciel",
+  "@adocKevRansomware": {
+    "description": "Rapport AsciiDoc : exploitée par un rançongiciel."
+  },
+  "adocEpss": "{score} (percentile p{pct})",
+  "@adocEpss": {
+    "description": "Rapport AsciiDoc : score EPSS et percentile.",
+    "placeholders": {
+      "score": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "adocCvssBase": "base {score}",
+  "@adocCvssBase": {
+    "description": "Rapport AsciiDoc : score de base CVSS.",
+    "placeholders": {
+      "score": {
+        "type": "String"
+      }
+    }
+  },
+  "adocPocPublic": "PoC public",
+  "@adocPocPublic": {
+    "description": "Rapport AsciiDoc : libellé de la ligne « PoC public »."
+  },
+  "adocPocRepos": "{n, plural, one{{n} dépôt} other{{n} dépôts}}",
+  "@adocPocRepos": {
+    "description": "Rapport AsciiDoc : nombre de dépôts PoC.",
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "adocYes": "oui",
+  "@adocYes": {
+    "description": "Rapport AsciiDoc : réponse affirmative."
+  },
+  "adocLinks": "Liens",
+  "@adocLinks": {
+    "description": "Rapport AsciiDoc : libellé de la ligne « liens »."
+  },
+  "pdfSeverityCritical": "CRITIQUE",
+  "@pdfSeverityCritical": {
+    "description": "Rapport : libellé de sévérité critique (badge, majuscules)."
+  },
+  "pdfSeverityHigh": "ÉLEVÉE",
+  "@pdfSeverityHigh": {
+    "description": "Rapport : libellé de sévérité élevée (badge, majuscules)."
+  },
+  "pdfSeverityMedium": "MOYENNE",
+  "@pdfSeverityMedium": {
+    "description": "Rapport : libellé de sévérité moyenne (badge, majuscules)."
+  },
+  "pdfSeverityLow": "FAIBLE",
+  "@pdfSeverityLow": {
+    "description": "Rapport : libellé de sévérité faible (badge, majuscules)."
+  },
+  "pdfSeverityNegligible": "NÉGLIGEABLE",
+  "@pdfSeverityNegligible": {
+    "description": "Rapport : libellé de sévérité négligeable (badge, majuscules)."
+  },
+  "pdfSeverityBarAlt": "Répartition par sévérité",
+  "@pdfSeverityBarAlt": {
+    "description": "Rapport : texte alternatif de la barre de répartition par sévérité."
+  },
+  "pdfUnavailable": "_indisponible_",
+  "@pdfUnavailable": {
+    "description": "Rapport : version d'un outil non détectée (AsciiDoc, en italique)."
+  },
+  "layerDocHeader": "Couche {index}/{total} — mode {mode}",
+  "@layerDocHeader": {
+    "description": "Description d'un SBOM de couche : numéro de la couche, total, mode de calcul.",
+    "placeholders": {
+      "index": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "layerDocDigest": "Digest : {digest}",
+  "@layerDocDigest": {
+    "description": "Description d'un SBOM de couche : digest de la couche.",
+    "placeholders": {
+      "digest": {
+        "type": "String"
+      }
+    }
+  },
+  "layerDocInstruction": "Instruction : {text}",
+  "@layerDocInstruction": {
+    "description": "Description d'un SBOM de couche : instruction de build.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "layerDocCounts": "Ajoutés : {added} — modifiés : {modified} — supprimés : {removed}",
+  "@layerDocCounts": {
+    "description": "Description d'un SBOM de couche : compteurs de composants.",
+    "placeholders": {
+      "added": {
+        "type": "String"
+      },
+      "modified": {
+        "type": "String"
+      },
+      "removed": {
+        "type": "String"
+      }
+    }
+  },
+  "layerDocAnalyzed": "{count, plural, one{{count} couche analysée} other{{count} couches analysées}}",
+  "@layerDocAnalyzed": {
+    "description": "Description du SBOM global d'une image : nombre de couches analysées.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "layerDocModeSuffix": " — mode {mode}",
+  "@layerDocModeSuffix": {
+    "description": "Suite de la description du SBOM global : mode de calcul des couches.",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "layerColAdded": "ajouté",
+  "@layerColAdded": {
+    "description": "Colonne « couche / changement » : composant ajouté par la couche."
+  },
+  "layerColModifiedWas": "modifié (était {prev})",
+  "@layerColModifiedWas": {
+    "description": "Colonne « couche / changement » : composant modifié, avec l'ancienne version.",
+    "placeholders": {
+      "prev": {
+        "type": "String"
+      }
+    }
+  },
+  "layerColModified": "modifié",
+  "@layerColModified": {
+    "description": "Colonne « couche / changement » : composant modifié."
+  },
+  "layerColLayer": "couche {index}",
+  "@layerColLayer": {
+    "description": "Colonne « couche » : couche d'origine du composant.",
+    "placeholders": {
+      "index": {
+        "type": "String"
+      }
+    }
+  },
+  "layerColLayerModifiedBy": "couche {index} (modifié : {by})",
+  "@layerColLayerModifiedBy": {
+    "description": "Colonne « couche » : couche d'origine et couches qui l'ont modifié.",
+    "placeholders": {
+      "index": {
+        "type": "String"
+      },
+      "by": {
+        "type": "String"
+      }
+    }
+  },
+  "layerGroupAdded": "Ajoutés",
+  "@layerGroupAdded": {
+    "description": "Regroupement par couche : composants ajoutés."
+  },
+  "layerGroupModified": "Modifiés",
+  "@layerGroupModified": {
+    "description": "Regroupement par couche : composants modifiés."
+  },
+  "layerGroupUnknown": "(couche inconnue)",
+  "@layerGroupUnknown": {
+    "description": "Regroupement par couche : composants sans couche connue."
+  },
+  "layerGroupLayer": "Couche {index}",
+  "@layerGroupLayer": {
+    "description": "Regroupement par couche : en-tête de groupe (index sur deux chiffres).",
+    "placeholders": {
+      "index": {
+        "type": "String"
+      }
+    }
+  },
+  "layerScanModeEach": "SBOM de chaque couche scanné",
+  "@layerScanModeEach": {
+    "description": "Rapport : méthode « chaque couche » de l'analyse par couche."
+  },
+  "layerScanModeAttribute": "rattachement à la couche d'origine du paquet",
+  "@layerScanModeAttribute": {
+    "description": "Rapport : méthode « rattachement » de l'analyse par couche."
+  },
+  "treeFormatUnknown": "Format non reconnu (ni CycloneDX ni SPDX).",
+  "@treeFormatUnknown": {
+    "description": "Arborescence : le fichier ouvert n'est ni CycloneDX ni SPDX."
+  },
+  "treeReadError": "Erreur de lecture : {error}",
+  "@treeReadError": {
+    "description": "Arborescence : échec de lecture du fichier.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "treePickTitle": "Sélectionner un fichier SBOM (JSON)",
+  "@treePickTitle": {
+    "description": "Titre du sélecteur de fichier SBOM."
+  },
+  "treeUnspecified": "(non spécifié)",
+  "@treeUnspecified": {
+    "description": "Arborescence : groupe des composants sans licence."
+  },
+  "treeExpandAll": "Tout déplier",
+  "@treeExpandAll": {
+    "description": "Info-bulle : déplier tous les groupes."
+  },
+  "treeCollapseAll": "Tout replier",
+  "@treeCollapseAll": {
+    "description": "Info-bulle : replier tous les groupes."
+  },
+  "treeFilterHint": "Filtrer par nom, purl, licence…",
+  "@treeFilterHint": {
+    "description": "Champ de filtre de l'arborescence."
+  },
+  "treeNoMatch": "Aucun composant pour \"{term}\"",
+  "@treeNoMatch": {
+    "description": "Arborescence : aucun résultat pour le filtre.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "treeNoFileSelected": "Aucun fichier SBOM sélectionné",
+  "@treeNoFileSelected": {
+    "description": "Barre de fichier : aucun SBOM chargé."
+  },
+  "treeGenerated": "Générés ({count})",
+  "@treeGenerated": {
+    "description": "Menu des SBOM générés (nombre de fichiers).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "treeOpen": "Ouvrir…",
+  "@treeOpen": {
+    "description": "Bouton : ouvrir un fichier SBOM."
+  },
+  "treeComponentsChip": "{count, plural, one{{count} composant} other{{count} composants}}",
+  "@treeComponentsChip": {
+    "description": "Pastille : nombre de composants du SBOM.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "treeLicensesChip": "{count, plural, one{{count} licence} other{{count} licences}}",
+  "@treeLicensesChip": {
+    "description": "Pastille : nombre de licences distinctes.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "treeGroupBy": "Grouper :",
+  "@treeGroupBy": {
+    "description": "Libellé du sélecteur de regroupement."
+  },
+  "treeGroupHelp": "Mode de regroupement des composants.\n• Aucun : liste à plat alphabétique\n• Type : groupé par écosystème (rpm, pypi…)\n• Licence : groupé par expression SPDX\n• Couche : groupé par couche d'origine (SBOM global) ou par changement (SBOM de couche) — SBOM produits avec --per-layer",
+  "@treeGroupHelp": {
+    "description": "Aide du sélecteur de regroupement."
+  },
+  "treeGroupNone": "Aucun",
+  "@treeGroupNone": {
+    "description": "Regroupement : aucun."
+  },
+  "treeGroupType": "Type",
+  "@treeGroupType": {
+    "description": "Regroupement : par type."
+  },
+  "treeGroupLicense": "Licence",
+  "@treeGroupLicense": {
+    "description": "Regroupement : par licence."
+  },
+  "treeGroupLayer": "Couche",
+  "@treeGroupLayer": {
+    "description": "Regroupement : par couche."
+  },
+  "treeDetailLicense": "Licence",
+  "@treeDetailLicense": {
+    "description": "Détail d'un composant : licence."
+  },
+  "treeDetailLayer": "Couche",
+  "@treeDetailLayer": {
+    "description": "Détail d'un composant : couche."
+  },
+  "treeEmptyNoSbom": "Aucun fichier SBOM (JSON/JSON-LD) dans les sorties.",
+  "@treeEmptyNoSbom": {
+    "description": "Arborescence vide : des sorties existent mais aucun SBOM."
+  },
+  "treeEmptyGenerate": "Générez un SBOM ou ouvrez un fichier existant.",
+  "@treeEmptyGenerate": {
+    "description": "Arborescence vide : rien à afficher."
+  },
+  "treeOpenSbom": "Ouvrir un fichier SBOM",
+  "@treeOpenSbom": {
+    "description": "Bouton : ouvrir un fichier SBOM."
+  },
+  "viewerOpenTitle": "Ouvrir un fichier SBOM",
+  "@viewerOpenTitle": {
+    "description": "Titre du sélecteur de fichier de la visionneuse."
+  },
+  "viewerParseError": "Impossible de parser le fichier : {error}",
+  "@viewerParseError": {
+    "description": "Visionneuse : échec d'analyse du fichier.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewerUnspecified": "Non spécifiée",
+  "@viewerUnspecified": {
+    "description": "Visionneuse : libellé d'une licence absente (statistiques)."
+  },
+  "viewerNoFile": "Aucun fichier SBOM chargé",
+  "@viewerNoFile": {
+    "description": "Visionneuse vide."
+  },
+  "viewerOpenEllipsis": "Ouvrir un fichier SBOM…",
+  "@viewerOpenEllipsis": {
+    "description": "Bouton : ouvrir un fichier SBOM (visionneuse vide)."
+  },
+  "viewerStatComponents": "composants",
+  "@viewerStatComponents": {
+    "description": "Visionneuse : étiquette du badge « nombre de composants »."
+  },
+  "viewerStatTypes": "types",
+  "@viewerStatTypes": {
+    "description": "Visionneuse : étiquette du badge « nombre de types »."
+  },
+  "viewerStatLicenses": "licences",
+  "@viewerStatLicenses": {
+    "description": "Visionneuse : étiquette du badge « nombre de licences »."
+  },
+  "viewerOpenShort": "Ouvrir…",
+  "@viewerOpenShort": {
+    "description": "Bouton : ouvrir un fichier."
+  },
+  "viewerFilterHint": "Filtrer…",
+  "@viewerFilterHint": {
+    "description": "Champ de filtre de la visionneuse."
+  },
+  "viewerTypeHint": "Type",
+  "@viewerTypeHint": {
+    "description": "Filtre par type : indication."
+  },
+  "viewerAll": "Tous",
+  "@viewerAll": {
+    "description": "Filtre par type : tous les types."
+  },
+  "viewerNoResult": "Aucun résultat",
+  "@viewerNoResult": {
+    "description": "Visionneuse : aucun composant ne correspond au filtre."
+  },
+  "viewerColName": "Nom",
+  "@viewerColName": {
+    "description": "En-tête de colonne : nom."
+  },
+  "viewerColLicense": "Licence",
+  "@viewerColLicense": {
+    "description": "En-tête de colonne : licence."
+  },
+  "viewerColChange": "Changement",
+  "@viewerColChange": {
+    "description": "En-tête de colonne : changement (SBOM de couche)."
+  },
+  "viewerColLayer": "Couche",
+  "@viewerColLayer": {
+    "description": "En-tête de colonne : couche d'origine (SBOM global)."
+  },
+  "viewerCopyPurl": "Copier le PURL",
+  "@viewerCopyPurl": {
+    "description": "Info-bulle : copier le PURL."
+  },
+  "viewerPurlCopied": "PURL copié",
+  "@viewerPurlCopied": {
+    "description": "Message : PURL copié."
+  },
+  "commonGeneratedFiles": "Fichiers générés",
+  "@commonGeneratedFiles": {
+    "description": "Menu : fichiers générés par la dernière génération."
+  },
+  "commonOutputFile": "Fichier de sortie",
+  "@commonOutputFile": {
+    "description": "Champ : chemin du fichier de sortie."
+  },
+  "commonDocNameOptional": "Nom du document (optionnel)",
+  "@commonDocNameOptional": {
+    "description": "Champ : nom du document (facultatif)."
+  },
+  "licPickTitle": "Sélectionner un fichier SBOM",
+  "@licPickTitle": {
+    "description": "Titre du sélecteur de fichier (onglet Licences)."
+  },
+  "licChooseFile": "Choisir un fichier…",
+  "@licChooseFile": {
+    "description": "Bouton : choisir un fichier SBOM."
+  },
+  "licNoFile": "Aucun fichier sélectionné",
+  "@licNoFile": {
+    "description": "Licences : aucun fichier choisi."
+  },
+  "licGenerate": "Générer",
+  "@licGenerate": {
+    "description": "Bouton : générer le rapport de licences."
+  },
+  "licReportGenerated": "Rapport généré → {path}",
+  "@licReportGenerated": {
+    "description": "Licences : rapport écrit.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "licReportFailed": "Échec de la génération (code {code}) — voir le journal ci-dessous.",
+  "@licReportFailed": {
+    "description": "Licences : échec de la génération.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "licLoadError": "Impossible de lire les licences : {error}",
+  "@licLoadError": {
+    "description": "Licences : échec de lecture des licences du SBOM.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "licSelectHint": "Sélectionnez un fichier CycloneDX ou SPDX pour visualiser ses licences (regroupées par licence, avec signalement des licences copyleft et des paquets sans licence détectée), puis générer un rapport ci-dessous.",
+  "@licSelectHint": {
+    "description": "Licences : texte d'accueil de l'onglet."
+  },
+  "licFilterHint": "Filtrer par licence ou par paquet…",
+  "@licFilterHint": {
+    "description": "Licences : champ de filtre."
+  },
+  "licViewGrouped": "Par licence",
+  "@licViewGrouped": {
+    "description": "Licences : vue regroupée par licence."
+  },
+  "licViewTable": "Tableau",
+  "@licViewTable": {
+    "description": "Licences : vue en tableau."
+  },
+  "licNoResult": "Aucun résultat.",
+  "@licNoResult": {
+    "description": "Licences : aucun résultat pour le filtre."
+  },
+  "licChipPackages": "{count, plural, one{{count} paquet} other{{count} paquets}}",
+  "@licChipPackages": {
+    "description": "Licences : pastille du nombre de paquets.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "licChipLicenses": "{count, plural, one{{count} licence} other{{count} licences}}",
+  "@licChipLicenses": {
+    "description": "Licences : pastille du nombre de licences distinctes.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "licChipStrong": "{count} copyleft fort",
+  "@licChipStrong": {
+    "description": "Licences : pastille des paquets sous copyleft fort.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "licChipWeak": "{count} copyleft faible",
+  "@licChipWeak": {
+    "description": "Licences : pastille des paquets sous copyleft faible.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "licChipNone": "{count} sans licence",
+  "@licChipNone": {
+    "description": "Licences : pastille des paquets sans licence.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "licCategoryStrong": "copyleft fort",
+  "@licCategoryStrong": {
+    "description": "Licences : badge de catégorie copyleft fort."
+  },
+  "licCategoryWeak": "copyleft faible",
+  "@licCategoryWeak": {
+    "description": "Licences : badge de catégorie copyleft faible."
+  },
+  "licCategoryNone": "sans licence",
+  "@licCategoryNone": {
+    "description": "Licences : badge de catégorie sans licence."
+  },
+  "licNoLicenseDetected": "Sans licence détectée",
+  "@licNoLicenseDetected": {
+    "description": "Licences : titre du groupe des paquets sans licence."
+  },
+  "licColPackage": "Paquet",
+  "@licColPackage": {
+    "description": "En-tête de colonne : paquet."
+  },
+  "licColLicense": "Licence",
+  "@licColLicense": {
+    "description": "En-tête de colonne : licence."
+  },
+  "mergePickTitle": "Sélectionner des fichiers SBOM à fusionner",
+  "@mergePickTitle": {
+    "description": "Titre du sélecteur de fichiers (onglet Fusion)."
+  },
+  "mergeAddFiles": "Ajouter des fichiers…",
+  "@mergeAddFiles": {
+    "description": "Bouton : ajouter des fichiers SBOM à fusionner."
+  },
+  "mergeJsonOnly": ".json / .jsonld",
+  "@mergeJsonOnly": {
+    "description": "Menu : filtrer sur les extensions JSON."
+  },
+  "mergeAllFiles": "Tous les fichiers",
+  "@mergeAllFiles": {
+    "description": "Menu : aucun filtre d'extension."
+  },
+  "mergeSelected": "{count, plural, one{{count} fichier sélectionné} other{{count} fichiers sélectionnés}}",
+  "@mergeSelected": {
+    "description": "Fusion : nombre de fichiers sélectionnés.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "mergeAtLeastTwo": " — au moins 2 requis",
+  "@mergeAtLeastTwo": {
+    "description": "Fusion : suite du compteur quand moins de deux fichiers sont choisis."
+  },
+  "mergeHint": "Ajoutez au moins deux fichiers SBOM à fusionner\n(CycloneDX ou SPDX 2.x — un même format des deux côtés).",
+  "@mergeHint": {
+    "description": "Fusion : texte d'accueil."
+  },
+  "mergeButton": "Fusionner",
+  "@mergeButton": {
+    "description": "Bouton : lancer la fusion."
+  },
+  "mergeOk": "Fusion réussie → {path}",
+  "@mergeOk": {
+    "description": "Fusion : réussite.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "mergeFailed": "Échec de la fusion (code {code}) — voir le journal ci-dessous.",
+  "@mergeFailed": {
+    "description": "Fusion : échec.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "diffFormatUnknown": "Format non reconnu.",
+  "@diffFormatUnknown": {
+    "description": "Comparaison : le fichier n'est ni CycloneDX ni SPDX."
+  },
+  "diffPickA": "Sélectionner SBOM A (référence)",
+  "@diffPickA": {
+    "description": "Titre du sélecteur de fichier pour le SBOM A."
+  },
+  "diffPickB": "Sélectionner SBOM B (comparé)",
+  "@diffPickB": {
+    "description": "Titre du sélecteur de fichier pour le SBOM B."
+  },
+  "diffNoMatch": "Aucun résultat pour \"{term}\"",
+  "@diffNoMatch": {
+    "description": "Comparaison : aucun résultat pour la recherche.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "diffNoItems": "Aucun élément pour les filtres sélectionnés.",
+  "@diffNoItems": {
+    "description": "Comparaison : aucun élément pour les filtres de statut."
+  },
+  "diffSlotA": "A – Référence",
+  "@diffSlotA": {
+    "description": "Comparaison : intitulé de l'emplacement du SBOM A."
+  },
+  "diffSlotB": "B – Comparé",
+  "@diffSlotB": {
+    "description": "Comparaison : intitulé de l'emplacement du SBOM B."
+  },
+  "diffCompare": "Comparer",
+  "@diffCompare": {
+    "description": "Bouton : lancer la comparaison."
+  },
+  "diffNoFile": "Aucun fichier sélectionné",
+  "@diffNoFile": {
+    "description": "Comparaison : aucun fichier dans l'emplacement."
+  },
+  "diffComponentsInfo": "{format} · {count, plural, one{{count} composant} other{{count} composants}}",
+  "@diffComponentsInfo": {
+    "description": "Comparaison : format du SBOM et nombre de composants.",
+    "placeholders": {
+      "format": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "diffOpenFile": "Ouvrir un fichier…",
+  "@diffOpenFile": {
+    "description": "Info-bulle : ouvrir un fichier."
+  },
+  "diffAdded": "Ajoutés",
+  "@diffAdded": {
+    "description": "Comparaison : composants ajoutés."
+  },
+  "diffRemoved": "Supprimés",
+  "@diffRemoved": {
+    "description": "Comparaison : composants supprimés."
+  },
+  "diffChanged": "Modifiés",
+  "@diffChanged": {
+    "description": "Comparaison : composants modifiés."
+  },
+  "diffUnchanged": "Inchangés",
+  "@diffUnchanged": {
+    "description": "Comparaison : composants inchangés."
+  },
+  "diffChipAdded": "➕ Ajoutés ({count})",
+  "@diffChipAdded": {
+    "description": "Comparaison : filtre « ajoutés » avec compteur.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "diffChipRemoved": "➖ Supprimés ({count})",
+  "@diffChipRemoved": {
+    "description": "Comparaison : filtre « supprimés » avec compteur.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "diffChipChanged": "🔄 Modifiés ({count})",
+  "@diffChipChanged": {
+    "description": "Comparaison : filtre « modifiés » avec compteur.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "diffChipUnchanged": "✓ Inchangés ({count})",
+  "@diffChipUnchanged": {
+    "description": "Comparaison : filtre « inchangés » avec compteur.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "diffFilterHint": "Filtrer par nom…",
+  "@diffFilterHint": {
+    "description": "Comparaison : champ de filtre."
+  },
+  "diffHdrStatus": "STATUT",
+  "@diffHdrStatus": {
+    "description": "Comparaison : en-tête de colonne statut."
+  },
+  "diffHdrName": "NOM",
+  "@diffHdrName": {
+    "description": "Comparaison : en-tête de colonne nom."
+  },
+  "diffHdrVersionA": "VERSION A",
+  "@diffHdrVersionA": {
+    "description": "Comparaison : en-tête de colonne version A."
+  },
+  "diffHdrVersionB": "VERSION B",
+  "@diffHdrVersionB": {
+    "description": "Comparaison : en-tête de colonne version B."
+  },
+  "diffHdrLicense": "LICENCE",
+  "@diffHdrLicense": {
+    "description": "Comparaison : en-tête de colonne licence."
+  },
+  "diffStatusAdded": "Ajouté",
+  "@diffStatusAdded": {
+    "description": "Comparaison : statut d'une ligne ajoutée."
+  },
+  "diffStatusRemoved": "Supprimé",
+  "@diffStatusRemoved": {
+    "description": "Comparaison : statut d'une ligne supprimée."
+  },
+  "diffStatusChanged": "Modifié",
+  "@diffStatusChanged": {
+    "description": "Comparaison : statut d'une ligne modifiée."
+  },
+  "diffStatusUnchanged": "Inchangé",
+  "@diffStatusUnchanged": {
+    "description": "Comparaison : statut d'une ligne inchangée."
+  },
+  "diffEmptyReady": "Cliquez sur \"Comparer\" pour lancer l'analyse.",
+  "@diffEmptyReady": {
+    "description": "Comparaison : invite quand les deux fichiers sont chargés."
+  },
+  "diffEmptyPick": "Sélectionnez deux fichiers SBOM (A et B) pour les comparer.",
+  "@diffEmptyPick": {
+    "description": "Comparaison : invite quand il manque un fichier."
+  },
+  "qualityPickTitle": "Sélectionner un fichier SBOM",
+  "@qualityPickTitle": {
+    "description": "Titre du sélecteur de fichier (onglet Qualité SBOM)."
+  },
+  "qualitySbomqsError": "Erreur sbomqs (exit {code})",
+  "@qualitySbomqsError": {
+    "description": "Qualité : sbomqs a échoué sans message.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "qualitySbomqsMissing": "sbomqs introuvable — installez-le et ajoutez-le au PATH",
+  "@qualitySbomqsMissing": {
+    "description": "Qualité : sbomqs n'est pas installé."
+  },
+  "qualityScorecardError": "Erreur sbom-scorecard (exit {code})",
+  "@qualityScorecardError": {
+    "description": "Qualité : sbom-scorecard a échoué sans message.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "qualityScorecardMissing": "sbom-scorecard introuvable — installez-le et ajoutez-le au PATH",
+  "@qualityScorecardMissing": {
+    "description": "Qualité : sbom-scorecard n'est pas installé."
+  },
+  "qualityFileLabel": "Fichier SBOM",
+  "@qualityFileLabel": {
+    "description": "Champ : fichier SBOM à évaluer."
+  },
+  "qualityAnalyze": "Analyser",
+  "@qualityAnalyze": {
+    "description": "Bouton : lancer l'évaluation de la qualité."
+  },
+  "qualityProfiles": "Profils :",
+  "@qualityProfiles": {
+    "description": "Libellé de la liste des profils sbomqs."
+  },
+  "qualityProfilesHelp": "Profils de conformité SBOM évalués par sbomqs.\nChaque profil vérifie un ensemble de critères\nspécifiques (NTIA, BSI, OpenChain, Interlynk…).\nAucun profil sélectionné = tous évalués.",
+  "@qualityProfilesHelp": {
+    "description": "Aide : profils de conformité sbomqs."
+  },
+  "qualityTitle": "Évaluation de la qualité SBOM",
+  "@qualityTitle": {
+    "description": "Qualité : titre de l'écran d'accueil."
+  },
+  "qualityIntro": "Sélectionnez un fichier SBOM puis cliquez sur Analyser.\nL'analyse utilise sbomqs (Interlynk) et sbom-scorecard (eBay).",
+  "@qualityIntro": {
+    "description": "Qualité : texte d'accueil."
+  },
+  "qualityTableView": "Vue tableau",
+  "@qualityTableView": {
+    "description": "Info-bulle : passer en vue tableau."
+  },
+  "qualityRawJson": "JSON brut",
+  "@qualityRawJson": {
+    "description": "Info-bulle : afficher le JSON brut."
+  },
+  "qualityNoCriteria": "Aucun critère détaillé disponible.",
+  "@qualityNoCriteria": {
+    "description": "Qualité : aucune donnée de critères."
+  },
+  "qualityOther": "Autre",
+  "@qualityOther": {
+    "description": "Qualité : catégorie sans nom."
+  },
+  "qualityShowAll": "Tout voir",
+  "@qualityShowAll": {
+    "description": "Qualité : bouton « tout afficher » des filtres."
+  },
+  "qualityChartView": "Vue graphique",
+  "@qualityChartView": {
+    "description": "Info-bulle : passer en vue graphique."
+  },
+  "qualityRawOutput": "Sortie brute",
+  "@qualityRawOutput": {
+    "description": "Info-bulle : afficher la sortie brute."
+  },
+  "qualityIndustryProfiles": "Profils d'industrie",
+  "@qualityIndustryProfiles": {
+    "description": "Qualité : titre de la section des profils."
+  },
+  "qualityIndustryHint": "Sélectionnez des profils dans la barre de configuration\npour afficher le détail des critères",
+  "@qualityIndustryHint": {
+    "description": "Qualité : info-bulle de la section des profils."
+  },
+  "qualityProfileSummary": "{score}/10  ·  {passed}/{total} critères",
+  "@qualityProfileSummary": {
+    "description": "Qualité : score d'un profil et critères satisfaits.",
+    "placeholders": {
+      "score": {
+        "type": "String"
+      },
+      "passed": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "qualityRequiredNote": "* critère obligatoire",
+  "@qualityRequiredNote": {
+    "description": "Qualité : légende de l'astérisque."
+  },
+  "tabProgress": "Progression",
+  "@tabProgress": {
+    "description": "Onglet des résultats : progression de la génération."
+  },
+  "tabResults": "Résultats",
+  "@tabResults": {
+    "description": "Onglet des résultats : fichiers produits."
+  },
+  "tabResultsCount": "Résultats ({count})",
+  "@tabResultsCount": {
+    "description": "Onglet des résultats avec le nombre de fichiers.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "tabDashboard": "Tableau de bord",
+  "@tabDashboard": {
+    "description": "Onglet : tableau de bord des vulnérabilités."
+  },
+  "tabCra": "Conformité CRA",
+  "@tabCra": {
+    "description": "Onglet : rapport de conformité Cyber Resilience Act."
+  },
+  "tabQuality": "Qualité SBOM",
+  "@tabQuality": {
+    "description": "Onglet : qualité du SBOM."
+  },
+  "tabTree": "Arborescence",
+  "@tabTree": {
+    "description": "Onglet : arborescence du SBOM."
+  },
+  "tabCompare": "Comparaison",
+  "@tabCompare": {
+    "description": "Onglet : comparaison de deux SBOM."
+  },
+  "tabMerge": "Fusion",
+  "@tabMerge": {
+    "description": "Onglet : fusion de SBOM."
+  },
+  "tabLicenses": "Licences",
+  "@tabLicenses": {
+    "description": "Onglet : licences du SBOM."
+  },
+  "tabViewer": "Visionneuse",
+  "@tabViewer": {
+    "description": "Onglet : visionneuse de SBOM."
+  },
+  "tabPreview": "Aperçu",
+  "@tabPreview": {
+    "description": "Onglet : aperçu des fichiers générés."
+  },
+  "tabPreviewCount": "Aperçu ({count})",
+  "@tabPreviewCount": {
+    "description": "Onglet : aperçu avec le nombre de fichiers.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsPreviewTruncated": "[… tronqué — {total} caractères au total]",
+  "@resultsPreviewTruncated": {
+    "description": "Aperçu : fichier tronqué.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsReadError": "Erreur de lecture : {error}",
+  "@resultsReadError": {
+    "description": "Aperçu : échec de lecture du fichier.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "resultsPdfConverting": "Conversion PDF (asciidoctor-pdf) en cours…",
+  "@resultsPdfConverting": {
+    "description": "Bandeau : conversion PDF en cours."
+  },
+  "resultsProgressPackages": "{current} / {total} paquets",
+  "@resultsProgressPackages": {
+    "description": "Progression : paquets traités sur total.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsSummaryOk": "{count, plural, one{{count} fichier SBOM généré} other{{count} fichiers SBOM générés}}",
+  "@resultsSummaryOk": {
+    "description": "Résumé : nombre de fichiers SBOM générés.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsSummaryWarnings": " — {count, plural, one{{count} avertissement} other{{count} avertissements}}",
+  "@resultsSummaryWarnings": {
+    "description": "Résumé : suite avec le nombre d'avertissements.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsGenerationFailed": "Échec de la génération (exit {code})",
+  "@resultsGenerationFailed": {
+    "description": "Résumé : la génération a échoué.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsLogsCopied": "Logs copiés dans le presse-papier",
+  "@resultsLogsCopied": {
+    "description": "Message : journal copié."
+  },
+  "resultsSave": "Enregistrer",
+  "@resultsSave": {
+    "description": "Bouton : enregistrer le journal."
+  },
+  "resultsSaveLogsTitle": "Enregistrer les logs",
+  "@resultsSaveLogsTitle": {
+    "description": "Titre du dialogue d'enregistrement du journal."
+  },
+  "resultsStatPackages": "{count, plural, one{{count} paquet} other{{count} paquets}}",
+  "@resultsStatPackages": {
+    "description": "Résumé : nombre de paquets.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsStatFiles": "{count, plural, one{{count} fichier SBOM} other{{count} fichiers SBOM}}",
+  "@resultsStatFiles": {
+    "description": "Résumé : nombre de fichiers SBOM.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsStatWarnings": "{count, plural, one{{count} avertissement} other{{count} avertissements}}",
+  "@resultsStatWarnings": {
+    "description": "Résumé : nombre d'avertissements.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsSectionFiles": "Fichiers générés",
+  "@resultsSectionFiles": {
+    "description": "Résultats : titre de section."
+  },
+  "resultsSectionScore": "Score sbomqs",
+  "@resultsSectionScore": {
+    "description": "Résultats : titre de section du score sbomqs."
+  },
+  "resultsSectionWarnings": "Avertissements ({count})",
+  "@resultsSectionWarnings": {
+    "description": "Résultats : titre de section des avertissements.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsSectionError": "Erreur",
+  "@resultsSectionError": {
+    "description": "Résultats : titre de section de l'erreur fatale."
+  },
+  "resultsNoPreview": "Aucun fichier texte généré pour la prévisualisation",
+  "@resultsNoPreview": {
+    "description": "Aperçu : aucun fichier prévisualisable."
+  },
+  "resultsCopyContent": "Copier le contenu",
+  "@resultsCopyContent": {
+    "description": "Info-bulle : copier le contenu du fichier."
+  },
+  "resultsContentCopied": "Contenu copié",
+  "@resultsContentCopied": {
+    "description": "Message : contenu copié."
+  },
+  "resultsSelectFile": "Sélectionnez un fichier",
+  "@resultsSelectFile": {
+    "description": "Aperçu : aucun fichier sélectionné."
+  },
+  "resultsCopyPath": "Copier le chemin",
+  "@resultsCopyPath": {
+    "description": "Info-bulle : copier le chemin du fichier."
+  },
+  "resultsPathCopied": "Chemin copié",
+  "@resultsPathCopied": {
+    "description": "Message : chemin copié."
+  },
+  "resultsOpenFile": "Ouvrir le fichier",
+  "@resultsOpenFile": {
+    "description": "Info-bulle : ouvrir le fichier."
+  },
+  "resultsCollapse": "Réduire",
+  "@resultsCollapse": {
+    "description": "Bouton : réduire la liste."
+  },
+  "resultsShowMore": "Voir {count} de plus…",
+  "@resultsShowMore": {
+    "description": "Bouton : afficher les avertissements restants.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "resultsEmptyHint": "Configurez les options et lancez la génération",
+  "@resultsEmptyHint": {
+    "description": "Résultats : texte d'accueil."
+  },
+  "homeGenerationFailed": "Génération échouée (exit {code})",
+  "@homeGenerationFailed": {
+    "description": "Erreur affichée quand le CLI se termine avec un code non nul.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "homePdfHeader": "Conversion PDF (asciidoctor-pdf)…",
+  "@homePdfHeader": {
+    "description": "Journal : début de la conversion AsciiDoc → PDF. Doit commencer par « Conversion PDF » ou « PDF conversion » (coloration du journal)."
+  },
+  "homePdfError": "Erreur asciidoctor-pdf (exit {code})",
+  "@homePdfError": {
+    "description": "Journal : asciidoctor-pdf a échoué.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "homePdfMissing": "Erreur : asciidoctor-pdf introuvable.",
+  "@homePdfMissing": {
+    "description": "Journal : asciidoctor-pdf n'est pas installé."
+  },
+  "homePdfInstall": "  Installez avec : gem install asciidoctor-pdf",
+  "@homePdfInstall": {
+    "description": "Journal : commande d'installation de asciidoctor-pdf."
+  },
+  "homeInterrupted": "[Génération interrompue par l'utilisateur]",
+  "@homeInterrupted": {
+    "description": "Journal : génération arrêtée par l'utilisateur."
+  },
+  "homePdfRunning": "Conversion PDF en cours…",
+  "@homePdfRunning": {
+    "description": "Info-bulle : conversion PDF en cours."
+  },
+  "homeSbomRunning": "Génération SBOM en cours…",
+  "@homeSbomRunning": {
+    "description": "Info-bulle : génération en cours."
+  },
+  "homeHelpTooltip": "Aide — Manuel utilisateur",
+  "@homeHelpTooltip": {
+    "description": "Info-bulle : ouvrir le manuel utilisateur."
+  },
+  "homeThemeColor": "Couleur du thème",
+  "@homeThemeColor": {
+    "description": "Info-bulle / titre : choix de la couleur du thème."
+  },
+  "homeLightMode": "Mode clair",
+  "@homeLightMode": {
+    "description": "Info-bulle : passer en mode clair."
+  },
+  "homeDarkMode": "Mode sombre",
+  "@homeDarkMode": {
+    "description": "Info-bulle : passer en mode sombre."
+  },
+  "homeAbout": "À propos",
+  "@homeAbout": {
+    "description": "Info-bulle : boîte « À propos »."
+  },
+  "homeAboutText": "Interface graphique pour l'outil sbom_generator.\n\nGénère des SBOM (Software Bill of Materials) depuis des listes de paquets RPM, .whl, .tar.gz, .deb, .zip, .jar, ou de manifestes (requirements.txt, go.sum, package-lock.json, pom.xml, pubspec.lock…) — fichier liste, paquet unique, ou dossier scanné récursivement.\n\nFormats supportés : CycloneDX 1.6/1.7, SPDX 2.3, SPDX 3.0 JSON-LD, JSON personnalisé, Markdown, AsciiDoc.",
+  "@homeAboutText": {
+    "description": "Boîte « À propos » : description de l'application."
+  },
+  "homeCancel": "Annuler",
+  "@homeCancel": {
+    "description": "Bouton : annuler un dialogue."
+  },
+  "themeBlue": "Bleu",
+  "@themeBlue": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "themePurple": "Violet",
+  "@themePurple": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "themeGreen": "Vert",
+  "@themeGreen": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "themeRed": "Rouge",
+  "@themeRed": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "themePink": "Rose",
+  "@themePink": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "themeSlate": "Ardoise",
+  "@themeSlate": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "themeBrown": "Marron",
+  "@themeBrown": {
+    "description": "Nom d'une couleur de thème de l'application."
+  },
+  "svcLaunchError": "Erreur de lancement : {error}",
+  "@svcLaunchError": {
+    "description": "Journal : le CLI n'a pas pu être lancé.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "svcGrypeMissing": "grype introuvable. Installez-le : https://github.com/anchore/grype",
+  "@svcGrypeMissing": {
+    "description": "Erreur : grype n'est pas installé."
+  },
+  "svcOsvMissing": "osv-scanner introuvable — https://github.com/google/osv-scanner",
+  "@svcOsvMissing": {
+    "description": "Erreur : osv-scanner n'est pas installé."
+  },
+  "svcTrivyMissing": "trivy introuvable — https://github.com/aquasecurity/trivy",
+  "@svcTrivyMissing": {
+    "description": "Erreur : trivy n'est pas installé."
+  },
+  "svcLayerSbomFailed": "génération des SBOM de couche impossible (code {code}) : {detail}",
+  "@svcLayerSbomFailed": {
+    "description": "Erreur : la génération du jeu de SBOM par couche a échoué.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "svcNoLayer": "aucune couche trouvée dans {image}",
+  "@svcNoLayer": {
+    "description": "Erreur : l'image ne contient aucune couche.",
+    "placeholders": {
+      "image": {
+        "type": "String"
+      }
+    }
+  },
+  "svcNotInstalled": "non installé",
+  "@svcNotInstalled": {
+    "description": "Version d'un outil : l'outil n'est pas installé."
+  },
+  "svcUpdateAvailable": "Mise à jour disponible — cliquez pour accéder à la release",
+  "@svcUpdateAvailable": {
+    "description": "Info-bulle : une nouvelle version d'un outil existe."
+  },
+  "craInvalidSbom": "Sélectionnez un fichier SBOM valide.",
+  "@craInvalidSbom": {
+    "description": "CRA : aucun SBOM valide choisi."
+  },
+  "craUnexpectedOutput": "Sortie inattendue (code {code}).",
+  "@craUnexpectedOutput": {
+    "description": "CRA : le CLI n'a pas produit de JSON.",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "craLaunchFailed": "Échec du lancement : {error}",
+  "@craLaunchFailed": {
+    "description": "CRA : le CLI n'a pas pu être lancé.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "craExportTitle": "Exporter le rapport CRA (PDF)",
+  "@craExportTitle": {
+    "description": "Titre du dialogue d'export du rapport CRA."
+  },
+  "craExportFileName": "rapport-cra.pdf",
+  "@craExportFileName": {
+    "description": "Nom de fichier proposé pour le rapport CRA."
+  },
+  "craReportWritten": "Rapport CRA écrit → {path}",
+  "@craReportWritten": {
+    "description": "CRA : rapport PDF écrit.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "craFailed": "Échec : {detail}",
+  "@craFailed": {
+    "description": "CRA : échec de l'export.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "craTitle": "Rapport de conformité — Cyber Resilience Act",
+  "@craTitle": {
+    "description": "CRA : titre de l'onglet."
+  },
+  "craHelp": "Périmètre vérifiable automatiquement uniquement : format et complétude du SBOM (Annexe I §2 point 1, BSI TR-03183-2, éléments minimaux NTIA), inventaire des vulnérabilités connues et disponibilité des correctifs, vulnérabilités activement exploitées (art. 14). Les autres obligations du CRA relèvent du fabricant. Ce rapport n'est pas une déclaration de conformité.",
+  "@craHelp": {
+    "description": "CRA : aide sur le périmètre du rapport."
+  },
+  "craSbomField": "Fichier SBOM à évaluer",
+  "@craSbomField": {
+    "description": "CRA : champ du fichier SBOM."
+  },
+  "craProductMeta": "Métadonnées produit (facultatif)",
+  "@craProductMeta": {
+    "description": "CRA : section des métadonnées produit."
+  },
+  "craManufacturer": "Fabricant",
+  "@craManufacturer": {
+    "description": "CRA : champ fabricant."
+  },
+  "craProduct": "Produit",
+  "@craProduct": {
+    "description": "CRA : champ produit."
+  },
+  "craProductVersion": "Version du produit",
+  "@craProductVersion": {
+    "description": "CRA : champ version du produit."
+  },
+  "craSupportUntil": "Fin de support (AAAA-MM-JJ)",
+  "@craSupportUntil": {
+    "description": "CRA : champ fin de support."
+  },
+  "craVulnContact": "Contact de signalement des vulnérabilités",
+  "@craVulnContact": {
+    "description": "CRA : champ contact de signalement."
+  },
+  "craCvdUrl": "URL de la politique de divulgation coordonnée",
+  "@craCvdUrl": {
+    "description": "CRA : champ URL de la politique de divulgation."
+  },
+  "craLoadConfig": "Charger un cra.yaml",
+  "@craLoadConfig": {
+    "description": "CRA : bouton de chargement du fichier de configuration."
+  },
+  "craConfigLoaded": "cra.yaml : {name}",
+  "@craConfigLoaded": {
+    "description": "CRA : fichier de configuration chargé.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "craScanVulns": "Analyser les vulnérabilités connues",
+  "@craScanVulns": {
+    "description": "CRA : case d'analyse des vulnérabilités."
+  },
+  "craScannerAll": "Les trois",
+  "@craScannerAll": {
+    "description": "CRA : choix des trois scanners."
+  },
+  "craEvaluate": "Évaluer",
+  "@craEvaluate": {
+    "description": "CRA : bouton d'évaluation."
+  },
+  "craExportPdf": "Exporter le rapport PDF",
+  "@craExportPdf": {
+    "description": "CRA : bouton d'export PDF."
+  },
+  "craStatusOk": "Conforme",
+  "@craStatusOk": {
+    "description": "CRA : statut conforme."
+  },
+  "craStatusPartial": "Partiel",
+  "@craStatusPartial": {
+    "description": "CRA : statut partiel."
+  },
+  "craStatusFail": "Non conforme",
+  "@craStatusFail": {
+    "description": "CRA : statut non conforme."
+  },
+  "craStatusNa": "Non évalué",
+  "@craStatusNa": {
+    "description": "CRA : statut non évalué."
+  },
+  "craVerdict": "Verdict (périmètre vérifié) : {status}",
+  "@craVerdict": {
+    "description": "CRA : ligne de verdict.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "craTileFields": "Champs SBOM conformes",
+  "@craTileFields": {
+    "description": "CRA : tuile du nombre de champs conformes."
+  },
+  "craTileNtia": "Éléments NTIA",
+  "@craTileNtia": {
+    "description": "CRA : tuile des éléments NTIA."
+  },
+  "craTileNoFix": "Vuln. sans correctif",
+  "@craTileNoFix": {
+    "description": "CRA : tuile des vulnérabilités sans correctif."
+  },
+  "craTileKev": "CVE exploitées (KEV)",
+  "@craTileKev": {
+    "description": "CRA : tuile des CVE exploitées."
+  },
+  "craBlockers": "Points bloquants",
+  "@craBlockers": {
+    "description": "CRA : titre de la liste des points bloquants."
+  },
+  "craFieldsTitle": "Champs de données SBOM (BSI TR-03183-2)",
+  "@craFieldsTitle": {
+    "description": "CRA : titre du tableau des champs."
+  },
+  "craThField": "Champ",
+  "@craThField": {
+    "description": "CRA : en-tête de colonne champ."
+  },
+  "craThCoverage": "Couverture",
+  "@craThCoverage": {
+    "description": "CRA : en-tête de colonne couverture."
+  },
+  "craThStatus": "Statut",
+  "@craThStatus": {
+    "description": "CRA : en-tête de colonne statut."
+  },
+  "craSbomSummary": "SBOM : {format} — {components} composants, {relations} relations de dépendance.",
+  "@craSbomSummary": {
+    "description": "CRA : résumé du SBOM évalué.",
+    "placeholders": {
+      "format": {
+        "type": "String"
+      },
+      "components": {
+        "type": "String"
+      },
+      "relations": {
+        "type": "String"
+      }
+    }
+  },
+  "craVulnSummary": "Vulnérabilités : {total} CVE — {critical} critiques, {high} élevées.",
+  "@craVulnSummary": {
+    "description": "CRA : résumé des vulnérabilités.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      },
+      "critical": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
+  "craEnisaNotice": " ⚠ Notification ENISA sous 24 h requise (art. 14).",
+  "@craEnisaNotice": {
+    "description": "CRA : rappel de la notification ENISA."
+  },
+  "commonStopAction": "Arrêter",
+  "@commonStopAction": {
+    "description": "Bouton : arrêter l'analyse en cours."
+  },
+  "scanTargetImage": "image « {target} »",
+  "@scanTargetImage": {
+    "description": "Cible d'un scan (rapports) : une image.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "scanTargetSbom": "SBOM {name}",
+  "@scanTargetSbom": {
+    "description": "Cible d'un scan (rapports) : un fichier SBOM.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "cliPlaceholderPackage": "<paquet>",
+  "@cliPlaceholderPackage": {
+    "description": "Aperçu de commande : marque de remplacement du chemin d'un paquet."
+  },
+  "scanBannerCount": "{count, plural, one{{count} vulnérabilité} other{{count} vulnérabilités}} — ",
+  "@scanBannerCount": {
+    "description": "Bannière de résultat : nombre de vulnérabilités (suivi des compteurs par sévérité).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "scanTabVulns": "Vulnérabilités",
+  "@scanTabVulns": {
+    "description": "Onglet de résultats : tableau des vulnérabilités."
+  },
+  "scanTabRawJson": "JSON brut",
+  "@scanTabRawJson": {
+    "description": "Onglet de résultats : sortie JSON brute."
+  },
+  "scanHintPick": "Sélectionnez un SBOM ou une image et lancez l'analyse",
+  "@scanHintPick": {
+    "description": "Texte d'accueil des onglets de scan."
+  },
+  "scanRunningTool": "Analyse {tool} en cours…",
+  "@scanRunningTool": {
+    "description": "Texte affiché pendant un scan.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "scanRunButton": "Analyser avec {tool}",
+  "@scanRunButton": {
+    "description": "Bouton : lancer un scan avec l'outil.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "scanNoVulnFound": "Aucune vulnérabilité trouvée",
+  "@scanNoVulnFound": {
+    "description": "Bannière : aucun résultat."
+  },
+  "scanPlatformHelp": "Optionnel. Force la plateforme cible sur une\nimage multi-architecture, ex. linux/arm64.\nLaisser vide = détection automatique par {tool}.",
+  "@scanPlatformHelp": {
+    "description": "Aide : champ plateforme d'un scan d'image.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "trivyPickConfigTitle": "Choisir trivy.yaml",
+  "@trivyPickConfigTitle": {
+    "description": "Titre du sélecteur de fichier trivy.yaml."
+  },
+  "trivySeverityLabel": "--severity (laisser vide = tout)",
+  "@trivySeverityLabel": {
+    "description": "Trivy : libellé du filtre de sévérité."
+  },
+  "trivySeverityHelp": "Filtres de sévérité. Seules les vulnérabilités\ndont la sévérité est cochée sont affichées.\nLaisser vide = toutes les sévérités.",
+  "@trivySeverityHelp": {
+    "description": "Trivy : aide du filtre de sévérité."
+  },
+  "trivyIgnoreUnfixedHelp": "Masque les vulnérabilités sans version\ncorrigée disponible. Réduit le bruit\ndans les résultats.",
+  "@trivyIgnoreUnfixedHelp": {
+    "description": "Trivy : aide de --ignore-unfixed."
+  },
+  "trivySkipDbHelp": "Utilise la base CVE locale sans la mettre\nà jour. Accélère les analyses successives,\nmais la base peut être obsolète.",
+  "@trivySkipDbHelp": {
+    "description": "Trivy : aide de --skip-db-update."
+  },
+  "trivyConfigLabel": "trivy.yaml (optionnel)",
+  "@trivyConfigLabel": {
+    "description": "Trivy : libellé du champ de configuration."
+  },
+  "trivyConfigHelp": "Fichier de configuration Trivy (YAML).\nPermet de définir des politiques, des\nexceptions ou des sources personnalisées.",
+  "@trivyConfigHelp": {
+    "description": "Trivy : aide du champ de configuration."
+  },
+  "trivyConfigHint": "/chemin/vers/trivy.yaml",
+  "@trivyConfigHint": {
+    "description": "Trivy : exemple de chemin du fichier de configuration."
+  },
+  "trivyCliConfigNote": "fichier de config",
+  "@trivyCliConfigNote": {
+    "description": "Aperçu de commande : option non transposable (fichier de configuration)."
+  },
+  "trivyCliPlatformNote": "plateforme",
+  "@trivyCliPlatformNote": {
+    "description": "Aperçu de commande : option non transposable (plateforme)."
+  },
+  "osvPickConfigTitle": "Choisir osv-scanner.toml",
+  "@osvPickConfigTitle": {
+    "description": "Titre du sélecteur de fichier osv-scanner.toml."
+  },
+  "osvConfigLabel": "Fichier de config (optionnel)",
+  "@osvConfigLabel": {
+    "description": "OSV-Scanner : libellé du champ de configuration."
+  },
+  "osvConfigHelp": "Fichier TOML de configuration osv-scanner.\nPermet d'exclure des CVE, de configurer\ndes sources ou de définir des politiques.",
+  "@osvConfigHelp": {
+    "description": "OSV-Scanner : aide du champ de configuration."
+  },
+  "osvCliConfigNote": "fichier de config (toml)",
+  "@osvCliConfigNote": {
+    "description": "Aperçu de commande : option non transposable (config toml)."
+  },
+  "osvEcosystemColumn": "ÉCOSYSTÈME",
+  "@osvEcosystemColumn": {
+    "description": "OSV-Scanner : en-tête de la colonne écosystème."
+  },
+  "vulnCsvHeaderGrype": "Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Type,Emplacements",
+  "@vulnCsvHeaderGrype": {
+    "description": "En-tête CSV de l'export Grype."
+  },
+  "vulnCsvHeaderTrivy": "Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Titre,Emplacements",
+  "@vulnCsvHeaderTrivy": {
+    "description": "En-tête CSV de l'export Trivy."
+  },
+  "vulnCsvHeaderOsv": "Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Écosystème,Emplacements",
+  "@vulnCsvHeaderOsv": {
+    "description": "En-tête CSV de l'export OSV-Scanner."
+  },
+  "pdfSeverityOther": "AUTRE",
+  "@pdfSeverityOther": {
+    "description": "Rapport : libellé de sévérité « autre » (badge, majuscules)."
+  },
+  "repTitle": "= Rapport de vulnérabilités: Synthèse inter-scanners",
+  "@repTitle": {
+    "description": "Rapport du tableau de bord (AsciiDoc) : titre du document."
+  },
+  "repTocTitle": ":toc-title: Sommaire",
+  "@repTocTitle": {
+    "description": "Rapport : titre du sommaire."
+  },
+  "repExecSummary": "== Résumé exécutif",
+  "@repExecSummary": {
+    "description": "Rapport : titre de la section « résumé exécutif »."
+  },
+  "repTarget": "*Cible analysée* : {target} +",
+  "@repTarget": {
+    "description": "Rapport : une cible analysée.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "repTargets": "*Cibles analysées* : {targets} +",
+  "@repTargets": {
+    "description": "Rapport : plusieurs cibles analysées.",
+    "placeholders": {
+      "targets": {
+        "type": "String"
+      }
+    }
+  },
+  "repScannersRun": "*Scanners exécutés* : {run} / 3{names} — *{unique}* CVE uniques",
+  "@repScannersRun": {
+    "description": "Rapport : nombre de scanners exécutés et de CVE uniques.",
+    "placeholders": {
+      "run": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "names": {
+        "type": "String"
+      },
+      "unique": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "repThresholdNote": "NOTE: Filtre de sévérité : *{label}* — {kept} CVE retenue(s){ofTotal}, d'après la pire sévérité rapportée par les scanners. Les CVE au catalogue CISA KEV sont incluses quelle que soit leur sévérité. Tout le rapport (compteurs, répartition, couches, comparaison, détail) porte sur ce sous-ensemble.",
+  "@repThresholdNote": {
+    "description": "Rapport : note sur le filtre de sévérité.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "kept": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "ofTotal": {
+        "type": "String"
+      }
+    }
+  },
+  "repThresholdOf": " sur {total}",
+  "@repThresholdOf": {
+    "description": "Rapport : suite de la note de filtre (total avant filtrage).",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "repStatsHeader": "h| Critiques h| Élevées h| CISA KEV h| EPSS ≥ 10 %",
+  "@repStatsHeader": {
+    "description": "Rapport : en-têtes du bandeau de chiffres clés."
+  },
+  "repVerdictKev": "Action immédiate requise. {kev, plural, one{{kev} CVE du catalogue CISA KEV est exploitée} other{{kev} CVE du catalogue CISA KEV sont exploitées}} activement dans la nature — appliquer les correctifs sans délai.",
+  "@repVerdictKev": {
+    "description": "Rapport : verdict en présence de CVE KEV.",
+    "placeholders": {
+      "kev": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "repVerdictCritical": "Action prioritaire. {count, plural, one{{count} vulnérabilité critique à corriger} other{{count} vulnérabilités critiques à corriger}} en priorité.",
+  "@repVerdictCritical": {
+    "description": "Rapport : verdict en présence de CVE critiques.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "repVerdictHigh": "À traiter. {count, plural, one{{count} vulnérabilité de sévérité élevée identifiée} other{{count} vulnérabilités de sévérité élevée identifiées}}.",
+  "@repVerdictHigh": {
+    "description": "Rapport : verdict en présence de CVE élevées.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "repVerdictOk": "Aucune vulnérabilité critique ni élevée détectée par les scanners exécutés.",
+  "@repVerdictOk": {
+    "description": "Rapport : verdict sans CVE critique ni élevée."
+  },
+  "repTools": "== Outils",
+  "@repTools": {
+    "description": "Rapport : section des outils."
+  },
+  "repToolHeader": "| Outil | Version",
+  "@repToolHeader": {
+    "description": "Rapport : en-tête du tableau des outils."
+  },
+  "repBreakdown": "== Répartition par scanner",
+  "@repBreakdown": {
+    "description": "Rapport : section de la répartition par scanner."
+  },
+  "repNotRun": "_Non exécuté._",
+  "@repNotRun": {
+    "description": "Rapport : scanner non exécuté."
+  },
+  "repNoVuln": "Aucune vulnérabilité détectée.",
+  "@repNoVuln": {
+    "description": "Rapport : aucun résultat pour un scanner."
+  },
+  "repSevCountHeader": "| Sévérité | Nombre",
+  "@repSevCountHeader": {
+    "description": "Rapport : en-tête du tableau sévérité / nombre."
+  },
+  "repLayersTitle": "== Couches de l'image",
+  "@repLayersTitle": {
+    "description": "Rapport : section des couches."
+  },
+  "repMethod": "Méthode : {methods}.",
+  "@repMethod": {
+    "description": "Rapport : méthode d'analyse par couche.",
+    "placeholders": {
+      "methods": {
+        "type": "String"
+      }
+    }
+  },
+  "repLayersHeader": "| Couche | Digest | Instruction | CVE | Critiques | Élevées",
+  "@repLayersHeader": {
+    "description": "Rapport : en-tête du tableau des couches."
+  },
+  "repCompareTitle": "== Comparaison inter-scanners",
+  "@repCompareTitle": {
+    "description": "Rapport : section de comparaison."
+  },
+  "repLayersColumn": " | Couche(s)",
+  "@repLayersColumn": {
+    "description": "Rapport : colonne des couches."
+  },
+  "repNoCve": "_Aucune CVE détectée par les scanners exécutés._",
+  "@repNoCve": {
+    "description": "Rapport : comparaison vide."
+  },
+  "repCompareHeaderExploit": "| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV | Trivy{layerHead}",
+  "@repCompareHeaderExploit": {
+    "description": "Rapport : en-tête de la comparaison avec exploitabilité.",
+    "placeholders": {
+      "layerHead": {
+        "type": "String"
+      }
+    }
+  },
+  "repCompareHeader": "| Sévérité | CVE / ID | Grype | OSV | Trivy{layerHead}",
+  "@repCompareHeader": {
+    "description": "Rapport : en-tête de la comparaison.",
+    "placeholders": {
+      "layerHead": {
+        "type": "String"
+      }
+    }
+  },
+  "repScannerNote": "Des comptages très différents entre scanners sur les paquets système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. OSV-Scanner peut ne trouver aucune CVE sur ces paquets lorsqu'il est lancé en mode « scan de SBOM » : son API n'indexe les avis Debian que sous une forme de purl précise, absente du SBOM standard produit par syft — scanner l'image directement (`osv-scanner scan image`) donne une couverture fiable. Grype et Trivy n'ont par ailleurs pas la même exhaustivité sur ces mêmes paquets : Grype reprend l'intégralité du Debian Security Tracker (avis « won't fix » inclus) là où Trivy ne remonte qu'un sous-ensemble plus restreint. Aucun des deux scanners n'a tort — leurs chiffres bruts ne sont simplement pas directement comparables sur ce type de paquet. Détails et méthode de vérification dans la documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».",
+  "@repScannerNote": {
+    "description": "Rapport : encadré expliquant les écarts entre scanners."
+  },
+  "repDetailTitle": "== Détail des CVE",
+  "@repDetailTitle": {
+    "description": "Rapport : section de détail des CVE."
+  },
+  "repDetailAll": "{count} CVE.",
+  "@repDetailAll": {
+    "description": "Rapport : nombre de CVE détaillées (tout le jeu).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "repDetailKept": "{count} CVE retenue(s) : sévérité {label} ou au catalogue CISA KEV.",
+  "@repDetailKept": {
+    "description": "Rapport : nombre de CVE détaillées avec seuil.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "dashExportTitle": "Exporter le tableau de bord (AsciiDoc + PDF)",
+  "@dashExportTitle": {
+    "description": "Titre du dialogue d'export du tableau de bord."
+  },
+  "dashExportFileAll": "rapport-vulnerabilites.adoc",
+  "@dashExportFileAll": {
+    "description": "Nom de fichier proposé pour le rapport du tableau de bord."
+  },
+  "dashExportFileThreshold": "rapport-vulnerabilites-{threshold}.adoc",
+  "@dashExportFileThreshold": {
+    "description": "Nom de fichier proposé pour le rapport avec seuil de sévérité.",
+    "placeholders": {
+      "threshold": {
+        "type": "String"
+      }
+    }
+  },
+  "dashExported": "Tableau de bord exporté → {path} et {pdf}",
+  "@dashExported": {
+    "description": "Message : rapport exporté en AsciiDoc et PDF.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "pdf": {
+        "type": "String"
+      }
+    }
+  },
+  "dashExportedPdfFailed": "Tableau de bord exporté → {path} (échec conversion PDF, code {code})",
+  "@dashExportedPdfFailed": {
+    "description": "Message : conversion PDF échouée.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashExportedNoPdf": "Tableau de bord exporté → {path} (asciidoctor-pdf introuvable, PDF non généré)",
+  "@dashExportedNoPdf": {
+    "description": "Message : asciidoctor-pdf absent.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "dashTitle": "Tableau de bord des vulnérabilités",
+  "@dashTitle": {
+    "description": "Tableau de bord : titre."
+  },
+  "dashNoScan": "Aucun scanner exécuté — lancez un scan depuis les onglets Grype, OSV-Scanner ou Trivy.",
+  "@dashNoScan": {
+    "description": "Tableau de bord : aucun scan lancé."
+  },
+  "dashScanSummary": "{scans, plural, one{{scans} scanner exécuté} other{{scans} scanners exécutés}} · {ids, plural, one{{ids} CVE unique détectée} other{{ids} CVE uniques détectées}}",
+  "@dashScanSummary": {
+    "description": "Tableau de bord : résumé du nombre de scanners et de CVE.",
+    "placeholders": {
+      "scans": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "ids": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashUniqueCves": "CVE uniques",
+  "@dashUniqueCves": {
+    "description": "Tableau de bord : badge du nombre de CVE uniques."
+  },
+  "dashThresholdTooltip": "Sévérité minimale des CVE du rapport PDF (les CVE CISA KEV sont toujours incluses)",
+  "@dashThresholdTooltip": {
+    "description": "Info-bulle : seuil de sévérité du rapport."
+  },
+  "dashNotRun": "Non exécuté",
+  "@dashNotRun": {
+    "description": "Carte scanner : scanner non exécuté."
+  },
+  "dashNone": "✓ Aucune",
+  "@dashNone": {
+    "description": "Carte scanner : aucune vulnérabilité."
+  },
+  "dashTotalVulns": "{count, plural, one{{count} vulnérabilité} other{{count} vulnérabilités}}",
+  "@dashTotalVulns": {
+    "description": "Carte scanner : nombre de vulnérabilités.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashRunScanFrom": "Lancez le scan depuis\nl'onglet {name}",
+  "@dashRunScanFrom": {
+    "description": "Carte scanner : invite à lancer le scan depuis l'onglet.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dashOtherSeverity": "Autre",
+  "@dashOtherSeverity": {
+    "description": "Carte scanner : sévérités regroupées « autre »."
+  },
+  "dashCompareTitle": "Comparaison inter-scanners ({count} CVE",
+  "@dashCompareTitle": {
+    "description": "Tableau de bord : titre de la comparaison (début, avant l'éventuel compteur KEV).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashCompareKev": ", dont {kev} CISA KEV",
+  "@dashCompareKev": {
+    "description": "Tableau de bord : suite du titre de comparaison.",
+    "placeholders": {
+      "kev": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashHdrSeverity": "SÉV.",
+  "@dashHdrSeverity": {
+    "description": "Comparaison : en-tête de colonne sévérité (abrégé)."
+  },
+  "dashHdrLayers": "COUCHE(S)",
+  "@dashHdrLayers": {
+    "description": "Comparaison : en-tête de colonne couches."
+  },
+  "dashSeenByOne": "Vu par un seul scanner sur {count}",
+  "@dashSeenByOne": {
+    "description": "Info-bulle : CVE vue par un seul scanner.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashEpssTooltip": "EPSS {score} — probabilité d'exploitation à 30 jours (percentile {pct})",
+  "@dashEpssTooltip": {
+    "description": "Info-bulle : score EPSS.",
+    "placeholders": {
+      "score": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashLayersCard": "Couches de l'image ({count})",
+  "@dashLayersCard": {
+    "description": "Carte des couches : titre.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "dashHdrLayer": "COUCHE",
+  "@dashHdrLayer": {
+    "description": "Carte des couches : en-tête de colonne couche."
+  },
+  "dashHdrHigh": "ÉLEV.",
+  "@dashHdrHigh": {
+    "description": "Carte des couches : en-tête de colonne élevées."
+  },
+  "cfgTitle": "Configuration",
+  "@cfgTitle": {
+    "description": "Titre du panneau de configuration."
+  },
+  "cfgProfilesTooltip": "Profils de configuration",
+  "@cfgProfilesTooltip": {
+    "description": "Infobulle du bouton des profils."
+  },
+  "cfgSectionInput": "Entrée",
+  "@cfgSectionInput": {
+    "description": "Titre de section."
+  },
+  "cfgSectionOutput": "Sortie",
+  "@cfgSectionOutput": {
+    "description": "Titre de section."
+  },
+  "cfgSectionOptions": "Options",
+  "@cfgSectionOptions": {
+    "description": "Titre de section."
+  },
+  "cfgInputLabel": "Paquets à analyser (--input)",
+  "@cfgInputLabel": {
+    "description": "Libellé du champ d'entrée."
+  },
+  "cfgInputHintDrop": "Déposez un fichier ou un dossier ici…",
+  "@cfgInputHintDrop": {
+    "description": "Indication pendant un glisser-déposer."
+  },
+  "cfgInputHint": "rpm.lst, un .jar, ou un dossier…",
+  "@cfgInputHint": {
+    "description": "Indication du champ d'entrée."
+  },
+  "cfgInputHelp": "Fichier liste (une référence par ligne),\nune archive/un paquet unique (.rpm, .deb,\n.whl, .jar, .zip, .tar.gz…), ou un dossier\nscanné récursivement pour tous ces types.",
+  "@cfgInputHelp": {
+    "description": "Aide du champ d'entrée."
+  },
+  "cfgPickInputFile": "Sélectionner le fichier d'entrée",
+  "@cfgPickInputFile": {
+    "description": "Titre du sélecteur de fichier."
+  },
+  "cfgPickPackagesDir": "Sélectionner un dossier de paquets",
+  "@cfgPickPackagesDir": {
+    "description": "Titre du sélecteur de dossier."
+  },
+  "cfgInputRequired": "Requis (ou spécifiez une image OCI / un binaire)",
+  "@cfgInputRequired": {
+    "description": "Erreur de validation."
+  },
+  "cfgDragHint": "Glissez-déposez un fichier ou un dossier depuis votre gestionnaire",
+  "@cfgDragHint": {
+    "description": "Indication de glisser-déposer."
+  },
+  "cfgOr": "OU",
+  "@cfgOr": {
+    "description": "Séparateur entre types d'entrée."
+  },
+  "cfgPickOciArchive": "Sélectionner une archive OCI",
+  "@cfgPickOciArchive": {
+    "description": "Titre du sélecteur."
+  },
+  "cfgPickOciDir": "Sélectionner un répertoire OCI layout",
+  "@cfgPickOciDir": {
+    "description": "Titre du sélecteur."
+  },
+  "cfgPickBinary": "Sélectionner un binaire",
+  "@cfgPickBinary": {
+    "description": "Titre du sélecteur."
+  },
+  "cfgBinarySyftForced": "Backend : syft (forcé — seul capable d'analyser un binaire autonome)",
+  "@cfgBinarySyftForced": {
+    "description": "Note sous le champ binaire."
+  },
+  "cfgOutputBase": "Chemin de base (--output)",
+  "@cfgOutputBase": {
+    "description": "Libellé."
+  },
+  "cfgOutputBaseHint": "sbom  →  sbom.cdx.json, sbom.spdx.json…",
+  "@cfgOutputBaseHint": {
+    "description": "Indication."
+  },
+  "cfgOutputBaseHelp": "Préfixe du chemin de sortie. Le suffixe de\nformat est ajouté automatiquement.\nEx : sbom → sbom.cdx.json, sbom.spdx.json…",
+  "@cfgOutputBaseHelp": {
+    "description": "Aide."
+  },
+  "cfgOutputBaseTitle": "Chemin de base du SBOM",
+  "@cfgOutputBaseTitle": {
+    "description": "Titre du dialogue d'enregistrement."
+  },
+  "cfgFormats": "Formats (--format)",
+  "@cfgFormats": {
+    "description": "Libellé."
+  },
+  "cfgFormatsHelp": "Sélectionnez un ou plusieurs formats de sortie.\nCycloneDX (1.6 ou 1.7) et SPDX sont les standards industrie.\nMarkdown et AsciiDoc sont lisibles directement.",
+  "@cfgFormatsHelp": {
+    "description": "Aide."
+  },
+  "cfgPdf": "Convertir en PDF (asciidoctor-pdf)",
+  "@cfgPdf": {
+    "description": "Case à cocher."
+  },
+  "cfgPdfSub": "Lance asciidoctor-pdf après la génération",
+  "@cfgPdfSub": {
+    "description": "Sous-titre."
+  },
+  "cfgPdfPath": "Chemin du PDF (optionnel)",
+  "@cfgPdfPath": {
+    "description": "Libellé."
+  },
+  "cfgPdfPathHint": "Défaut : même dossier que .adoc",
+  "@cfgPdfPathHint": {
+    "description": "Indication."
+  },
+  "cfgPdfSaveTitle": "Enregistrer le PDF sous…",
+  "@cfgPdfSaveTitle": {
+    "description": "Titre du dialogue."
+  },
+  "cfgName": "Nom du document SBOM (--name)",
+  "@cfgName": {
+    "description": "Libellé."
+  },
+  "cfgNameHelp": "Nom logique du document SBOM\n(champ metadata.component.name).\nEx : \"Mon Application 1.0\"",
+  "@cfgNameHelp": {
+    "description": "Aide."
+  },
+  "cfgNameHint": "Mon Application 1.0",
+  "@cfgNameHint": {
+    "description": "Indication."
+  },
+  "cfgRpmDir": "Répertoire RPM local (--rpm-dir)",
+  "@cfgRpmDir": {
+    "description": "Libellé."
+  },
+  "cfgRpmDirHint": "Dossier contenant des fichiers .rpm",
+  "@cfgRpmDirHint": {
+    "description": "Indication."
+  },
+  "cfgRpmDirHelp": "Dossier contenant des fichiers .rpm.\nsbom_generator extrait les métadonnées\nsans installer les paquets (rpm -qp).",
+  "@cfgRpmDirHelp": {
+    "description": "Aide."
+  },
+  "cfgRpmDirTitle": "Répertoire de fichiers RPM",
+  "@cfgRpmDirTitle": {
+    "description": "Titre du sélecteur."
+  },
+  "cfgLicenseMap": "Override licences (--license-map)",
+  "@cfgLicenseMap": {
+    "description": "Libellé."
+  },
+  "cfgLicenseMapHint": "Fichier \"paquet: SPDX-expression\"",
+  "@cfgLicenseMapHint": {
+    "description": "Indication."
+  },
+  "cfgLicenseMapHelp": "Fichier de substitution de licences,\nformat \"paquet: SPDX-expression\" par ligne.\nEx : mon-paquet-interne: MIT",
+  "@cfgLicenseMapHelp": {
+    "description": "Aide."
+  },
+  "cfgLicenseMapTitle": "Fichier de map licences",
+  "@cfgLicenseMapTitle": {
+    "description": "Titre du sélecteur."
+  },
+  "cfgConcurrency": "Concurrence (--concurrency)",
+  "@cfgConcurrency": {
+    "description": "Libellé."
+  },
+  "cfgConcurrencyHelp": "Nombre de paquets analysés simultanément.\n0 = illimité (tous en parallèle).\nRéduire si les outils externes nécessitent\ndes accès exclusifs ou si la machine est lente.",
+  "@cfgConcurrencyHelp": {
+    "description": "Aide."
+  },
+  "cfgUnlimited": "illimitée",
+  "@cfgUnlimited": {
+    "description": "Valeur du curseur de concurrence."
+  },
+  "cfgConcurrencyZero": "0 = tous les paquets en parallèle",
+  "@cfgConcurrencyZero": {
+    "description": "Note."
+  },
+  "cfgConcurrencyNote": "1 = séquentiel  •  défaut : 4",
+  "@cfgConcurrencyNote": {
+    "description": "Note."
+  },
+  "cfgVerbose": "Mode verbeux (--verbose)",
+  "@cfgVerbose": {
+    "description": "Case à cocher."
+  },
+  "cfgVerboseSub": "Affiche les outils détectés et les statistiques",
+  "@cfgVerboseSub": {
+    "description": "Sous-titre."
+  },
+  "cfgVerboseHelp": "Affiche pour chaque paquet : outil utilisé,\nversion, durée de traitement.\nUtile pour déboguer les paquets dont la\nlicence n'est pas reconnue.",
+  "@cfgVerboseHelp": {
+    "description": "Aide."
+  },
+  "cfgSbomqs": "Score qualité sbomqs",
+  "@cfgSbomqs": {
+    "description": "Case à cocher."
+  },
+  "cfgSbomqsHelp": "Exécute sbomqs (Interlynk) sur le SBOM généré\npour calculer un score de conformité (0–10).\nRequiert que sbomqs soit installé dans le PATH.",
+  "@cfgSbomqsHelp": {
+    "description": "Aide."
+  },
+  "cfgSbomqsSub": "Analyse le SBOM généré avec sbomqs après génération",
+  "@cfgSbomqsSub": {
+    "description": "Sous-titre."
+  },
+  "cfgStop": "Arrêter la génération",
+  "@cfgStop": {
+    "description": "Bouton."
+  },
+  "cfgGenerate": "Générer le SBOM",
+  "@cfgGenerate": {
+    "description": "Bouton."
+  },
+  "cfgCopyCommand": "Copier la commande",
+  "@cfgCopyCommand": {
+    "description": "Infobulle."
+  },
+  "cfgBrowse": "Parcourir…",
+  "@cfgBrowse": {
+    "description": "Infobulle des boutons de sélection."
+  },
+  "cfgPickFiltered": "Type filtré ({filter})",
+  "@cfgPickFiltered": {
+    "description": "Entrée de menu.",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "cfgPickAny": "Tous les fichiers",
+  "@cfgPickAny": {
+    "description": "Entrée de menu."
+  },
+  "cfgPickDirRecursive": "Dossier (scan récursif)",
+  "@cfgPickDirRecursive": {
+    "description": "Entrée de menu."
+  },
+  "cfgFilesToGenerate": "Fichiers qui seront générés :",
+  "@cfgFilesToGenerate": {
+    "description": "Titre."
+  },
+  "cfgProfDeleteTitle": "Supprimer le profil",
+  "@cfgProfDeleteTitle": {
+    "description": "Titre du dialogue."
+  },
+  "cfgProfDeleteConfirm": "Supprimer « {name} » ?",
+  "@cfgProfDeleteConfirm": {
+    "description": "Confirmation.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "cfgDelete": "Supprimer",
+  "@cfgDelete": {
+    "description": "Bouton."
+  },
+  "cfgProfTitle": "Profils de configuration",
+  "@cfgProfTitle": {
+    "description": "Titre du dialogue."
+  },
+  "cfgProfSaveCurrent": "Enregistrer la configuration actuelle",
+  "@cfgProfSaveCurrent": {
+    "description": "Titre."
+  },
+  "cfgProfNameHint": "Nom du profil…",
+  "@cfgProfNameHint": {
+    "description": "Indication."
+  },
+  "cfgProfSave": "Enregistrer",
+  "@cfgProfSave": {
+    "description": "Bouton."
+  },
+  "cfgProfSaved": "Profils enregistrés",
+  "@cfgProfSaved": {
+    "description": "Titre."
+  },
+  "cfgProfNone": "Aucun profil enregistré.",
+  "@cfgProfNone": {
+    "description": "Liste vide."
+  },
+  "cfgProfLoad": "Charger",
+  "@cfgProfLoad": {
+    "description": "Bouton."
+  },
+  "cfgOciLabel": "Image OCI (--image)",
+  "@cfgOciLabel": {
+    "description": "Libellé."
+  },
+  "cfgOciHelp": "Référence d'une image conteneur à analyser.\n• Registre : nginx:latest, ghcr.io/org/app:v1\n• Archive tar : ./image.tar / .tar.gz / .tgz (docker save)\n• Répertoire OCI layout : ./oci/ (index.json)",
+  "@cfgOciHelp": {
+    "description": "Aide."
+  },
+  "cfgOciHint": "nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/",
+  "@cfgOciHint": {
+    "description": "Indication."
+  },
+  "cfgOciTar": "Archive tar (.tar / .tar.gz / .tgz)",
+  "@cfgOciTar": {
+    "description": "Entrée de menu."
+  },
+  "cfgOciDir": "Répertoire OCI layout",
+  "@cfgOciDir": {
+    "description": "Entrée de menu."
+  },
+  "cfgBinaryLabel": "Binaire autonome (--binary)",
+  "@cfgBinaryLabel": {
+    "description": "Libellé."
+  },
+  "cfgBinaryHelp": "Exécutable local à analyser directement (pas une image de conteneur) — ex. un binaire Go lié statiquement.\nForce le backend syft : seul capable de lire les métadonnées embarquées dans un binaire (buildinfo Go via go-module-binary-cataloger ; classifieur générique syft pour quelques bibliothèques connues — OpenSSL, zlib, sqlite…).\nNe récupère pas les dépendances liées statiquement sans métadonnée embarquée (C/C++ « fait maison », Rust sans cargo-auditable).",
+  "@cfgBinaryHelp": {
+    "description": "Aide."
+  },
+  "cfgBinaryHint": "/usr/local/bin/mon-app",
+  "@cfgBinaryHint": {
+    "description": "Indication."
+  },
+  "cfgDepthLabel": "Profondeur (--depth)",
+  "@cfgDepthLabel": {
+    "description": "Libellé."
+  },
+  "cfgDepthHelp": "Descend dans les objets contenus dans l'entrée : par exemple les jars d'un RPM, les paquets ou archives d'un tar.gz, les jars d'un fat jar.\n• 0 : l'objet seul (défaut)\n• N : N niveaux (1 = objets directs, 2 = ce qu'ils contiennent…)\n• Illimitée : tous les niveaux (plafonnés à 10)\nLes manifestes rencontrés (package-lock.json, go.sum, pom.xml…) sont analysés. Le SBOM global fusionne tous les composants (propriétés location/depth, dépendances parent → enfant). Extraction bornée en taille.",
+  "@cfgDepthHelp": {
+    "description": "Aide."
+  },
+  "cfgDepth0": "0 — objet seul",
+  "@cfgDepth0": {
+    "description": "Option de profondeur."
+  },
+  "cfgDepthAll": "Illimitée",
+  "@cfgDepthAll": {
+    "description": "Option de profondeur."
+  },
+  "cfgDepth1": "1 niveau",
+  "@cfgDepth1": {
+    "description": "Option de profondeur."
+  },
+  "cfgDepthN": "{n} niveaux",
+  "@cfgDepthN": {
+    "description": "Option de profondeur.",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "cfgNestedFiles": "Un SBOM par objet imbriqué",
+  "@cfgNestedFiles": {
+    "description": "Case à cocher."
+  },
+  "cfgNestedFilesHelp": "En plus du SBOM fusionné, écrit un SBOM par objet imbriqué (<sortie>.nested-NN-<objet>.<ext>, dans chaque format coché). Décocher = --no-nested-files : fusionné seulement.",
+  "@cfgNestedFilesHelp": {
+    "description": "Aide."
+  },
+  "cfgPerLayer": "Un SBOM par couche (--per-layer)",
+  "@cfgPerLayer": {
+    "description": "Case à cocher."
+  },
+  "cfgPerLayerHelp": "Génère, en plus du SBOM global, un SBOM par couche de l'image (<sortie>.layer-NN-<digest>.<ext>, dans chaque format coché) décrivant le delta de la couche : composants ajoutés ou modifiés, composants supprimés listés à part. Le SBOM global indique la couche d'origine de chaque composant.\n• Métadonnées : couche d'origine indiquée par Syft/Trivy — rapide, ajouts seulement\n• Rootfs : couches appliquées une à une et réanalysées — ajouts, modifications, suppressions (seul mode possible avec Skopeo et cdxgen)",
+  "@cfgPerLayerHelp": {
+    "description": "Aide."
+  },
+  "cfgLayerMetadata": "Métadonnées",
+  "@cfgLayerMetadata": {
+    "description": "Segment."
+  },
+  "cfgLayerMetadataTip": "Couche d'origine indiquée par le backend",
+  "@cfgLayerMetadataTip": {
+    "description": "Infobulle."
+  },
+  "cfgLayerRootfs": "Rootfs",
+  "@cfgLayerRootfs": {
+    "description": "Segment."
+  },
+  "cfgLayerRootfsTip": "Réanalyse du rootfs après chaque couche",
+  "@cfgLayerRootfsTip": {
+    "description": "Infobulle."
+  },
+  "cfgRootfsForced": "Mode rootfs forcé : {tool} n'indique pas la couche d'origine des paquets",
+  "@cfgRootfsForced": {
+    "description": "Note.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "cfgOciToolLabel": "Backend OCI (--oci-tool)",
+  "@cfgOciToolLabel": {
+    "description": "Libellé."
+  },
+  "cfgOciToolHelp": "Outil utilisé pour extraire les paquets de l'image :\n• Syft (Anchore) — le plus complet, tous écosystèmes\n• Trivy (Aqua) — rapide, CVE intégrées\n• Skopeo — extraction manuelle dpkg/rpm/apk\n• cdxgen (OWASP) — CycloneDX natif, tous écosystèmes",
+  "@cfgOciToolHelp": {
+    "description": "Aide."
+  },
+  "cfgSyftTip": "Anchore Syft — tous écosystèmes",
+  "@cfgSyftTip": {
+    "description": "Infobulle."
+  },
+  "cfgTrivyTip": "Aqua Trivy — tous écosystèmes",
+  "@cfgTrivyTip": {
+    "description": "Infobulle."
+  },
+  "cfgSkopeoTip": "Skopeo + extraction manuelle (dpkg/rpm/apk)",
+  "@cfgSkopeoTip": {
+    "description": "Infobulle."
+  },
+  "cfgCdxgenTip": "OWASP cdxgen — CycloneDX natif, tous écosystèmes",
+  "@cfgCdxgenTip": {
+    "description": "Infobulle."
+  },
+  "cfgSyftDesc": "Syft (recommandé) — supporte tous les écosystèmes",
+  "@cfgSyftDesc": {
+    "description": "Description du backend."
+  },
+  "cfgTrivyDesc": "Trivy — tous écosystèmes, déjà utilisé pour les CVE",
+  "@cfgTrivyDesc": {
+    "description": "Description du backend."
+  },
+  "cfgSkopeoDesc": "Skopeo — extraction manuelle dpkg / rpm / apk",
+  "@cfgSkopeoDesc": {
+    "description": "Description du backend."
+  },
+  "cfgCdxgenDesc": "cdxgen — SBOM CycloneDX natif, tous écosystèmes (nécessite Node.js)",
+  "@cfgCdxgenDesc": {
+    "description": "Description du backend."
+  },
+  "cfgCdxVersion": "Version (--cyclonedx-version)",
+  "@cfgCdxVersion": {
+    "description": "Libellé."
+  },
+  "cfgCdxVersionHelp": "1.6 — la plus répandue chez les consommateurs actuels (défaut).\n1.7 — ajoute citations / patentAssertions / distributionConstraints\n(voir --tlp et --patent-map en ligne de commande).",
+  "@cfgCdxVersionHelp": {
+    "description": "Aide."
+  },
+  "cfgLegendAccepted": "Types acceptés (fichier liste, paquet unique, ou dossier scanné) :",
+  "@cfgLegendAccepted": {
+    "description": "Légende."
+  },
+  "cfgLegRpmInstalled": "RPM installé",
+  "@cfgLegRpmInstalled": {
+    "description": "Légende."
+  },
+  "cfgLegRpmFile": "Fichier .rpm",
+  "@cfgLegRpmFile": {
+    "description": "Légende."
+  },
+  "cfgLegWheel": "Wheel Python",
+  "@cfgLegWheel": {
+    "description": "Légende."
+  },
+  "cfgLegTar": "Archive tar",
+  "@cfgLegTar": {
+    "description": "Légende."
+  },
+  "cfgLegZip": "Archive .zip",
+  "@cfgLegZip": {
+    "description": "Légende."
+  },
+  "cfgLegDeb": "Paquet Debian",
+  "@cfgLegDeb": {
+    "description": "Légende."
+  },
+  "cfgLegJar": "Archive Java",
+  "@cfgLegJar": {
+    "description": "Légende."
+  },
+  "cfgLegManifest": "Manifeste/lock",
+  "@cfgLegManifest": {
+    "description": "Légende."
+  },
+  "cfgLegendImage": "Image OCI (champ --image) :",
+  "@cfgLegendImage": {
+    "description": "Légende."
+  },
+  "cfgLegRegistry": "Registre",
+  "@cfgLegRegistry": {
+    "description": "Légende."
+  },
+  "cfgLegOciLayout": "OCI layout",
+  "@cfgLegOciLayout": {
+    "description": "Légende."
+  },
+  "cfgLegOciLayoutVal": "/path/oci_dir/  (index.json présent)",
+  "@cfgLegOciLayoutVal": {
+    "description": "Légende."
+  },
+  "cfgLegendBinary": "Binaire autonome (champ --binary) :",
+  "@cfgLegendBinary": {
+    "description": "Légende."
+  },
+  "cfgLegendBinaryText": "Exécutable local (ex. binaire Go lié statiquement) — force le backend syft. Dépendances Go embarquées lues systématiquement ; seul un catalogue fixe de bibliothèques connues (OpenSSL, zlib, sqlite…) est détecté pour les autres langages.",
+  "@cfgLegendBinaryText": {
+    "description": "Légende."
+  },
+  "cfgLegOr": "ou",
+  "@cfgLegOr": {
+    "description": "Mot de liaison dans la légende (« bash ou bash-5… »)."
+  },
+  "qualitySbomqsNoResult": "Aucun résultat retourné par sbomqs",
+  "@qualitySbomqsNoResult": {
+    "description": "Erreur sbomqs."
+  },
+  "formatJsonCustom": "JSON personnalisé",
+  "@formatJsonCustom": {
+    "description": "Libellé du format JSON propre à l'outil."
+  },
+  "helpTitle": "Aide — Manuel utilisateur",
+  "@helpTitle": {
+    "description": "Titre de l'écran d'aide."
+  },
+  "helpSearchHint": "Rechercher dans le manuel…",
+  "@helpSearchHint": {
+    "description": "Champ de recherche."
+  },
+  "helpClear": "Effacer",
+  "@helpClear": {
+    "description": "Infobulle."
+  },
+  "helpNoMatch": "Aucun chapitre ne contient « {query} ».",
+  "@helpNoMatch": {
+    "description": "Recherche sans résultat.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "helpLoadError": "Aide indisponible : impossible de charger le manuel ({error}).",
+  "@helpLoadError": {
+    "description": "Erreur de chargement.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

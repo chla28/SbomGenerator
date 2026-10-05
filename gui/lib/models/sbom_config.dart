@@ -1,3 +1,5 @@
+import '../l10n/l10n.dart';
+
 const _formatExtensions = {
   'cyclonedx': '.cdx.json',
   'spdx': '.spdx.json',
@@ -11,18 +13,31 @@ const _formatExtensions = {
 
 String formatExtension(String fmt) => _formatExtensions[fmt] ?? '.json';
 
-const allFormats = ['cyclonedx', 'spdx', 'spdx3', 'json', 'markdown', 'asciidoc', 'html', 'csv'];
+const allFormats = [
+  'cyclonedx',
+  'spdx',
+  'spdx3',
+  'json',
+  'markdown',
+  'asciidoc',
+  'html',
+  'csv',
+];
 
 const formatLabels = {
   'cyclonedx': 'CycloneDX',
   'spdx': 'SPDX 2.3',
   'spdx3': 'SPDX 3.0 JSON-LD',
-  'json': 'JSON personnalisé',
+  'json': 'JSON',
   'markdown': 'Markdown',
   'asciidoc': 'AsciiDoc',
   'html': 'HTML',
   'csv': 'CSV',
 };
+
+/// Libellé affiché d'un format : [formatLabels], sauf `json` qui est traduit.
+String formatLabel(String fmt, AppLocalizations l) =>
+    fmt == 'json' ? l.formatJsonCustom : formatLabels[fmt] ?? fmt;
 
 const allOciTools = ['syft', 'trivy', 'skopeo', 'cdxgen'];
 
@@ -204,9 +219,10 @@ class SbomConfig {
 
   /// Ligne de commande équivalente (affichage uniquement).
   String toCommandLine(String binary) {
-    return [binary, ...toArgs()]
-        .map((s) => s.contains(' ') ? '"$s"' : s)
-        .join(' ');
+    return [
+      binary,
+      ...toArgs(),
+    ].map((s) => s.contains(' ') ? '"$s"' : s).join(' ');
   }
 
   /// Chemins de sortie attendus (prévisualisation avant exécution).

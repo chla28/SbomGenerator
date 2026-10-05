@@ -43,27 +43,34 @@ void main() {
   group('SbomConfig.toArgs — --per-layer', () {
     test('émet --per-layer et --layer-mode avec une image', () {
       final c = SbomConfig(imageRef: 'nginx:latest', perLayer: true);
-      expect(c.toArgs(),
-          containsAllInOrder(['--per-layer', '--layer-mode', 'metadata']));
+      expect(
+        c.toArgs(),
+        containsAllInOrder(['--per-layer', '--layer-mode', 'metadata']),
+      );
     });
 
     test('mode rootfs forcé pour skopeo et cdxgen', () {
       for (final tool in ['skopeo', 'cdxgen']) {
         final c = SbomConfig(
-            imageRef: 'nginx:latest',
-            ociTool: tool,
-            perLayer: true,
-            layerMode: 'metadata');
+          imageRef: 'nginx:latest',
+          ociTool: tool,
+          perLayer: true,
+          layerMode: 'metadata',
+        );
         expect(c.effectiveLayerMode, 'rootfs');
         expect(c.toArgs(), containsAllInOrder(['--layer-mode', 'rootfs']));
       }
     });
 
     test('ignoré sans image (entrée fichier ou binaire)', () {
-      expect(SbomConfig(inputFile: 'pkgs.txt', perLayer: true).toArgs(),
-          isNot(contains('--per-layer')));
-      expect(SbomConfig(binaryPath: '/bin/x', perLayer: true).toArgs(),
-          isNot(contains('--per-layer')));
+      expect(
+        SbomConfig(inputFile: 'pkgs.txt', perLayer: true).toArgs(),
+        isNot(contains('--per-layer')),
+      );
+      expect(
+        SbomConfig(binaryPath: '/bin/x', perLayer: true).toArgs(),
+        isNot(contains('--per-layer')),
+      );
     });
 
     test('round-trip toJson/fromJson conserve perLayer et layerMode', () {
@@ -89,17 +96,23 @@ void main() {
 
     test('all et --no-nested-files', () {
       final c = SbomConfig(
-          inputFile: 'app.rpm', nestedDepth: 'all', nestedFiles: false);
+        inputFile: 'app.rpm',
+        nestedDepth: 'all',
+        nestedFiles: false,
+      );
       expect(c.toArgs(), containsAllInOrder(['--depth', 'all']));
       expect(c.toArgs(), contains('--no-nested-files'));
     });
 
     test('ignoré sans entrée fichier (image ou binaire)', () {
       expect(
-          SbomConfig(imageRef: 'nginx:latest', nestedDepth: '2').toArgs(),
-          isNot(contains('--depth')));
-      expect(SbomConfig(binaryPath: '/bin/x', nestedDepth: '2').toArgs(),
-          isNot(contains('--depth')));
+        SbomConfig(imageRef: 'nginx:latest', nestedDepth: '2').toArgs(),
+        isNot(contains('--depth')),
+      );
+      expect(
+        SbomConfig(binaryPath: '/bin/x', nestedDepth: '2').toArgs(),
+        isNot(contains('--depth')),
+      );
     });
 
     test('round-trip toJson/fromJson ; anciens profils → défauts', () {

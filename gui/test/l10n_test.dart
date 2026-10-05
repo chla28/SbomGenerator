@@ -24,29 +24,45 @@ void main() {
         .where((n) => n.startsWith('app_') && n.endsWith('.arb'))
         .map((n) => n.substring(4, n.length - 4))
         .toList();
-    final keys = {for (final k in fr.keys) if (!k.startsWith('@')) k};
+    final keys = {
+      for (final k in fr.keys)
+        if (!k.startsWith('@')) k,
+    };
 
     test('le français (référence) documente chaque clé', () {
       for (final k in keys) {
         final meta = fr['@$k'];
-        expect(meta is Map && (meta['description'] as String?)?.isNotEmpty == true,
-            isTrue,
-            reason: 'app_fr.arb : @$k.description manquante');
+        expect(
+          meta is Map && (meta['description'] as String?)?.isNotEmpty == true,
+          isTrue,
+          reason: 'app_fr.arb : @$k.description manquante',
+        );
       }
     });
 
     for (final lang in languages.where((l) => l != 'fr')) {
       test('$lang : mêmes clés et mêmes paramètres que le français', () {
         final other = _arb(lang);
-        final otherKeys = {for (final k in other.keys) if (!k.startsWith('@')) k};
-        expect(otherKeys.difference(keys), isEmpty,
-            reason: 'clés inconnues de app_fr.arb');
-        expect(keys.difference(otherKeys), isEmpty,
-            reason: 'clés non traduites dans app_$lang.arb');
+        final otherKeys = {
+          for (final k in other.keys)
+            if (!k.startsWith('@')) k,
+        };
+        expect(
+          otherKeys.difference(keys),
+          isEmpty,
+          reason: 'clés inconnues de app_fr.arb',
+        );
+        expect(
+          keys.difference(otherKeys),
+          isEmpty,
+          reason: 'clés non traduites dans app_$lang.arb',
+        );
         for (final k in keys) {
-          expect(_placeholders(other[k] as String),
-              _placeholders(fr[k] as String),
-              reason: 'paramètres différents pour « $k »');
+          expect(
+            _placeholders(other[k] as String),
+            _placeholders(fr[k] as String),
+            reason: 'paramètres différents pour « $k »',
+          );
         }
       });
     }
@@ -54,8 +70,10 @@ void main() {
 
   test('langue : résolution et repli sur le français', () {
     expect(resolveAppLocale([const Locale('en', 'US')]), const Locale('en'));
-    expect(resolveAppLocale([const Locale('de'), const Locale('fr', 'CA')]),
-        const Locale('fr'));
+    expect(
+      resolveAppLocale([const Locale('de'), const Locale('fr', 'CA')]),
+      const Locale('fr'),
+    );
     expect(resolveAppLocale([const Locale('de')]), fallbackLocale);
     expect(resolveAppLocale(null), fallbackLocale);
     expect(AppLanguage.parse('en'), AppLanguage.en);
@@ -64,32 +82,42 @@ void main() {
     expect(AppLanguage.system.locale, isNull);
   });
 
-  testWidgets('context.l10n : langue de l\'application, repli hors délégués',
-      (tester) async {
+  testWidgets('context.l10n : langue de l\'application, repli hors délégués', (
+    tester,
+  ) async {
     late String inApp;
     late String bare;
-    await tester.pumpWidget(MaterialApp(
-      locale: const Locale('en'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Builder(builder: (context) {
-        inApp = context.l10n.languageSystem;
-        return const SizedBox();
-      }),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) {
+            inApp = context.l10n.languageSystem;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
     expect(inApp, 'System');
 
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(builder: (context) {
-        bare = context.l10n.languageSystem;
-        return const SizedBox();
-      }),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            bare = context.l10n.languageSystem;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
     expect(bare, 'Système');
   });
 
-  testWidgets('menu de langue : bascule de l\'application et mémorisation',
-      (tester) async {
+  testWidgets('menu de langue : bascule de l\'application et mémorisation', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -104,7 +132,8 @@ void main() {
     addTearDown(() => FlutterError.onError = originalOnError);
 
     await tester.pumpWidget(
-        const SbomGeneratorApp(initialLanguage: AppLanguage.en));
+      const SbomGeneratorApp(initialLanguage: AppLanguage.en),
+    );
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byTooltip('Interface language'), findsOneWidget);
 

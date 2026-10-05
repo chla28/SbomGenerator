@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/scan_enrichment.dart';
 import 'pdf_report.dart' show frenchSeverityLabel;
+import '../l10n/l10n.dart';
 
 /// Ce qu'un scanner donné rapporte sur une CVE. Les scanners divergent souvent
 /// sur la sévérité, les versions corrigées et les dates — on les garde donc
@@ -64,15 +65,18 @@ class CveDetail {
   }
 
   /// Paquet le plus renseigné (première vue non vide).
-  ScannerCveView? get primary =>
-      views.isEmpty ? null : views.firstWhere((v) => v.packageName.isNotEmpty,
-          orElse: () => views.first);
+  ScannerCveView? get primary => views.isEmpty
+      ? null
+      : views.firstWhere(
+          (v) => v.packageName.isNotEmpty,
+          orElse: () => views.first,
+        );
 
   String _fmtDate(DateTime? d) => d == null
       ? '—'
       : '${d.year.toString().padLeft(4, '0')}-'
-          '${d.month.toString().padLeft(2, '0')}-'
-          '${d.day.toString().padLeft(2, '0')}';
+            '${d.month.toString().padLeft(2, '0')}-'
+            '${d.day.toString().padLeft(2, '0')}';
 
   /// Liens de référence externes, sous forme (libellé, URL).
   List<(String, String)> get links {
@@ -88,68 +92,87 @@ class CveDetail {
         (
           'CISA KEV',
           'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'
-              '?search_api_fulltext=$e'
+              '?search_api_fulltext=$e',
         ),
     ];
   }
 
   /// Rendu AsciiDoc compact (une ligne « libellé | valeur » par attribut) —
   /// utilisé par l'export du tableau de bord.
-  String toAdocRows(String Function(String) esc) {
+  String toAdocRows(String Function(String) esc, {AppLocalizations? l}) {
+    final t = l ?? lookupAppLocalizations(fallbackLocale);
     final b = StringBuffer();
     final p = primary;
     if (p != null && p.packageName.isNotEmpty) {
       final fixed = p.fixedVersion.isEmpty ? '' : ' → ${p.fixedVersion}';
-      b.writeln('| Paquet | `${esc('${p.packageName} ${p.installedVersion}'
-          '$fixed')}`');
+      b.writeln(
+        '| ${t.adocPackage} | `${esc('${p.packageName} ${p.installedVersion}'
+        '$fixed')}`',
+      );
     }
     final reported = views
-        .map((v) => '${v.scanner} (${frenchSeverityLabel(v.severity)})')
+        .map((v) => '${v.scanner} (${frenchSeverityLabel(v.severity, l: t)})')
         .join(', ');
-    if (reported.isNotEmpty) b.writeln('| Rapporté par | ${esc(reported)}');
+    if (reported.isNotEmpty) {
+      b.writeln('| ${t.cveReportedBy} | ${esc(reported)}');
+    }
     final dates = views
         .where((v) => v.publishedDate != null || v.modifiedDate != null)
-        .map((v) => '${v.scanner} : publié ${_fmtDate(v.publishedDate)}, '
-            'modifié ${_fmtDate(v.modifiedDate)}')
+        .map(
+          (v) => t.adocDateEntry(
+            v.scanner,
+            _fmtDate(v.publishedDate),
+            _fmtDate(v.modifiedDate),
+          ),
+        )
         .join(' +\n');
-    if (dates.isNotEmpty) b.writeln('| Dates | ${esc(dates)}');
+    if (dates.isNotEmpty) b.writeln('| ${t.adocDates} | ${esc(dates)}');
     if (description.isNotEmpty) {
-      b.writeln('| Description | ${esc(description)}');
+      b.writeln('| ${t.adocDescription} | ${esc(description)}');
     }
 
     final ex = exploit;
     if (ex.inKev) {
-      final parts = <String>['ajoutée ${_fmtDate(ex.kevDateAdded)}'];
+      final parts = <String>[t.adocKevAdded(_fmtDate(ex.kevDateAdded))];
       if (ex.kevDueDate != null) {
-        parts.add('échéance ${_fmtDate(ex.kevDueDate)}');
+        parts.add(t.adocKevDue(_fmtDate(ex.kevDueDate)));
       }
-      if (ex.kevRansomware) parts.add('usage par rançongiciel');
-      b.writeln('| CISA KEV | Oui — ${esc(parts.join(', '))}');
+      if (ex.kevRansomware) parts.add(t.adocKevRansomware);
+      b.writeln('| CISA KEV | ${esc(t.adocKevYes(parts.join(', ')))}');
     }
     if (ex.epssScore != null) {
       final pct = ((ex.epssPercentile ?? 0) * 100).round();
-      b.writeln('| EPSS | ${ex.epssScore!.toStringAsFixed(2)} (percentile p$pct)');
+      b.writeln(
+        '| EPSS | ${t.adocEpss(ex.epssScore!.toStringAsFixed(2), pct)}',
+      );
     }
     if (ex.cvssExploitabilityScore != null || ex.exploitMaturity != null) {
       final parts = <String>[];
       if (ex.cvssBaseScore != null) {
-        parts.add('base ${ex.cvssBaseScore!.toStringAsFixed(1)}');
+        parts.add(t.adocCvssBase(ex.cvssBaseScore!.toStringAsFixed(1)));
       }
       if (ex.cvssExploitabilityScore != null) {
-        parts.add('exploitabilité ${ex.cvssExploitabilityScore!
-            .toStringAsFixed(1)}/3.9');
+        parts.add(
+          t.cveExploitability(ex.cvssExploitabilityScore!.toStringAsFixed(1)),
+        );
       }
-      if (ex.exploitMaturity != null) parts.add('maturité ${ex.exploitMaturity}');
-      b.writeln('| CVSS | ${esc(parts.join(' · '))}'
-          '${ex.cvssVector != null ? ' +\n`${esc(ex.cvssVector!)}`' : ''}');
+      if (ex.exploitMaturity != null) {
+        parts.add(t.cveMaturity(ex.exploitMaturity!));
+      }
+      b.writeln(
+        '| CVSS | ${esc(parts.join(' · '))}'
+        '${ex.cvssVector != null ? ' +\n`${esc(ex.cvssVector!)}`' : ''}',
+      );
     }
     if (ex.pocKnown) {
       final n = ex.pocCount;
-      b.writeln('| PoC public | ${n > 0 ? '$n dépôt(s)' : 'oui'}'
-          '${ex.pocUrls.isNotEmpty ? ' +\n${ex.pocUrls.map(esc).join(' +\n')}' : ''}');
+      b.writeln(
+        '| ${t.adocPocPublic} | ${n > 0 ? t.adocPocRepos(n) : t.adocYes}'
+        '${ex.pocUrls.isNotEmpty ? ' +\n${ex.pocUrls.map(esc).join(' +\n')}' : ''}',
+      );
     }
     if (links.isNotEmpty) {
-      b.writeln('| Liens | ${links.map((l) => l.$2).join(' +\n')}');
+      b.writeln('| ${t.adocLinks} | ${links.map((x) => x.$2).join(' +\n')}');
     }
     return b.toString();
   }
@@ -181,22 +204,27 @@ class CveDetailPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(detail.id,
-                  style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
+              Text(
+                detail.id,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(width: 6),
               IconButton(
                 icon: const Icon(Icons.copy, size: 14),
                 visualDensity: VisualDensity.compact,
-                tooltip: 'Copier l\'identifiant',
+                tooltip: context.l10n.cveCopyId,
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: detail.id));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('CVE copié'),
-                    duration: Duration(seconds: 2),
-                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(context.l10n.cveCopied),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
                 },
               ),
             ],
@@ -207,8 +235,10 @@ class CveDetailPanel extends StatelessWidget {
           ...detail.views.where((v) => v.packageName.isNotEmpty).map((v) {
             final fixed = v.fixedVersion.isEmpty
                 ? const SizedBox.shrink()
-                : Text('  →  ${v.fixedVersion}',
-                    style: const TextStyle(fontSize: 12, color: Colors.green));
+                : Text(
+                    '  →  ${v.fixedVersion}',
+                    style: const TextStyle(fontSize: 12, color: Colors.green),
+                  );
             return Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Wrap(
@@ -216,14 +246,19 @@ class CveDetailPanel extends StatelessWidget {
                 children: [
                   _tag(v.scanner),
                   const SizedBox(width: 6),
-                  Text('${v.packageName} ${v.installedVersion}',
-                      style: const TextStyle(
-                          fontFamily: 'monospace', fontSize: 12)),
+                  Text(
+                    '${v.packageName} ${v.installedVersion}',
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
+                  ),
                   fixed,
                   if (v.extra.isNotEmpty && v.extra.length <= 24)
-                    Text('   ${v.extra}',
-                        style:
-                            const TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text(
+                      '   ${v.extra}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
                 ],
               ),
             );
@@ -231,13 +266,15 @@ class CveDetailPanel extends StatelessWidget {
           if (detail.description.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 2, bottom: 2),
-              child: Text(detail.description,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              child: Text(
+                detail.description,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ),
           const SizedBox(height: 6),
 
           // ── Sévérité par scanner + dates ──
-          _sectionTitle('Rapporté par'),
+          _sectionTitle(context.l10n.cveReportedBy),
           Table(
             columnWidths: const {
               0: IntrinsicColumnWidth(),
@@ -245,46 +282,61 @@ class CveDetailPanel extends StatelessWidget {
               2: FlexColumnWidth(),
             },
             children: [
-              const TableRow(children: [
-                _Th('Scanner'),
-                _Th('Sévérité'),
-                _Th('Publié / modifié'),
-              ]),
+              TableRow(
+                children: [
+                  const _Th('Scanner'),
+                  _Th(context.l10n.cveThSeverity),
+                  _Th(context.l10n.cveThPublishedModified),
+                ],
+              ),
               for (final v in detail.views)
-                TableRow(children: [
-                  _Td(v.scanner),
-                  _Td(v.severity.isEmpty ? '?' : v.severity),
-                  _Td('${detail._fmtDate(v.publishedDate)}'
-                      ' / ${detail._fmtDate(v.modifiedDate)}'),
-                ]),
+                TableRow(
+                  children: [
+                    _Td(v.scanner),
+                    _Td(v.severity.isEmpty ? '?' : v.severity),
+                    _Td(
+                      '${detail._fmtDate(v.publishedDate)}'
+                      ' / ${detail._fmtDate(v.modifiedDate)}',
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 8),
 
           // ── Exploitabilité ──
-          _sectionTitle('Exploitabilité et exploitation active'),
+          _sectionTitle(context.l10n.cveExploitTitle),
           if (!e.hasAnySignal)
-            const Text('Aucun signal d\'exploitation connu.',
-                style: TextStyle(fontSize: 12, color: Colors.grey))
+            Text(
+              context.l10n.cveNoSignal,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            )
           else ...[
             if (e.inKev)
               _line(
                 Icons.local_fire_department,
                 Colors.red,
-                'CISA KEV — exploitée activement dans la nature'
-                '${e.kevDateAdded != null ? ' · ajoutée le '
-                    '${detail._fmtDate(e.kevDateAdded)}' : ''}'
-                '${e.kevDueDate != null ? ' · échéance '
-                    '${detail._fmtDate(e.kevDueDate)}' : ''}'
-                '${e.kevRansomware ? ' · usage par rançongiciel' : ''}',
+                context.l10n.cveKevLine +
+                    (e.kevDateAdded != null
+                        ? context.l10n.cveKevAddedOn(
+                            detail._fmtDate(e.kevDateAdded),
+                          )
+                        : '') +
+                    (e.kevDueDate != null
+                        ? context.l10n.cveKevDueOn(
+                            detail._fmtDate(e.kevDueDate),
+                          )
+                        : '') +
+                    (e.kevRansomware ? context.l10n.cveKevRansomware : ''),
               ),
             if (e.epssScore != null)
               _line(
                 Icons.trending_up,
                 Colors.deepOrange,
-                'EPSS ${e.epssScore!.toStringAsFixed(2)} '
-                '(percentile p${((e.epssPercentile ?? 0) * 100).round()}) — '
-                'probabilité d\'exploitation à 30 jours',
+                context.l10n.cveEpssLine(
+                  e.epssScore!.toStringAsFixed(2),
+                  ((e.epssPercentile ?? 0) * 100).round(),
+                ),
               ),
             if (e.cvssExploitabilityScore != null || e.exploitMaturity != null)
               _line(
@@ -294,10 +346,11 @@ class CveDetailPanel extends StatelessWidget {
                   if (e.cvssBaseScore != null)
                     'CVSS base ${e.cvssBaseScore!.toStringAsFixed(1)}',
                   if (e.cvssExploitabilityScore != null)
-                    'exploitabilité ${e.cvssExploitabilityScore!
-                        .toStringAsFixed(1)}/3.9',
+                    context.l10n.cveExploitability(
+                      e.cvssExploitabilityScore!.toStringAsFixed(1),
+                    ),
                   if (e.exploitMaturity != null)
-                    'maturité ${e.exploitMaturity}',
+                    context.l10n.cveMaturity(e.exploitMaturity!),
                 ].join(' · '),
                 mono: e.cvssVector,
               ),
@@ -306,8 +359,8 @@ class CveDetailPanel extends StatelessWidget {
                 Icons.code,
                 Colors.purple,
                 e.pocCount > 0
-                    ? '${e.pocCount} dépôt(s) PoC public(s) recensé(s)'
-                    : 'Exploit / PoC public recensé',
+                    ? context.l10n.cvePocRepos(e.pocCount)
+                    : context.l10n.cvePocKnown,
               ),
             for (final url in e.pocUrls)
               Padding(
@@ -319,7 +372,7 @@ class CveDetailPanel extends StatelessWidget {
 
           // ── Liens externes ──
           if (detail.links.isNotEmpty) ...[
-            _sectionTitle('Références'),
+            _sectionTitle(context.l10n.cveReferences),
             Wrap(
               spacing: 8,
               runSpacing: 4,
@@ -332,8 +385,10 @@ class CveDetailPanel extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                     ),
-                    onPressed: () => launchUrl(Uri.parse(url),
-                        mode: LaunchMode.externalApplication),
+                    onPressed: () => launchUrl(
+                      Uri.parse(url),
+                      mode: LaunchMode.externalApplication,
+                    ),
                   ),
               ],
             ),
@@ -344,53 +399,63 @@ class CveDetailPanel extends StatelessWidget {
   }
 
   static Widget _sectionTitle(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 3),
-        child: Text(t.toUpperCase(),
-            style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-                letterSpacing: 0.5)),
-      );
+    padding: const EdgeInsets.only(bottom: 3),
+    child: Text(
+      t.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        color: Colors.grey,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
 
   static Widget _tag(String s) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-        decoration: BoxDecoration(
-          color: Colors.grey.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(s,
-            style: const TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+    decoration: BoxDecoration(
+      color: Colors.grey.withValues(alpha: 0.18),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      s,
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+    ),
+  );
 
-  static Widget _line(IconData icon, Color color, String text, {String? mono}) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 3),
-        child: Column(
+  static Widget _line(
+    IconData icon,
+    Color color,
+    String text, {
+    String? mono,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 3),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon, size: 13, color: color),
-                const SizedBox(width: 6),
-                Expanded(
-                    child: Text(text, style: const TextStyle(fontSize: 12))),
-              ],
-            ),
-            if (mono != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 19, top: 1),
-                child: SelectableText(mono,
-                    style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 11,
-                        color: Colors.grey)),
-              ),
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 6),
+            Expanded(child: Text(text, style: const TextStyle(fontSize: 12))),
           ],
         ),
-      );
+        if (mono != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 19, top: 1),
+            child: SelectableText(
+              mono,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _Th extends StatelessWidget {
@@ -398,13 +463,16 @@ class _Th extends StatelessWidget {
   const _Th(this.text);
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 12, bottom: 2),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey)),
-      );
+    padding: const EdgeInsets.only(right: 12, bottom: 2),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        color: Colors.grey,
+      ),
+    ),
+  );
 }
 
 class _Td extends StatelessWidget {
@@ -412,9 +480,9 @@ class _Td extends StatelessWidget {
   const _Td(this.text);
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 12, bottom: 2),
-        child: Text(text, style: const TextStyle(fontSize: 12)),
-      );
+    padding: const EdgeInsets.only(right: 12, bottom: 2),
+    child: Text(text, style: const TextStyle(fontSize: 12)),
+  );
 }
 
 class _LinkText extends StatelessWidget {
@@ -422,12 +490,15 @@ class _LinkText extends StatelessWidget {
   const _LinkText(this.url);
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: () =>
-            launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-        child: Text(url,
-            style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.primary,
-                decoration: TextDecoration.underline)),
-      );
+    onTap: () =>
+        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+    child: Text(
+      url,
+      style: TextStyle(
+        fontSize: 11,
+        color: Theme.of(context).colorScheme.primary,
+        decoration: TextDecoration.underline,
+      ),
+    ),
+  );
 }

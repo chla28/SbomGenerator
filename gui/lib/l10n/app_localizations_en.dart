@@ -604,4 +604,2249 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get cliCommandPackageNote =>
       'The SBOM is generated in a temporary directory; each CVE is attributed to the object containing the vulnerable package (OBJET column) in the sbom-generator scan equivalent.';
+
+  @override
+  String get layerGlobalSbom => 'Global SBOM';
+
+  @override
+  String layerOption(int index, int total, String digest) {
+    final intl.NumberFormat indexNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String indexString = indexNumberFormat.format(index);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return 'Layer $indexString/$totalString ($digest)';
+  }
+
+  @override
+  String layerCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString layers:',
+      one: '$countString layer:',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String layerRemovedChip(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString removed',
+      one: '$countString removed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cveCopyId => 'Copy identifier';
+
+  @override
+  String get cveCopied => 'CVE copied';
+
+  @override
+  String get cveReportedBy => 'Reported by';
+
+  @override
+  String get cveThSeverity => 'Severity';
+
+  @override
+  String get cveThPublishedModified => 'Published / modified';
+
+  @override
+  String get cveExploitTitle => 'Exploitability and active exploitation';
+
+  @override
+  String get cveNoSignal => 'No known exploitation signal.';
+
+  @override
+  String get cveKevLine => 'CISA KEV — actively exploited in the wild';
+
+  @override
+  String cveKevAddedOn(String date) {
+    return ' · added on $date';
+  }
+
+  @override
+  String cveKevDueOn(String date) {
+    return ' · due $date';
+  }
+
+  @override
+  String get cveKevRansomware => ' · used by ransomware';
+
+  @override
+  String cveEpssLine(String score, int pct) {
+    final intl.NumberFormat pctNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String pctString = pctNumberFormat.format(pct);
+
+    return 'EPSS $score (percentile p$pctString) — 30-day exploitation probability';
+  }
+
+  @override
+  String cveExploitability(String score) {
+    return 'exploitability $score/3.9';
+  }
+
+  @override
+  String cveMaturity(String value) {
+    return 'maturity $value';
+  }
+
+  @override
+  String cvePocRepos(int n) {
+    final intl.NumberFormat nNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String nString = nNumberFormat.format(n);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$nString public PoC repositories listed',
+      one: '$nString public PoC repository listed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cvePocKnown => 'Public exploit / PoC listed';
+
+  @override
+  String get cveReferences => 'References';
+
+  @override
+  String get adocPackage => 'Package';
+
+  @override
+  String get adocDates => 'Dates';
+
+  @override
+  String adocDateEntry(String scanner, String published, String modified) {
+    return '$scanner: published $published, modified $modified';
+  }
+
+  @override
+  String get adocDescription => 'Description';
+
+  @override
+  String adocKevYes(String details) {
+    return 'Yes — $details';
+  }
+
+  @override
+  String adocKevAdded(String date) {
+    return 'added $date';
+  }
+
+  @override
+  String adocKevDue(String date) {
+    return 'due $date';
+  }
+
+  @override
+  String get adocKevRansomware => 'used by ransomware';
+
+  @override
+  String adocEpss(String score, int pct) {
+    final intl.NumberFormat pctNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String pctString = pctNumberFormat.format(pct);
+
+    return '$score (percentile p$pctString)';
+  }
+
+  @override
+  String adocCvssBase(String score) {
+    return 'base $score';
+  }
+
+  @override
+  String get adocPocPublic => 'Public PoC';
+
+  @override
+  String adocPocRepos(int n) {
+    final intl.NumberFormat nNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String nString = nNumberFormat.format(n);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$nString repositories',
+      one: '$nString repository',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adocYes => 'yes';
+
+  @override
+  String get adocLinks => 'Links';
+
+  @override
+  String get pdfSeverityCritical => 'CRITICAL';
+
+  @override
+  String get pdfSeverityHigh => 'HIGH';
+
+  @override
+  String get pdfSeverityMedium => 'MEDIUM';
+
+  @override
+  String get pdfSeverityLow => 'LOW';
+
+  @override
+  String get pdfSeverityNegligible => 'NEGLIGIBLE';
+
+  @override
+  String get pdfSeverityBarAlt => 'Breakdown by severity';
+
+  @override
+  String get pdfUnavailable => '_unavailable_';
+
+  @override
+  String layerDocHeader(String index, String total, String mode) {
+    return 'Layer $index/$total — $mode mode';
+  }
+
+  @override
+  String layerDocDigest(String digest) {
+    return 'Digest: $digest';
+  }
+
+  @override
+  String layerDocInstruction(String text) {
+    return 'Instruction: $text';
+  }
+
+  @override
+  String layerDocCounts(String added, String modified, String removed) {
+    return 'Added: $added — modified: $modified — removed: $removed';
+  }
+
+  @override
+  String layerDocAnalyzed(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString layers analyzed',
+      one: '$countString layer analyzed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String layerDocModeSuffix(String mode) {
+    return ' — $mode mode';
+  }
+
+  @override
+  String get layerColAdded => 'added';
+
+  @override
+  String layerColModifiedWas(String prev) {
+    return 'modified (was $prev)';
+  }
+
+  @override
+  String get layerColModified => 'modified';
+
+  @override
+  String layerColLayer(String index) {
+    return 'layer $index';
+  }
+
+  @override
+  String layerColLayerModifiedBy(String index, String by) {
+    return 'layer $index (modified: $by)';
+  }
+
+  @override
+  String get layerGroupAdded => 'Added';
+
+  @override
+  String get layerGroupModified => 'Modified';
+
+  @override
+  String get layerGroupUnknown => '(unknown layer)';
+
+  @override
+  String layerGroupLayer(String index) {
+    return 'Layer $index';
+  }
+
+  @override
+  String get layerScanModeEach => 'Each layer\'s SBOM scanned';
+
+  @override
+  String get layerScanModeAttribute =>
+      'attribution to the package\'s originating layer';
+
+  @override
+  String get treeFormatUnknown =>
+      'Unrecognized format (neither CycloneDX nor SPDX).';
+
+  @override
+  String treeReadError(String error) {
+    return 'Read error: $error';
+  }
+
+  @override
+  String get treePickTitle => 'Select an SBOM file (JSON)';
+
+  @override
+  String get treeUnspecified => '(not specified)';
+
+  @override
+  String get treeExpandAll => 'Expand all';
+
+  @override
+  String get treeCollapseAll => 'Collapse all';
+
+  @override
+  String get treeFilterHint => 'Filter by name, purl, license…';
+
+  @override
+  String treeNoMatch(String term) {
+    return 'No component for \"$term\"';
+  }
+
+  @override
+  String get treeNoFileSelected => 'No SBOM file selected';
+
+  @override
+  String treeGenerated(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Generated ($countString)';
+  }
+
+  @override
+  String get treeOpen => 'Open…';
+
+  @override
+  String treeComponentsChip(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString components',
+      one: '$countString component',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String treeLicensesChip(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString licenses',
+      one: '$countString license',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get treeGroupBy => 'Group by:';
+
+  @override
+  String get treeGroupHelp =>
+      'Component grouping mode.\n• None: flat alphabetical list\n• Type: grouped by ecosystem (rpm, pypi…)\n• License: grouped by SPDX expression\n• Layer: grouped by originating layer (global SBOM) or by change (layer SBOM) — SBOMs produced with --per-layer';
+
+  @override
+  String get treeGroupNone => 'None';
+
+  @override
+  String get treeGroupType => 'Type';
+
+  @override
+  String get treeGroupLicense => 'License';
+
+  @override
+  String get treeGroupLayer => 'Layer';
+
+  @override
+  String get treeDetailLicense => 'License';
+
+  @override
+  String get treeDetailLayer => 'Layer';
+
+  @override
+  String get treeEmptyNoSbom => 'No SBOM file (JSON/JSON-LD) in the outputs.';
+
+  @override
+  String get treeEmptyGenerate => 'Generate an SBOM or open an existing file.';
+
+  @override
+  String get treeOpenSbom => 'Open an SBOM file';
+
+  @override
+  String get viewerOpenTitle => 'Open an SBOM file';
+
+  @override
+  String viewerParseError(String error) {
+    return 'Unable to parse the file: $error';
+  }
+
+  @override
+  String get viewerUnspecified => 'Not specified';
+
+  @override
+  String get viewerNoFile => 'No SBOM file loaded';
+
+  @override
+  String get viewerOpenEllipsis => 'Open an SBOM file…';
+
+  @override
+  String get viewerStatComponents => 'components';
+
+  @override
+  String get viewerStatTypes => 'types';
+
+  @override
+  String get viewerStatLicenses => 'licenses';
+
+  @override
+  String get viewerOpenShort => 'Open…';
+
+  @override
+  String get viewerFilterHint => 'Filter…';
+
+  @override
+  String get viewerTypeHint => 'Type';
+
+  @override
+  String get viewerAll => 'All';
+
+  @override
+  String get viewerNoResult => 'No results';
+
+  @override
+  String get viewerColName => 'Name';
+
+  @override
+  String get viewerColLicense => 'License';
+
+  @override
+  String get viewerColChange => 'Change';
+
+  @override
+  String get viewerColLayer => 'Layer';
+
+  @override
+  String get viewerCopyPurl => 'Copy PURL';
+
+  @override
+  String get viewerPurlCopied => 'PURL copied';
+
+  @override
+  String get commonGeneratedFiles => 'Generated files';
+
+  @override
+  String get commonOutputFile => 'Output file';
+
+  @override
+  String get commonDocNameOptional => 'Document name (optional)';
+
+  @override
+  String get licPickTitle => 'Select an SBOM file';
+
+  @override
+  String get licChooseFile => 'Choose a file…';
+
+  @override
+  String get licNoFile => 'No file selected';
+
+  @override
+  String get licGenerate => 'Generate';
+
+  @override
+  String licReportGenerated(String path) {
+    return 'Report generated → $path';
+  }
+
+  @override
+  String licReportFailed(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Generation failed (code $codeString) — see the log below.';
+  }
+
+  @override
+  String licLoadError(String error) {
+    return 'Unable to read the licenses: $error';
+  }
+
+  @override
+  String get licSelectHint =>
+      'Select a CycloneDX or SPDX file to view its licenses (grouped by license, with copyleft licenses and packages with no detected license flagged), then generate a report below.';
+
+  @override
+  String get licFilterHint => 'Filter by license or package…';
+
+  @override
+  String get licViewGrouped => 'By license';
+
+  @override
+  String get licViewTable => 'Table';
+
+  @override
+  String get licNoResult => 'No results.';
+
+  @override
+  String licChipPackages(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString packages',
+      one: '$countString package',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String licChipLicenses(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString licenses',
+      one: '$countString license',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String licChipStrong(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString strong copyleft';
+  }
+
+  @override
+  String licChipWeak(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString weak copyleft';
+  }
+
+  @override
+  String licChipNone(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString unlicensed';
+  }
+
+  @override
+  String get licCategoryStrong => 'strong copyleft';
+
+  @override
+  String get licCategoryWeak => 'weak copyleft';
+
+  @override
+  String get licCategoryNone => 'unlicensed';
+
+  @override
+  String get licNoLicenseDetected => 'No license detected';
+
+  @override
+  String get licColPackage => 'Package';
+
+  @override
+  String get licColLicense => 'License';
+
+  @override
+  String get mergePickTitle => 'Select SBOM files to merge';
+
+  @override
+  String get mergeAddFiles => 'Add files…';
+
+  @override
+  String get mergeJsonOnly => '.json / .jsonld';
+
+  @override
+  String get mergeAllFiles => 'All files';
+
+  @override
+  String mergeSelected(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString files selected',
+      one: '$countString file selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get mergeAtLeastTwo => ' — at least 2 required';
+
+  @override
+  String get mergeHint =>
+      'Add at least two SBOM files to merge\n(CycloneDX or SPDX 2.x — the same format on both sides).';
+
+  @override
+  String get mergeButton => 'Merge';
+
+  @override
+  String mergeOk(String path) {
+    return 'Merge succeeded → $path';
+  }
+
+  @override
+  String mergeFailed(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Merge failed (code $codeString) — see the log below.';
+  }
+
+  @override
+  String get diffFormatUnknown => 'Unrecognized format.';
+
+  @override
+  String get diffPickA => 'Select SBOM A (reference)';
+
+  @override
+  String get diffPickB => 'Select SBOM B (compared)';
+
+  @override
+  String diffNoMatch(String term) {
+    return 'No results for \"$term\"';
+  }
+
+  @override
+  String get diffNoItems => 'No items for the selected filters.';
+
+  @override
+  String get diffSlotA => 'A – Reference';
+
+  @override
+  String get diffSlotB => 'B – Compared';
+
+  @override
+  String get diffCompare => 'Compare';
+
+  @override
+  String get diffNoFile => 'No file selected';
+
+  @override
+  String diffComponentsInfo(String format, int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString components',
+      one: '$countString component',
+    );
+    return '$format · $_temp0';
+  }
+
+  @override
+  String get diffOpenFile => 'Open a file…';
+
+  @override
+  String get diffAdded => 'Added';
+
+  @override
+  String get diffRemoved => 'Removed';
+
+  @override
+  String get diffChanged => 'Modified';
+
+  @override
+  String get diffUnchanged => 'Unchanged';
+
+  @override
+  String diffChipAdded(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '➕ Added ($countString)';
+  }
+
+  @override
+  String diffChipRemoved(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '➖ Removed ($countString)';
+  }
+
+  @override
+  String diffChipChanged(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '🔄 Modified ($countString)';
+  }
+
+  @override
+  String diffChipUnchanged(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '✓ Unchanged ($countString)';
+  }
+
+  @override
+  String get diffFilterHint => 'Filter by name…';
+
+  @override
+  String get diffHdrStatus => 'STATUS';
+
+  @override
+  String get diffHdrName => 'NAME';
+
+  @override
+  String get diffHdrVersionA => 'VERSION A';
+
+  @override
+  String get diffHdrVersionB => 'VERSION B';
+
+  @override
+  String get diffHdrLicense => 'LICENSE';
+
+  @override
+  String get diffStatusAdded => 'Added';
+
+  @override
+  String get diffStatusRemoved => 'Removed';
+
+  @override
+  String get diffStatusChanged => 'Modified';
+
+  @override
+  String get diffStatusUnchanged => 'Unchanged';
+
+  @override
+  String get diffEmptyReady => 'Click \"Compare\" to start the analysis.';
+
+  @override
+  String get diffEmptyPick =>
+      'Select two SBOM files (A and B) to compare them.';
+
+  @override
+  String get qualityPickTitle => 'Select an SBOM file';
+
+  @override
+  String qualitySbomqsError(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'sbomqs error (exit $codeString)';
+  }
+
+  @override
+  String get qualitySbomqsMissing =>
+      'sbomqs not found — install it and add it to the PATH';
+
+  @override
+  String qualityScorecardError(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'sbom-scorecard error (exit $codeString)';
+  }
+
+  @override
+  String get qualityScorecardMissing =>
+      'sbom-scorecard not found — install it and add it to the PATH';
+
+  @override
+  String get qualityFileLabel => 'SBOM file';
+
+  @override
+  String get qualityAnalyze => 'Analyze';
+
+  @override
+  String get qualityProfiles => 'Profiles:';
+
+  @override
+  String get qualityProfilesHelp =>
+      'SBOM compliance profiles evaluated by sbomqs.\nEach profile checks a set of specific\ncriteria (NTIA, BSI, OpenChain, Interlynk…).\nNo profile selected = all evaluated.';
+
+  @override
+  String get qualityTitle => 'SBOM quality assessment';
+
+  @override
+  String get qualityIntro =>
+      'Select an SBOM file, then click Analyze.\nThe analysis uses sbomqs (Interlynk) and sbom-scorecard (eBay).';
+
+  @override
+  String get qualityTableView => 'Table view';
+
+  @override
+  String get qualityRawJson => 'Raw JSON';
+
+  @override
+  String get qualityNoCriteria => 'No detailed criteria available.';
+
+  @override
+  String get qualityOther => 'Other';
+
+  @override
+  String get qualityShowAll => 'Show all';
+
+  @override
+  String get qualityChartView => 'Chart view';
+
+  @override
+  String get qualityRawOutput => 'Raw output';
+
+  @override
+  String get qualityIndustryProfiles => 'Industry profiles';
+
+  @override
+  String get qualityIndustryHint =>
+      'Select profiles in the configuration bar\nto see the criteria details';
+
+  @override
+  String qualityProfileSummary(String score, int passed, int total) {
+    final intl.NumberFormat passedNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String passedString = passedNumberFormat.format(passed);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '$score/10  ·  $passedString/$totalString criteria';
+  }
+
+  @override
+  String get qualityRequiredNote => '* mandatory criterion';
+
+  @override
+  String get tabProgress => 'Progress';
+
+  @override
+  String get tabResults => 'Results';
+
+  @override
+  String tabResultsCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Results ($countString)';
+  }
+
+  @override
+  String get tabDashboard => 'Dashboard';
+
+  @override
+  String get tabCra => 'CRA Compliance';
+
+  @override
+  String get tabQuality => 'SBOM Quality';
+
+  @override
+  String get tabTree => 'Tree';
+
+  @override
+  String get tabCompare => 'Comparison';
+
+  @override
+  String get tabMerge => 'Merge';
+
+  @override
+  String get tabLicenses => 'Licenses';
+
+  @override
+  String get tabViewer => 'Viewer';
+
+  @override
+  String get tabPreview => 'Preview';
+
+  @override
+  String tabPreviewCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Preview ($countString)';
+  }
+
+  @override
+  String resultsPreviewTruncated(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '[… truncated — $totalString characters in total]';
+  }
+
+  @override
+  String resultsReadError(String error) {
+    return 'Read error: $error';
+  }
+
+  @override
+  String get resultsPdfConverting =>
+      'PDF conversion (asciidoctor-pdf) in progress…';
+
+  @override
+  String resultsProgressPackages(int current, int total) {
+    final intl.NumberFormat currentNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String currentString = currentNumberFormat.format(current);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '$currentString / $totalString packages';
+  }
+
+  @override
+  String resultsSummaryOk(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString SBOM files generated',
+      one: '$countString SBOM file generated',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String resultsSummaryWarnings(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString warnings',
+      one: '$countString warning',
+    );
+    return ' — $_temp0';
+  }
+
+  @override
+  String resultsGenerationFailed(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Generation failed (exit $codeString)';
+  }
+
+  @override
+  String get resultsLogsCopied => 'Logs copied to the clipboard';
+
+  @override
+  String get resultsSave => 'Save';
+
+  @override
+  String get resultsSaveLogsTitle => 'Save the logs';
+
+  @override
+  String resultsStatPackages(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString packages',
+      one: '$countString package',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String resultsStatFiles(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString SBOM files',
+      one: '$countString SBOM file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String resultsStatWarnings(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString warnings',
+      one: '$countString warning',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get resultsSectionFiles => 'Generated files';
+
+  @override
+  String get resultsSectionScore => 'sbomqs score';
+
+  @override
+  String resultsSectionWarnings(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Warnings ($countString)';
+  }
+
+  @override
+  String get resultsSectionError => 'Error';
+
+  @override
+  String get resultsNoPreview => 'No text file generated for the preview';
+
+  @override
+  String get resultsCopyContent => 'Copy the content';
+
+  @override
+  String get resultsContentCopied => 'Content copied';
+
+  @override
+  String get resultsSelectFile => 'Select a file';
+
+  @override
+  String get resultsCopyPath => 'Copy the path';
+
+  @override
+  String get resultsPathCopied => 'Path copied';
+
+  @override
+  String get resultsOpenFile => 'Open the file';
+
+  @override
+  String get resultsCollapse => 'Collapse';
+
+  @override
+  String resultsShowMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Show $countString more…';
+  }
+
+  @override
+  String get resultsEmptyHint =>
+      'Configure the options and start the generation';
+
+  @override
+  String homeGenerationFailed(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Generation failed (exit $codeString)';
+  }
+
+  @override
+  String get homePdfHeader => 'PDF conversion (asciidoctor-pdf)…';
+
+  @override
+  String homePdfError(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'asciidoctor-pdf error (exit $codeString)';
+  }
+
+  @override
+  String get homePdfMissing => 'Error: asciidoctor-pdf not found.';
+
+  @override
+  String get homePdfInstall => '  Install with: gem install asciidoctor-pdf';
+
+  @override
+  String get homeInterrupted => '[Generation interrupted by the user]';
+
+  @override
+  String get homePdfRunning => 'PDF conversion in progress…';
+
+  @override
+  String get homeSbomRunning => 'SBOM generation in progress…';
+
+  @override
+  String get homeHelpTooltip => 'Help — User manual';
+
+  @override
+  String get homeThemeColor => 'Theme color';
+
+  @override
+  String get homeLightMode => 'Light mode';
+
+  @override
+  String get homeDarkMode => 'Dark mode';
+
+  @override
+  String get homeAbout => 'About';
+
+  @override
+  String get homeAboutText =>
+      'Graphical interface for the sbom_generator tool.\n\nGenerates SBOMs (Software Bill of Materials) from lists of RPM, .whl, .tar.gz, .deb, .zip, .jar packages, or from manifests (requirements.txt, go.sum, package-lock.json, pom.xml, pubspec.lock…) — list file, single package, or recursively scanned directory.\n\nSupported formats: CycloneDX 1.6/1.7, SPDX 2.3, SPDX 3.0 JSON-LD, custom JSON, Markdown, AsciiDoc.';
+
+  @override
+  String get homeCancel => 'Cancel';
+
+  @override
+  String get themeBlue => 'Blue';
+
+  @override
+  String get themePurple => 'Purple';
+
+  @override
+  String get themeGreen => 'Green';
+
+  @override
+  String get themeRed => 'Red';
+
+  @override
+  String get themePink => 'Pink';
+
+  @override
+  String get themeSlate => 'Slate';
+
+  @override
+  String get themeBrown => 'Brown';
+
+  @override
+  String svcLaunchError(String error) {
+    return 'Launch error: $error';
+  }
+
+  @override
+  String get svcGrypeMissing =>
+      'grype not found. Install it: https://github.com/anchore/grype';
+
+  @override
+  String get svcOsvMissing =>
+      'osv-scanner not found — https://github.com/google/osv-scanner';
+
+  @override
+  String get svcTrivyMissing =>
+      'trivy not found — https://github.com/aquasecurity/trivy';
+
+  @override
+  String svcLayerSbomFailed(int code, String detail) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'unable to generate the layer SBOMs (code $codeString): $detail';
+  }
+
+  @override
+  String svcNoLayer(String image) {
+    return 'no layer found in $image';
+  }
+
+  @override
+  String get svcNotInstalled => 'not installed';
+
+  @override
+  String get svcUpdateAvailable =>
+      'Update available — click to open the release';
+
+  @override
+  String get craInvalidSbom => 'Select a valid SBOM file.';
+
+  @override
+  String craUnexpectedOutput(int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Unexpected output (code $codeString).';
+  }
+
+  @override
+  String craLaunchFailed(String error) {
+    return 'Launch failed: $error';
+  }
+
+  @override
+  String get craExportTitle => 'Export the CRA report (PDF)';
+
+  @override
+  String get craExportFileName => 'cra-report.pdf';
+
+  @override
+  String craReportWritten(String path) {
+    return 'CRA report written → $path';
+  }
+
+  @override
+  String craFailed(String detail) {
+    return 'Failed: $detail';
+  }
+
+  @override
+  String get craTitle => 'Compliance report — Cyber Resilience Act';
+
+  @override
+  String get craHelp =>
+      'Automatically verifiable scope only: SBOM format and completeness (Annex I §2 point 1, BSI TR-03183-2, NTIA minimum elements), inventory of known vulnerabilities and availability of fixes, actively exploited vulnerabilities (art. 14). The other CRA obligations are the manufacturer\'s responsibility. This report is not a declaration of conformity.';
+
+  @override
+  String get craSbomField => 'SBOM file to assess';
+
+  @override
+  String get craProductMeta => 'Product metadata (optional)';
+
+  @override
+  String get craManufacturer => 'Manufacturer';
+
+  @override
+  String get craProduct => 'Product';
+
+  @override
+  String get craProductVersion => 'Product version';
+
+  @override
+  String get craSupportUntil => 'End of support (YYYY-MM-DD)';
+
+  @override
+  String get craVulnContact => 'Vulnerability reporting contact';
+
+  @override
+  String get craCvdUrl => 'URL of the coordinated disclosure policy';
+
+  @override
+  String get craLoadConfig => 'Load a cra.yaml';
+
+  @override
+  String craConfigLoaded(String name) {
+    return 'cra.yaml: $name';
+  }
+
+  @override
+  String get craScanVulns => 'Scan for known vulnerabilities';
+
+  @override
+  String get craScannerAll => 'All three';
+
+  @override
+  String get craEvaluate => 'Assess';
+
+  @override
+  String get craExportPdf => 'Export the PDF report';
+
+  @override
+  String get craStatusOk => 'Compliant';
+
+  @override
+  String get craStatusPartial => 'Partial';
+
+  @override
+  String get craStatusFail => 'Non-compliant';
+
+  @override
+  String get craStatusNa => 'Not assessed';
+
+  @override
+  String craVerdict(String status) {
+    return 'Verdict (verified scope): $status';
+  }
+
+  @override
+  String get craTileFields => 'Compliant SBOM fields';
+
+  @override
+  String get craTileNtia => 'NTIA elements';
+
+  @override
+  String get craTileNoFix => 'Vulns. without fix';
+
+  @override
+  String get craTileKev => 'Exploited CVEs (KEV)';
+
+  @override
+  String get craBlockers => 'Blocking items';
+
+  @override
+  String get craFieldsTitle => 'SBOM data fields (BSI TR-03183-2)';
+
+  @override
+  String get craThField => 'Field';
+
+  @override
+  String get craThCoverage => 'Coverage';
+
+  @override
+  String get craThStatus => 'Status';
+
+  @override
+  String craSbomSummary(String format, String components, String relations) {
+    return 'SBOM: $format — $components components, $relations dependency relationships.';
+  }
+
+  @override
+  String craVulnSummary(String total, String critical, String high) {
+    return 'Vulnerabilities: $total CVEs — $critical critical, $high high.';
+  }
+
+  @override
+  String get craEnisaNotice =>
+      ' ⚠ ENISA notification within 24 h required (art. 14).';
+
+  @override
+  String get commonStopAction => 'Stop';
+
+  @override
+  String scanTargetImage(String target) {
+    return 'image \"$target\"';
+  }
+
+  @override
+  String scanTargetSbom(String name) {
+    return 'SBOM $name';
+  }
+
+  @override
+  String get cliPlaceholderPackage => '<package>';
+
+  @override
+  String scanBannerCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString vulnerabilities',
+      one: '$countString vulnerability',
+    );
+    return '$_temp0 — ';
+  }
+
+  @override
+  String get scanTabVulns => 'Vulnerabilities';
+
+  @override
+  String get scanTabRawJson => 'Raw JSON';
+
+  @override
+  String get scanHintPick =>
+      'Select an SBOM or an image and start the analysis';
+
+  @override
+  String scanRunningTool(String tool) {
+    return '$tool analysis in progress…';
+  }
+
+  @override
+  String scanRunButton(String tool) {
+    return 'Analyze with $tool';
+  }
+
+  @override
+  String get scanNoVulnFound => 'No vulnerability found';
+
+  @override
+  String scanPlatformHelp(String tool) {
+    return 'Optional. Forces the target platform on a\nmulti-architecture image, e.g. linux/arm64.\nLeave empty = automatic detection by $tool.';
+  }
+
+  @override
+  String get trivyPickConfigTitle => 'Choose trivy.yaml';
+
+  @override
+  String get trivySeverityLabel => '--severity (leave empty = all)';
+
+  @override
+  String get trivySeverityHelp =>
+      'Severity filters. Only the vulnerabilities\nwhose severity is checked are shown.\nLeave empty = all severities.';
+
+  @override
+  String get trivyIgnoreUnfixedHelp =>
+      'Hides vulnerabilities with no fixed\nversion available. Reduces noise\nin the results.';
+
+  @override
+  String get trivySkipDbHelp =>
+      'Uses the local CVE database without updating\nit. Speeds up successive scans,\nbut the database may be outdated.';
+
+  @override
+  String get trivyConfigLabel => 'trivy.yaml (optional)';
+
+  @override
+  String get trivyConfigHelp =>
+      'Trivy configuration file (YAML).\nLets you define policies, exceptions\nor custom sources.';
+
+  @override
+  String get trivyConfigHint => '/path/to/trivy.yaml';
+
+  @override
+  String get trivyCliConfigNote => 'config file';
+
+  @override
+  String get trivyCliPlatformNote => 'platform';
+
+  @override
+  String get osvPickConfigTitle => 'Choose osv-scanner.toml';
+
+  @override
+  String get osvConfigLabel => 'Config file (optional)';
+
+  @override
+  String get osvConfigHelp =>
+      'osv-scanner TOML configuration file.\nLets you exclude CVEs, configure\nsources or define policies.';
+
+  @override
+  String get osvCliConfigNote => 'config file (toml)';
+
+  @override
+  String get osvEcosystemColumn => 'ECOSYSTEM';
+
+  @override
+  String get vulnCsvHeaderGrype =>
+      'Severity,CVE / ID,Package,Installed version,Fixed version,Type,Locations';
+
+  @override
+  String get vulnCsvHeaderTrivy =>
+      'Severity,CVE / ID,Package,Installed version,Fixed version,Title,Locations';
+
+  @override
+  String get vulnCsvHeaderOsv =>
+      'Severity,CVE / ID,Package,Installed version,Fixed version,Ecosystem,Locations';
+
+  @override
+  String get pdfSeverityOther => 'OTHER';
+
+  @override
+  String get repTitle => '= Vulnerability report: Cross-scanner summary';
+
+  @override
+  String get repTocTitle => ':toc-title: Contents';
+
+  @override
+  String get repExecSummary => '== Executive summary';
+
+  @override
+  String repTarget(String target) {
+    return '*Analyzed target*: $target +';
+  }
+
+  @override
+  String repTargets(String targets) {
+    return '*Analyzed targets*: $targets +';
+  }
+
+  @override
+  String repScannersRun(int run, String names, int unique) {
+    final intl.NumberFormat runNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String runString = runNumberFormat.format(run);
+    final intl.NumberFormat uniqueNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String uniqueString = uniqueNumberFormat.format(unique);
+
+    return '*Scanners run*: $runString / 3$names — *$uniqueString* unique CVEs';
+  }
+
+  @override
+  String repThresholdNote(String label, int kept, String ofTotal) {
+    final intl.NumberFormat keptNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String keptString = keptNumberFormat.format(kept);
+
+    return 'NOTE: Severity filter: *$label* — $keptString CVE(s) kept$ofTotal, based on the worst severity reported by the scanners. CVEs in the CISA KEV catalog are included whatever their severity. The whole report (counters, breakdown, layers, comparison, details) covers this subset.';
+  }
+
+  @override
+  String repThresholdOf(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return ' out of $totalString';
+  }
+
+  @override
+  String get repStatsHeader => 'h| Critical h| High h| CISA KEV h| EPSS ≥ 10 %';
+
+  @override
+  String repVerdictKev(int kev) {
+    final intl.NumberFormat kevNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String kevString = kevNumberFormat.format(kev);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      kev,
+      locale: localeName,
+      other: '$kevString CVEs from the CISA KEV catalog are',
+      one: '$kevString CVE from the CISA KEV catalog is',
+    );
+    return 'Immediate action required. $_temp0 actively exploited in the wild — apply the fixes without delay.';
+  }
+
+  @override
+  String repVerdictCritical(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString critical vulnerabilities to fix',
+      one: '$countString critical vulnerability to fix',
+    );
+    return 'Priority action. $_temp0 first.';
+  }
+
+  @override
+  String repVerdictHigh(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString high-severity vulnerabilities identified',
+      one: '$countString high-severity vulnerability identified',
+    );
+    return 'To address. $_temp0.';
+  }
+
+  @override
+  String get repVerdictOk =>
+      'No critical or high vulnerability detected by the scanners that ran.';
+
+  @override
+  String get repTools => '== Tools';
+
+  @override
+  String get repToolHeader => '| Tool | Version';
+
+  @override
+  String get repBreakdown => '== Breakdown by scanner';
+
+  @override
+  String get repNotRun => '_Not run._';
+
+  @override
+  String get repNoVuln => 'No vulnerability detected.';
+
+  @override
+  String get repSevCountHeader => '| Severity | Count';
+
+  @override
+  String get repLayersTitle => '== Image layers';
+
+  @override
+  String repMethod(String methods) {
+    return 'Method: $methods.';
+  }
+
+  @override
+  String get repLayersHeader =>
+      '| Layer | Digest | Instruction | CVE | Critical | High';
+
+  @override
+  String get repCompareTitle => '== Cross-scanner comparison';
+
+  @override
+  String get repLayersColumn => ' | Layer(s)';
+
+  @override
+  String get repNoCve => '_No CVE detected by the scanners that ran._';
+
+  @override
+  String repCompareHeaderExploit(String layerHead) {
+    return '| Severity | CVE / ID | KEV | EPSS | Grype | OSV | Trivy$layerHead';
+  }
+
+  @override
+  String repCompareHeader(String layerHead) {
+    return '| Severity | CVE / ID | Grype | OSV | Trivy$layerHead';
+  }
+
+  @override
+  String get repScannerNote =>
+      'Very different counts between scanners on system packages (Debian/Alpine/RPM) do not necessarily indicate an error. OSV-Scanner may find no CVE on these packages when run in \"SBOM scan\" mode: its API only indexes Debian advisories under a precise purl form, absent from the standard SBOM produced by syft — scanning the image directly (`osv-scanner scan image`) gives reliable coverage. Grype and Trivy are also not equally exhaustive on these same packages: Grype takes the whole Debian Security Tracker (\"won\'t fix\" advisories included) where Trivy only reports a smaller subset. Neither scanner is wrong — their raw figures are simply not directly comparable on this kind of package. Details and verification method in the user documentation, section \"Why Grype, OSV-Scanner and Trivy do not find the same CVEs\".';
+
+  @override
+  String get repDetailTitle => '== CVE details';
+
+  @override
+  String repDetailAll(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString CVEs.';
+  }
+
+  @override
+  String repDetailKept(int count, String label) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString CVE(s) kept: severity $label or in the CISA KEV catalog.';
+  }
+
+  @override
+  String get dashExportTitle => 'Export the dashboard (AsciiDoc + PDF)';
+
+  @override
+  String get dashExportFileAll => 'vulnerability-report.adoc';
+
+  @override
+  String dashExportFileThreshold(String threshold) {
+    return 'vulnerability-report-$threshold.adoc';
+  }
+
+  @override
+  String dashExported(String path, String pdf) {
+    return 'Dashboard exported → $path and $pdf';
+  }
+
+  @override
+  String dashExportedPdfFailed(String path, int code) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Dashboard exported → $path (PDF conversion failed, code $codeString)';
+  }
+
+  @override
+  String dashExportedNoPdf(String path) {
+    return 'Dashboard exported → $path (asciidoctor-pdf not found, PDF not generated)';
+  }
+
+  @override
+  String get dashTitle => 'Vulnerability dashboard';
+
+  @override
+  String get dashNoScan =>
+      'No scanner run — start a scan from the Grype, OSV-Scanner or Trivy tabs.';
+
+  @override
+  String dashScanSummary(int scans, int ids) {
+    final intl.NumberFormat scansNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String scansString = scansNumberFormat.format(scans);
+    final intl.NumberFormat idsNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String idsString = idsNumberFormat.format(ids);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      scans,
+      locale: localeName,
+      other: '$scansString scanners run',
+      one: '$scansString scanner run',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      ids,
+      locale: localeName,
+      other: '$idsString unique CVEs detected',
+      one: '$idsString unique CVE detected',
+    );
+    return '$_temp0 · $_temp1';
+  }
+
+  @override
+  String get dashUniqueCves => 'Unique CVEs';
+
+  @override
+  String get dashThresholdTooltip =>
+      'Minimum severity of the CVEs in the PDF report (CISA KEV CVEs are always included)';
+
+  @override
+  String get dashNotRun => 'Not run';
+
+  @override
+  String get dashNone => '✓ None';
+
+  @override
+  String dashTotalVulns(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString vulnerabilities',
+      one: '$countString vulnerability',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashRunScanFrom(String name) {
+    return 'Start the scan from\nthe $name tab';
+  }
+
+  @override
+  String get dashOtherSeverity => 'Other';
+
+  @override
+  String dashCompareTitle(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Cross-scanner comparison ($countString CVEs';
+  }
+
+  @override
+  String dashCompareKev(int kev) {
+    final intl.NumberFormat kevNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String kevString = kevNumberFormat.format(kev);
+
+    return ', of which $kevString CISA KEV';
+  }
+
+  @override
+  String get dashHdrSeverity => 'SEV.';
+
+  @override
+  String get dashHdrLayers => 'LAYER(S)';
+
+  @override
+  String dashSeenByOne(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Seen by a single scanner out of $countString';
+  }
+
+  @override
+  String dashEpssTooltip(String score, int pct) {
+    final intl.NumberFormat pctNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String pctString = pctNumberFormat.format(pct);
+
+    return 'EPSS $score — 30-day exploitation probability (percentile $pctString)';
+  }
+
+  @override
+  String dashLayersCard(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Image layers ($countString)';
+  }
+
+  @override
+  String get dashHdrLayer => 'LAYER';
+
+  @override
+  String get dashHdrHigh => 'HIGH';
+
+  @override
+  String get cfgTitle => 'Configuration';
+
+  @override
+  String get cfgProfilesTooltip => 'Configuration profiles';
+
+  @override
+  String get cfgSectionInput => 'Input';
+
+  @override
+  String get cfgSectionOutput => 'Output';
+
+  @override
+  String get cfgSectionOptions => 'Options';
+
+  @override
+  String get cfgInputLabel => 'Packages to analyze (--input)';
+
+  @override
+  String get cfgInputHintDrop => 'Drop a file or folder here…';
+
+  @override
+  String get cfgInputHint => 'rpm.lst, a .jar, or a folder…';
+
+  @override
+  String get cfgInputHelp =>
+      'List file (one reference per line),\na single archive/package (.rpm, .deb,\n.whl, .jar, .zip, .tar.gz…), or a folder\nscanned recursively for all these types.';
+
+  @override
+  String get cfgPickInputFile => 'Select the input file';
+
+  @override
+  String get cfgPickPackagesDir => 'Select a packages folder';
+
+  @override
+  String get cfgInputRequired =>
+      'Required (or specify an OCI image / a binary)';
+
+  @override
+  String get cfgDragHint =>
+      'Drag and drop a file or folder from your file manager';
+
+  @override
+  String get cfgOr => 'OR';
+
+  @override
+  String get cfgPickOciArchive => 'Select an OCI archive';
+
+  @override
+  String get cfgPickOciDir => 'Select an OCI layout directory';
+
+  @override
+  String get cfgPickBinary => 'Select a binary';
+
+  @override
+  String get cfgBinarySyftForced =>
+      'Backend: syft (forced — the only one able to analyze a standalone binary)';
+
+  @override
+  String get cfgOutputBase => 'Base path (--output)';
+
+  @override
+  String get cfgOutputBaseHint => 'sbom  →  sbom.cdx.json, sbom.spdx.json…';
+
+  @override
+  String get cfgOutputBaseHelp =>
+      'Output path prefix. The format suffix\nis added automatically.\nE.g. sbom → sbom.cdx.json, sbom.spdx.json…';
+
+  @override
+  String get cfgOutputBaseTitle => 'SBOM base path';
+
+  @override
+  String get cfgFormats => 'Formats (--format)';
+
+  @override
+  String get cfgFormatsHelp =>
+      'Select one or more output formats.\nCycloneDX (1.6 or 1.7) and SPDX are industry standards.\nMarkdown and AsciiDoc are directly readable.';
+
+  @override
+  String get cfgPdf => 'Convert to PDF (asciidoctor-pdf)';
+
+  @override
+  String get cfgPdfSub => 'Runs asciidoctor-pdf after generation';
+
+  @override
+  String get cfgPdfPath => 'PDF path (optional)';
+
+  @override
+  String get cfgPdfPathHint => 'Default: same folder as the .adoc';
+
+  @override
+  String get cfgPdfSaveTitle => 'Save the PDF as…';
+
+  @override
+  String get cfgName => 'SBOM document name (--name)';
+
+  @override
+  String get cfgNameHelp =>
+      'Logical name of the SBOM document\n(metadata.component.name field).\nE.g. \"My Application 1.0\"';
+
+  @override
+  String get cfgNameHint => 'My Application 1.0';
+
+  @override
+  String get cfgRpmDir => 'Local RPM directory (--rpm-dir)';
+
+  @override
+  String get cfgRpmDirHint => 'Folder containing .rpm files';
+
+  @override
+  String get cfgRpmDirHelp =>
+      'Folder containing .rpm files.\nsbom_generator extracts the metadata\nwithout installing the packages (rpm -qp).';
+
+  @override
+  String get cfgRpmDirTitle => 'RPM files directory';
+
+  @override
+  String get cfgLicenseMap => 'License override (--license-map)';
+
+  @override
+  String get cfgLicenseMapHint => 'File \"package: SPDX-expression\"';
+
+  @override
+  String get cfgLicenseMapHelp =>
+      'License override file,\n\"package: SPDX-expression\" format, one per line.\nE.g. my-internal-package: MIT';
+
+  @override
+  String get cfgLicenseMapTitle => 'License map file';
+
+  @override
+  String get cfgConcurrency => 'Concurrency (--concurrency)';
+
+  @override
+  String get cfgConcurrencyHelp =>
+      'Number of packages analyzed at the same time.\n0 = unlimited (all in parallel).\nReduce it if the external tools need\nexclusive access or if the machine is slow.';
+
+  @override
+  String get cfgUnlimited => 'unlimited';
+
+  @override
+  String get cfgConcurrencyZero => '0 = all packages in parallel';
+
+  @override
+  String get cfgConcurrencyNote => '1 = sequential  •  default: 4';
+
+  @override
+  String get cfgVerbose => 'Verbose mode (--verbose)';
+
+  @override
+  String get cfgVerboseSub => 'Shows the detected tools and statistics';
+
+  @override
+  String get cfgVerboseHelp =>
+      'Shows for each package: tool used,\nversion, processing time.\nUseful to debug packages whose\nlicense is not recognized.';
+
+  @override
+  String get cfgSbomqs => 'sbomqs quality score';
+
+  @override
+  String get cfgSbomqsHelp =>
+      'Runs sbomqs (Interlynk) on the generated SBOM\nto compute a compliance score (0–10).\nRequires sbomqs to be installed in the PATH.';
+
+  @override
+  String get cfgSbomqsSub =>
+      'Analyzes the generated SBOM with sbomqs after generation';
+
+  @override
+  String get cfgStop => 'Stop generation';
+
+  @override
+  String get cfgGenerate => 'Generate the SBOM';
+
+  @override
+  String get cfgCopyCommand => 'Copy the command';
+
+  @override
+  String get cfgBrowse => 'Browse…';
+
+  @override
+  String cfgPickFiltered(String filter) {
+    return 'Filtered type ($filter)';
+  }
+
+  @override
+  String get cfgPickAny => 'All files';
+
+  @override
+  String get cfgPickDirRecursive => 'Folder (recursive scan)';
+
+  @override
+  String get cfgFilesToGenerate => 'Files that will be generated:';
+
+  @override
+  String get cfgProfDeleteTitle => 'Delete the profile';
+
+  @override
+  String cfgProfDeleteConfirm(String name) {
+    return 'Delete “$name”?';
+  }
+
+  @override
+  String get cfgDelete => 'Delete';
+
+  @override
+  String get cfgProfTitle => 'Configuration profiles';
+
+  @override
+  String get cfgProfSaveCurrent => 'Save the current configuration';
+
+  @override
+  String get cfgProfNameHint => 'Profile name…';
+
+  @override
+  String get cfgProfSave => 'Save';
+
+  @override
+  String get cfgProfSaved => 'Saved profiles';
+
+  @override
+  String get cfgProfNone => 'No saved profile.';
+
+  @override
+  String get cfgProfLoad => 'Load';
+
+  @override
+  String get cfgOciLabel => 'OCI image (--image)';
+
+  @override
+  String get cfgOciHelp =>
+      'Reference of a container image to analyze.\n• Registry: nginx:latest, ghcr.io/org/app:v1\n• Tar archive: ./image.tar / .tar.gz / .tgz (docker save)\n• OCI layout directory: ./oci/ (index.json)';
+
+  @override
+  String get cfgOciHint => 'nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/';
+
+  @override
+  String get cfgOciTar => 'Tar archive (.tar / .tar.gz / .tgz)';
+
+  @override
+  String get cfgOciDir => 'OCI layout directory';
+
+  @override
+  String get cfgBinaryLabel => 'Standalone binary (--binary)';
+
+  @override
+  String get cfgBinaryHelp =>
+      'Local executable to analyze directly (not a container image) — e.g. a statically linked Go binary.\nForces the syft backend: the only one able to read the metadata embedded in a binary (Go buildinfo via go-module-binary-cataloger; syft generic classifier for a few well-known libraries — OpenSSL, zlib, sqlite…).\nDoes not recover statically linked dependencies without embedded metadata (home-made C/C++, Rust without cargo-auditable).';
+
+  @override
+  String get cfgBinaryHint => '/usr/local/bin/my-app';
+
+  @override
+  String get cfgDepthLabel => 'Depth (--depth)';
+
+  @override
+  String get cfgDepthHelp =>
+      'Descends into the objects contained in the input: for example the jars of an RPM, the packages or archives of a tar.gz, the jars of a fat jar.\n• 0: the object only (default)\n• N: N levels (1 = direct objects, 2 = what they contain…)\n• Unlimited: all levels (capped at 10)\nManifests found (package-lock.json, go.sum, pom.xml…) are analyzed. The global SBOM merges all components (location/depth properties, parent → child dependencies). Extraction is size-bounded.';
+
+  @override
+  String get cfgDepth0 => '0 — object only';
+
+  @override
+  String get cfgDepthAll => 'Unlimited';
+
+  @override
+  String get cfgDepth1 => '1 level';
+
+  @override
+  String cfgDepthN(String n) {
+    return '$n levels';
+  }
+
+  @override
+  String get cfgNestedFiles => 'One SBOM per nested object';
+
+  @override
+  String get cfgNestedFilesHelp =>
+      'In addition to the merged SBOM, writes one SBOM per nested object (<output>.nested-NN-<object>.<ext>, in each checked format). Unchecking = --no-nested-files: merged only.';
+
+  @override
+  String get cfgPerLayer => 'One SBOM per layer (--per-layer)';
+
+  @override
+  String get cfgPerLayerHelp =>
+      'Generates, in addition to the global SBOM, one SBOM per image layer (<output>.layer-NN-<digest>.<ext>, in each checked format) describing the layer delta: added or modified components, removed components listed separately. The global SBOM indicates the originating layer of each component.\n• Metadata: originating layer reported by Syft/Trivy — fast, additions only\n• Rootfs: layers applied one by one and re-analyzed — additions, modifications, removals (the only possible mode with Skopeo and cdxgen)';
+
+  @override
+  String get cfgLayerMetadata => 'Metadata';
+
+  @override
+  String get cfgLayerMetadataTip => 'Originating layer reported by the backend';
+
+  @override
+  String get cfgLayerRootfs => 'Rootfs';
+
+  @override
+  String get cfgLayerRootfsTip => 'Re-analysis of the rootfs after each layer';
+
+  @override
+  String cfgRootfsForced(String tool) {
+    return 'Rootfs mode forced: $tool does not report the originating layer of packages';
+  }
+
+  @override
+  String get cfgOciToolLabel => 'OCI backend (--oci-tool)';
+
+  @override
+  String get cfgOciToolHelp =>
+      'Tool used to extract the packages from the image:\n• Syft (Anchore) — the most complete, all ecosystems\n• Trivy (Aqua) — fast, built-in CVEs\n• Skopeo — manual dpkg/rpm/apk extraction\n• cdxgen (OWASP) — native CycloneDX, all ecosystems';
+
+  @override
+  String get cfgSyftTip => 'Anchore Syft — all ecosystems';
+
+  @override
+  String get cfgTrivyTip => 'Aqua Trivy — all ecosystems';
+
+  @override
+  String get cfgSkopeoTip => 'Skopeo + manual extraction (dpkg/rpm/apk)';
+
+  @override
+  String get cfgCdxgenTip => 'OWASP cdxgen — native CycloneDX, all ecosystems';
+
+  @override
+  String get cfgSyftDesc => 'Syft (recommended) — supports all ecosystems';
+
+  @override
+  String get cfgTrivyDesc => 'Trivy — all ecosystems, already used for CVEs';
+
+  @override
+  String get cfgSkopeoDesc => 'Skopeo — manual dpkg / rpm / apk extraction';
+
+  @override
+  String get cfgCdxgenDesc =>
+      'cdxgen — native CycloneDX SBOM, all ecosystems (requires Node.js)';
+
+  @override
+  String get cfgCdxVersion => 'Version (--cyclonedx-version)';
+
+  @override
+  String get cfgCdxVersionHelp =>
+      '1.6 — the most widespread among current consumers (default).\n1.7 — adds citations / patentAssertions / distributionConstraints\n(see --tlp and --patent-map on the command line).';
+
+  @override
+  String get cfgLegendAccepted =>
+      'Accepted types (list file, single package, or scanned folder):';
+
+  @override
+  String get cfgLegRpmInstalled => 'Installed RPM';
+
+  @override
+  String get cfgLegRpmFile => '.rpm file';
+
+  @override
+  String get cfgLegWheel => 'Python wheel';
+
+  @override
+  String get cfgLegTar => 'Tar archive';
+
+  @override
+  String get cfgLegZip => '.zip archive';
+
+  @override
+  String get cfgLegDeb => 'Debian package';
+
+  @override
+  String get cfgLegJar => 'Java archive';
+
+  @override
+  String get cfgLegManifest => 'Manifest/lock';
+
+  @override
+  String get cfgLegendImage => 'OCI image (--image field):';
+
+  @override
+  String get cfgLegRegistry => 'Registry';
+
+  @override
+  String get cfgLegOciLayout => 'OCI layout';
+
+  @override
+  String get cfgLegOciLayoutVal => '/path/oci_dir/  (index.json present)';
+
+  @override
+  String get cfgLegendBinary => 'Standalone binary (--binary field):';
+
+  @override
+  String get cfgLegendBinaryText =>
+      'Local executable (e.g. statically linked Go binary) — forces the syft backend. Embedded Go dependencies are always read; only a fixed catalog of well-known libraries (OpenSSL, zlib, sqlite…) is detected for other languages.';
+
+  @override
+  String get cfgLegOr => 'or';
+
+  @override
+  String get qualitySbomqsNoResult => 'No result returned by sbomqs';
+
+  @override
+  String get formatJsonCustom => 'Custom JSON';
+
+  @override
+  String get helpTitle => 'Help — User manual';
+
+  @override
+  String get helpSearchHint => 'Search the manual…';
+
+  @override
+  String get helpClear => 'Clear';
+
+  @override
+  String helpNoMatch(String query) {
+    return 'No chapter contains “$query”.';
+  }
+
+  @override
+  String helpLoadError(String error) {
+    return 'Help unavailable: unable to load the manual ($error).';
+  }
 }

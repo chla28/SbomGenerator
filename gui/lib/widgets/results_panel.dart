@@ -20,6 +20,7 @@ import 'sbom_merge_panel.dart';
 import 'sbom_tree_panel.dart';
 import 'sbom_viewer_panel.dart';
 import 'trivy_panel.dart';
+import '../l10n/l10n.dart';
 
 class ResultsPanel extends StatefulWidget {
   final List<String> logLines;
@@ -87,10 +88,10 @@ class _ResultsPanelState extends State<ResultsPanel>
   String? _trivyTarget;
 
   List<String> get _scanTargets => <String?>[
-        _grypeTarget,
-        _osvTarget,
-        _trivyTarget
-      ].whereType<String>().toSet().toList();
+    _grypeTarget,
+    _osvTarget,
+    _trivyTarget,
+  ].whereType<String>().toSet().toList();
 
   Map<String, ExploitInfo> get _mergedExploit {
     final out = <String, ExploitInfo>{};
@@ -98,7 +99,8 @@ class _ResultsPanelState extends State<ResultsPanel>
       for (final e in m.entries) {
         final cur = out[e.key];
         // On garde l'entrée qui porte le plus de signal (KEV > … > rien).
-        if (cur == null || (!cur.hasAnySignal && e.value.hasAnySignal) ||
+        if (cur == null ||
+            (!cur.hasAnySignal && e.value.hasAnySignal) ||
             (!cur.inKev && e.value.inKev)) {
           out[e.key] = e.value;
         }
@@ -162,6 +164,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   }
 
   Future<void> _loadPreview(OutputFile file) async {
+    final l = context.l10n;
     setState(() {
       _previewFile = file;
       _previewLoading = true;
@@ -173,14 +176,14 @@ class _ResultsPanelState extends State<ResultsPanel>
       if (!mounted) return;
       setState(() {
         _previewContent = raw.length > maxChars
-            ? '${raw.substring(0, maxChars)}\n\n[… tronqué — ${raw.length} caractères au total]'
+            ? '${raw.substring(0, maxChars)}\n\n${l.resultsPreviewTruncated(raw.length)}'
             : raw;
         _previewLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _previewContent = 'Erreur de lecture : $e';
+        _previewContent = l.resultsReadError('$e');
         _previewLoading = false;
       });
     }
@@ -190,12 +193,12 @@ class _ResultsPanelState extends State<ResultsPanel>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isBusy = widget.isRunning || widget.isPdfRunning;
-    final hasActivity = isBusy ||
-        widget.logLines.isNotEmpty ||
-        widget.outputFiles.isNotEmpty;
+    final hasActivity =
+        isBusy || widget.logLines.isNotEmpty || widget.outputFiles.isNotEmpty;
 
-    final previewableFiles =
-        widget.outputFiles.where((f) => !f.path.endsWith('.pdf')).toList();
+    final previewableFiles = widget.outputFiles
+        .where((f) => !f.path.endsWith('.pdf'))
+        .toList();
 
     return Column(
       children: [
@@ -212,21 +215,21 @@ class _ResultsPanelState extends State<ResultsPanel>
         if (widget.isPdfRunning)
           Container(
             color: Colors.blue[50],
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
                 const SizedBox(
                   width: 14,
                   height: 14,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.blue),
+                    strokeWidth: 2,
+                    color: Colors.blue,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'Conversion PDF (asciidoctor-pdf) en cours…',
-                  style: TextStyle(
-                      fontSize: 13, color: Colors.blue[800]),
+                  context.l10n.resultsPdfConverting,
+                  style: TextStyle(fontSize: 13, color: Colors.blue[800]),
                 ),
               ],
             ),
@@ -257,13 +260,12 @@ class _ResultsPanelState extends State<ResultsPanel>
                       const SizedBox(
                         width: 14,
                         height: 14,
-                        child:
-                            CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     else
                       const Icon(Icons.terminal, size: 16),
                     const SizedBox(width: 6),
-                    const Text('Progression'),
+                    Text(context.l10n.tabProgress),
                   ],
                 ),
               ),
@@ -275,19 +277,21 @@ class _ResultsPanelState extends State<ResultsPanel>
                     const SizedBox(width: 6),
                     Text(
                       widget.outputFiles.isEmpty
-                          ? 'Résultats'
-                          : 'Résultats (${widget.outputFiles.length})',
+                          ? context.l10n.tabResults
+                          : context.l10n.tabResultsCount(
+                              widget.outputFiles.length,
+                            ),
                     ),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.dashboard_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Tableau de bord'),
+                    const Icon(Icons.dashboard_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabDashboard),
                   ],
                 ),
               ),
@@ -321,73 +325,73 @@ class _ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.gpp_good_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Conformité CRA'),
+                    const Icon(Icons.gpp_good_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabCra),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.verified_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Qualité SBOM'),
+                    const Icon(Icons.verified_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabQuality),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.account_tree_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Arborescence'),
+                    const Icon(Icons.account_tree_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabTree),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.compare_arrows, size: 16),
-                    SizedBox(width: 6),
-                    Text('Comparaison'),
+                    const Icon(Icons.compare_arrows, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabCompare),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.merge_type, size: 16),
-                    SizedBox(width: 6),
-                    Text('Fusion'),
+                    const Icon(Icons.merge_type, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabMerge),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.gavel_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Licences'),
+                    const Icon(Icons.gavel_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabLicenses),
                   ],
                 ),
               ),
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.manage_search_outlined, size: 16),
-                    SizedBox(width: 6),
-                    Text('Visionneuse'),
+                    const Icon(Icons.manage_search_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabViewer),
                   ],
                 ),
               ),
@@ -399,8 +403,10 @@ class _ResultsPanelState extends State<ResultsPanel>
                     const SizedBox(width: 6),
                     Text(
                       previewableFiles.isEmpty
-                          ? 'Aperçu'
-                          : 'Aperçu (${previewableFiles.length})',
+                          ? context.l10n.tabPreview
+                          : context.l10n.tabPreviewCount(
+                              previewableFiles.length,
+                            ),
                     ),
                   ],
                 ),
@@ -417,8 +423,7 @@ class _ResultsPanelState extends State<ResultsPanel>
               hasActivity
                   ? Column(
                       children: [
-                        if (!widget.isRunning &&
-                            widget.logLines.isNotEmpty)
+                        if (!widget.isRunning && widget.logLines.isNotEmpty)
                           _LogExportBar(lines: widget.logLines),
                         Expanded(
                           child: _LogView(
@@ -463,9 +468,11 @@ class _ResultsPanelState extends State<ResultsPanel>
                 onVulnsChanged: (v) => setState(() => _grypeVulns = v),
                 onExploitChanged: (m) => setState(() => _grypeExploit = m),
                 onScanTargetChanged: (t) => setState(() => _grypeTarget = t),
-                onLayerScanChanged: (r) => setState(() => r == null
-                    ? _layerScans.remove('Grype')
-                    : _layerScans['Grype'] = r),
+                onLayerScanChanged: (r) => setState(
+                  () => r == null
+                      ? _layerScans.remove('Grype')
+                      : _layerScans['Grype'] = r,
+                ),
                 dateFilter: _grypeFilter,
                 onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
                 onPropagate: (f) => setState(() {
@@ -480,9 +487,11 @@ class _ResultsPanelState extends State<ResultsPanel>
                 onVulnsChanged: (v) => setState(() => _osvVulns = v),
                 onExploitChanged: (m) => setState(() => _osvExploit = m),
                 onScanTargetChanged: (t) => setState(() => _osvTarget = t),
-                onLayerScanChanged: (r) => setState(() => r == null
-                    ? _layerScans.remove('OSV-Scanner')
-                    : _layerScans['OSV-Scanner'] = r),
+                onLayerScanChanged: (r) => setState(
+                  () => r == null
+                      ? _layerScans.remove('OSV-Scanner')
+                      : _layerScans['OSV-Scanner'] = r,
+                ),
                 dateFilter: _osvFilter,
                 onDateFilterChanged: (f) => setState(() => _osvFilter = f),
                 onPropagate: (f) => setState(() {
@@ -497,9 +506,11 @@ class _ResultsPanelState extends State<ResultsPanel>
                 onVulnsChanged: (v) => setState(() => _trivyVulns = v),
                 onExploitChanged: (m) => setState(() => _trivyExploit = m),
                 onScanTargetChanged: (t) => setState(() => _trivyTarget = t),
-                onLayerScanChanged: (r) => setState(() => r == null
-                    ? _layerScans.remove('Trivy')
-                    : _layerScans['Trivy'] = r),
+                onLayerScanChanged: (r) => setState(
+                  () => r == null
+                      ? _layerScans.remove('Trivy')
+                      : _layerScans['Trivy'] = r,
+                ),
                 dateFilter: _trivyFilter,
                 onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
                 onPropagate: (f) => setState(() {
@@ -572,17 +583,20 @@ class _ProgressBar extends StatelessWidget {
           Row(
             children: [
               Text(
-                '$current / $total paquets',
+                context.l10n.resultsProgressPackages(current, total),
                 style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.bold),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(width: 12),
               Text(
                 '$percent%',
                 style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold),
+                  fontSize: 12,
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const Spacer(),
               if (label.isNotEmpty)
@@ -590,7 +604,9 @@ class _ProgressBar extends StatelessWidget {
                   child: Text(
                     label,
                     style: const TextStyle(
-                        fontSize: 11, fontFamily: 'monospace'),
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -640,9 +656,14 @@ class _StatusBanner extends StatelessWidget {
           Expanded(
             child: Text(
               ok
-                  ? '${outputFiles.length} fichier(s) SBOM généré(s)'
-                      '${warnings.isNotEmpty ? " — ${warnings.length} avertissement(s)" : ""}'
-                  : fatalError ?? 'Échec de la génération (exit $exitCode)',
+                  ? context.l10n.resultsSummaryOk(outputFiles.length) +
+                        (warnings.isNotEmpty
+                            ? context.l10n.resultsSummaryWarnings(
+                                warnings.length,
+                              )
+                            : '')
+                  : fatalError ??
+                        context.l10n.resultsGenerationFailed(exitCode),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: ok ? Colors.green[800] : Colors.red[800],
@@ -673,30 +694,33 @@ class _LogExportBar extends StatelessWidget {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: lines.join('\n')));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Logs copiés dans le presse-papier'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(context.l10n.resultsLogsCopied),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
             icon: const Icon(Icons.copy, size: 14, color: Colors.grey),
-            label: const Text('Copier',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
+            label: Text(
+              context.l10n.commonCopy,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
           ),
           TextButton.icon(
             onPressed: () async {
               final path = await FilePicker.saveFile(
-                dialogTitle: 'Enregistrer les logs',
+                dialogTitle: context.l10n.resultsSaveLogsTitle,
                 fileName: 'sbom_generator.log',
               );
               if (path != null) {
                 await File(path).writeAsString(lines.join('\n'));
               }
             },
-            icon: const Icon(Icons.save_outlined,
-                size: 14, color: Colors.grey),
-            label: const Text('Enregistrer',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
+            icon: const Icon(Icons.save_outlined, size: 14, color: Colors.grey),
+            label: Text(
+              context.l10n.resultsSave,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -740,16 +764,16 @@ class _StatsCard extends StatelessWidget {
               children: [
                 _StatItem(
                   icon: Icons.inventory_2_outlined,
-                  label: '$packageCount paquet(s)',
+                  label: context.l10n.resultsStatPackages(packageCount),
                 ),
                 _StatItem(
                   icon: Icons.description_outlined,
-                  label: '$fileCount fichier(s) SBOM',
+                  label: context.l10n.resultsStatFiles(fileCount),
                 ),
                 if (warningCount > 0)
                   _StatItem(
                     icon: Icons.warning_amber_outlined,
-                    label: '$warningCount avertissement(s)',
+                    label: context.l10n.resultsStatWarnings(warningCount),
                     color: Colors.orange,
                   ),
               ],
@@ -800,10 +824,17 @@ class _LogView extends StatelessWidget {
     }
     if (line.contains('SBOM written')) return Colors.green[300];
     if (line.contains('PDF written')) return Colors.green[300];
-    if (line.startsWith('Conversion PDF')) return Colors.lightBlue[300];
+    if (line.startsWith('Conversion PDF') ||
+        line.startsWith('PDF conversion')) {
+      return Colors.lightBlue[300];
+    }
+    // Messages de progression du CLI (français ou anglais).
     if (line.startsWith('Generating') ||
+        line.startsWith('Génération') ||
         line.startsWith('Resolving') ||
+        line.startsWith('Résolution') ||
         line.startsWith('Found') ||
+        line.startsWith('Analysed') ||
         line.startsWith('Analysés')) {
       return Colors.blue[300];
     }
@@ -865,9 +896,9 @@ class _ResultsView extends StatelessWidget {
       children: [
         // Fichiers générés
         if (outputFiles.isNotEmpty) ...[
-          const _SectionTitle(
+          _SectionTitle(
             icon: Icons.insert_drive_file_outlined,
-            label: 'Fichiers générés',
+            label: context.l10n.resultsSectionFiles,
           ),
           const SizedBox(height: 8),
           for (final f in outputFiles) _OutputFileCard(file: f),
@@ -878,7 +909,7 @@ class _ResultsView extends StatelessWidget {
         if (sbomqsOutput != null) ...[
           _SectionTitle(
             icon: Icons.analytics_outlined,
-            label: 'Score sbomqs',
+            label: context.l10n.resultsSectionScore,
             color: Colors.indigo[600],
           ),
           const SizedBox(height: 8),
@@ -901,7 +932,7 @@ class _ResultsView extends StatelessWidget {
         if (warnings.isNotEmpty) ...[
           _SectionTitle(
             icon: Icons.warning_amber_outlined,
-            label: 'Avertissements (${warnings.length})',
+            label: context.l10n.resultsSectionWarnings(warnings.length),
             color: Colors.orange[700],
           ),
           const SizedBox(height: 8),
@@ -913,7 +944,7 @@ class _ResultsView extends StatelessWidget {
         if (fatalError != null) ...[
           _SectionTitle(
             icon: Icons.error_outline,
-            label: 'Erreur',
+            label: context.l10n.resultsSectionError,
             color: Colors.red[700],
           ),
           const SizedBox(height: 8),
@@ -927,9 +958,10 @@ class _ResultsView extends StatelessWidget {
             child: SelectableText(
               fatalError!,
               style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  color: Colors.red[800]),
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: Colors.red[800],
+              ),
             ),
           ),
         ],
@@ -958,9 +990,9 @@ class _SbomPreviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (files.isEmpty) {
-      return const _EmptyHint(
+      return _EmptyHint(
         icon: Icons.preview_outlined,
-        message: 'Aucun fichier texte généré pour la prévisualisation',
+        message: context.l10n.resultsNoPreview,
       );
     }
 
@@ -969,8 +1001,7 @@ class _SbomPreviewTab extends StatelessWidget {
         // Sélecteur de fichier
         Container(
           color: Theme.of(context).colorScheme.surfaceContainerLow,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: [
               const Icon(Icons.file_present_outlined, size: 16),
@@ -982,15 +1013,19 @@ class _SbomPreviewTab extends StatelessWidget {
                   isDense: true,
                   underline: const SizedBox.shrink(),
                   items: files
-                      .map((f) => DropdownMenuItem(
-                            value: f,
-                            child: Text(
-                              f.path.split('/').last,
-                              style: const TextStyle(
-                                  fontFamily: 'monospace', fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
+                      .map(
+                        (f) => DropdownMenuItem(
+                          value: f,
+                          child: Text(
+                            f.path.split('/').last,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
                             ),
-                          ))
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
                       .toList(),
                   onChanged: (f) {
                     if (f != null) onSelectFile(f);
@@ -1000,13 +1035,13 @@ class _SbomPreviewTab extends StatelessWidget {
               if (content != null)
                 IconButton(
                   icon: const Icon(Icons.copy_outlined, size: 16),
-                  tooltip: 'Copier le contenu',
+                  tooltip: context.l10n.resultsCopyContent,
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: content!));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Contenu copié'),
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: Text(context.l10n.resultsContentCopied),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   },
@@ -1020,27 +1055,27 @@ class _SbomPreviewTab extends StatelessWidget {
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : content == null
-                  ? const _EmptyHint(
-                      icon: Icons.preview_outlined,
-                      message: 'Sélectionnez un fichier',
-                    )
-                  : Container(
-                      color: const Color(0xFF1E1E1E),
-                      padding: const EdgeInsets.all(12),
-                      child: SelectionArea(
-                        child: SingleChildScrollView(
-                          child: Text(
-                            content!,
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              color: Color(0xFFD4D4D4),
-                              height: 1.5,
-                            ),
-                          ),
+              ? _EmptyHint(
+                  icon: Icons.preview_outlined,
+                  message: context.l10n.resultsSelectFile,
+                )
+              : Container(
+                  color: const Color(0xFF1E1E1E),
+                  padding: const EdgeInsets.all(12),
+                  child: SelectionArea(
+                    child: SingleChildScrollView(
+                      child: Text(
+                        content!,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: Color(0xFFD4D4D4),
+                          height: 1.5,
                         ),
                       ),
                     ),
+                  ),
+                ),
         ),
       ],
     );
@@ -1079,7 +1114,9 @@ class _OutputFileCard extends StatelessWidget {
         title: Text(
           file.path.split('/').last,
           style: const TextStyle(
-              fontFamily: 'monospace', fontWeight: FontWeight.w600),
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.w600,
+          ),
         ),
         subtitle: Text(
           file.path,
@@ -1092,20 +1129,20 @@ class _OutputFileCard extends StatelessWidget {
             Text(
               file.size,
               style: TextStyle(
-                  fontSize: 12,
-                  color: theme.colorScheme.onSurface
-                      .withValues(alpha: 0.6)),
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
             ),
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18),
-              tooltip: 'Copier le chemin',
+              tooltip: context.l10n.resultsCopyPath,
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: file.path));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Chemin copié'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(context.l10n.resultsPathCopied),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               },
@@ -1113,7 +1150,7 @@ class _OutputFileCard extends StatelessWidget {
             if (exists)
               IconButton(
                 icon: const Icon(Icons.open_in_new, size: 18),
-                tooltip: 'Ouvrir le fichier',
+                tooltip: context.l10n.resultsOpenFile,
                 onPressed: () => launchUrl(Uri.file(file.path)),
               ),
           ],
@@ -1160,7 +1197,9 @@ class _WarningsListState extends State<_WarningsList> {
                   child: Text(
                     w,
                     style: const TextStyle(
-                        fontSize: 12, fontFamily: 'monospace'),
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
             ],
@@ -1170,9 +1209,13 @@ class _WarningsListState extends State<_WarningsList> {
           const SizedBox(height: 4),
           TextButton(
             onPressed: () => setState(() => _expanded = !_expanded),
-            child: Text(_expanded
-                ? 'Réduire'
-                : 'Voir ${widget.warnings.length - _previewCount} de plus…'),
+            child: Text(
+              _expanded
+                  ? context.l10n.resultsCollapse
+                  : context.l10n.resultsShowMore(
+                      widget.warnings.length - _previewCount,
+                    ),
+            ),
           ),
         ],
       ],
@@ -1185,11 +1228,7 @@ class _SectionTitle extends StatelessWidget {
   final String label;
   final Color? color;
 
-  const _SectionTitle({
-    required this.icon,
-    required this.label,
-    this.color,
-  });
+  const _SectionTitle({required this.icon, required this.label, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1200,8 +1239,7 @@ class _SectionTitle extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           label,
-          style: TextStyle(
-              fontSize: 13, fontWeight: FontWeight.bold, color: c),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: c),
         ),
       ],
     );
@@ -1210,26 +1248,23 @@ class _SectionTitle extends StatelessWidget {
 
 class _EmptyHint extends StatelessWidget {
   final IconData icon;
-  final String message;
+  final String? message;
 
-  const _EmptyHint({
-    this.icon = Icons.inventory_2_outlined,
-    this.message = 'Configurez les options et lancez la génération',
-  });
+  const _EmptyHint({this.icon = Icons.inventory_2_outlined, this.message});
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: Colors.grey),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: const TextStyle(color: Colors.grey, fontSize: 15),
-              textAlign: TextAlign.center,
-            ),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 56, color: Colors.grey),
+        const SizedBox(height: 12),
+        Text(
+          message ?? context.l10n.resultsEmptyHint,
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
+          textAlign: TextAlign.center,
         ),
-      );
+      ],
+    ),
+  );
 }

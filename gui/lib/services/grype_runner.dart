@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../l10n/l10n.dart';
 
 sealed class GrypeEvent {}
 
@@ -70,60 +71,65 @@ class GrypeRunner {
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
 
-    Process.start('grype', args).then((process) {
-      _process = process;
-      unawaited(process.stdin.close());
+    Process.start('grype', args)
+        .then((process) {
+          _process = process;
+          unawaited(process.stdin.close());
 
-      process.stdout
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen((chunk) {
-        if (!controller.isClosed) jsonBuf.write(chunk);
-      });
+          process.stdout
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .listen((chunk) {
+                if (!controller.isClosed) jsonBuf.write(chunk);
+              });
 
-      process.stderr
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen((chunk) {
-        if (!controller.isClosed) stderrBuf.write(chunk);
-      });
+          process.stderr
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .listen((chunk) {
+                if (!controller.isClosed) stderrBuf.write(chunk);
+              });
 
-      process.exitCode.then((code) async {
-        _process = null;
-        if (controller.isClosed) return;
+          process.exitCode.then((code) async {
+            _process = null;
+            if (controller.isClosed) return;
 
-        if (jsonBuf.isNotEmpty) {
-          controller.add(GrypeOutputEvent(jsonBuf.toString()));
-        }
-
-        final tf = tmpFile;
-        if (tf != null && tf.existsSync()) {
-          try {
-            final content = await tf.readAsString();
-            if (!controller.isClosed && content.isNotEmpty) {
-              controller.add(GrypeTemplateEvent(content));
+            if (jsonBuf.isNotEmpty) {
+              controller.add(GrypeOutputEvent(jsonBuf.toString()));
             }
-          } catch (_) {}
-          try {
-            await tf.delete();
-          } catch (_) {}
-        }
 
-        controller.add(GrypeDoneEvent(
-          code,
-          stderr:
-              stderrBuf.isNotEmpty ? stderrBuf.toString().trim() : null,
-        ));
-        controller.close();
-      });
-    }).catchError((Object e) {
-      _process = null;
-      if (!controller.isClosed) {
-        final msg = e.toString().contains('No such file')
-            ? 'grype introuvable. Installez-le : https://github.com/anchore/grype'
-            : e.toString();
-        controller.add(GrypeDoneEvent(1, stderr: msg));
-        controller.close();
-      }
-    });
+            final tf = tmpFile;
+            if (tf != null && tf.existsSync()) {
+              try {
+                final content = await tf.readAsString();
+                if (!controller.isClosed && content.isNotEmpty) {
+                  controller.add(GrypeTemplateEvent(content));
+                }
+              } catch (_) {}
+              try {
+                await tf.delete();
+              } catch (_) {}
+            }
+
+            controller.add(
+              GrypeDoneEvent(
+                code,
+                stderr: stderrBuf.isNotEmpty
+                    ? stderrBuf.toString().trim()
+                    : null,
+              ),
+            );
+            controller.close();
+          });
+        })
+        .catchError((Object e) {
+          _process = null;
+          if (!controller.isClosed) {
+            final msg = e.toString().contains('No such file')
+                ? appL10n().svcGrypeMissing
+                : e.toString();
+            controller.add(GrypeDoneEvent(1, stderr: msg));
+            controller.close();
+          }
+        });
 
     return controller.stream;
   }
@@ -145,10 +151,14 @@ class GrypeRunner {
     String? platform,
   }) {
     final args = <String>[target, '--output', 'json'];
-    if (templateFile != null && templateFile.isNotEmpty && templateOutput != null) {
+    if (templateFile != null &&
+        templateFile.isNotEmpty &&
+        templateOutput != null) {
       args.addAll([
-        '--output', 'template=$templateOutput',
-        '--template', templateFile,
+        '--output',
+        'template=$templateOutput',
+        '--template',
+        templateFile,
       ]);
     }
     if (platform != null && platform.isNotEmpty) {

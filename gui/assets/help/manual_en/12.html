@@ -1,0 +1,393 @@
+
+<h2 id="_dashboard_tab_cve_synthesis">13. Dashboard tab — CVE synthesis</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>Dashboard</strong> tab presents a synthesis view that aggregates the results of
+the three scanners (Grype, OSV-Scanner, Trivy) without having to navigate
+between each tab. It is populated automatically after the analyses are run.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ Global synthesis ─────────────────────────────────────────────  [⬥]─┐
+  │  3 scanners run  •  87 unique CVEs                                   │
+  └────────────────────────────────────────────────────────────────────┘
+
+  ┌─ Grype (42) ───────────┐  ┌─ OSV-Scanner (31) ─────┐  ┌─ Trivy (38) ─────┐
+  │ CRITICAL  ██  5        │  │ CRITICAL  █   3         │  │ CRITICAL  ██  4   │
+  │ HIGH      ████ 18      │  │ HIGH      ████ 15       │  │ HIGH      ████ 16 │
+  │ MEDIUM    ███ 14       │  │ MEDIUM    ██  10        │  │ MEDIUM    ██  14  │
+  │ LOW       █   5        │  │ LOW       █   3         │  │ LOW       █   4   │
+  └────────────────────────┘  └────────────────────────┘  └──────────────────┘
+
+  ┌─ Cross-scanner comparison (87 CVEs) ──────────────────────────────────┐
+  │ CRITICAL  CVE-2021-3711   Grype ✓  OSV ✓  Trivy ✓                   │
+  │ HIGH      CVE-2023-38545  Grype ✓  OSV ✓  Trivy ✗                   │
+  │ ⚠ MEDIUM  CVE-2024-9999   Grype ✓  OSV ✗  Trivy ✗                   │
+  └──────────────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_per_scanner_cards">13.1. Per-scanner cards</h3>
+<div class="paragraph">
+<p>Each scanner has a card displaying:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The distribution by severity (colored stacked bars)</p>
+</li>
+<li>
+<p>The number of vulnerabilities per level</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The cards of scanners not yet run display a prompt message.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_global_synthesis">13.2. Global synthesis</h3>
+<div class="paragraph">
+<p>The top banner indicates:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The number of scanners that produced results (out of 3)</p>
+</li>
+<li>
+<p>The total number of <strong>unique</strong> CVEs (union of the identifiers of all the
+scanners run)</p>
+</li>
+<li>
+<p>The ⬥ AsciiDoc + PDF export button (see <a href="#sec-dashboard-export">AsciiDoc + PDF export</a>)</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_cross_scanner_comparison">13.3. Cross-scanner comparison</h3>
+<div class="paragraph">
+<p>The table at the bottom lists <strong>all</strong> the vulnerabilities detected by <strong>at least
+one</strong> scanner — not only those common to several: it is precisely by keeping
+the isolated CVEs (seen by a single scanner while several ran) that detection
+gaps between tools can be spotted. These isolated rows carry an amber border,
+a ⚠ icon and a “Seen by a single scanner out of N” tooltip to tell them apart
+at a glance. A ✓ / — mark indicates presence or absence in each scanner.</p>
+</div>
+<div class="paragraph">
+<p><strong>Sort</strong>: click a column header to sort, click again to reverse (the ↑ / ↓ arrow
+indicates the active column and direction):</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>SEV.</strong> — severity (Critical first);</p>
+</li>
+<li>
+<p><strong>CVE / ID</strong> — alphabetical order;</p>
+</li>
+<li>
+<p><strong>Grype</strong> / <strong>OSV</strong> / <strong>Trivy</strong> — CVEs seen by this scanner first (✓ before —),
+to isolate in one click what each tool detects alone;</p>
+</li>
+<li>
+<p><strong>KEV</strong> and <strong>EPSS</strong> (columns only present if the enrichment ran, see
+<a href="#sec-exploitabilite">[sec-exploitabilite]</a>) — CISA catalog CVEs first, or decreasing EPSS score.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>By default, rows are ordered by <strong>risk prioritization</strong> — CISA KEV, then
+decreasing EPSS, then severity — when the enrichment produced results; by
+severity alone otherwise. The AsciiDoc / PDF export follows exactly the
+displayed order.</p>
+</div>
+<div id="sec-cve-detail" class="paragraph">
+<p><strong>CVE detail</strong>: click a row (the ▾ chevron on the right indicates it) to expand
+it. A panel then displays, from the data already in memory:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the affected <strong>package</strong>, its installed version and the fixed version, as seen
+by each scanner;</p>
+</li>
+<li>
+<p>the <strong>severity</strong> and the publication / modification <strong>dates</strong>, per scanner —
+often different from one tool to another;</p>
+</li>
+<li>
+<p>the <strong>detailed exploitability</strong>: CISA KEV (date added, remediation due date,
+use by ransomware), EPSS score and its percentile, CVSS exploitability
+sub-score with the vector and the exploit maturity, public PoC repositories
+(clickable links);</p>
+</li>
+<li>
+<p><strong>reference buttons</strong> opening NVD, CVE.org, osv.dev and — for a CVE of the
+catalog — CISA KEV in the browser, plus a <strong>copy the identifier</strong> button.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Clicking the row again collapses the panel. The same detail is available in
+the Grype / OSV-Scanner / Trivy tabs.</p>
+</div>
+<div class="paragraph">
+<p>If the list exceeds the available height, the tab’s vertical scrollbar lets
+you browse everything — scroll down inside the Dashboard tab.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+OSV-Scanner sometimes prefixes a CVE with the origin of the distro
+advisory (e.g. <code>DEBIAN-CVE-2026-13221</code> for a Debian package) where Grype and
+Trivy report the same bare identifier (<code>CVE-2026-13221</code>). The table
+automatically normalizes this kind of prefix before comparing — the
+vulnerability therefore appears only once, in its bare CVE form, instead of
+two distinct rows one of which is wrongly marked “seen by a single scanner”.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-dashboard-couches">13.4. Image layers</h3>
+<div class="paragraph">
+<p>When at least one scan tab has analyzed an image with the <strong>Per layer</strong> option
+(see <a href="#sec-scan-couches">Per-layer analysis (“Container image” source)</a>), an <strong>Image layers</strong> card is displayed: for each
+layer, its digest, its build instruction and the number of unique CVEs (all
+scanners combined), including critical and high ones; the method used by each
+scanner is recalled at the top. The <strong>Cross-scanner comparison</strong> gains a
+<strong>LAYER(S)</strong> column, and the AsciiDoc + PDF export an <strong>Image layers</strong> section and
+the same column.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-pourquoi-ecarts-scanners">13.5. Why Grype, OSV-Scanner and Trivy do not find the same CVEs</h3>
+<div class="paragraph">
+<p>It is normal — and expected — that a good part of the rows of the
+cross-scanner table are isolated (seen by a single tool). On the same Keycloak
+image (RHEL 9.6, ~450 MB) analyzed directly by Grype and by Trivy, a raw
+comparison of identifiers only shows 72 common CVEs out of ~210 unique
+identifiers on each side — a gap with two quite distinct causes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Different identifier naming (main cause, not a real detection gap)</strong> — on
+Java packages (JAR/Maven), Grype names its findings with the <strong>GitHub
+Security Advisory</strong> identifier (<code>GHSA-xxxx-xxxx-xxxx</code>, its main source for
+this ecosystem) while Trivy prefers the matching <strong>CVE</strong> identifier. It is the
+same vulnerability under two different names — Grype moreover lists the
+related CVE in its <code>relatedVulnerabilities</code> field. On this same image, the
+two tools seemed to agree on only 2 Java CVEs out of ~135 on each side; once
+Grype’s <code>GHSA-*</code> are resolved to their related CVE, the agreement rises to
+132/135 (~98 %). On RPM packages (OS base), where both tools natively use
+the CVE identifier, the agreement was already direct at ~94 % (70 common
+CVEs out of ~75 on each side).</p>
+</li>
+<li>
+<p><strong>Another different naming, this one normalized automatically</strong> — on Debian
+packages, OSV-Scanner names some of its advisories <code>DEBIAN-CVE-xxxx-xxxxx</code>
+(Debian Security Tracker origin) where Grype and Trivy report the matching
+bare CVE identifier. Unlike the GHSA↔CVE case above, the Dashboard’s
+comparison table resolves this prefix automatically (see
+<a href="#sec-dashboard-export">AsciiDoc + PDF export</a>) — on a real Debian image, this reduced the number
+of rows of the cross-scanner comparison from 200 to 106 (nearly half were
+only this naming duplicate).</p>
+</li>
+<li>
+<p><strong>Residual real gaps (freshness and coverage of the databases)</strong> — Grype
+(Anchore database) and Trivy (<code>trivy-db</code>) republish their vulnerability
+databases at paces and from sources that are not perfectly identical (NVD,
+GHSA, Red Hat OVAL/CSAF…). A just-published CVE, or one not yet mapped to
+the exact CPE of a package, may appear in one before the other. The version
+matching rules (affected bounds, RPM epoch) and the retained severity score
+(NVD CVSS vs vendor vs distro) may also differ slightly from one engine to
+another.</p>
+</li>
+<li>
+<p><strong>Grype and Trivy do not have the same exhaustiveness on Debian OS
+packages</strong> — on a real Debian image (79 packages), Grype reported 207 matches
+versus only 27 for Trivy, on the same SBOM. This is nevertheless not a
+problem of CPE false positives: both tools do use their dedicated distro
+matcher (<code>dpkg-matcher</code> on the Grype side). The gap comes from the
+completeness of the data taken in — Grype reports the whole Debian Security
+Tracker, including the advisories marked <code>&lt;no-dsa&gt;</code> (minor bug that Debian
+chose never to fix) and the CVEs with no known fixed version, where Trivy
+only reports a more restricted subset. Checked on
+<code>security-tracker.debian.org</code>: a CVE cited only by Grype (<code>CVE-2026-19499</code>
+on <code>glibc</code>/trixie) is indeed listed there as “vulnerable” with the note
+<code>&lt;no-dsa&gt; (Minor issue)</code> — Grype therefore rightly reports it (“won’t fix”
+state), Trivy simply omits it. Neither is wrong: Trivy is more conservative
+(CVEs with a settled status), Grype more exhaustive but noisier.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Neither scanner is “the” truth: each has its own database and its own matching
+granularity. That is precisely the purpose of this tab — seeing the union of
+the three scanners rather than relying on a single one to maximize detection
+coverage.</p>
+</div>
+<div class="paragraph">
+<p>A gap may also appear with a <strong>single</strong> scanner depending on whether it is given
+an SBOM or the image directly — typically in the Trivy tab (see
+<a href="#sec-onglet-trivy-source">Selecting the source to analyze</a>) between the <strong>SBOM file</strong> (<code>trivy sbom</code>) and
+<strong>Container image</strong> (<code>trivy image</code>) modes. On this same Keycloak image,
+<code>trivy sbom</code> on an SBOM generated with the <code>syft</code> backend found 3 HIGH CVEs
+(<code>micrometer-core</code>, <code>postgresql</code>) absent from a direct <code>trivy image</code>: the jar
+analyzer built into Trivy identifies a jar through <code>pom.properties</code>, then
+<code>MANIFEST.MF</code>, then a SHA-1 lookup in its <code>trivy-java-db</code> database (indexed
+from Maven Central) — and silently drops the package if all three fail, which
+happens for internally rebuilt jars (e.g. <code>.redhat-000xx</code>) without
+<code>pom.properties</code> and absent from Maven Central. The syft cataloger, for its
+part, can recover these packages by parsing the file name
+<code>&lt;groupId&gt;.&lt;artifactId&gt;-&lt;version&gt;.jar</code> (convention of the Quarkus “fast-jar”
+packaging of this image). Here again, the SBOM does not invent CVEs: it is
+<code>trivy image</code> that misses a few that <code>trivy sbom</code> finds thanks to syft’s more
+complete detection.</p>
+</div>
+<div class="paragraph">
+<p>The same kind of gap existed for OSV-Scanner, but far more drastically: on
+distribution packages, giving it a syft SBOM brought the result down to almost
+<strong>zero</strong> CVEs, whereas scanning the image directly finds hundreds. Two causes,
+both fixed at the source by <code>sbom_generator</code> (syft backend):</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong><code>distro</code> qualifier</strong> — OSV-Scanner only links a <code>pkg:deb/debian/…​</code> to the
+<code>Debian:13</code> ecosystem if <code>distro</code> is <code>debian-&lt;major&gt;</code> or if <code>distro_name</code>
+carries a known codename. syft fills in the <strong>point release</strong>
+(<code>distro=debian-13.6</code>, read from <code>/etc/debian_version</code>), which is not
+recognized. Fixed: <code>debian-13.6</code> → <code>debian-13</code> + <code>distro_name=trixie</code>.</p>
+</li>
+<li>
+<p><strong>Binary vs source package</strong> — OSV.dev indexes Debian advisories by <strong>source</strong>
+package (<code>zlib</code>, <code>perl</code>), not binary (<code>zlib1g</code>, <code>perl-base</code>). syft only
+lists the binary (with <code>upstream=</code>), which OSV-Scanner does not use. Fixed:
+one component per distinct source package is added (like cdxgen), and
+<code>upstream=</code> is removed from the binary so that Grype does not count the CVE
+twice.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>On <code>haproxy:3.4.4</code> (Debian 13.6), the syft SBOM thus goes from ~0 to 58
+OSV-Scanner CVEs (parity with the cdxgen SBOM), cross-checked by the three
+scanners instead of Grype alone.</p>
+</div>
+<div class="paragraph">
+<p>Two limits remain:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the other families of distribution packages (Alpine, RPM/RHEL) — OSV.dev
+indexes them poorly or not at all in “SBOM scan” mode;</p>
+</li>
+<li>
+<p><code>osv-scanner scan image</code>, which does its own extraction without PURLs,
+remains more exhaustive on the base OS. For maximum OS coverage with this
+tool, scan the image directly.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-dashboard-export">13.6. AsciiDoc + PDF export</h3>
+<div class="paragraph">
+<p>The ⬥ button (PDF icon, in the global synthesis card) exports a report
+reproducing the whole displayed view:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>the global summary (scanners run, unique CVEs);</p>
+</li>
+<li>
+<p>the <strong>Tools</strong> section: version of sbom_generator_gui and version of each
+scanner run (detected through <code>&lt;tool&gt; --version</code> at export time, hence
+always up to date even if the tool was updated since the last scan —
+“unavailable” if the tool is no longer in the <code>PATH</code>);</p>
+</li>
+<li>
+<p>for each scanner: its severity distribution with a colored bar (or “Not
+run” / “No vulnerability detected” as appropriate);</p>
+</li>
+<li>
+<p>the complete cross-scanner comparison table (severity, CVE/ID, presence per
+tool, and KEV / EPSS columns if the enrichment ran), in the <strong>same order as
+displayed on screen</strong>, with the distro-prefixed CVEs already normalized (see
+<a href="#sec-pourquoi-ecarts-scanners">Why Grype, OSV-Scanner and Trivy do not find the same CVEs</a>);</p>
+</li>
+<li>
+<p>a <strong>“CVE details”</strong> section: one block per CVE retained by the report’s
+severity threshold (all with “All”; CISA KEV catalog CVEs are always
+included) — with package, versions, severity and dates per scanner, and all
+the exploitability information (KEV, EPSS, CVSS, PoC, links). It reproduces
+the content of the expandable detail panel on screen.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Unlike the Grype/OSV-Scanner/Trivy tabs, there is only one synthesis view
+here — no individually filtered rows to export, but the active sort column of
+the cross-scanner table is respected.</p>
+</div>
+<div class="paragraph">
+<p><strong>Report severity level</strong>: the menu to the left of the export button
+(<strong>Critical</strong>, <strong>≥ High</strong>, <strong>≥ Medium</strong>, <strong>All</strong> — <strong>All</strong> by default) limits the whole
+report to the CVEs of that level or above: executive summary, distribution per
+scanner, image layers, cross-scanner comparison and detail. The choice is
+remembered from one session to another; the on-screen display is not
+filtered.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>A CVE is retained according to its <strong>worst</strong> severity, all scanners combined:
+a CVE that is High for Grype and Medium for Trivy appears in a “≥ High”
+report with both scanners, so that the comparison stays fair.</p>
+</li>
+<li>
+<p>The <strong>CISA KEV</strong> catalog CVEs (actively exploited) are always included,
+whatever their severity.</p>
+</li>
+<li>
+<p>The filtered report states it at the top (chosen level, number of retained
+CVEs out of the total) and the proposed file name carries the level
+(<code>vulnerability-report-high.adoc</code>).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The button stays disabled as long as no scanner has been run. Once the <code>.adoc</code>
+file is written (location chosen through a dialog box), the conversion to PDF
+through <code>asciidoctor-pdf</code> is attempted automatically; if the tool is not
+installed, the <code>.adoc</code> file is still produced and a message says so — same
+behavior as the export of the scan tabs (see <a href="#sec-vue-table">[sec-vue-table]</a>). The PDF
+reuses the Dashboard colors (severity badges, distribution bar, blue headers)
+— see <a href="#sec-vue-table">[sec-vue-table]</a> for the theme detail.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The Dashboard is updated automatically every time an analysis is run in
+a scanner tab. No additional action is required.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>

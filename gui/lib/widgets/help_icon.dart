@@ -18,7 +18,9 @@ class HelpIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4);
+    final color = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.4);
     return Tooltip(
       message: message,
       preferBelow: false,
@@ -42,13 +44,7 @@ class HelpLabel extends StatelessWidget {
   final TextStyle? style;
   final double gap;
 
-  const HelpLabel(
-    this.label,
-    this.help, {
-    super.key,
-    this.style,
-    this.gap = 4,
-  });
+  const HelpLabel(this.label, this.help, {super.key, this.style, this.gap = 4});
 
   @override
   Widget build(BuildContext context) {

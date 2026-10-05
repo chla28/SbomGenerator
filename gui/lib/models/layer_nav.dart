@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../l10n/l10n.dart';
 
 // Navigation entre le SBOM global d'une image et ses SBOM de couche
 // (`sbom-generator --per-layer`). Les fichiers sont reliés par leur nom :
@@ -96,7 +97,10 @@ class LayerNav {
       if (rank[idx] == null || r < rank[idx]!) {
         rank[idx] = r;
         byIndex[idx] = LayerFile(
-            index: idx, shortDigest: lm.group(3)!, path: '$dir/$f');
+          index: idx,
+          shortDigest: lm.group(3)!,
+          path: '$dir/$f',
+        );
       }
     }
     if (byIndex.isEmpty) return null;
@@ -145,8 +149,11 @@ class LayerDocInfo {
 
   static const empty = LayerDocInfo();
 
-  static LayerDocInfo fromSbom(Map<String, dynamic> json) {
-    if (json['bomFormat'] == 'CycloneDX') return _fromCdx(json);
+  static LayerDocInfo fromSbom(
+    Map<String, dynamic> json, {
+    AppLocalizations? l,
+  }) {
+    if (json['bomFormat'] == 'CycloneDX') return _fromCdx(json, l);
     // SPDX 2.3 / 3.0 : description en commentaire du document.
     String? comment;
     if (json.containsKey('spdxVersion')) {
@@ -160,10 +167,12 @@ class LayerDocInfo {
     }
     if (comment == null || !comment.contains('couche')) return empty;
     return LayerDocInfo(
-        lines: comment.split('\n').where((l) => l.isNotEmpty).toList());
+      lines: comment.split('\n').where((l) => l.isNotEmpty).toList(),
+    );
   }
 
-  static LayerDocInfo _fromCdx(Map<String, dynamic> json) {
+  static LayerDocInfo _fromCdx(Map<String, dynamic> json, AppLocalizations? l) {
+    final t = l ?? lookupAppLocalizations(fallbackLocale);
     final root = (json['metadata'] as Map?)?['component'] as Map?;
     if (root == null) return empty;
     final props = <String, List<String>>{};
@@ -181,12 +190,14 @@ class LayerDocInfo {
       final desc = root['description'] as String?;
       return LayerDocInfo(
         lines: [
-          'Couche $index/${one('total') ?? '?'} — mode ${one('mode') ?? '?'}',
-          if (one('digest') != null) 'Digest : ${one('digest')}',
-          if (desc != null && desc.isNotEmpty) 'Instruction : $desc',
-          'Ajoutés : ${one('added') ?? '0'} — modifiés : '
-              '${one('modified') ?? '0'} — supprimés : '
-              '${one('removedCount') ?? '0'}',
+          t.layerDocHeader(index, one('total') ?? '?', one('mode') ?? '?'),
+          if (one('digest') != null) t.layerDocDigest(one('digest')!),
+          if (desc != null && desc.isNotEmpty) t.layerDocInstruction(desc),
+          t.layerDocCounts(
+            one('added') ?? '0',
+            one('modified') ?? '0',
+            one('removedCount') ?? '0',
+          ),
         ],
         removed: props['sbom_generator:layer:removed'] ?? const [],
       );
@@ -199,7 +210,8 @@ class LayerDocInfo {
         final s = jsonDecode(e.value.first);
         if (s is! Map || s['index'] is! int) continue;
         final by = (s['createdBy'] as String?)?.trim() ?? '';
-        labels[s['index'] as int] = '+${s['added']} ~${s['modified']} '
+        labels[s['index'] as int] =
+            '+${s['added']} ~${s['modified']} '
             '-${s['removed']}${by.isEmpty ? '' : ' — $by'}';
       } on FormatException {
         continue;
@@ -208,8 +220,8 @@ class LayerDocInfo {
     final mode = props['sbom_generator:layers:mode']?.first;
     return LayerDocInfo(
       lines: [
-        '${labels.length} couche(s) analysée(s)'
-            '${mode != null ? ' — mode $mode' : ''}',
+        t.layerDocAnalyzed(labels.length) +
+            (mode != null ? t.layerDocModeSuffix(mode) : ''),
       ],
       layerLabels: labels,
     );
@@ -218,12 +230,15 @@ class LayerDocInfo {
 
 /// Libellés des couches (voir [LayerDocInfo.layerLabels]) relus dans le SBOM
 /// global [globalPath] — vide s'il est absent ou illisible.
-Future<Map<int, String>> readLayerLabels(String? globalPath) async {
+Future<Map<int, String>> readLayerLabels(
+  String? globalPath, {
+  AppLocalizations? l,
+}) async {
   if (globalPath == null) return const {};
   try {
     final json = jsonDecode(await File(globalPath).readAsString());
     if (json is Map<String, dynamic>) {
-      return LayerDocInfo.fromSbom(json).layerLabels;
+      return LayerDocInfo.fromSbom(json, l: l).layerLabels;
     }
   } catch (_) {
     // Global illisible : sélecteur sans instruction de build.
@@ -261,27 +276,31 @@ Map<String, String> layerFieldsOf(Map<String, dynamic> component) {
 
 /// Libellé court d'un composant vis-à-vis des couches (colonne « Couche » ou
 /// « Changement »), vide si le SBOM n'en porte pas.
-String layerColumnLabel(Map<String, String> f) {
+String layerColumnLabel(Map<String, String> f, {AppLocalizations? l}) {
+  final t = l ?? lookupAppLocalizations(fallbackLocale);
   final change = f['change'];
   if (change != null) {
-    if (change == 'added') return 'ajouté';
+    if (change == 'added') return t.layerColAdded;
     final prev = f['previousVersion'];
-    return prev != null ? 'modifié (était $prev)' : 'modifié';
+    return prev != null ? t.layerColModifiedWas(prev) : t.layerColModified;
   }
   final index = f['index'];
   if (index == null) return '';
   final by = f['modifiedBy'];
   return by == null || by.isEmpty
-      ? 'couche $index'
-      : 'couche $index (modifié : $by)';
+      ? t.layerColLayer(index)
+      : t.layerColLayerModifiedBy(index, by);
 }
 
 /// Clé de regroupement par couche (tri naturel des index).
-String layerGroupKey(Map<String, String> f) {
+String layerGroupKey(Map<String, String> f, {AppLocalizations? l}) {
+  final t = l ?? lookupAppLocalizations(fallbackLocale);
   final change = f['change'];
-  if (change != null) return change == 'added' ? 'Ajoutés' : 'Modifiés';
+  if (change != null) {
+    return change == 'added' ? t.layerGroupAdded : t.layerGroupModified;
+  }
   final index = int.tryParse(f['index'] ?? '');
   return index == null
-      ? '(couche inconnue)'
-      : 'Couche ${index.toString().padLeft(2, '0')}';
+      ? t.layerGroupUnknown
+      : t.layerGroupLayer(index.toString().padLeft(2, '0'));
 }

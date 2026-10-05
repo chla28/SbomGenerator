@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../l10n/l10n.dart';
 
 sealed class OsvEvent {}
 
@@ -32,52 +33,60 @@ class OsvRunner {
     String? configFile,
   }) {
     final controller = StreamController<OsvEvent>();
-    final args =
-        buildArgs(target: target, useImage: useImage, configFile: configFile);
+    final args = buildArgs(
+      target: target,
+      useImage: useImage,
+      configFile: configFile,
+    );
 
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
 
-    Process.start('osv-scanner', args).then((process) {
-      _process = process;
-      unawaited(process.stdin.close());
+    Process.start('osv-scanner', args)
+        .then((process) {
+          _process = process;
+          unawaited(process.stdin.close());
 
-      process.stdout
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen((c) {
-        if (!controller.isClosed) jsonBuf.write(c);
-      });
+          process.stdout
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .listen((c) {
+                if (!controller.isClosed) jsonBuf.write(c);
+              });
 
-      process.stderr
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen((c) {
-        if (!controller.isClosed) stderrBuf.write(c);
-      });
+          process.stderr
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .listen((c) {
+                if (!controller.isClosed) stderrBuf.write(c);
+              });
 
-      process.exitCode.then((code) {
-        _process = null;
-        if (controller.isClosed) return;
+          process.exitCode.then((code) {
+            _process = null;
+            if (controller.isClosed) return;
 
-        if (jsonBuf.isNotEmpty) {
-          controller.add(OsvOutputEvent(jsonBuf.toString()));
-        }
+            if (jsonBuf.isNotEmpty) {
+              controller.add(OsvOutputEvent(jsonBuf.toString()));
+            }
 
-        // Exit 1 = vulnérabilités trouvées (normal), >1 = erreur réelle
-        final stderr = stderrBuf.isNotEmpty ? stderrBuf.toString().trim() : null;
-        controller.add(OsvDoneEvent(code, stderr: code > 1 ? stderr : null));
-        controller.close();
-      });
-    }).catchError((Object e) {
-      _process = null;
-      if (!controller.isClosed) {
-        final msg = e.toString().contains('No such file')
-            ? 'osv-scanner introuvable — '
-              'https://github.com/google/osv-scanner'
-            : e.toString();
-        controller.add(OsvDoneEvent(127, stderr: msg));
-        controller.close();
-      }
-    });
+            // Exit 1 = vulnérabilités trouvées (normal), >1 = erreur réelle
+            final stderr = stderrBuf.isNotEmpty
+                ? stderrBuf.toString().trim()
+                : null;
+            controller.add(
+              OsvDoneEvent(code, stderr: code > 1 ? stderr : null),
+            );
+            controller.close();
+          });
+        })
+        .catchError((Object e) {
+          _process = null;
+          if (!controller.isClosed) {
+            final msg = e.toString().contains('No such file')
+                ? appL10n().svcOsvMissing
+                : e.toString();
+            controller.add(OsvDoneEvent(127, stderr: msg));
+            controller.close();
+          }
+        });
 
     return controller.stream;
   }

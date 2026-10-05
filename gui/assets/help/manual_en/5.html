@@ -1,0 +1,111 @@
+
+<h2 id="_results_tab">6. Results tab</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>Results (N)</strong> tab shows the number of generated files in its label.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ✔  2 SBOM file(s) generated — 1 warning(s)
+  ┌─────────────────────────────────────────────────────┐
+  │ 📄 sbom.cdx.json                                    │
+  │    /home/user/project/sbom.cdx.json    [📋] [↗]    │
+  │    42.3 KB                                          │
+  ├─────────────────────────────────────────────────────┤
+  │ 📄 sbom.spdx.json                                   │
+  │    /home/user/project/sbom.spdx.json   [📋] [↗]    │
+  │    38.1 KB                                          │
+  └─────────────────────────────────────────────────────┘
+
+  ⚠ Warnings (1)
+  Warning: unknown license for 'mylib-1.2.3'</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_result_banner">6.1. Result banner</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Green background</strong>: the generation succeeded. The number of files and
+warnings is displayed.</p>
+</li>
+<li>
+<p><strong>Red background</strong>: the generation failed. The error message is displayed
+directly in the banner.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_generated_files">6.2. Generated files</h3>
+<div class="paragraph">
+<p>Each file is presented in a card with:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>its name (bold, monospace font)</p>
+</li>
+<li>
+<p>its full path</p>
+</li>
+<li>
+<p>its size</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Two buttons are available on the right of each card:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">📋</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copies the full path to the clipboard</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">↗</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Opens the file with the default system application (JSON viewer, editor…)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_sbomqs_score">6.3. sbomqs score</h3>
+<div class="paragraph">
+<p>If the <strong>sbomqs quality score</strong> option is checked and <code>sbomqs</code> is installed,
+an indigo block is displayed after the file list with the complete output of
+<code>sbomqs score</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ── sbomqs score ──────────────────────────────────
+  sbomqs score sbom.cdx.json
+  Document Name  Format  Spec   Score   Avg
+  sbom.cdx.json  cdx     1.6    8.3/10  8.3</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The text is selectable to copy-paste the score.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_warnings">6.4. Warnings</h3>
+<div class="paragraph">
+<p>Warnings are displayed in a collapsed orange block. If there are more than 5,
+a <strong>Show N more…</strong> button displays them all.
+These warnings are non-blocking: the SBOM files were generated.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fatal_error">6.5. Fatal error</h3>
+<div class="paragraph">
+<p>On failure (non-zero exit code), the error message appears in a selectable red
+block to make copy-pasting easier.</p>
+</div>
+</div>
+</div>

@@ -46,15 +46,15 @@ class CveSeed {
   /// Fusionne deux graines vues pour la même CVE (scanners différents) —
   /// on garde la première valeur non nulle / non fausse.
   CveSeed merge(CveSeed other) => CveSeed(
-        cvssVector: cvssVector ?? other.cvssVector,
-        cvssBaseScore: cvssBaseScore ?? other.cvssBaseScore,
-        kev: kev || other.kev,
-        kevDateAdded: kevDateAdded ?? other.kevDateAdded,
-        kevDueDate: kevDueDate ?? other.kevDueDate,
-        kevRansomware: kevRansomware || other.kevRansomware,
-        epssScore: epssScore ?? other.epssScore,
-        epssPercentile: epssPercentile ?? other.epssPercentile,
-      );
+    cvssVector: cvssVector ?? other.cvssVector,
+    cvssBaseScore: cvssBaseScore ?? other.cvssBaseScore,
+    kev: kev || other.kev,
+    kevDateAdded: kevDateAdded ?? other.kevDateAdded,
+    kevDueDate: kevDueDate ?? other.kevDueDate,
+    kevRansomware: kevRansomware || other.kevRansomware,
+    epssScore: epssScore ?? other.epssScore,
+    epssPercentile: epssPercentile ?? other.epssPercentile,
+  );
 }
 
 /// Résultat de l'enrichissement pour une CVE.
@@ -239,19 +239,24 @@ class VulnEnricher {
     Uri? epssApiUrl,
     Uri? pocApiBase,
     HttpClient Function()? httpClientFactory,
-  })  : _cacheDir = cacheDir ?? _defaultCacheDir(),
-        _kevFeedUrl = kevFeedUrl ??
-            Uri.parse('https://www.cisa.gov/sites/default/files/feeds/'
-                'known_exploited_vulnerabilities.json'),
-        _epssApiUrl =
-            epssApiUrl ?? Uri.parse('https://api.first.org/data/v1/epss'),
-        _pocApiBase = pocApiBase ??
-            Uri.parse('https://poc-in-github.motikan2010.net/api/v1/'),
-        _clientFactory = httpClientFactory ?? HttpClient.new;
+  }) : _cacheDir = cacheDir ?? _defaultCacheDir(),
+       _kevFeedUrl =
+           kevFeedUrl ??
+           Uri.parse(
+             'https://www.cisa.gov/sites/default/files/feeds/'
+             'known_exploited_vulnerabilities.json',
+           ),
+       _epssApiUrl =
+           epssApiUrl ?? Uri.parse('https://api.first.org/data/v1/epss'),
+       _pocApiBase =
+           pocApiBase ??
+           Uri.parse('https://poc-in-github.motikan2010.net/api/v1/'),
+       _clientFactory = httpClientFactory ?? HttpClient.new;
 
   static Directory _defaultCacheDir() {
     final env = Platform.environment;
-    final base = env['XDG_CACHE_HOME'] ??
+    final base =
+        env['XDG_CACHE_HOME'] ??
         (env['HOME'] != null ? '${env['HOME']}/.cache' : null) ??
         Directory.systemTemp.path;
     return Directory('$base/sbom-generator');
@@ -263,8 +268,9 @@ class VulnEnricher {
     Set<String> cveIds, {
     Map<String, CveSeed> seed = const {},
   }) async {
-    final cves =
-        cveIds.where((c) => c.toUpperCase().startsWith('CVE-')).toSet();
+    final cves = cveIds
+        .where((c) => c.toUpperCase().startsWith('CVE-'))
+        .toSet();
 
     Map<String, _KevEntry> kev = const {};
     Map<String, _EpssEntry> epss = const {};
@@ -290,7 +296,8 @@ class VulnEnricher {
 
       final inKev = k != null || sd.kev;
       final maturity = parsed.maturity;
-      final pocFromMaturity = maturity == 'High' ||
+      final pocFromMaturity =
+          maturity == 'High' ||
           maturity == 'Functional' ||
           maturity == 'Proof-of-Concept';
 
@@ -370,7 +377,8 @@ class VulnEnricher {
         entries[id] = {
           'dateAdded': m['dateAdded'],
           'dueDate': m['dueDate'],
-          'ransomware': ((m['knownRansomwareCampaignUse'] as String?) ?? '')
+          'ransomware':
+              ((m['knownRansomwareCampaignUse'] as String?) ?? '')
                   .toLowerCase() ==
               'known',
         };
@@ -434,10 +442,9 @@ class VulnEnricher {
     var networkFailed = false;
     for (var i = 0; i < missing.length; i += 100) {
       final batch = missing.sublist(i, (i + 100).clamp(0, missing.length));
-      final url = _epssApiUrl.replace(queryParameters: {
-        'cve': batch.join(','),
-        'limit': '100',
-      });
+      final url = _epssApiUrl.replace(
+        queryParameters: {'cve': batch.join(','), 'limit': '100'},
+      );
       final body = await _get(url);
       if (body == null) {
         networkFailed = true;
@@ -452,11 +459,7 @@ class VulnEnricher {
           final score = double.tryParse('${m['epss']}');
           final pct = double.tryParse('${m['percentile']}');
           result[id] = _EpssEntry(score, pct);
-          cache[id] = {
-            'score': score,
-            'percentile': pct,
-            'fetchedAt': now,
-          };
+          cache[id] = {'score': score, 'percentile': pct, 'fetchedAt': now};
         }
       } catch (_) {
         networkFailed = true;
@@ -522,25 +525,27 @@ class VulnEnricher {
     const poolSize = 6;
     for (var i = 0; i < missing.length; i += poolSize) {
       final slice = missing.sublist(i, (i + poolSize).clamp(0, missing.length));
-      await Future.wait(slice.map((id) async {
-        final url = _pocApiBase.replace(queryParameters: {'cve_id': id});
-        final body = await _get(url);
-        if (body == null) return;
-        try {
-          final data = jsonDecode(body) as Map<String, dynamic>;
-          final pocs = (data['pocs'] as List?) ?? const [];
-          final urls = <String>[
-            for (final p in pocs)
-              if ((p as Map)['html_url'] is String) p['html_url'] as String,
-          ];
-          result[id] = _PocEntry(pocs.length, urls.take(3).toList());
-          cache[id] = {
-            'count': pocs.length,
-            'urls': urls.take(3).toList(),
-            'fetchedAt': now,
-          };
-        } catch (_) {}
-      }));
+      await Future.wait(
+        slice.map((id) async {
+          final url = _pocApiBase.replace(queryParameters: {'cve_id': id});
+          final body = await _get(url);
+          if (body == null) return;
+          try {
+            final data = jsonDecode(body) as Map<String, dynamic>;
+            final pocs = (data['pocs'] as List?) ?? const [];
+            final urls = <String>[
+              for (final p in pocs)
+                if ((p as Map)['html_url'] is String) p['html_url'] as String,
+            ];
+            result[id] = _PocEntry(pocs.length, urls.take(3).toList());
+            cache[id] = {
+              'count': pocs.length,
+              'urls': urls.take(3).toList(),
+              'fetchedAt': now,
+            };
+          } catch (_) {}
+        }),
+      );
     }
     // Repli cache périmé.
     for (final id in missing) {

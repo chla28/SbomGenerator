@@ -1,0 +1,682 @@
+
+<h2 id="_configuration_panel">4. Configuration panel</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_input_section">4.1. Input section</h3>
+<div class="sect3">
+<h4 id="_input_file_input">4.1.1. Input file (<code>--input</code>)</h4>
+<div class="paragraph">
+<p>Path to the file containing the list of packages to analyze.
+The 📂 button to the right of the field offers a menu:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Filtered type (.lst .txt)</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Only shows files with the usual extensions</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>All files</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Shows all the files of the directory</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+You can also <strong>drag and drop</strong> a file from your file manager (Nautilus,
+Thunar…) directly onto this field. A blue outline indicates that the drop is
+accepted.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="paragraph">
+<p>The file must contain <strong>one item per line</strong>. The accepted types are:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Type</th>
+<th class="tableblock halign-left valign-top">Line format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Installed RPM package</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>bash</code> or <code>bash-5.1.8-6.el9.x86_64</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Local RPM file</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/package.rpm</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Python wheel (<code>.whl</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/package-1.0-py3-none-any.whl</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Tar archive</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/pkg.tar.gz</code> or <code>.tgz</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Zip archive</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/archive.zip</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Debian package (<code>.deb</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/package.deb</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Python dependencies</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/requirements.txt</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Java archive (<code>.jar</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/to/lib-1.2.3.jar</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Manifest / lockfile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>go.sum</code>, <code>go.mod</code>, <code>package-lock.json</code>, <code>yarn.lock</code>, <code>pom.xml</code>,
+<code>pubspec.lock</code>, <code>pubspec.yaml</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>A single input file may contain lines of different types. A path pointing
+directly to an archive or to a single manifest (rather than to a list file) is
+also accepted; a directory is scanned recursively for all these types. For
+Dart/Flutter, <code>pubspec.lock</code> provides the resolved versions and the complete
+transitive closure (development dependencies are excluded); <code>pubspec.yaml</code>
+only provides the direct dependencies of the <code>dependencies:</code> section.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The <strong>Packages to analyze</strong> field becomes optional if an <strong>OCI image</strong> is
+specified in the next section.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="admonitionblock important">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+The <strong>Packages to analyze</strong> and <strong>OCI image</strong> fields are mutually
+exclusive in the interface: filling in one (typing, drag and drop, or
+file/directory picker) automatically empties the other. To combine both
+sources in a single analysis, use the command line (<code>--input</code> and <code>--image</code>
+together).
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_oci_image_section">4.2. OCI image section</h3>
+<div class="sect3">
+<h4 id="_oci_image_image">4.2.1. OCI image (<code>--image</code>)</h4>
+<div class="paragraph">
+<p>Reference of an OCI image to analyze. Three formats are accepted:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 28.5714%;">
+<col style="width: 42.8571%;">
+<col style="width: 28.5715%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Format</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Registry</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Docker Hub image or private registry</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>nginx:latest</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Tar archive</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>docker save</code> or <code>skopeo copy docker-archive:</code> export (.tar, .tar.gz, .tgz)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/ubuntu.tar</code>, <code>/path/image.tar.gz</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OCI layout</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Directory containing <code>index.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/path/oci_dir/</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The 📂 button to the right of the field opens a context menu:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Tar archive (.tar / .tar.gz / .tgz)</strong> — file picker filtered on these three extensions</p>
+</li>
+<li>
+<p><strong>OCI layout directory</strong> — directory picker</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>For registry images, type the reference manually.</p>
+</div>
+<div class="paragraph">
+<p>If the field is empty, the OCI analysis is disabled.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_oci_tool_oci_tool">4.2.2. OCI tool (<code>--oci-tool</code>)</h4>
+<div class="paragraph">
+<p>Only visible when the <strong>OCI image</strong> field is filled in. Select the analysis
+backend:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 40%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Tool</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Requirements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Syft (default)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Anchore Syft — all package types (deb, rpm, apk, pypi, npm, go, java…)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>syft</code> in the PATH</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Trivy</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Aqua Trivy — all package types</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> in the PATH</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Skopeo</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Manual layer extraction — dpkg, RPM and APK only</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>skopeo</code> and <code>tar</code> in the PATH</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">cdxgen</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OWASP CycloneDX Generator — all package types; the produced SBOM is
+filtered to the components carrying a real ecosystem PURL</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>cdxgen</code> in the PATH (requires Node.js)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect3">
+<h4 id="sec-depth">4.2.3. Descent depth (<code>--depth</code>)</h4>
+<div class="paragraph">
+<p>Under the input field, the <strong>Depth</strong> selector lets you descend into the objects
+contained in the input: for example the jars of an RPM, the packages and jars
+of a <code>.tar.gz</code> / <code>.zip</code> archive, the jars of a fat jar, as well as the
+manifests found (<code>package-lock.json</code>, <code>go.sum</code>, <code>pom.xml</code>…).</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>0 — object only</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Default behavior: the input is not opened</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>1 level, 2, 3</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Descends N levels (1 = direct objects of the input, 2 = what these contain…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Unlimited</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">All levels (capped at 10)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The generated SBOM merges the object and everything it contains: each nested
+component carries its location (<code>sbom_generator:nested:location</code>) and its
+depth, and the dependency graph links the container to its content. As soon
+as the depth is greater than 0, the <strong>One SBOM per nested object</strong> checkbox
+additionally writes one SBOM per jar/package/archive
+(<code>&lt;output&gt;.nested-NN-&lt;object&gt;.&lt;ext&gt;</code>); these files appear in the list of
+produced files, after the global SBOM. Unchecking the box adds
+<code>--no-nested-files</code>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The depth only applies to a <strong>file / folder</strong> input (not to an image or a
+binary). The extraction is size-bounded and requires <code>python3</code>; analyzing a
+nested <code>.rpm</code> requires <code>rpm</code>.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="sec-per-layer">4.2.4. One SBOM per layer (<code>--per-layer</code>)</h4>
+<div class="paragraph">
+<p>Checkbox visible under the OCI backend, only for an <strong>OCI image</strong> (a standalone
+binary has no layers). Once checked, the generation produces, in addition to
+the global SBOM, one SBOM per image layer in each checked format:
+<code>&lt;output&gt;.layer-NN-&lt;digest&gt;.&lt;ext&gt;</code> (e.g. <code>sbom.layer-02-b676b687f0f5.cdx.json</code>).</p>
+</div>
+<div class="paragraph">
+<p>The SBOM of a layer describes its <strong>delta</strong>: the components added or modified
+by the layer, with the removed components listed separately; its root
+component carries the build instruction (<code>RUN …</code>, <code>COPY …</code>) and the digest of
+the layer. The global SBOM indicates, for each component, the layer that
+introduced it.</p>
+</div>
+<div class="paragraph">
+<p>The method selector (<code>--layer-mode</code>) offers:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Method</th>
+<th class="tableblock halign-left valign-top">Principle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Metadata (default)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Originating layer reported by Syft or Trivy. Fast; only <strong>additions</strong> are
+known. Unavailable with Skopeo and cdxgen.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rootfs</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Layers are applied one by one and the image is re-analyzed after each one:
+additions, <strong>modifications</strong> (version bumps…) and <strong>removals</strong>. One analysis per
+layer, hence slower. The only possible mode with Skopeo and cdxgen (reminder
+displayed under the selector). For a registry image, <code>skopeo</code> must be
+installed.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Layer SBOMs can be browsed from the <strong>SBOM Tree</strong> and <strong>SBOM Viewer</strong> tabs (see
+<a href="#sec-nav-couches">Per-layer navigation (<code>--per-layer</code>)</a>). The global SBOM is always the first file produced: it is
+the one that the other tabs (Preview, scanners, Quality, CRA…) select by
+default.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_standalone_binary_binary">4.2.5. Standalone binary (<code>--binary</code>)</h4>
+<div class="paragraph">
+<p>Separate field, under a second “OR” separator: local executable to analyze
+directly (not a container image) — for example a statically linked Go binary.
+The 📂 button opens a simple file picker (no extension filter, a binary often
+has none).</p>
+</div>
+<div class="paragraph">
+<p>Mutually exclusive with <strong>Packages to analyze</strong> and <strong>OCI image</strong>: filling in this
+field automatically empties the other two, and conversely.</p>
+</div>
+<div class="paragraph">
+<p>Systematically forces the Syft backend (the <strong>OCI tool</strong> selector is not
+displayed for this field) — it is the only backend able to exploit the
+metadata embedded in a standalone binary:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Go</strong> (statically linked or not): the complete list of modules + versions
+is read from the <code>buildinfo</code> metadata embedded in the executable, even if
+stripped.</p>
+</li>
+<li>
+<p><strong>Other languages</strong> (Rust, static C/C++…): only a <strong>fixed</strong> catalog of
+well-known open-source libraries (OpenSSL, zlib, sqlite, busybox…) is
+detected through a version-string fingerprint — not an arbitrary
+extraction of the linked dependencies.</p>
+</li>
+<li>
+<p>A statically linked library with no recognized signature nor embedded
+metadata (home-made C/C++, Rust without <code>cargo-auditable</code>) cannot be
+recovered afterwards.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_output_section">4.3. Output section</h3>
+<div class="sect3">
+<h4 id="_base_path_output">4.3.1. Base path (<code>--output</code>)</h4>
+<div class="paragraph">
+<p>Prefix of the generated files, without extension.
+Example: <code>sbom</code> will produce <code>sbom.cdx.json</code>, <code>sbom.spdx.json</code>, etc.
+A relative path is resolved from the current directory at launch time.</p>
+</div>
+<div class="paragraph">
+<p>A preview of the expected file names is displayed as soon as the field is
+filled in.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_formats_format">4.3.2. Formats (<code>--format</code>)</h4>
+<div class="paragraph">
+<p>Check one or more formats. At least one format must be selected.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 28.5714%;">
+<col style="width: 28.5714%;">
+<col style="width: 42.8572%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Format</th>
+<th class="tableblock halign-left valign-top">Produced extension</th>
+<th class="tableblock halign-left valign-top">Typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CycloneDX 1.6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.cdx.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Vulnerability analysis with grype, OWASP tools</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SPDX 2.3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.spdx.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Legal compliance, OpenChain tools</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SPDX 3.0 JSON-LD</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.spdx3.jsonld</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Linked ecosystems (RDF/ontology)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Custom JSON</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.custom.json</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Integration into internal pipelines</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Markdown</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.md</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Documentation directly readable on GitHub/GitLab</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">AsciiDoc</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.adoc</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rich technical report (tables, styles)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HTML</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.html</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Standalone interactive report (filterable and sortable, charts by ecosystem/license)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CSV</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>.csv</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Import into a spreadsheet or a data-processing pipeline</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect3">
+<h4 id="_pdf_option_asciidoc_only">4.3.3. PDF option (AsciiDoc only)</h4>
+<div class="paragraph">
+<p>When the <strong>AsciiDoc</strong> format is checked, an additional option appears:
+<strong>Convert to PDF (asciidoctor-pdf)</strong>. If enabled, the <code>asciidoctor-pdf</code> tool is
+launched automatically after the <code>.adoc</code> is generated.</p>
+</div>
+<div class="paragraph">
+<p>An optional field lets you specify the destination path of the PDF.
+Without a value, the PDF is created in the same folder as the <code>.adoc</code>, with
+the same base name.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_options_section">4.4. Options section</h3>
+<div class="sect3">
+<h4 id="_sbom_document_name_name">4.4.1. SBOM document name (<code>--name</code>)</h4>
+<div class="paragraph">
+<p>Label that will appear in the SBOM metadata
+(<code>metadata.component.name</code> field in CycloneDX).
+Example: <code>My Application 2.1.0</code>.
+Leave empty to use the name of the input file.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_local_rpm_directory_rpm_dir">4.4.2. Local RPM directory (<code>--rpm-dir</code>)</h4>
+<div class="paragraph">
+<p>Folder containing additional <code>.rpm</code> files to include in the analysis.
+Useful to enrich the metadata resolution (exact version, license)
+when the packages are not installed on the current machine.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_license_override_license_map">4.4.3. License override (<code>--license-map</code>)</h4>
+<div class="paragraph">
+<p>Text file used to correct or specify the licenses of some packages.
+The button on the right offers the same options as the input file field:
+filtered type (<code>.txt</code>, <code>.yaml</code>) or all files.
+Format: one rule per line: <code>package-name: SPDX-expression</code></p>
+</div>
+<div class="paragraph">
+<p>Example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>openssl: OpenSSL
+my-internal-lib: LicenseRef-PROPRIETARY</pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_concurrency_concurrency">4.4.4. Concurrency (<code>--concurrency</code>)</h4>
+<div class="paragraph">
+<p>Number of packages processed in parallel. The slider goes from <strong>0</strong>
+(unlimited) to <strong>16</strong>. The default value is <strong>4</strong>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Increase it if your machine has many cores and a good network connection.</p>
+</li>
+<li>
+<p>Decrease it (1 = sequential) in case of rate-limiting errors on the repositories.</p>
+</li>
+<li>
+<p>The value 0 processes all the packages simultaneously — to be used with
+caution on large lists.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_verbose_mode_verbose">4.4.5. Verbose mode (<code>--verbose</code>)</h4>
+<div class="paragraph">
+<p>Displays additional information in the <strong>Progress</strong> tab: resolution tools used,
+processing statistics, details of each package found.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_sbomqs_quality_score">4.4.6. sbomqs quality score</h4>
+<div class="paragraph">
+<p>When this option is checked, <code>sbomqs score</code> is run automatically on the first
+generated JSON SBOM file (<code><strong>.cdx.json</strong></code><strong> or <code></code></strong><code>.spdx.json</code>).
+The result is displayed in the <strong>Results</strong> tab under the file list.</p>
+</div>
+<div class="paragraph">
+<p>If <code>sbomqs</code> is not installed, the option is silently ignored.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+See <a href="#_installing_sbomqs_optional">Installing sbomqs (optional)</a> for the installation.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_settings_persistence">4.5. Settings persistence</h3>
+<div class="paragraph">
+<p>All the settings of the <strong>Options</strong> section — selected formats, base path, RPM
+directory, license file, concurrency level, verbose mode, PDF generation,
+sbomqs score — are <strong>automatically saved</strong> after each generation and <strong>restored</strong>
+at the next application start.</p>
+</div>
+<div class="paragraph">
+<p>The saved settings <strong>do not include</strong> the input file (too tied to a particular
+context) nor the PDF path.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_configuration_profiles">4.6. Configuration profiles</h3>
+<div class="paragraph">
+<p>A <strong>profile</strong> groups all the configuration settings under a custom name, and can
+be recalled in one click to switch quickly between several typical
+configurations (e.g. “RHEL 9 production”, “Python audit”, “Minimal CI/CD”).</p>
+</div>
+<div class="sect3">
+<h4 id="_accessing_the_profiles">4.6.1. Accessing the profiles</h4>
+<div class="paragraph">
+<p>Click the 🔖 (bookmarks) icon at the top right of the Configuration panel
+header.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ Configuration ────────────────── [🔖] ─┐
+  │  ...                                     │</pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_profile_management_window">4.6.2. Profile management window</h4>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ Configuration profiles ────────────────────────────────────┐
+  │                                                              │
+  │  Profile name : [ RHEL 9 production       ] [Save]          │
+  │                                                              │
+  │  ─────────────────────────────────────────────────────────  │
+  │  RHEL 9 production               [Load] [Delete]             │
+  │  Python audit                    [Load] [Delete]             │
+  │  Minimal CI/CD                   [Load] [Delete]             │
+  │                                                              │
+  └──────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Save</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Saves the current state of all the fields under the entered name</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Load</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Applies the profile values (except the input file)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Delete</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Asks for confirmation, then deletes the profile</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The <strong>input file</strong> is not included in the profiles — it is generally
+specific to each usage context.
+</td>
+</tr>
+</tbody></table>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+If a profile with the same name already exists, <strong>Save</strong> updates it.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_command_preview">4.7. Command preview</h3>
+<div class="paragraph">
+<p>Under the <strong>▶ Generate the SBOM</strong> button, the shell command line equivalent to
+the current configuration is permanently displayed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  $ sbom-generator --input /home/user/packages.lst \
+    --output /home/user/sbom --format cyclonedx spdx</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This preview is updated at each field change. A 📋 button copies the command
+to the clipboard to replay it from a terminal or integrate it into a CI/CD
+script.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_starting_and_stopping_the_generation">4.8. Starting and stopping the generation</h3>
+<div class="paragraph">
+<p>Click <strong>▶ Generate the SBOM</strong> to start.
+The button turns into <strong>■ Stop generation</strong> during execution.
+Clicking Stop sends an interrupt signal to the process.</p>
+</div>
+</div>
+</div>

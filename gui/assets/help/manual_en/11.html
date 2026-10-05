@@ -1,0 +1,275 @@
+
+<h2 id="_sbom_quality_tab_quality_assessment">12. SBOM Quality tab — Quality assessment</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>SBOM Quality</strong> tab assesses the quality of an SBOM file with two
+complementary tools: <strong>sbomqs</strong> (Interlynk) and <strong>sbom-scorecard</strong> (eBay). A
+single click on <strong>Analyze</strong> runs both in parallel.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌──────────────────────────────────────────────────────────────────┐
+  │  SBOM file : [ /project/sbom.cdx.json        ] [📂▾]  [Analyze] │
+  │  Profiles: [NTIA 2021] [NTIA 2025] [FSCT] [BSI] [BSI v1.1]     │
+  │            [BSI v2.0] [BSI v2.1] [OpenChain v1.1] [Interlynk]  │
+  ├──────────────────────────────────────────────────────────────────┤
+  │ ┌─ sbomqs ──────────────────────────────────────── 5.8 / 10 ──┐ │
+  │ │ Filter : [Identification] [Provenance] [Integrity] ...       │ │
+  │ │                                                              │ │
+  │ │  ✔ comp_with_name           Identification   10/10           │ │
+  │ │  ✔ comp_with_version        Identification   10/10           │ │
+  │ │  ✘ sbom_authors             Provenance        0/10           │ │
+  │ │  ✘ comp_with_strong_checksums  Integrity      0/10           │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ Industry profiles ──────────────────────────────────────────┐ │
+  │ │  [A] NTIA Minimum Elements (2021)       10.0/10  ▶ details  │ │
+  │ │  [C] Interlynk                           7.2/10  ▶ details  │ │
+  │ │  [D] BSI TR-03183-2 v1.1                6.7/10  ▶ details  │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ sbom-scorecard ──────────────────────────────── 69 / 100 ──┐ │
+  │ │  Spec          ████████████████████████████████████  100    │ │
+  │ │  Quality       ████████████████████████░░░░░░░░░░░░   63    │ │
+  │ │  NTIA-minimum  ████████████████████████████████░░░░   88    │ │
+  │ │  Total         ██████████████████████████░░░░░░░░░░   69    │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  └──────────────────────────────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_requirements_4">12.1. Requirements</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Tool</th>
+<th class="tableblock halign-left valign-top">Source</th>
+<th class="tableblock halign-left valign-top">Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Global score + detailed criteria per category (Identification, Provenance, Integrity…) and industry profiles</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-scorecard</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">eBay</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Global score as a percentage, broken down by category</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Both tools are optional: if one is not installed, its section displays an
+error message without blocking the other.</p>
+</div>
+<div class="sect3">
+<h4 id="_installing_sbom_scorecard_optional">12.1.1. Installing sbom-scorecard (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Via Go
+go install github.com/eBay/sbom-scorecard@latest
+
+# Or download the binary from the GitHub releases
+# https://github.com/eBay/sbom-scorecard/releases
+
+# Check
+sbom-scorecard --version</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_selecting_profiles">12.2. Selecting profiles</h3>
+<div class="paragraph">
+<p>The <strong>Profiles</strong> line under the file picker contains nine independently
+selectable `FilterChip`s:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 66.6667%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Chip</th>
+<th class="tableblock halign-left valign-top">sbomqs profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA 2021</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA Minimum Elements (2021)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA 2025</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA Minimum Elements (2025) — RFC</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">FSCT</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Framing Software Component Transparency (3rd Edition)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 (latest version, alias of bsi-v2.1)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v1.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v2.0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v2.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v2.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v2.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OpenChain v1.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OpenChain Telco SBOM Guide v1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk Scoring Profile</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>With no selection, sbomqs only performs the full analysis (<strong>Comprehensive</strong>).
+With one or more profiles checked, sbomqs receives <code>--profile p1,p2,…​</code> and
+the criteria detail per profile is displayed in the <strong>Industry profiles</strong> card.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Choosing profiles does not replace the full analysis — both sections are
+always displayed simultaneously.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sbomqs_section">12.3. sbomqs section</h3>
+<div class="paragraph">
+<p>Displays a table of quality criteria per category (Identification,
+Provenance, Integrity, Completeness, Licensing, Vulnerability, Structural,
+Component Quality). A ✔ (green) / ✘ (red) icon indicates whether the criterion
+is met (score = 10/10).</p>
+</div>
+<div class="paragraph">
+<p><strong>Category filters</strong>: the FilterChips at the top of the table let you display
+only the criteria of one or more categories.</p>
+</div>
+<div class="paragraph">
+<p>The <code>{ }</code> / ≡ button toggles between the table and the raw JSON.
+The 📋 button copies the raw JSON to the clipboard.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_industry_profiles_section">12.4. Industry profiles section</h3>
+<div class="paragraph">
+<p>Always present after a successful analysis. It displays for each available
+profile:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>A colored badge with the grade (A / B / C / D / F)</p>
+</li>
+<li>
+<p>The full name of the profile</p>
+</li>
+<li>
+<p>The score out of 10</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>If profiles were selected in the configuration bar before the analysis, each
+profile has an expand button (▶) that reveals the list of its criteria with:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>✔/✘ icon, criterion name, short description, score</p>
+</li>
+<li>
+<p>“N / M criteria” counter in the subtitle</p>
+</li>
+<li>
+<p><code><strong></strong></code><strong> marker for the *mandatory</strong> (required) criteria of the profile</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+When no profile is selected, the section header displays an ⓘ tooltip
+recalling how to enable the detail.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sbom_scorecard_section">12.5. sbom-scorecard section</h3>
+<div class="paragraph">
+<p>Displays a bar chart for each score category.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Color</th>
+<th class="tableblock halign-left valign-top">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Green</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score ≥ 80 % — excellent quality</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score between 60 % and 80 % — acceptable quality</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Red</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score &lt; 60 % — insufficient quality</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The <code>{ }</code> / ≡ button toggles between the chart and the raw output.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_state_persistence">12.6. State persistence</h3>
+<div class="paragraph">
+<p>Like the other analysis tabs, the <strong>SBOM Quality</strong> tab remembers its state when
+navigating between tabs: the selected file and the results remain displayed
+even after viewing another tab.</p>
+</div>
+</div>
+</div>

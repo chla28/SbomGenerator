@@ -1,0 +1,127 @@
+
+<h2 id="_progress_tab">5. Progress tab</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>Progress</strong> tab is activated automatically when the generation starts.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  12 / 23 packages   52%                      bash-5.1.8-6.el9.x86_64
+  ████████████████████████████░░░░░░░░░░░░░░░
+
+                                    [Copy] [Save]
+  $ sbom-generator --input /home/user/packages.lst --output sbom …   ← cyan
+  Generating CycloneDX 1.6 SBOM…
+  Resolved bash-5.1.8-6.el9.x86_64
+  Warning: unknown license for 'mylib'
+  SBOM written → sbom.cdx.json  (42.3 KB)
+
+  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  ✔  23 packages  •  1 SBOM file(s)  •  1 warning(s)</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_terminal_color_codes">5.1. Terminal color codes</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Color</th>
+<th class="tableblock halign-left valign-top">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cyan</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Shell command launched (first line, prefixed with <code>$</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">White (default)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">General information</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Blue</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Start of a step (<code>Generating</code>, <code>Resolving</code>, <code>Found</code>, <code>Analysed</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Warning (<code>Warning:</code>, <code>⚠</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Red</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fatal error (<code>Error:</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Green</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Produced file (<code>SBOM written</code>, <code>PDF written</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Light blue</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">PDF conversion in progress</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The terminal text is selectable to copy-paste error messages.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_progress_bar">5.2. Progress bar</h3>
+<div class="paragraph">
+<p>The progress bar shows the number of processed packages, the percentage and
+the name of the current package. It only appears during the generation.</p>
+</div>
+<div class="paragraph">
+<p>Once the generation is finished, the <strong>Results</strong> tab is activated automatically
+on success.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_log_export">5.3. Log export</h3>
+<div class="paragraph">
+<p>Once the generation is finished, two buttons appear at the top of the terminal:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copy</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copies all the logs to the clipboard</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Save</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Opens a save dialog to write the logs to a <code>.log</code> file</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_post_generation_summary">5.4. Post-generation summary</h3>
+<div class="paragraph">
+<p>At the end of a successful generation, a summary card is displayed at the
+bottom of the tab:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>number of analyzed packages</p>
+</li>
+<li>
+<p>number of generated SBOM files</p>
+</li>
+<li>
+<p>number of warnings (in orange if &gt; 0)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The card outline is green on success with no warning, orange otherwise.</p>
+</div>
+</div>
+</div>

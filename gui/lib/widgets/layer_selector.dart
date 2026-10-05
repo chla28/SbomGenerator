@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/layer_nav.dart';
+import '../l10n/l10n.dart';
 
 /// Menu « SBOM global / couche N » d'un jeu de SBOM produit avec
 /// `--per-layer`, et bandeau descriptif de la couche affichée.
@@ -31,21 +32,25 @@ class LayerSelector extends StatelessWidget {
       if (nav.globalPath != null)
         DropdownMenuItem(
           value: nav.globalPath,
-          child: const Text('SBOM global', style: TextStyle(fontSize: 12)),
+          child: Text(
+            context.l10n.layerGlobalSbom,
+            style: const TextStyle(fontSize: 12),
+          ),
         ),
       for (final l in nav.layers)
         DropdownMenuItem(
           value: l.path,
           child: Text(
-            'Couche ${l.index}/$total (${l.shortDigest})'
-            '${layerLabels[l.index] != null ? '  ${layerLabels[l.index]}' : ''}',
+            context.l10n.layerOption(l.index, total, l.shortDigest) +
+                (layerLabels[l.index] != null
+                    ? '  ${layerLabels[l.index]}'
+                    : ''),
             style: const TextStyle(fontSize: 12),
             overflow: TextOverflow.ellipsis,
           ),
         ),
     ];
-    final value =
-        items.any((i) => i.value == currentPath) ? currentPath : null;
+    final value = items.any((i) => i.value == currentPath) ? currentPath : null;
 
     return Container(
       width: double.infinity,
@@ -56,12 +61,19 @@ class LayerSelector extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.layers_outlined,
-                  size: 16, color: theme.colorScheme.tertiary),
+              Icon(
+                Icons.layers_outlined,
+                size: 16,
+                color: theme.colorScheme.tertiary,
+              ),
               const SizedBox(width: 6),
-              Text('${nav.layers.length} couche(s) :',
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(
+                context.l10n.layerCount(nav.layers.length),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButton<String>(
@@ -81,8 +93,10 @@ class LayerSelector extends StatelessWidget {
                   message: info.removed.join('\n'),
                   child: Chip(
                     visualDensity: VisualDensity.compact,
-                    label: Text('${info.removed.length} supprimé(s)',
-                        style: const TextStyle(fontSize: 11)),
+                    label: Text(
+                      context.l10n.layerRemovedChip(info.removed.length),
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     avatar: const Icon(Icons.remove_circle_outline, size: 14),
                   ),
                 ),
@@ -92,8 +106,9 @@ class LayerSelector extends StatelessWidget {
             Text(
               line,
               style: TextStyle(
-                  fontSize: 11,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.75)),
+                fontSize: 11,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

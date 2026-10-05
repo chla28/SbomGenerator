@@ -54,25 +54,25 @@ class GrypeVuln implements VulnRow {
   /// Reconstruit cette entrée avec un nombre d'occurrences fusionnées — voir
   /// [dedupeVulns].
   GrypeVuln withOccurrenceCount(int count) => GrypeVuln(
-        id: id,
-        severity: severity,
-        packageName: packageName,
-        installedVersion: installedVersion,
-        fixedVersion: fixedVersion,
-        packageType: packageType,
-        publishedDate: publishedDate,
-        modifiedDate: modifiedDate,
-        occurrenceCount: count,
-      );
+    id: id,
+    severity: severity,
+    packageName: packageName,
+    installedVersion: installedVersion,
+    fixedVersion: fixedVersion,
+    packageType: packageType,
+    publishedDate: publishedDate,
+    modifiedDate: modifiedDate,
+    occurrenceCount: count,
+  );
 
   static int _order(String s) => switch (s.toLowerCase()) {
-        'critical' => 0,
-        'high' => 1,
-        'medium' => 2,
-        'low' => 3,
-        'negligible' => 4,
-        _ => 5,
-      };
+    'critical' => 0,
+    'high' => 1,
+    'medium' => 2,
+    'low' => 3,
+    'negligible' => 4,
+    _ => 5,
+  };
 
   static DateTime? _parseDate(String? s) {
     if (s == null || s.isEmpty) return null;
@@ -93,16 +93,14 @@ class GrypeVuln implements VulnRow {
       final vuln = m['vulnerability'] as Map<String, dynamic>? ?? {};
       final artifact = m['artifact'] as Map<String, dynamic>? ?? {};
       final fix = vuln['fix'] as Map<String, dynamic>? ?? {};
-      final fixVersions =
-          (fix['versions'] as List?)?.cast<String>() ?? [];
+      final fixVersions = (fix['versions'] as List?)?.cast<String>() ?? [];
       final fixState = fix['state'] as String? ?? '';
       return GrypeVuln(
         id: vuln['id'] as String? ?? '',
         severity: vuln['severity'] as String? ?? 'Unknown',
         packageName: artifact['name'] as String? ?? '',
         installedVersion: artifact['version'] as String? ?? '',
-        fixedVersion:
-            fixVersions.isNotEmpty ? fixVersions.first : fixState,
+        fixedVersion: fixVersions.isNotEmpty ? fixVersions.first : fixState,
         packageType: artifact['type'] as String? ?? '',
         publishedDate: _parseDate(vuln['publishedDate'] as String?),
         modifiedDate: _parseDate(vuln['lastModifiedDate'] as String?),
@@ -157,8 +155,7 @@ class _GrypePanelState extends State<GrypePanel>
   String _packageDepth = '0';
   final _imagePlatformCtrl = TextEditingController();
   final _configCtrl = TextEditingController();
-  final _templateCtrl =
-      TextEditingController(text: './grype_csv.tmpl');
+  final _templateCtrl = TextEditingController(text: './grype_csv.tmpl');
   late final TabController _resultTabs;
 
   // Source à analyser : fichier SBOM (par défaut) ou image de conteneur
@@ -215,10 +212,12 @@ class _GrypePanelState extends State<GrypePanel>
     super.initState();
     _resultTabs = TabController(length: 3, vsync: this);
     _updateAutoFile();
-    SettingsService.loadScanEnrichOnline()
-        .then((v) { if (mounted) setState(() => _enrichOnline = v); });
-    VersionService.checkGrype()
-        .then((info) { if (mounted) setState(() => _versionInfo = info); });
+    SettingsService.loadScanEnrichOnline().then((v) {
+      if (mounted) setState(() => _enrichOnline = v);
+    });
+    VersionService.checkGrype().then((info) {
+      if (mounted) setState(() => _versionInfo = info);
+    });
   }
 
   @override
@@ -243,13 +242,12 @@ class _GrypePanelState extends State<GrypePanel>
   void _updateAutoFile() {
     if (widget.outputFiles.isEmpty || _fileCtrl.text.isNotEmpty) return;
     final preferred = widget.outputFiles
-        .where((f) =>
-            f.path.endsWith('.cdx.json') ||
-            f.path.endsWith('.spdx.json'))
+        .where(
+          (f) => f.path.endsWith('.cdx.json') || f.path.endsWith('.spdx.json'),
+        )
         .firstOrNull;
     final fallback = widget.outputFiles
-        .where(
-            (f) => f.path.endsWith('.json') || f.path.endsWith('.jsonld'))
+        .where((f) => f.path.endsWith('.json') || f.path.endsWith('.jsonld'))
         .firstOrNull;
     final file = preferred ?? fallback;
     if (file != null) setState(() => _fileCtrl.text = file.path);
@@ -324,23 +322,26 @@ class _GrypePanelState extends State<GrypePanel>
     final useImage = _sourceKind == ScanSourceKind.image;
     final target = (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
     if (target.isEmpty) {
-      setState(() => _error = useImage
-          ? context.l10n.scanSourceMissingImage
-          : context.l10n.scanSourceMissingSbom);
+      setState(
+        () => _error = useImage
+            ? context.l10n.scanSourceMissingImage
+            : context.l10n.scanSourceMissingSbom,
+      );
       return;
     }
     // Une référence de registre (nginx:latest) n'est pas un chemin local :
     // on ne vérifie l'existence que pour un fichier SBOM ou une archive/
     // répertoire OCI local explicitement désigné comme tel (préfixe ./, /, ~).
-    if ((!useImage || looksLikeLocalPath(target)) && !File(target).existsSync()
-        && !Directory(target).existsSync()) {
+    if ((!useImage || looksLikeLocalPath(target)) &&
+        !File(target).existsSync() &&
+        !Directory(target).existsSync()) {
       setState(() => _error = context.l10n.commonFileNotFound(target));
       return;
     }
 
     final targetLabel = useImage
-        ? 'image « $target »'
-        : 'SBOM ${target.split(RegExp(r'[/\\]')).last}';
+        ? context.l10n.scanTargetImage(target)
+        : context.l10n.scanTargetSbom(target.split(RegExp(r'[/\\]')).last);
     _launch(target, useImage, targetLabel);
   }
 
@@ -415,8 +416,7 @@ class _GrypePanelState extends State<GrypePanel>
 
     final tmpl = _templateCtrl.text.trim();
 
-    _start(target, useImage, templateFile: tmpl.isEmpty ? null : tmpl)
-        .listen(
+    _start(target, useImage, templateFile: tmpl.isEmpty ? null : tmpl).listen(
       (event) {
         if (!mounted) return;
         switch (event) {
@@ -427,7 +427,10 @@ class _GrypePanelState extends State<GrypePanel>
               // être détectée à plusieurs emplacements (ex. jar autonome +
               // copie shadée dans un autre jar) avec la même sévérité/CVE/
               // paquet/version — voir dedupeVulns dans vuln_shared.dart.
-              final vulns = dedupeVulns(raw, (v, n) => v.withOccurrenceCount(n));
+              final vulns = dedupeVulns(
+                raw,
+                (v, n) => v.withOccurrenceCount(n),
+              );
               setState(() {
                 _jsonOutput = jsonOutput;
                 _vulns = vulns;
@@ -469,53 +472,61 @@ class _GrypePanelState extends State<GrypePanel>
     );
   }
 
-  Stream<GrypeEvent> _start(String target, bool useImage,
-          {String? templateFile}) =>
-      _runner.run(
-        target: target,
-        failOn: _failOn.isEmpty ? null : _failOn,
-        onlyFixed: _onlyFixed,
-        configFile:
-            _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
-        // La case --platform linux (ci-dessous) vise le mode fichier SBOM,
-        // où grype l'ignore (source non-image) : ne pas l'appliquer en
-        // mode image, où 'linux' seul (sans arch) est rejeté par grype
-        // pour une image multi-plateforme — seul le champ dédié ci-dessous
-        // doit fixer la plateforme dans ce mode.
-        platformLinux: useImage ? false : _platformLinux,
-        platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
-            ? _imagePlatformCtrl.text.trim()
-            : null,
-        addCpesIfNone: _addCpesIfNone,
-        byCve: _byCve,
-        distroVersion: _distroVersion.isEmpty ? null : _distroVersion,
-        templateFile: templateFile,
-      );
+  Stream<GrypeEvent> _start(
+    String target,
+    bool useImage, {
+    String? templateFile,
+  }) => _runner.run(
+    target: target,
+    failOn: _failOn.isEmpty ? null : _failOn,
+    onlyFixed: _onlyFixed,
+    configFile: _configCtrl.text.trim().isEmpty
+        ? null
+        : _configCtrl.text.trim(),
+    // La case --platform linux (ci-dessous) vise le mode fichier SBOM,
+    // où grype l'ignore (source non-image) : ne pas l'appliquer en
+    // mode image, où 'linux' seul (sans arch) est rejeté par grype
+    // pour une image multi-plateforme — seul le champ dédié ci-dessous
+    // doit fixer la plateforme dans ce mode.
+    platformLinux: useImage ? false : _platformLinux,
+    platform: useImage && _imagePlatformCtrl.text.trim().isNotEmpty
+        ? _imagePlatformCtrl.text.trim()
+        : null,
+    addCpesIfNone: _addCpesIfNone,
+    byCve: _byCve,
+    distroVersion: _distroVersion.isEmpty ? null : _distroVersion,
+    templateFile: templateFile,
+  );
 
   /// Commandes du popup « CLI Commande » pour le paramétrage courant.
   List<CliCommandSection> _cliSections() {
     if (_sourceKind != ScanSourceKind.package) return _scanCliSections();
     final raw = _packageCtrl.text.trim();
-    final pkg = raw.isNotEmpty ? raw : '<paquet>';
+    final pkg = raw.isNotEmpty ? raw : context.l10n.cliPlaceholderPackage;
     final l10n = context.l10n;
     return [
       CliCommandSection(
         l10n.cliCommandPackagePrepare,
-        shellCommand(SettingsService.cliBinary,
-            PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom)),
+        shellCommand(
+          SettingsService.cliBinary,
+          PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom),
+        ),
         note: l10n.cliCommandPackageNote,
       ),
       ..._scanCliSections(sbomTarget: cliPackageSbom, packageTarget: pkg),
     ];
   }
 
-  List<CliCommandSection> _scanCliSections(
-      {String? sbomTarget, String? packageTarget}) {
+  List<CliCommandSection> _scanCliSections({
+    String? sbomTarget,
+    String? packageTarget,
+  }) {
     final useImage = _sourceKind == ScanSourceKind.image;
-    final raw = sbomTarget ??
-        (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
-    final target =
-        raw.isNotEmpty ? raw : (useImage ? '<image>' : '<sbom.cdx.json>');
+    final raw =
+        sbomTarget ?? (useImage ? _imageCtrl.text : _fileCtrl.text).trim();
+    final target = raw.isNotEmpty
+        ? raw
+        : (useImage ? '<image>' : '<sbom.cdx.json>');
     final tmpl = _templateCtrl.text.trim();
     final layered = useImage && _layerSettings.enabled;
     List<String> args(String t, bool image, {bool withTemplate = false}) =>
@@ -523,8 +534,9 @@ class _GrypePanelState extends State<GrypePanel>
           target: t,
           failOn: _failOn.isEmpty ? null : _failOn,
           onlyFixed: _onlyFixed,
-          configFile:
-              _configCtrl.text.trim().isEmpty ? null : _configCtrl.text.trim(),
+          configFile: _configCtrl.text.trim().isEmpty
+              ? null
+              : _configCtrl.text.trim(),
           platformLinux: image ? false : _platformLinux,
           platform: image && _imagePlatformCtrl.text.trim().isNotEmpty
               ? _imagePlatformCtrl.text.trim()
@@ -542,12 +554,17 @@ class _GrypePanelState extends State<GrypePanel>
             l10n.cliCommandExecutedLayered,
             layeredCliSequence(
               cliBinary: SettingsService.cliBinary,
-              prepareArgs: LayerScanService.prepareArgs(target,
-                  _layerSettings.layerMode, '$cliLayerDir/image.cdx.json'),
+              prepareArgs: LayerScanService.prepareArgs(
+                target,
+                _layerSettings.layerMode,
+                '$cliLayerDir/image.cdx.json',
+              ),
               layers: _layerSettings,
               imageScan: shellCommand('grype', args(target, true)),
-              layerScan: (f) => shellCommand('grype', args('LAYER_SBOM', false))
-                  .replaceAll('LAYER_SBOM', f),
+              layerScan: (f) => shellCommand(
+                'grype',
+                args('LAYER_SBOM', false),
+              ).replaceAll('LAYER_SBOM', f),
             ),
             note: [
               l10n.cliCommandLayerDirNote(cliLayerDir),
@@ -636,7 +653,9 @@ class _GrypePanelState extends State<GrypePanel>
       if (r.json.isNotEmpty) {
         try {
           vulns = dedupeVulns(
-              GrypeVuln.fromJson(r.json), (v, n) => v.withOccurrenceCount(n));
+            GrypeVuln.fromJson(r.json),
+            (v, n) => v.withOccurrenceCount(n),
+          );
         } catch (e) {
           parseFailed = true;
           error = context.l10n.scanUnreadableOutput('grype', '$e');
@@ -706,7 +725,9 @@ class _GrypePanelState extends State<GrypePanel>
   Widget build(BuildContext context) {
     super.build(context);
     final showResults =
-        _vulns.isNotEmpty || _jsonOutput.isNotEmpty || _templateOutput.isNotEmpty;
+        _vulns.isNotEmpty ||
+        _jsonOutput.isNotEmpty ||
+        _templateOutput.isNotEmpty;
 
     return Column(
       children: [
@@ -746,11 +767,9 @@ class _GrypePanelState extends State<GrypePanel>
           onAddCpesIfNoneChanged: (v) =>
               setState(() => _addCpesIfNone = v ?? true),
           onByCveChanged: (v) => setState(() => _byCve = v ?? true),
-          onDistroVersionChanged: (v) =>
-              setState(() => _distroVersion = v),
+          onDistroVersionChanged: (v) => setState(() => _distroVersion = v),
           onFailOnChanged: (v) => setState(() => _failOn = v),
-          onOnlyFixedChanged: (v) =>
-              setState(() => _onlyFixed = v ?? false),
+          onOnlyFixedChanged: (v) => setState(() => _onlyFixed = v ?? false),
           onRun: _analyze,
           onStop: _stop,
           cliSections: _cliSections,
@@ -760,14 +779,12 @@ class _GrypePanelState extends State<GrypePanel>
         if (_isRunning) const LinearProgressIndicator(minHeight: 3),
         if (_isRunning && _status != null) ScanStatusLine(_status!),
         if (!_isRunning && _exitCode != null)
-          _GrypeBanner(
-              exitCode: _exitCode!, vulns: _vulns, error: _error),
+          _GrypeBanner(exitCode: _exitCode!, vulns: _vulns, error: _error),
         if (!_isRunning && _error != null && _vulns.isEmpty)
           ErrorBanner(message: _error!),
         if (showResults) ...[
           ColoredBox(
-            color:
-                Theme.of(context).colorScheme.surfaceContainerLow,
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: TabBar(
               controller: _resultTabs,
               tabs: [
@@ -811,16 +828,20 @@ class _GrypePanelState extends State<GrypePanel>
                 VulnTableView<GrypeVuln>(
                   vulns: _vulns,
                   parseFailed: _parseFailed,
-                  parseFailedMessage:
-                      context.l10n.scanUnreadableOutputShort('grype'),
+                  parseFailedMessage: context.l10n.scanUnreadableOutputShort(
+                    'grype',
+                  ),
                   severityOrder: const [
-                    'Critical', 'High', 'Medium', 'Low', 'Negligible'
+                    'Critical',
+                    'High',
+                    'Medium',
+                    'Low',
+                    'Negligible',
                   ],
                   toolName: 'Grype',
                   csvDialogTitle: context.l10n.scanExportCsvDialog('Grype'),
                   csvFileName: 'grype_vulns.csv',
-                  csvHeader:
-                      'Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Type,Emplacements',
+                  csvHeader: context.l10n.vulnCsvHeaderGrype,
                   csvRow: (v) => [
                     v.severity,
                     v.id,
@@ -963,13 +984,15 @@ class _ConfigSection extends StatelessWidget {
           // ── Version ──
           Row(
             children: [
-              Text('grype',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.5))),
+              Text(
+                'grype',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
               const SizedBox(width: 8),
               ToolVersionBadge(info: versionInfo),
             ],
@@ -995,7 +1018,9 @@ class _ConfigSection extends StatelessWidget {
                       isDense: true,
                     ),
                     style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 13),
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1084,13 +1109,15 @@ class _ConfigSection extends StatelessWidget {
                 label: 'Distro',
                 value: distroVersion,
                 items: distroVersions
-                    .map((v) => DropdownMenuItem(
-                          value: v,
-                          child: Text(
-                            v.isEmpty ? l10n.commonNoneFeminine : 'rhel:$v',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ))
+                    .map(
+                      (v) => DropdownMenuItem(
+                        value: v,
+                        child: Text(
+                          v.isEmpty ? l10n.commonNoneFeminine : 'rhel:$v',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    )
                     .toList(),
                 enabled: !isRunning,
                 onChanged: (v) => onDistroVersionChanged(v ?? ''),
@@ -1103,13 +1130,15 @@ class _ConfigSection extends StatelessWidget {
                 label: '--fail-on',
                 value: failOn,
                 items: severities
-                    .map((s) => DropdownMenuItem(
-                          value: s,
-                          child: Text(
-                            s.isEmpty ? l10n.commonNone : s,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ))
+                    .map(
+                      (s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(
+                          s.isEmpty ? l10n.commonNone : s,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    )
                     .toList(),
                 enabled: !isRunning,
                 onChanged: (v) => onFailOnChanged(v ?? ''),
@@ -1138,7 +1167,8 @@ class _ConfigSection extends StatelessWidget {
                       icon: const Icon(Icons.stop, size: 18),
                       label: Text(l10n.commonStop),
                       style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red),
+                        foregroundColor: Colors.red,
+                      ),
                     )
                   : FilledButton.icon(
                       onPressed: onRun,
@@ -1156,13 +1186,15 @@ class _ConfigSection extends StatelessWidget {
                 child: TextField(
                   controller: templateCtrl,
                   decoration: InputDecoration(
-                    label: HelpLabel(l10n.grypeTemplateLabel, l10n.grypeTemplateHelp),
+                    label: HelpLabel(
+                      l10n.grypeTemplateLabel,
+                      l10n.grypeTemplateHelp,
+                    ),
                     hintText: './grype_csv.tmpl',
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 12),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1182,13 +1214,15 @@ class _ConfigSection extends StatelessWidget {
                 child: TextField(
                   controller: configCtrl,
                   decoration: InputDecoration(
-                    label: HelpLabel(l10n.grypeConfigLabel, l10n.grypeConfigHelp),
+                    label: HelpLabel(
+                      l10n.grypeConfigLabel,
+                      l10n.grypeConfigHelp,
+                    ),
                     hintText: l10n.grypeConfigHint,
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 12),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1233,11 +1267,14 @@ class _CheckOption extends StatelessWidget {
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         ),
-        Text(label,
-            style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-                color: enabled ? null : Colors.grey)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontFamily: 'monospace',
+            color: enabled ? null : Colors.grey,
+          ),
+        ),
         if (helpText != null) ...[
           const SizedBox(width: 4),
           HelpIcon(helpText!),
@@ -1273,9 +1310,10 @@ class _LabeledDropdown<T> extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            ),
             if (helpText != null) ...[
               const SizedBox(width: 4),
               HelpIcon(helpText!),
@@ -1301,8 +1339,7 @@ class _GrypeBanner extends StatelessWidget {
   final List<GrypeVuln> vulns;
   final String? error;
 
-  const _GrypeBanner(
-      {required this.exitCode, required this.vulns, this.error});
+  const _GrypeBanner({required this.exitCode, required this.vulns, this.error});
 
   @override
   Widget build(BuildContext context) {
@@ -1318,22 +1355,22 @@ class _GrypeBanner extends StatelessWidget {
     final bgColor = hasCritical
         ? Colors.red[50]
         : hasHigh
-            ? Colors.orange[50]
-            : vulns.isEmpty
-                ? Colors.green[50]
-                : Colors.yellow[50];
+        ? Colors.orange[50]
+        : vulns.isEmpty
+        ? Colors.green[50]
+        : Colors.yellow[50];
     final fgColor = hasCritical
         ? Colors.red[800]
         : hasHigh
-            ? Colors.orange[800]
-            : vulns.isEmpty
-                ? Colors.green[800]
-                : Colors.yellow[900];
+        ? Colors.orange[800]
+        : vulns.isEmpty
+        ? Colors.green[800]
+        : Colors.yellow[900];
     final icon = hasCritical || hasHigh
         ? Icons.warning_amber_rounded
         : vulns.isEmpty
-            ? Icons.verified_user_outlined
-            : Icons.security_outlined;
+        ? Icons.verified_user_outlined
+        : Icons.security_outlined;
 
     final parts = <String>[];
     for (final s in ['Critical', 'High', 'Medium', 'Low', 'Negligible']) {
@@ -1345,16 +1382,16 @@ class _GrypeBanner extends StatelessWidget {
 
     return Container(
       color: bgColor,
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
           Icon(icon, color: fgColor, size: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(summary,
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, color: fgColor)),
+            child: Text(
+              summary,
+              style: TextStyle(fontWeight: FontWeight.bold, color: fgColor),
+            ),
           ),
         ],
       ),
@@ -1401,10 +1438,11 @@ class _TemplateView extends StatelessWidget {
               child: Text(
                 content,
                 style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Color(0xFFD4D4D4),
-                    height: 1.5),
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: Color(0xFFD4D4D4),
+                  height: 1.5,
+                ),
               ),
             ),
           ),
@@ -1415,8 +1453,11 @@ class _TemplateView extends StatelessWidget {
           child: Tooltip(
             message: context.l10n.grypeTemplateCopyTooltip,
             child: IconButton(
-              icon: const Icon(Icons.copy_outlined,
-                  size: 18, color: Colors.white70),
+              icon: const Icon(
+                Icons.copy_outlined,
+                size: 18,
+                color: Colors.white70,
+              ),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: content));
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1441,19 +1482,19 @@ class _GrypeEmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.security_outlined, size: 56, color: Colors.grey),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.grypeEmptyHint,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey, fontSize: 15),
-            ),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.security_outlined, size: 56, color: Colors.grey),
+        const SizedBox(height: 12),
+        Text(
+          context.l10n.grypeEmptyHint,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _GrypeRunningHint extends StatelessWidget {
@@ -1461,17 +1502,16 @@ class _GrypeRunningHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              context.l10n.grypeRunning,
-              style: const TextStyle(color: Colors.grey, fontSize: 15),
-            ),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text(
+          context.l10n.grypeRunning,
+          style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
-      );
+      ],
+    ),
+  );
 }
-

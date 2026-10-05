@@ -8,6 +8,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../l10n/l10n.dart';
+
 // ─── Version de la GUI ───────────────────────────────────────────────────────
 //
 // Unique endroit à mettre à jour côté GUI lors d'un bump de version (avec
@@ -172,7 +174,8 @@ role:
 /// évite tout problème de cache si le thème change d'une version à l'autre.
 Future<String> writePdfTheme() async {
   final file = File(
-      '${Directory.systemTemp.path}/sbom_generator_gui_pdf_theme.yml');
+    '${Directory.systemTemp.path}/sbom_generator_gui_pdf_theme.yml',
+  );
   await file.writeAsString(_kPdfThemeYaml);
   return file.path;
 }
@@ -182,8 +185,13 @@ Future<String> writePdfTheme() async {
 /// GUI, pour un rendu cohérent entre les onglets.
 Future<ProcessResult> runAsciidoctorPdf(String adocPath, String pdfPath) async {
   final themePath = await writePdfTheme();
-  return Process.run(
-      'asciidoctor-pdf', [adocPath, '-o', pdfPath, '-a', 'pdf-theme=$themePath']);
+  return Process.run('asciidoctor-pdf', [
+    adocPath,
+    '-o',
+    pdfPath,
+    '-a',
+    'pdf-theme=$themePath',
+  ]);
 }
 
 // ─── Badges de sévérité ──────────────────────────────────────────────────────
@@ -191,36 +199,67 @@ Future<ProcessResult> runAsciidoctorPdf(String adocPath, String pdfPath) async {
 // Mêmes seuils que severityFg/severityBg (vuln_shared.dart) et _SeverityBar
 // (dashboard_panel.dart), traduits en rôles du thème ci-dessus.
 String _severityRole(String severity) => switch (severity.toLowerCase()) {
-      'critical' => 'sev-critical',
-      'high' => 'sev-high',
-      'medium' => 'sev-medium',
-      'low' => 'sev-low',
-      _ => 'sev-other',
-    };
+  'critical' => 'sev-critical',
+  'high' => 'sev-high',
+  'medium' => 'sev-medium',
+  'low' => 'sev-low',
+  _ => 'sev-other',
+};
 
 /// Libellé français d'une sévérité (les scanners rapportent l'anglais, parfois
 /// en casses différentes). Utilisé pour un rendu homogène dans les rapports.
-String frenchSeverityLabel(String severity) => switch (severity.toLowerCase()) {
-      'critical' => 'CRITIQUE',
-      'high' => 'ÉLEVÉE',
-      'medium' => 'MOYENNE',
-      'low' => 'FAIBLE',
-      'negligible' => 'NÉGLIGEABLE',
-      '' => '?',
-      _ => severity.toUpperCase(),
-    };
+String frenchSeverityLabel(String severity, {AppLocalizations? l}) {
+  final t = l ?? lookupAppLocalizations(fallbackLocale);
+  return switch (severity.toLowerCase()) {
+    'critical' => t.pdfSeverityCritical,
+    'high' => t.pdfSeverityHigh,
+    'medium' => t.pdfSeverityMedium,
+    'low' => t.pdfSeverityLow,
+    'negligible' => t.pdfSeverityNegligible,
+    'autre' => t.pdfSeverityOther,
+    '' => '?',
+    _ => severity.toUpperCase(),
+  };
+}
 
 /// Rend une sévérité en badge coloré AsciiDoc (`[.sev-xxx]#LIBELLÉ#`), libellé
 /// francisé, à utiliser directement comme contenu d'une cellule de tableau.
-String pdfSeverityBadge(String severity) =>
-    '[.${_severityRole(severity)}]#${frenchSeverityLabel(severity)}#';
+String pdfSeverityBadge(String severity, {AppLocalizations? l}) =>
+    '[.${_severityRole(severity)}]#${frenchSeverityLabel(severity, l: l)}#';
 
 /// Date longue en français, ex. « 8 septembre 2026 » — pour l'en-tête des
 /// rapports (évite une dépendance `intl`).
-String pdfFrenchDate(DateTime d) {
+String pdfFrenchDate(DateTime d, {AppLocalizations? l}) {
+  if ((l ?? lookupAppLocalizations(fallbackLocale)).localeName == 'en') {
+    const en = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${d.day} ${en[d.month - 1]} ${d.year}';
+  }
   const months = [
-    'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
-    'septembre', 'octobre', 'novembre', 'décembre'
+    'janvier',
+    'février',
+    'mars',
+    'avril',
+    'mai',
+    'juin',
+    'juillet',
+    'août',
+    'septembre',
+    'octobre',
+    'novembre',
+    'décembre',
   ];
   return '${d.day} ${months[d.month - 1]} ${d.year}';
 }
@@ -260,16 +299,22 @@ String? buildSeverityBarSvg(
 
   final radius = height / 2;
   final buf = StringBuffer()
-    ..writeln('<svg xmlns="http://www.w3.org/2000/svg" '
-        'width="$width" height="$height">')
-    ..writeln('<clipPath id="r"><rect x="0" y="0" '
-        'width="$width" height="$height" rx="$radius" ry="$radius"/></clipPath>')
+    ..writeln(
+      '<svg xmlns="http://www.w3.org/2000/svg" '
+      'width="$width" height="$height">',
+    )
+    ..writeln(
+      '<clipPath id="r"><rect x="0" y="0" '
+      'width="$width" height="$height" rx="$radius" ry="$radius"/></clipPath>',
+    )
     ..writeln('<g clip-path="url(#r)">');
   var x = 0.0;
   for (final (count, color) in segments) {
     final w = width * count / total;
-    buf.writeln('<rect x="${x.toStringAsFixed(1)}" y="0" '
-        'width="${w.toStringAsFixed(1)}" height="$height" fill="#$color"/>');
+    buf.writeln(
+      '<rect x="${x.toStringAsFixed(1)}" y="0" '
+      'width="${w.toStringAsFixed(1)}" height="$height" fill="#$color"/>',
+    );
     x += w;
   }
   buf.writeln('</g></svg>');
@@ -277,7 +322,8 @@ String? buildSeverityBarSvg(
 }
 
 /// Encode un SVG en macro image AsciiDoc (data URI, sans fichier temporaire).
-String svgImageMacro(String svg, {String alt = 'Répartition par sévérité'}) {
+String svgImageMacro(String svg, {String? alt, AppLocalizations? l}) {
+  alt ??= (l ?? lookupAppLocalizations(fallbackLocale)).pdfSeverityBarAlt;
   final b64 = base64Encode(utf8.encode(svg));
   return 'image::data:image/svg+xml;base64,$b64[$alt,pdfwidth=100%]';
 }
@@ -305,24 +351,29 @@ Future<String?> _detectToolVersion(
 }
 
 /// Ex. `grype version` → une ligne `Version:             0.118.0`.
-Future<String?> grypeVersion() => _detectToolVersion(
-    'grype', ['version'], RegExp(r'^Version:\s*(\S+)', multiLine: true));
+Future<String?> grypeVersion() => _detectToolVersion('grype', [
+  'version',
+], RegExp(r'^Version:\s*(\S+)', multiLine: true));
 
 /// Ex. `trivy --version` → une première ligne `Version: 0.74.0` (les
 /// versions de bases de données qui suivent sont indentées, donc non
 /// capturées par `^Version:` ancré en tout début de ligne).
-Future<String?> trivyVersion() => _detectToolVersion(
-    'trivy', ['--version'], RegExp(r'^Version:\s*(\S+)', multiLine: true));
+Future<String?> trivyVersion() => _detectToolVersion('trivy', [
+  '--version',
+], RegExp(r'^Version:\s*(\S+)', multiLine: true));
 
 /// Ex. `osv-scanner --version` → une première ligne
 /// `osv-scanner version: 2.4.0`.
-Future<String?> osvScannerVersion() => _detectToolVersion(
-    'osv-scanner',
-    ['--version'],
-    RegExp(r'^osv-scanner version:\s*(\S+)', multiLine: true));
+Future<String?> osvScannerVersion() => _detectToolVersion('osv-scanner', [
+  '--version',
+], RegExp(r'^osv-scanner version:\s*(\S+)', multiLine: true));
 
 /// Formate une ligne `| Libellé | Version |` pour la table de résumé d'un
 /// export, avec "indisponible" si la détection a échoué (outil absent du
 /// PATH, sortie inattendue…).
-String pdfToolVersionRow(String label, String? version) =>
-    '| $label | ${version ?? '_indisponible_'}';
+String pdfToolVersionRow(
+  String label,
+  String? version, {
+  AppLocalizations? l,
+}) =>
+    '| $label | ${version ?? (l ?? lookupAppLocalizations(fallbackLocale)).pdfUnavailable}';

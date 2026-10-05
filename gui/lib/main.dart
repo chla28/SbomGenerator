@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 
 import 'home_screen.dart';
@@ -12,12 +14,14 @@ void main() async {
   final themeMode = await SettingsService.loadTheme();
   final themeIndex = await SettingsService.loadThemeColorIndex();
   final language = AppLanguage.parse(await SettingsService.loadLanguage());
-  runApp(SbomGeneratorApp(
-    initialConfig: savedConfig,
-    initialTheme: themeMode,
-    initialThemeIndex: themeIndex,
-    initialLanguage: language,
-  ));
+  runApp(
+    SbomGeneratorApp(
+      initialConfig: savedConfig,
+      initialTheme: themeMode,
+      initialThemeIndex: themeIndex,
+      initialLanguage: language,
+    ),
+  );
 }
 
 class SbomGeneratorApp extends StatefulWidget {
@@ -49,16 +53,28 @@ class _SbomGeneratorAppState extends State<SbomGeneratorApp> {
     _themeMode = widget.initialTheme;
     _themeIndex = widget.initialThemeIndex.clamp(0, kAppThemes.length - 1);
     _language = widget.initialLanguage;
+    _applyLanguage(_language);
+  }
+
+  /// Langue effective pour le code sans `BuildContext` et pour le CLI lancé en
+  /// sous-processus (`SBOM_LANG`) — la locale résolue, jamais « système ».
+  void _applyLanguage(AppLanguage language) {
+    appLocale =
+        language.locale ??
+        resolveAppLocale(PlatformDispatcher.instance.locales);
+    SettingsService.cliLang = appLocale.languageCode;
   }
 
   void _onLanguageChanged(AppLanguage language) {
     setState(() => _language = language);
+    _applyLanguage(language);
     SettingsService.saveLanguage(language.name);
   }
 
   void _toggleTheme() {
-    final next =
-        _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    final next = _themeMode == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     setState(() => _themeMode = next);
     SettingsService.saveTheme(next);
   }

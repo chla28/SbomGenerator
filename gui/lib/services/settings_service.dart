@@ -15,6 +15,13 @@ class SettingsService {
   static const _reportSeverityKey = 'dashboard_report_severity_v1';
   static const _languageKey = 'ui_language_v1';
 
+  /// Langue (`fr` / `en`) imposée aux messages du CLI, alignée sur celle de
+  /// l'interface ; `null` = laisser le CLI décider (variables LANG/LC_*).
+  static String? cliLang;
+
+  /// Environnement supplémentaire des sous-processus `sbom-generator`.
+  static Map<String, String> get cliEnvironment => {'SBOM_LANG': ?cliLang};
+
   static String get cliBinary {
     final exeDir = p.dirname(Platform.resolvedExecutable);
     final candidates = [

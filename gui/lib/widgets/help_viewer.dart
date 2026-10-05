@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_html/flutter_html.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
+import '../l10n/l10n.dart';
 
 /// Visionneuse du manuel utilisateur (doc/user.adoc) directement dans la
 /// GUI, sans quitter l'appli. Le contenu est pré-généré en HTML (un fichier
@@ -21,7 +22,9 @@ class HelpViewerScreen extends StatefulWidget {
 }
 
 class _HelpViewerScreenState extends State<HelpViewerScreen> {
-  static const _base = 'assets/help/manual';
+  // Manuel généré par `tool/generate_help.dart` : `manual` (français) et
+  // `manual_en` (anglais) ; repli sur le français si la langue n'a pas de manuel.
+  String _base = 'assets/help/manual';
 
   List<_Chapter> _chapters = const [];
   Map<String, int> _anchors = const {};
@@ -58,19 +61,29 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
 
   Future<void> _loadAll() async {
     try {
+      if (appLocale.languageCode == 'en') {
+        try {
+          await rootBundle.loadString('assets/help/manual_en/toc.json');
+          _base = 'assets/help/manual_en';
+        } catch (_) {}
+      }
       final rawToc = await rootBundle.loadString('$_base/toc.json');
       final json = jsonDecode(rawToc) as Map<String, dynamic>;
       final chapters = (json['chapters'] as List)
-          .map((c) => _Chapter(
-                title: c['title'] as String,
-                file: c['file'] as String,
-              ))
+          .map(
+            (c) => _Chapter(
+              title: c['title'] as String,
+              file: c['file'] as String,
+            ),
+          )
           .toList();
-      final anchors = (json['anchors'] as Map<String, dynamic>)
-          .map((k, v) => MapEntry(k, v as int));
+      final anchors = (json['anchors'] as Map<String, dynamic>).map(
+        (k, v) => MapEntry(k, v as int),
+      );
 
       final htmls = await Future.wait(
-          chapters.map((c) => rootBundle.loadString('$_base/${c.file}')));
+        chapters.map((c) => rootBundle.loadString('$_base/${c.file}')),
+      );
       final texts = htmls.map(_stripHtml).toList();
 
       if (!mounted) return;
@@ -86,7 +99,7 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Aide indisponible : impossible de charger le manuel ($e).';
+        _error = appL10n().helpLoadError('$e');
       });
     }
   }
@@ -148,109 +161,108 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
     final visible = _visibleIndices;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Aide — Manuel utilisateur'),
-      ),
+      appBar: AppBar(title: Text(context.l10n.helpTitle)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(_error!, textAlign: TextAlign.center),
-                  ),
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: 320,
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: TextField(
-                              controller: _searchController,
-                              decoration: InputDecoration(
-                                hintText: 'Rechercher dans le manuel…',
-                                prefixIcon: const Icon(Icons.search, size: 20),
-                                suffixIcon: _query.isEmpty
-                                    ? null
-                                    : IconButton(
-                                        icon: const Icon(Icons.clear, size: 18),
-                                        tooltip: 'Effacer',
-                                        onPressed: _searchController.clear,
-                                      ),
-                                isDense: true,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_error!, textAlign: TextAlign.center),
+              ),
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 320,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: context.l10n.helpSearchHint,
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    tooltip: context.l10n.helpClear,
+                                    onPressed: _searchController.clear,
+                                  ),
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          Expanded(
-                            child: visible.isEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Text(
-                                      'Aucun chapitre ne contient « $_query ».',
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    itemCount: visible.length,
-                                    itemBuilder: (context, pos) {
-                                      final i = visible[pos];
-                                      final selected = i == _selected;
-                                      final snippet = _snippetFor(i);
-                                      return ListTile(
-                                        dense: true,
-                                        selected: selected,
-                                        selectedTileColor: theme
-                                            .colorScheme.primary
-                                            .withValues(alpha: 0.1),
-                                        title: Text(
-                                          '${i + 1}. ${_chapters[i].title}',
-                                          style: TextStyle(
-                                            fontWeight: selected
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                            color: selected
-                                                ? theme.colorScheme.primary
-                                                : null,
-                                          ),
-                                        ),
-                                        subtitle: snippet == null
-                                            ? null
-                                            : Text(
-                                                snippet,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: theme.textTheme.bodySmall,
-                                              ),
-                                        onTap: () => _selectChapter(i),
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 24),
-                        child: Html(
-                          data: _chapterHtml[_selected],
-                          onAnchorTap: _onAnchorTap,
-                          style: _helpStyle(theme),
                         ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: visible.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  context.l10n.helpNoMatch(_query),
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: visible.length,
+                                itemBuilder: (context, pos) {
+                                  final i = visible[pos];
+                                  final selected = i == _selected;
+                                  final snippet = _snippetFor(i);
+                                  return ListTile(
+                                    dense: true,
+                                    selected: selected,
+                                    selectedTileColor: theme.colorScheme.primary
+                                        .withValues(alpha: 0.1),
+                                    title: Text(
+                                      '${i + 1}. ${_chapters[i].title}',
+                                      style: TextStyle(
+                                        fontWeight: selected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: selected
+                                            ? theme.colorScheme.primary
+                                            : null,
+                                      ),
+                                    ),
+                                    subtitle: snippet == null
+                                        ? null
+                                        : Text(
+                                            snippet,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                    onTap: () => _selectChapter(i),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 24,
+                    ),
+                    child: Html(
+                      data: _chapterHtml[_selected],
+                      onAnchorTap: _onAnchorTap,
+                      style: _helpStyle(theme),
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -316,8 +328,9 @@ Map<String, Style> _helpStyle(ThemeData theme) {
       border: Border.all(color: theme.dividerColor, width: 0.5),
     ),
     '.admonitionblock': Style(
-      backgroundColor:
-          theme.colorScheme.secondaryContainer.withValues(alpha: 0.4),
+      backgroundColor: theme.colorScheme.secondaryContainer.withValues(
+        alpha: 0.4,
+      ),
       padding: HtmlPaddings.all(12),
       margin: Margins.symmetric(vertical: 12),
     ),

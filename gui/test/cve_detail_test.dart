@@ -21,7 +21,8 @@ void main() {
         packageName: 'log4j-core',
         installedVersion: '2.14.1',
         fixedVersion: '2.15.0',
-        extra: 'Apache Log4j2 JNDI features do not protect against attacker '
+        extra:
+            'Apache Log4j2 JNDI features do not protect against attacker '
             'controlled LDAP',
       ),
     ],
@@ -51,8 +52,10 @@ void main() {
     test('links : NVD + CVE.org + osv.dev + CISA KEV pour une CVE KEV', () {
       final labels = detail.links.map((l) => l.$1).toList();
       expect(labels, containsAll(['NVD', 'CVE.org', 'osv.dev', 'CISA KEV']));
-      expect(detail.links.firstWhere((l) => l.$1 == 'NVD').$2,
-          'https://nvd.nist.gov/vuln/detail/CVE-2021-44228');
+      expect(
+        detail.links.firstWhere((l) => l.$1 == 'NVD').$2,
+        'https://nvd.nist.gov/vuln/detail/CVE-2021-44228',
+      );
     });
 
     test('links : GHSA → GitHub Advisory, pas de NVD/KEV', () {
@@ -66,38 +69,48 @@ void main() {
     test('toAdocRows : reprend paquet, KEV, EPSS, CVSS, PoC, liens', () {
       final adoc = detail.toAdocRows((s) => s);
       expect(adoc, contains('| Paquet | `log4j-core 2.14.1 → 2.15.0`'));
-      expect(adoc,
-          contains('| Rapporté par | Grype (CRITIQUE), Trivy (CRITIQUE)'));
+      expect(
+        adoc,
+        contains('| Rapporté par | Grype (CRITIQUE), Trivy (CRITIQUE)'),
+      );
       expect(adoc, contains('| CISA KEV | Oui'));
       expect(adoc, contains('échéance 2021-12-24'));
       expect(adoc, contains('rançongiciel'));
       expect(adoc, contains('| EPSS | 0.97 (percentile p100)'));
       expect(adoc, contains('exploitabilité 3.9/3.9'));
       expect(adoc, contains('maturité High'));
-      expect(adoc, contains('| PoC public | 12 dépôt(s)'));
+      expect(adoc, contains('| PoC public | 12 dépôts'));
       expect(adoc, contains('nvd.nist.gov'));
     });
   });
 
   group('CveDetailPanel', () {
-    testWidgets('affiche paquet, sévérité par scanner et signaux KEV/EPSS',
-        (tester) async {
+    testWidgets('affiche paquet, sévérité par scanner et signaux KEV/EPSS', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1000, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(child: CveDetailPanel(detail: detail)),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(child: CveDetailPanel(detail: detail)),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       expect(find.textContaining('log4j-core 2.14.1'), findsWidgets);
-      expect(find.textContaining('exploitée activement dans la nature'),
-          findsOneWidget);
+      expect(
+        find.textContaining('exploitée activement dans la nature'),
+        findsOneWidget,
+      );
       expect(find.textContaining('EPSS 0.97'), findsOneWidget);
-      expect(find.textContaining('12 dépôt(s)'), findsOneWidget);
+      expect(
+        find.textContaining('12 dépôts PoC publics recensés'),
+        findsOneWidget,
+      );
       expect(find.text('NVD'), findsOneWidget);
       expect(find.text('CISA KEV'), findsOneWidget); // bouton lien
     });
@@ -117,9 +130,11 @@ void main() {
           ),
         ],
       );
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: CveDetailPanel(detail: bare)),
-      ));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: CveDetailPanel(detail: bare)),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Aucun signal d\'exploitation connu.'), findsOneWidget);
     });

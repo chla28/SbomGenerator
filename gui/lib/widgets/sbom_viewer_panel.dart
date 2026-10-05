@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../models/layer_nav.dart';
 import 'layer_selector.dart';
+import '../l10n/l10n.dart';
 
 // ─── Modèles ──────────────────────────────────────────────────────────────────
 
@@ -34,96 +35,121 @@ class _Component {
     this.layer = '',
   });
 
-  static List<_Component> fromSbom(Map<String, dynamic> raw) {
-    if (raw['bomFormat'] == 'CycloneDX') return _fromCdx(raw);
-    if (raw.containsKey('spdxVersion')) return _fromSpdx(raw);
-    if (raw.containsKey('@graph')) return _fromSpdx3(raw);
+  static List<_Component> fromSbom(
+    Map<String, dynamic> raw, {
+    AppLocalizations? l,
+  }) {
+    if (raw['bomFormat'] == 'CycloneDX') return _fromCdx(raw, l);
+    if (raw.containsKey('spdxVersion')) return _fromSpdx(raw, l);
+    if (raw.containsKey('@graph')) return _fromSpdx3(raw, l);
     return [];
   }
 
-  static List<_Component> _fromCdx(Map<String, dynamic> d) {
-    return ((d['components'] as List?) ?? []).map((e) {
-      final c = e as Map<String, dynamic>;
-      final lics = c['licenses'] as List? ?? [];
-      String lic = '';
-      if (lics.isNotEmpty) {
-        final first = lics.first as Map<String, dynamic>;
-        lic = first['expression'] as String? ??
-            (first['license'] as Map<String, dynamic>?)?['id'] as String? ??
-            (first['license'] as Map<String, dynamic>?)?['name'] as String? ??
-            '';
-      }
-      final meta = (c['externalReferences'] as List? ?? []);
-      String homepage = '';
-      for (final ref in meta) {
-        final r = ref as Map<String, dynamic>;
-        if (r['type'] == 'website') {
-          homepage = r['url'] as String? ?? '';
-          break;
-        }
-      }
-      return _Component(
-        name: c['name'] as String? ?? '',
-        version: c['version'] as String? ?? '',
-        type: c['type'] as String? ?? 'library',
-        license: lic,
-        purl: c['purl'] as String? ?? '',
-        description: c['description'] as String? ?? '',
-        url: homepage,
-        layer: layerColumnLabel(layerFieldsOf(c)),
-      );
-    }).where((c) => c.name.isNotEmpty).toList();
+  static List<_Component> _fromCdx(
+    Map<String, dynamic> d,
+    AppLocalizations? l,
+  ) {
+    return ((d['components'] as List?) ?? [])
+        .map((e) {
+          final c = e as Map<String, dynamic>;
+          final lics = c['licenses'] as List? ?? [];
+          String lic = '';
+          if (lics.isNotEmpty) {
+            final first = lics.first as Map<String, dynamic>;
+            lic =
+                first['expression'] as String? ??
+                (first['license'] as Map<String, dynamic>?)?['id'] as String? ??
+                (first['license'] as Map<String, dynamic>?)?['name']
+                    as String? ??
+                '';
+          }
+          final meta = (c['externalReferences'] as List? ?? []);
+          String homepage = '';
+          for (final ref in meta) {
+            final r = ref as Map<String, dynamic>;
+            if (r['type'] == 'website') {
+              homepage = r['url'] as String? ?? '';
+              break;
+            }
+          }
+          return _Component(
+            name: c['name'] as String? ?? '',
+            version: c['version'] as String? ?? '',
+            type: c['type'] as String? ?? 'library',
+            license: lic,
+            purl: c['purl'] as String? ?? '',
+            description: c['description'] as String? ?? '',
+            url: homepage,
+            layer: layerColumnLabel(layerFieldsOf(c), l: l),
+          );
+        })
+        .where((c) => c.name.isNotEmpty)
+        .toList();
   }
 
-  static List<_Component> _fromSpdx(Map<String, dynamic> d) {
-    return ((d['packages'] as List?) ?? []).map((e) {
-      final p = e as Map<String, dynamic>;
-      String purl = '';
-      for (final ref in (p['externalRefs'] as List? ?? [])) {
-        final r = ref as Map<String, dynamic>;
-        if (r['referenceType'] == 'purl') {
-          purl = r['referenceLocator'] as String? ?? '';
-          break;
-        }
-      }
-      return _Component(
-        name: p['name'] as String? ?? '',
-        version: p['versionInfo'] as String? ?? '',
-        type: 'package',
-        license: p['licenseConcluded'] as String? ?? '',
-        purl: purl,
-        description: p['comment'] as String? ?? '',
-        url: p['downloadLocation'] as String? ?? '',
-        layer: layerColumnLabel(layerFieldsOf(p)),
-      );
-    }).where((c) => c.name.isNotEmpty).toList();
+  static List<_Component> _fromSpdx(
+    Map<String, dynamic> d,
+    AppLocalizations? l,
+  ) {
+    return ((d['packages'] as List?) ?? [])
+        .map((e) {
+          final p = e as Map<String, dynamic>;
+          String purl = '';
+          for (final ref in (p['externalRefs'] as List? ?? [])) {
+            final r = ref as Map<String, dynamic>;
+            if (r['referenceType'] == 'purl') {
+              purl = r['referenceLocator'] as String? ?? '';
+              break;
+            }
+          }
+          return _Component(
+            name: p['name'] as String? ?? '',
+            version: p['versionInfo'] as String? ?? '',
+            type: 'package',
+            license: p['licenseConcluded'] as String? ?? '',
+            purl: purl,
+            description: p['comment'] as String? ?? '',
+            url: p['downloadLocation'] as String? ?? '',
+            layer: layerColumnLabel(layerFieldsOf(p), l: l),
+          );
+        })
+        .where((c) => c.name.isNotEmpty)
+        .toList();
   }
 
-  static List<_Component> _fromSpdx3(Map<String, dynamic> d) {
+  static List<_Component> _fromSpdx3(
+    Map<String, dynamic> d,
+    AppLocalizations? l,
+  ) {
     final graph = (d['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
-    return graph.where((e) => e['type'] == 'software:Package').map((p) {
-      String purl = '';
-      for (final ref in (p['externalIdentifier'] as List? ?? [])) {
-        final r = ref as Map<String, dynamic>;
-        if (r['externalIdentifierType'] == 'purl') {
-          purl = r['identifier'] as String? ?? '';
-          break;
-        }
-      }
-      final license = p['concludedLicense'] as String? ??
-          p['declaredLicense'] as String? ??
-          '';
-      return _Component(
-        name: p['name'] as String? ?? '',
-        version: p['software:packageVersion'] as String? ?? '',
-        type: 'package',
-        license: license == 'NOASSERTION' ? '' : license,
-        purl: purl,
-        description: p['summary'] as String? ?? '',
-        url: p['software:downloadLocation'] as String? ?? '',
-        layer: layerColumnLabel(layerFieldsOf(p)),
-      );
-    }).where((c) => c.name.isNotEmpty).toList();
+    return graph
+        .where((e) => e['type'] == 'software:Package')
+        .map((p) {
+          String purl = '';
+          for (final ref in (p['externalIdentifier'] as List? ?? [])) {
+            final r = ref as Map<String, dynamic>;
+            if (r['externalIdentifierType'] == 'purl') {
+              purl = r['identifier'] as String? ?? '';
+              break;
+            }
+          }
+          final license =
+              p['concludedLicense'] as String? ??
+              p['declaredLicense'] as String? ??
+              '';
+          return _Component(
+            name: p['name'] as String? ?? '',
+            version: p['software:packageVersion'] as String? ?? '',
+            type: 'package',
+            license: license == 'NOASSERTION' ? '' : license,
+            purl: purl,
+            description: p['summary'] as String? ?? '',
+            url: p['software:downloadLocation'] as String? ?? '',
+            layer: layerColumnLabel(layerFieldsOf(p), l: l),
+          );
+        })
+        .where((c) => c.name.isNotEmpty)
+        .toList();
   }
 }
 
@@ -166,7 +192,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
 
   Future<void> _loadFile() async {
     final result = await FilePicker.pickFiles(
-      dialogTitle: 'Ouvrir un fichier SBOM',
+      dialogTitle: context.l10n.viewerOpenTitle,
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
@@ -175,6 +201,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   }
 
   Future<void> _openPath(String path) async {
+    final l = context.l10n;
     setState(() {
       _loading = true;
       _error = null;
@@ -191,10 +218,10 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
     try {
       final raw = await File(path).readAsString();
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      final components = _Component.fromSbom(json);
+      final components = _Component.fromSbom(json, l: l);
       final nav = LayerNav.discover(path);
-      final layerInfo = LayerDocInfo.fromSbom(json);
-      final layerLabels = await _labelsFor(nav, layerInfo);
+      final layerInfo = LayerDocInfo.fromSbom(json, l: l);
+      final layerLabels = await _labelsFor(nav, layerInfo, l);
 
       String? docName;
       String? fmt;
@@ -208,7 +235,8 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
         docName = json['name'] as String?;
       } else if (json.containsKey('@graph')) {
         fmt = 'SPDX 3.0 JSON-LD';
-        final graph = (json['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
+        final graph = (json['@graph'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         final doc = graph.firstWhere(
           (e) => e['type'] == 'SpdxDocument',
           orElse: () => const {},
@@ -229,7 +257,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Impossible de parser le fichier : $e';
+        _error = l.viewerParseError('$e');
         _loading = false;
       });
     }
@@ -237,13 +265,17 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
 
   /// Libellés des couches pour le sélecteur : lus dans le SBOM global (le
   /// fichier ouvert, ou relu depuis le disque quand on ouvre une couche).
-  Future<Map<int, String>> _labelsFor(LayerNav? nav, LayerDocInfo info) async {
+  Future<Map<int, String>> _labelsFor(
+    LayerNav? nav,
+    LayerDocInfo info,
+    AppLocalizations l,
+  ) async {
     if (nav == null) return const {};
     if (info.layerLabels.isNotEmpty) return info.layerLabels;
     if (nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty) {
       return _layerLabels;
     }
-    return readLayerLabels(nav.globalPath);
+    return readLayerLabels(nav.globalPath, l: l);
   }
 
   bool get _hasLayerColumn => _all.any((c) => c.layer.isNotEmpty);
@@ -260,7 +292,9 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
           !c.layer.toLowerCase().contains(q)) {
         return false;
       }
-      if (t.isNotEmpty && c.type.toLowerCase() != t) { return false; }
+      if (t.isNotEmpty && c.type.toLowerCase() != t) {
+        return false;
+      }
       return true;
     }).toList();
 
@@ -275,13 +309,13 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   }
 
   String _sortField(_Component c) => switch (_sortCol) {
-        0 => c.name,
-        1 => c.version,
-        2 => c.type,
-        3 => c.license,
-        4 => c.layer,
-        _ => c.name,
-      };
+    0 => c.name,
+    1 => c.version,
+    2 => c.type,
+    3 => c.license,
+    4 => c.layer,
+    _ => c.name,
+  };
 
   void _sort(int col) {
     setState(() {
@@ -299,15 +333,17 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
 
   Map<String, int> get _ecosystems {
     final m = <String, int>{};
-    for (final c in _all) { m[c.type] = (m[c.type] ?? 0) + 1; }
+    for (final c in _all) {
+      m[c.type] = (m[c.type] ?? 0) + 1;
+    }
     return m;
   }
 
   Map<String, int> get _licenses {
     final m = <String, int>{};
     for (final c in _all) {
-      final l = c.license.isEmpty ? 'Non spécifiée' : c.license;
-      m[l] = (m[l] ?? 0) + 1;
+      final k = c.license.isEmpty ? context.l10n.viewerUnspecified : c.license;
+      m[k] = (m[k] ?? 0) + 1;
     }
     return m;
   }
@@ -338,26 +374,29 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.manage_search_outlined,
-              size: 56,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
+          Icon(
+            Icons.manage_search_outlined,
+            size: 56,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.3),
+          ),
           const SizedBox(height: 16),
           Text(
-            _error ?? 'Aucun fichier SBOM chargé',
+            _error ?? context.l10n.viewerNoFile,
             style: TextStyle(
               color: _error != null
                   ? Theme.of(context).colorScheme.error
-                  : Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
             icon: const Icon(Icons.folder_open_outlined),
-            label: const Text('Ouvrir un fichier SBOM…'),
+            label: Text(context.l10n.viewerOpenEllipsis),
             onPressed: _loadFile,
           ),
         ],
@@ -384,32 +423,41 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                   children: [
                     Text(
                       _docName ?? 'SBOM',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (_format != null)
-                      Text(_format!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                          )),
+                      Text(
+                        _format!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
               // Badges statistiques
-              _StatBadge('${_all.length}', 'composants'),
+              _StatBadge('${_all.length}', context.l10n.viewerStatComponents),
               const SizedBox(width: 8),
-              _StatBadge('${eco.length}', 'types'),
+              _StatBadge('${eco.length}', context.l10n.viewerStatTypes),
               const SizedBox(width: 8),
-              _StatBadge('${lic.length}', 'licences'),
+              _StatBadge('${lic.length}', context.l10n.viewerStatLicenses),
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 icon: const Icon(Icons.folder_open_outlined, size: 16),
-                label: const Text('Ouvrir…'),
+                label: Text(context.l10n.viewerOpenShort),
                 onPressed: _loadFile,
                 style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ],
           ),
@@ -433,13 +481,15 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
               Expanded(
                 child: TextField(
                   controller: _searchCtrl,
-                  decoration: const InputDecoration(
-                    hintText: 'Filtrer…',
-                    prefixIcon: Icon(Icons.search, size: 18),
+                  decoration: InputDecoration(
+                    hintText: context.l10n.viewerFilterHint,
+                    prefixIcon: const Icon(Icons.search, size: 18),
                     isDense: true,
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 10,
+                    ),
                   ),
                   onChanged: (v) {
                     _search = v;
@@ -450,14 +500,16 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
               const SizedBox(width: 8),
               DropdownButton<String>(
                 value: _typeFilter.isEmpty ? null : _typeFilter,
-                hint: const Text('Type'),
+                hint: Text(context.l10n.viewerTypeHint),
                 isDense: true,
                 items: [
-                  const DropdownMenuItem(value: '', child: Text('Tous')),
-                  ..._types.map((t) => DropdownMenuItem(
-                        value: t,
-                        child: Text(t),
-                      )),
+                  DropdownMenuItem(
+                    value: '',
+                    child: Text(context.l10n.viewerAll),
+                  ),
+                  ..._types.map(
+                    (t) => DropdownMenuItem(value: t, child: Text(t)),
+                  ),
                 ],
                 onChanged: (v) {
                   _typeFilter = v ?? '';
@@ -468,7 +520,8 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
               Text(
                 '${_filtered.length} / ${_all.length}',
                 style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
             ],
           ),
@@ -478,9 +531,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
         Expanded(
           child: _filtered.isEmpty
               ? Center(
-                  child: Text('Aucun résultat',
-                      style: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+                  child: Text(
+                    context.l10n.viewerNoResult,
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
                 )
               : Column(
                   children: [
@@ -489,19 +545,49 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                       color: theme.colorScheme.surfaceContainerLow,
                       child: Row(
                         children: [
-                          _Header('Nom', 0, _sortCol, _sortAsc, _sort,
-                              flex: 3),
-                          _Header('Version', 1, _sortCol, _sortAsc, _sort,
-                              flex: 2),
-                          _Header('Type', 2, _sortCol, _sortAsc, _sort,
-                              flex: 2),
-                          _Header('Licence', 3, _sortCol, _sortAsc, _sort,
-                              flex: 3),
+                          _Header(
+                            context.l10n.viewerColName,
+                            0,
+                            _sortCol,
+                            _sortAsc,
+                            _sort,
+                            flex: 3,
+                          ),
+                          _Header(
+                            'Version',
+                            1,
+                            _sortCol,
+                            _sortAsc,
+                            _sort,
+                            flex: 2,
+                          ),
+                          _Header(
+                            'Type',
+                            2,
+                            _sortCol,
+                            _sortAsc,
+                            _sort,
+                            flex: 2,
+                          ),
+                          _Header(
+                            context.l10n.viewerColLicense,
+                            3,
+                            _sortCol,
+                            _sortAsc,
+                            _sort,
+                            flex: 3,
+                          ),
                           if (_hasLayerColumn)
                             _Header(
-                                _nav?.isLayer == true ? 'Changement' : 'Couche',
-                                4, _sortCol, _sortAsc, _sort,
-                                flex: 2),
+                              _nav?.isLayer == true
+                                  ? context.l10n.viewerColChange
+                                  : context.l10n.viewerColLayer,
+                              4,
+                              _sortCol,
+                              _sortAsc,
+                              _sort,
+                              flex: 2,
+                            ),
                         ],
                       ),
                     ),
@@ -516,58 +602,65 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                           final c = _filtered[i];
                           final isSelected = _selected == c;
                           return InkWell(
-                            onTap: () => setState(() =>
-                                _selected = isSelected ? null : c),
+                            onTap: () => setState(
+                              () => _selected = isSelected ? null : c,
+                            ),
                             child: Container(
                               color: isSelected
                                   ? theme.colorScheme.primaryContainer
-                                      .withValues(alpha: 0.3)
+                                        .withValues(alpha: 0.3)
                                   : null,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 7),
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
                               child: Row(
                                 children: [
                                   Expanded(
                                     flex: 3,
-                                    child: Text(c.name,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 13),
-                                        overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      c.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   Expanded(
                                     flex: 2,
-                                    child: Text(c.version,
-                                        style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 12),
-                                        overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      c.version,
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 12,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: _TypeBadge(c.type),
-                                  ),
+                                  Expanded(flex: 2, child: _TypeBadge(c.type)),
                                   Expanded(
                                     flex: 3,
                                     child: Text(
-                                      c.license.isEmpty
-                                          ? '—'
-                                          : c.license,
+                                      c.license.isEmpty ? '—' : c.license,
                                       style: TextStyle(
-                                          fontSize: 12,
-                                          color: c.license.isEmpty
-                                              ? theme.colorScheme.onSurface
+                                        fontSize: 12,
+                                        color: c.license.isEmpty
+                                            ? theme.colorScheme.onSurface
                                                   .withValues(alpha: 0.4)
-                                              : null),
+                                            : null,
+                                      ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (_hasLayerColumn)
                                     Expanded(
                                       flex: 2,
-                                      child: Text(c.layer,
-                                          style: const TextStyle(fontSize: 12),
-                                          overflow: TextOverflow.ellipsis),
+                                      child: Text(
+                                        c.layer,
+                                        style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                 ],
                               ),
@@ -598,8 +691,9 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                 Expanded(
                   child: Text(
                     c.name,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -620,20 +714,29 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                 children: [
                   _DetailRow('Version', c.version),
                   _DetailRow('Type', c.type),
-                  if (c.license.isNotEmpty) _DetailRow('Licence', c.license),
+                  if (c.license.isNotEmpty)
+                    _DetailRow(context.l10n.viewerColLicense, c.license),
                   if (c.layer.isNotEmpty)
                     _DetailRow(
-                        _nav?.isLayer == true ? 'Changement' : 'Couche',
-                        c.layer),
+                      _nav?.isLayer == true
+                          ? context.l10n.viewerColChange
+                          : context.l10n.viewerColLayer,
+                      c.layer,
+                    ),
                   if (c.description.isNotEmpty)
                     _DetailRow('Description', c.description),
                   if (c.url.isNotEmpty) _DetailRow('URL', c.url),
                   if (c.purl.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    Text('PURL',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                            letterSpacing: .5)),
+                    Text(
+                      'PURL',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                        letterSpacing: .5,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -641,18 +744,20 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                           child: SelectableText(
                             c.purl,
                             style: const TextStyle(
-                                fontFamily: 'monospace', fontSize: 11),
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.copy_outlined, size: 15),
-                          tooltip: 'Copier le PURL',
+                          tooltip: context.l10n.viewerCopyPurl,
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: c.purl));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('PURL copié'),
-                                duration: Duration(seconds: 2),
+                              SnackBar(
+                                content: Text(context.l10n.viewerPurlCopied),
+                                duration: const Duration(seconds: 2),
                               ),
                             );
                           },
@@ -684,18 +789,23 @@ class _StatBadge extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value,
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.primary)),
-        Text(label,
-            style: TextStyle(
-                fontSize: 10,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6))),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
       ],
     );
   }
@@ -710,7 +820,9 @@ class _TypeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+        color: Theme.of(
+          context,
+        ).colorScheme.primaryContainer.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -755,28 +867,26 @@ class _Header extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: active ? 1.0 : 0.6),
-                    letterSpacing: .4,
-                  )),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: active ? 1.0 : 0.6),
+                  letterSpacing: .4,
+                ),
+              ),
               const SizedBox(width: 4),
               Icon(
                 active
-                    ? (sortAsc
-                        ? Icons.arrow_upward
-                        : Icons.arrow_downward)
+                    ? (sortAsc ? Icons.arrow_upward : Icons.arrow_downward)
                     : Icons.unfold_more,
                 size: 13,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: active ? 0.8 : 0.35),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: active ? 0.8 : 0.35),
               ),
             ],
           ),
@@ -799,13 +909,15 @@ class _DetailRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
-                  letterSpacing: .5)),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
+              letterSpacing: .5,
+            ),
+          ),
           const SizedBox(height: 2),
           SelectableText(value, style: const TextStyle(fontSize: 13)),
         ],

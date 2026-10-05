@@ -10,8 +10,9 @@ import 'package:sbom_generator_gui/widgets/help_viewer.dart';
 // minimal sans rapport avec HelpViewerScreen ni flutter_html. Voir
 // help_viewer_navigation_test.dart pour le test de changement de chapitre.
 void main() {
-  testWidgets('charge le sommaire et affiche le premier chapitre par défaut',
-      (tester) async {
+  testWidgets('charge le sommaire et affiche le premier chapitre par défaut', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);

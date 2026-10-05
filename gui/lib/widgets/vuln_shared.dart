@@ -13,8 +13,12 @@ import 'package:flutter/services.dart';
 import '../l10n/l10n.dart';
 import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
-import '../services/layer_scan_service.dart' show LayerScanStep,
-    LayerScanPreparing, LayerScanScanningImage, LayerScanScanningLayer;
+import '../services/layer_scan_service.dart'
+    show
+        LayerScanStep,
+        LayerScanPreparing,
+        LayerScanScanningImage,
+        LayerScanScanningLayer;
 import '../services/package_scan_service.dart' show packageScanDepths;
 import '../services/scan_enrichment.dart';
 import 'cve_detail.dart';
@@ -27,23 +31,23 @@ import 'pdf_report.dart';
 /// vulnérabilité. Insensible à la casse ('Critical', 'CRITICAL', 'critical'
 /// donnent le même résultat).
 Color severityFg(String severity) => switch (severity.toLowerCase()) {
-      'critical' => const Color(0xFFB71C1C),
-      'high' => const Color(0xFFBF360C),
-      'medium' => const Color(0xFFE65100),
-      'low' => const Color(0xFF2E7D32),
-      'negligible' => Colors.grey,
-      _ => Colors.grey,
-    };
+  'critical' => const Color(0xFFB71C1C),
+  'high' => const Color(0xFFBF360C),
+  'medium' => const Color(0xFFE65100),
+  'low' => const Color(0xFF2E7D32),
+  'negligible' => Colors.grey,
+  _ => Colors.grey,
+};
 
 /// Couleur de fond associée à une sévérité de vulnérabilité.
 Color severityBg(String severity) => switch (severity.toLowerCase()) {
-      'critical' => const Color(0xFFFFEBEE),
-      'high' => const Color(0xFFFBE9E7),
-      'medium' => const Color(0xFFFFF3E0),
-      'low' => const Color(0xFFF1F8E9),
-      'negligible' => const Color(0xFFF5F5F5),
-      _ => const Color(0xFFF5F5F5),
-    };
+  'critical' => const Color(0xFFFFEBEE),
+  'high' => const Color(0xFFFBE9E7),
+  'medium' => const Color(0xFFFFF3E0),
+  'low' => const Color(0xFFF1F8E9),
+  'negligible' => const Color(0xFFF5F5F5),
+  _ => const Color(0xFFF5F5F5),
+};
 
 // ─── Export CSV ─────────────────────────────────────────────────────────────
 
@@ -64,11 +68,11 @@ String adocEscape(String s) => s.replaceAll('|', '\\|');
 /// Associe le nom d'outil affiché (`widget.toolName` de grype/osv/trivy_panel)
 /// à sa fonction de détection de version (pdf_report.dart).
 Future<String?> _toolVersionFor(String toolName) => switch (toolName) {
-      'Grype' => grypeVersion(),
-      'OSV-Scanner' => osvScannerVersion(),
-      'Trivy' => trivyVersion(),
-      _ => Future.value(null),
-    };
+  'Grype' => grypeVersion(),
+  'OSV-Scanner' => osvScannerVersion(),
+  'Trivy' => trivyVersion(),
+  _ => Future.value(null),
+};
 
 String _dateFilterSummary(CveDateFilter f) {
   final fieldLabel = switch (f.field) {
@@ -77,8 +81,10 @@ String _dateFilterSummary(CveDateFilter f) {
     CveDateField.latest => 'plus récente des deux',
   };
   final parts = <String>[];
-  if (f.after != null) parts.add('après ${f.after!.toIso8601String().split('T').first}');
-  if (f.before != null) parts.add('avant ${f.before!.toIso8601String().split('T').first}');
+  if (f.after != null)
+    parts.add('après ${f.after!.toIso8601String().split('T').first}');
+  if (f.before != null)
+    parts.add('avant ${f.before!.toIso8601String().split('T').first}');
   final bounds = parts.isEmpty ? 'aucune borne' : parts.join(', ');
   final undated = f.includeUndated ? ', dont sans date connue' : '';
   return '$fieldLabel — $bounds$undated';
@@ -92,23 +98,23 @@ class ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        color: Colors.red[50],
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SelectableText(
-                message,
-                style: TextStyle(color: Colors.red[800], fontSize: 13),
-                maxLines: 5,
-              ),
-            ),
-          ],
+    color: Colors.red[50],
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.error_outline, color: Colors.red, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SelectableText(
+            message,
+            style: TextStyle(color: Colors.red[800], fontSize: 13),
+            maxLines: 5,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 // ─── Vue JSON brut ────────────────────────────────────────────────────────
@@ -141,10 +147,11 @@ class JsonView extends StatelessWidget {
               child: Text(
                 pretty,
                 style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Color(0xFFD4D4D4),
-                    height: 1.5),
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: Color(0xFFD4D4D4),
+                  height: 1.5,
+                ),
               ),
             ),
           ),
@@ -155,8 +162,11 @@ class JsonView extends StatelessWidget {
           child: Tooltip(
             message: context.l10n.jsonViewCopyTooltip,
             child: IconButton(
-              icon: const Icon(Icons.copy_outlined,
-                  size: 18, color: Colors.white70),
+              icon: const Icon(
+                Icons.copy_outlined,
+                size: 18,
+                color: Colors.white70,
+              ),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: json));
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -183,18 +193,26 @@ class SortHeader extends StatelessWidget {
   final VoidCallback onTap;
   final double? width;
 
-  const SortHeader(this.label, this.active, this.ascending, this.onTap,
-      {super.key, this.width});
+  const SortHeader(
+    this.label,
+    this.active,
+    this.ascending,
+    this.onTap, {
+    super.key,
+    this.width,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        active ? Theme.of(context).colorScheme.primary : Colors.grey[600]!;
-    final labelText = Text(label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-            fontSize: 10, fontWeight: FontWeight.bold, color: color));
+    final color = active
+        ? Theme.of(context).colorScheme.primary
+        : Colors.grey[600]!;
+    final labelText = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+    );
     final bounded = width != null;
     Widget cell = InkWell(
       onTap: onTap,
@@ -209,8 +227,11 @@ class SortHeader extends StatelessWidget {
             bounded ? Flexible(child: labelText) : labelText,
             if (active) ...[
               const SizedBox(width: 2),
-              Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 11, color: color),
+              Icon(
+                ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                size: 11,
+                color: color,
+              ),
             ],
           ],
         ),
@@ -386,13 +407,14 @@ class PackageSourceField extends StatelessWidget {
                 enabled: enabled,
                 decoration: InputDecoration(
                   label: HelpLabel(
-                      l10n.scanSourcePackage, l10n.scanSourcePackageHelp),
+                    l10n.scanSourcePackage,
+                    l10n.scanSourcePackageHelp,
+                  ),
                   hintText: l10n.scanSourcePackageHint,
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
-                style:
-                    const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               ),
             ),
             const SizedBox(width: 8),
@@ -411,7 +433,9 @@ class PackageSourceField extends StatelessWidget {
             isDense: true,
             decoration: InputDecoration(
               label: HelpLabel(
-                  l10n.scanPackageDepthLabel, l10n.scanPackageDepthHelp),
+                l10n.scanPackageDepthLabel,
+                l10n.scanPackageDepthHelp,
+              ),
               border: const OutlineInputBorder(),
               isDense: true,
             ),
@@ -419,8 +443,10 @@ class PackageSourceField extends StatelessWidget {
               for (final d in packageScanDepths)
                 DropdownMenuItem(
                   value: d,
-                  child: Text(depthLabel(l10n, d),
-                      style: const TextStyle(fontSize: 13)),
+                  child: Text(
+                    depthLabel(l10n, d),
+                    style: const TextStyle(fontSize: 13),
+                  ),
                 ),
             ],
             onChanged: enabled ? (v) => onDepthChanged(v ?? '0') : null,
@@ -466,7 +492,8 @@ class ImageRefField extends StatelessWidget {
               label: HelpLabel(
                 context.l10n.scanSourceImage,
                 context.l10n.scanSourceImageHelp(
-                    allowOciDir ? context.l10n.scanSourceImageHelpOciDir : ''),
+                  allowOciDir ? context.l10n.scanSourceImageHelpOciDir : '',
+                ),
               ),
               hintText: allowOciDir
                   ? 'nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/'
@@ -542,8 +569,10 @@ List<String> sbomGeneratorScanArgs({
     if (dateFilter.after != null) ...['--cve-after', day(dateFilter.after!)],
     if (dateFilter.before != null) ...['--cve-before', day(dateFilter.before!)],
     if (dateFilter.hasConstraints &&
-        dateFilter.field != CveDateField.published)
-      ...['--cve-date-field', dateFilter.field.name],
+        dateFilter.field != CveDateField.published) ...[
+      '--cve-date-field',
+      dateFilter.field.name,
+    ],
     if (dateFilter.hasConstraints && dateFilter.includeUndated)
       '--include-undated',
     if (!enrichOnline) '--no-enrich',
@@ -610,9 +639,13 @@ class CliCommandDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final sec in sections) ...[
-                Text(sec.title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(
+                  sec.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Container(
                   width: double.infinity,
@@ -628,14 +661,18 @@ class CliCommandDialog extends StatelessWidget {
                         child: SelectableText(
                           sec.command,
                           style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              color: Color(0xFFE0E0E0)),
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            color: Color(0xFFE0E0E0),
+                          ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.copy,
-                            size: 16, color: Color(0xFFBDBDBD)),
+                        icon: const Icon(
+                          Icons.copy,
+                          size: 16,
+                          color: Color(0xFFBDBDBD),
+                        ),
                         tooltip: context.l10n.commonCopy,
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: sec.command));
@@ -652,11 +689,13 @@ class CliCommandDialog extends StatelessWidget {
                 ),
                 if (sec.note != null) ...[
                   const SizedBox(height: 4),
-                  Text(sec.note!,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.6))),
+                  Text(
+                    sec.note!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 14),
               ],
@@ -677,7 +716,10 @@ class CliCommandDialog extends StatelessWidget {
 /// Remarque de la section « Équivalent sbom-generator scan » : différence
 /// de cible en mode image, options de l'onglet sans équivalent.
 String? equivalentScanNote(
-    AppLocalizations l10n, bool useImage, List<String> notCarried) {
+  AppLocalizations l10n,
+  bool useImage,
+  List<String> notCarried,
+) {
   final parts = [
     if (useImage) l10n.cliCommandImageNote,
     if (notCarried.isNotEmpty) l10n.cliCommandNotCarried(notCarried.join(', ')),
@@ -727,11 +769,10 @@ class ScanStatusLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-        child: Text(text,
-            style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+    child: Text(text, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+  );
 }
 
 /// Options de l'analyse par couche (source « Image de conteneur ») :
@@ -873,17 +914,26 @@ class DateFilterBar extends StatelessWidget {
           SegmentedButton<CveDateField>(
             segments: [
               ButtonSegment(
-                  value: CveDateField.published,
-                  label: Text(l10n.dateFilterPublished,
-                      style: const TextStyle(fontSize: 10))),
+                value: CveDateField.published,
+                label: Text(
+                  l10n.dateFilterPublished,
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
               ButtonSegment(
-                  value: CveDateField.modified,
-                  label: Text(l10n.dateFilterModified,
-                      style: const TextStyle(fontSize: 10))),
+                value: CveDateField.modified,
+                label: Text(
+                  l10n.dateFilterModified,
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
               ButtonSegment(
-                  value: CveDateField.latest,
-                  label: Text(l10n.dateFilterLatest,
-                      style: const TextStyle(fontSize: 10))),
+                value: CveDateField.latest,
+                label: Text(
+                  l10n.dateFilterLatest,
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
             ],
             selected: {filter.field},
             onSelectionChanged: (s) =>
@@ -891,8 +941,7 @@ class DateFilterBar extends StatelessWidget {
             style: ButtonStyle(
               visualDensity: VisualDensity.compact,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle:
-                  WidgetStateProperty.all(const TextStyle(fontSize: 10)),
+              textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 10)),
             ),
           ),
           const SizedBox(width: 10),
@@ -902,8 +951,11 @@ class DateFilterBar extends StatelessWidget {
                 ? l10n.dateFilterAfterEmpty
                 : l10n.dateFilterAfter(_fmtDate(filter.after!)),
             active: filter.after != null,
-            onTap: () => _pickDate(context, filter.after,
-                (d) => onChanged?.call(filter.copyWith(after: d))),
+            onTap: () => _pickDate(
+              context,
+              filter.after,
+              (d) => onChanged?.call(filter.copyWith(after: d)),
+            ),
             onClear: filter.after == null
                 ? null
                 : () => onChanged?.call(filter.copyWith(after: null)),
@@ -915,8 +967,11 @@ class DateFilterBar extends StatelessWidget {
                 ? l10n.dateFilterBeforeEmpty
                 : l10n.dateFilterBefore(_fmtDate(filter.before!)),
             active: filter.before != null,
-            onTap: () => _pickDate(context, filter.before,
-                (d) => onChanged?.call(filter.copyWith(before: d))),
+            onTap: () => _pickDate(
+              context,
+              filter.before,
+              (d) => onChanged?.call(filter.copyWith(before: d)),
+            ),
             onClear: filter.before == null
                 ? null
                 : () => onChanged?.call(filter.copyWith(before: null)),
@@ -931,15 +986,18 @@ class DateFilterBar extends StatelessWidget {
                 height: 16,
                 child: Checkbox(
                   value: filter.includeUndated,
-                  onChanged: (v) => onChanged
-                      ?.call(filter.copyWith(includeUndated: v ?? false)),
+                  onChanged: (v) => onChanged?.call(
+                    filter.copyWith(includeUndated: v ?? false),
+                  ),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
                 ),
               ),
               const SizedBox(width: 4),
-              Text(l10n.dateFilterUndated,
-                  style: const TextStyle(fontSize: 11)),
+              Text(
+                l10n.dateFilterUndated,
+                style: const TextStyle(fontSize: 11),
+              ),
             ],
           ),
           const Spacer(),
@@ -947,11 +1005,12 @@ class DateFilterBar extends StatelessWidget {
           if (onPropagate != null)
             TextButton.icon(
               icon: const Icon(Icons.sync_alt, size: 14),
-              label: Text(l10n.dateFilterPropagate,
-                  style: const TextStyle(fontSize: 11)),
+              label: Text(
+                l10n.dateFilterPropagate,
+                style: const TextStyle(fontSize: 11),
+              ),
               style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -1018,8 +1077,11 @@ class DateChip extends StatelessWidget {
               const SizedBox(width: 4),
               InkWell(
                 onTap: onClear,
-                child: Icon(Icons.close,
-                    size: 12, color: theme.colorScheme.onPrimaryContainer),
+                child: Icon(
+                  Icons.close,
+                  size: 12,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
               ),
             ],
           ],
@@ -1075,10 +1137,16 @@ List<T> dedupeVulns<T extends VulnRow>(
 ) {
   final merged = <String, ({T first, int count})>{};
   for (final v in vulns) {
-    final key = [v.severity, v.id, v.packageName, v.installedVersion].join('\u0000');
+    final key = [
+      v.severity,
+      v.id,
+      v.packageName,
+      v.installedVersion,
+    ].join('\u0000');
     final existing = merged[key];
-    merged[key] =
-        existing == null ? (first: v, count: 1) : (first: existing.first, count: existing.count + 1);
+    merged[key] = existing == null
+        ? (first: v, count: 1)
+        : (first: existing.first, count: existing.count + 1);
   }
   return [for (final e in merged.values) withOccurrenceCount(e.first, e.count)];
 }
@@ -1207,23 +1275,21 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
 
   /// Détail (un seul scanner : celui de cet onglet) pour la ligne dépliée.
   CveDetail _detailFor(T v) => CveDetail(
-        id: v.id,
-        views: [
-          ScannerCveView(
-            scanner: widget.toolName,
-            severity: v.severity,
-            packageName: v.packageName,
-            installedVersion: v.installedVersion,
-            fixedVersion: v.fixedVersion,
-            extra: widget.descriptionOf?.call(v) ??
-                widget.extraOf?.call(v) ??
-                '',
-            publishedDate: v.publishedDate,
-            modifiedDate: v.modifiedDate,
-          ),
-        ],
-        exploit: _ex(v),
-      );
+    id: v.id,
+    views: [
+      ScannerCveView(
+        scanner: widget.toolName,
+        severity: v.severity,
+        packageName: v.packageName,
+        installedVersion: v.installedVersion,
+        fixedVersion: v.fixedVersion,
+        extra: widget.descriptionOf?.call(v) ?? widget.extraOf?.call(v) ?? '',
+        publishedDate: v.publishedDate,
+        modifiedDate: v.modifiedDate,
+      ),
+    ],
+    exploit: _ex(v),
+  );
 
   @override
   void dispose() {
@@ -1232,41 +1298,47 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   }
 
   static int _sevOrd(String s) => switch (s.toLowerCase()) {
-        'critical' => 0,
-        'high' => 1,
-        'medium' => 2,
-        'low' => 3,
-        _ => 4,
-      };
+    'critical' => 0,
+    'high' => 1,
+    'medium' => 2,
+    'low' => 3,
+    _ => 4,
+  };
 
   void _onSort(VulnSortCol col) => setState(() {
-        if (_sortCol == col) {
-          _sortAsc = !_sortAsc;
-        } else {
-          _sortCol = col;
-          // Sévérité/KEV/EPSS : le plus « à risque » d'abord au 1er clic.
-          _sortAsc = col == VulnSortCol.severity;
-        }
-      });
+    if (_sortCol == col) {
+      _sortAsc = !_sortAsc;
+    } else {
+      _sortCol = col;
+      // Sévérité/KEV/EPSS : le plus « à risque » d'abord au 1er clic.
+      _sortAsc = col == VulnSortCol.severity;
+    }
+  });
 
   List<T> get _filtered {
     var list = _activeFilters.isEmpty
         ? widget.vulns
-        : widget.vulns.where((v) => _activeFilters.contains(v.severity)).toList();
+        : widget.vulns
+              .where((v) => _activeFilters.contains(v.severity))
+              .toList();
     if (_kevOnly) {
       list = list.where((v) => _ex(v).inKev).toList();
     }
     if (_searchTerm.isNotEmpty) {
       final q = _searchTerm.toLowerCase();
       list = list
-          .where((v) =>
-              v.packageName.toLowerCase().contains(q) ||
-              v.id.toLowerCase().contains(q))
+          .where(
+            (v) =>
+                v.packageName.toLowerCase().contains(q) ||
+                v.id.toLowerCase().contains(q),
+          )
           .toList();
     }
     if (widget.dateFilter.hasConstraints) {
       list = list
-          .where((v) => widget.dateFilter.matches(v.publishedDate, v.modifiedDate))
+          .where(
+            (v) => widget.dateFilter.matches(v.publishedDate, v.modifiedDate),
+          )
           .toList();
     }
     if (_layerFilter != null) {
@@ -1275,13 +1347,16 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     list = List.of(list)
       ..sort((a, b) {
         final cmp = switch (_sortCol) {
-          VulnSortCol.severity => _sevOrd(a.severity).compareTo(_sevOrd(b.severity)),
-          VulnSortCol.cveId    => a.id.compareTo(b.id),
-          VulnSortCol.package  => a.packageName.compareTo(b.packageName),
+          VulnSortCol.severity => _sevOrd(
+            a.severity,
+          ).compareTo(_sevOrd(b.severity)),
+          VulnSortCol.cveId => a.id.compareTo(b.id),
+          VulnSortCol.package => a.packageName.compareTo(b.packageName),
           // KEV puis (départage) EPSS ; EPSS décroissant.
           VulnSortCol.kev => _riskCmp(a, b),
-          VulnSortCol.epss => -((_ex(a).epssScore ?? -1)
-              .compareTo(_ex(b).epssScore ?? -1)),
+          VulnSortCol.epss => -((_ex(a).epssScore ?? -1).compareTo(
+            _ex(b).epssScore ?? -1,
+          )),
         };
         return _sortAsc ? cmp : -cmp;
       });
@@ -1298,68 +1373,97 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
 
   Widget _exploitBadges(ExploitInfo e) {
     Widget pill(String text, Color color, {IconData? icon}) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: color.withValues(alpha: 0.5), width: 0.6),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: color),
+            const SizedBox(width: 2),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[
-              Icon(icon, size: 10, color: color),
-              const SizedBox(width: 2),
-            ],
-            Text(text,
-                style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-          ]),
-        );
+        ],
+      ),
+    );
 
     final chips = <Widget>[];
     if (e.inKev) {
-      chips.add(Tooltip(
-        message: context.l10n.vulnTableKevTooltip(
-          e.kevDateAdded != null
-              ? context.l10n.vulnTableKevAdded(
-                  e.kevDateAdded!.toIso8601String().substring(0, 10))
-              : '',
-          e.kevRansomware ? context.l10n.vulnTableKevRansomware : '',
+      chips.add(
+        Tooltip(
+          message: context.l10n.vulnTableKevTooltip(
+            e.kevDateAdded != null
+                ? context.l10n.vulnTableKevAdded(
+                    e.kevDateAdded!.toIso8601String().substring(0, 10),
+                  )
+                : '',
+            e.kevRansomware ? context.l10n.vulnTableKevRansomware : '',
+          ),
+          child: pill('KEV', Colors.red, icon: Icons.local_fire_department),
         ),
-        child: pill('KEV', Colors.red, icon: Icons.local_fire_department),
-      ));
+      );
     }
     if (e.epssScore != null) {
       final pct = ((e.epssPercentile ?? 0) * 100).round();
-      chips.add(Tooltip(
-        message: context.l10n.vulnTableEpssTooltip(pct),
-        child: pill('EPSS ${e.epssScore!.toStringAsFixed(2)}',
-            e.epssScore! >= 0.10 ? Colors.deepOrange : Colors.blueGrey),
-      ));
+      chips.add(
+        Tooltip(
+          message: context.l10n.vulnTableEpssTooltip(pct),
+          child: pill(
+            'EPSS ${e.epssScore!.toStringAsFixed(2)}',
+            e.epssScore! >= 0.10 ? Colors.deepOrange : Colors.blueGrey,
+          ),
+        ),
+      );
     }
     if (e.pocKnown) {
-      chips.add(Tooltip(
-        message: e.pocCount > 0
-            ? context.l10n.vulnTablePocRepos(e.pocCount)
-            : context.l10n.vulnTablePocMaturity(e.exploitMaturity ?? 'PoC'),
-        child: pill(e.pocCount > 0 ? 'PoC ${e.pocCount}' : 'PoC',
-            Colors.purple, icon: Icons.code),
-      ));
+      chips.add(
+        Tooltip(
+          message: e.pocCount > 0
+              ? context.l10n.vulnTablePocRepos(e.pocCount)
+              : context.l10n.vulnTablePocMaturity(e.exploitMaturity ?? 'PoC'),
+          child: pill(
+            e.pocCount > 0 ? 'PoC ${e.pocCount}' : 'PoC',
+            Colors.purple,
+            icon: Icons.code,
+          ),
+        ),
+      );
     }
     if (e.cvssExploitabilityScore != null) {
-      chips.add(Tooltip(
-        message: context.l10n.vulnTableExploitabilityTooltip(
+      chips.add(
+        Tooltip(
+          message: context.l10n.vulnTableExploitabilityTooltip(
             e.exploitMaturity != null
-                ? context.l10n.vulnTableExploitabilityMaturity(e.exploitMaturity!)
-                : ''),
-        child: pill('expl. ${e.cvssExploitabilityScore!.toStringAsFixed(1)}',
-            Colors.teal),
-      ));
+                ? context.l10n.vulnTableExploitabilityMaturity(
+                    e.exploitMaturity!,
+                  )
+                : '',
+          ),
+          child: pill(
+            'expl. ${e.cvssExploitabilityScore!.toStringAsFixed(1)}',
+            Colors.teal,
+          ),
+        ),
+      );
     }
     if (chips.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: 2),
-        child: Text(context.l10n.vulnTableNoExploitSignal,
-            style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        child: Text(
+          context.l10n.vulnTableNoExploitSignal,
+          style: const TextStyle(fontSize: 10, color: Colors.grey),
+        ),
       );
     }
     return Padding(
@@ -1373,10 +1477,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final epss = e.epssScore == null
         ? '—'
         : '${e.epssScore!.toStringAsFixed(2)} '
-            '(p${((e.epssPercentile ?? 0) * 100).round()})';
-    final poc = e.pocCount > 0
-        ? '${e.pocCount}'
-        : (e.pocKnown ? 'oui' : '—');
+              '(p${((e.epssPercentile ?? 0) * 100).round()})';
+    final poc = e.pocCount > 0 ? '${e.pocCount}' : (e.pocKnown ? 'oui' : '—');
     return [e.inKev ? 'oui' : '—', epss, poc];
   }
 
@@ -1384,11 +1486,13 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final rows = _filtered;
     final buf = StringBuffer();
     final withLayers = widget.layerScan != null;
-    buf.writeln([
-      widget.csvHeader,
-      if (_hasExploit) _exploitHeaders.join(','),
-      if (withLayers) 'Couche(s)',
-    ].join(','));
+    buf.writeln(
+      [
+        widget.csvHeader,
+        if (_hasExploit) _exploitHeaders.join(','),
+        if (withLayers) 'Couche(s)',
+      ].join(','),
+    );
     for (final v in rows) {
       final cells = [
         ...widget.csvRow(v),
@@ -1406,10 +1510,12 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     if (path == null || !context.mounted) return;
     await File(path).writeAsString(buf.toString());
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(context.l10n.vulnTableExported(rows.length, path)),
-        duration: const Duration(seconds: 4),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.vulnTableExported(rows.length, path)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -1433,9 +1539,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       if (_hasExploit) ..._exploitHeaders,
       if (layerScan != null) 'Couche(s)',
     ];
-    final kevCount = _hasExploit
-        ? rows.where((v) => _ex(v).inKev).length
-        : 0;
+    final kevCount = _hasExploit ? rows.where((v) => _ex(v).inKev).length : 0;
 
     int cnt(String key) => widget.severityOrder
         .where((s) => s.toLowerCase() == key)
@@ -1459,9 +1563,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     if (widget.scanTarget != null) {
       buf.writeln('*Cible analysée* : ${adocEscape(widget.scanTarget!)} +');
     }
-    buf.writeln('*Scanner* : ${widget.toolName} — *${rows.length}* '
-        'vulnérabilité(s)'
-        '${widget.dateFilter.hasConstraints ? ' après filtre de date' : ''}');
+    buf.writeln(
+      '*Scanner* : ${widget.toolName} — *${rows.length}* '
+      'vulnérabilité(s)'
+      '${widget.dateFilter.hasConstraints ? ' après filtre de date' : ''}',
+    );
     buf.writeln();
     final svg = buildSeverityBarSvg(counts);
     if (svg != null) {
@@ -1471,15 +1577,19 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
     buf.writeln('|===');
     buf.writeln('h| Critiques h| Élevées h| CISA KEV h| Total');
-    buf.writeln('| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
-        '| [.h1-num]*$high* '
-        '| [.${kevCount > 0 ? 'h1-num-alert' : 'h1-num'}]*$kevCount* '
-        '| [.h1-num]*${rows.length}*');
+    buf.writeln(
+      '| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
+      '| [.h1-num]*$high* '
+      '| [.${kevCount > 0 ? 'h1-num-alert' : 'h1-num'}]*$kevCount* '
+      '| [.h1-num]*${rows.length}*',
+    );
     buf.writeln('|===');
     buf.writeln();
     if (widget.dateFilter.hasConstraints) {
-      buf.writeln('NOTE: Filtre de date appliqué — '
-          '${_dateFilterSummary(widget.dateFilter)}.');
+      buf.writeln(
+        'NOTE: Filtre de date appliqué — '
+        '${_dateFilterSummary(widget.dateFilter)}.',
+      );
       buf.writeln();
     }
     buf.writeln('[cols="<2,>1",options="header"]');
@@ -1502,29 +1612,39 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('| Outil | Version');
     buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion));
     buf.writeln(
-        pdfToolVersionRow(widget.toolName, await _toolVersionFor(widget.toolName)));
+      pdfToolVersionRow(
+        widget.toolName,
+        await _toolVersionFor(widget.toolName),
+      ),
+    );
     buf.writeln('|===');
     buf.writeln();
 
     if (layerScan != null) {
       buf.writeln('== Couches de l\'image');
       buf.writeln();
-      buf.writeln('Méthode : ${layerScan.modeLabel}'
-          '${layerScan.unattributed > 0 ? ' — ${layerScan.unattributed} '
-              'vulnérabilité(s) sans couche connue' : ''}.');
+      buf.writeln(
+        'Méthode : ${layerScan.modeLabel}'
+        '${layerScan.unattributed > 0 ? ' — ${layerScan.unattributed} '
+                  'vulnérabilité(s) sans couche connue' : ''}.',
+      );
       buf.writeln();
       buf.writeln('[cols="2,3,7,2,3,3",options="header"]');
       buf.writeln('|===');
-      buf.writeln('| Couche | Digest | Instruction | Vulnérabilités '
-          '| Critiques | Élevées');
+      buf.writeln(
+        '| Couche | Digest | Instruction | Vulnérabilités '
+        '| Critiques | Élevées',
+      );
       for (final l in layerScan.layers) {
         final inLayer = rows.where((v) => _layersOf(v).contains(l.index));
         int sev(String k) =>
             inLayer.where((v) => v.severity.toLowerCase() == k).length;
         final by = l.createdBy ?? '—';
-        buf.writeln('| ${l.index} | `${l.shortDigest}` '
-            '| ${adocEscape(by.length > 160 ? '${by.substring(0, 159)}…' : by)} '
-            '| ${inLayer.length} | ${sev('critical')} | ${sev('high')}');
+        buf.writeln(
+          '| ${l.index} | `${l.shortDigest}` '
+          '| ${adocEscape(by.length > 160 ? '${by.substring(0, 159)}…' : by)} '
+          '| ${inLayer.length} | ${sev('critical')} | ${sev('high')}',
+        );
       }
       buf.writeln('|===');
       buf.writeln();
@@ -1533,7 +1653,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('== Détail');
     buf.writeln();
     buf.writeln(
-        '[cols="${List.filled(columns.length, "<1").join(',')}",options="header"]');
+      '[cols="${List.filled(columns.length, "<1").join(',')}",options="header"]',
+    );
     buf.writeln('|===');
     buf.writeln('| ${columns.join(' | ')}');
     buf.writeln();
@@ -1562,19 +1683,28 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     try {
       final result = await runAsciidoctorPdf(path, pdfPath);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.exitCode == 0
-            ? context.l10n.vulnTableExportedPdf(rows.length, path, pdfPath)
-            : context.l10n.vulnTableExportedPdfFailed(
-                rows.length, path, result.exitCode)),
-        duration: const Duration(seconds: 5),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.exitCode == 0
+                ? context.l10n.vulnTableExportedPdf(rows.length, path, pdfPath)
+                : context.l10n.vulnTableExportedPdfFailed(
+                    rows.length,
+                    path,
+                    result.exitCode,
+                  ),
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(context.l10n.vulnTableExportedNoPdf(rows.length, path)),
-        duration: const Duration(seconds: 5),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.vulnTableExportedNoPdf(rows.length, path)),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
@@ -1606,19 +1736,25 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     return DropdownButton<int?>(
       value: _layerFilter,
       isDense: true,
-      hint: Text(context.l10n.vulnTableAllLayers,
-          style: const TextStyle(fontSize: 12)),
+      hint: Text(
+        context.l10n.vulnTableAllLayers,
+        style: const TextStyle(fontSize: 12),
+      ),
       items: [
         DropdownMenuItem<int?>(
           value: null,
-          child: Text(context.l10n.vulnTableAllLayers,
-              style: const TextStyle(fontSize: 12)),
+          child: Text(
+            context.l10n.vulnTableAllLayers,
+            style: const TextStyle(fontSize: 12),
+          ),
         ),
         for (final l in scan.layers)
           DropdownMenuItem<int?>(
             value: l.index,
-            child: Text(context.l10n.vulnTableLayerItem(l.index, count(l.index)),
-                style: const TextStyle(fontSize: 12)),
+            child: Text(
+              context.l10n.vulnTableLayerItem(l.index, count(l.index)),
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
       ],
       onChanged: (v) => setState(() => _layerFilter = v),
@@ -1630,12 +1766,14 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final scan = widget.layerScan!;
     final tip = layers.isEmpty
         ? context.l10n.vulnTableLayerUnknownTooltip
-        : layers.map((i) {
-            final l = scan.layer(i);
-            return '${context.l10n.vulnTableLayerLabel(i)}'
-                '${l == null ? '' : ' (${l.shortDigest})'}'
-                '${l?.createdBy == null ? '' : ' — ${l!.createdBy}'}';
-          }).join('\n');
+        : layers
+              .map((i) {
+                final l = scan.layer(i);
+                return '${context.l10n.vulnTableLayerLabel(i)}'
+                    '${l == null ? '' : ' (${l.shortDigest})'}'
+                    '${l?.createdBy == null ? '' : ' — ${l!.createdBy}'}';
+              })
+              .join('\n');
     return Tooltip(
       message: tip,
       child: Container(
@@ -1670,13 +1808,17 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
-          Icon(Icons.layers_outlined, size: 16, color: theme.colorScheme.tertiary),
+          Icon(
+            Icons.layers_outlined,
+            size: 16,
+            color: theme.colorScheme.tertiary,
+          ),
           const SizedBox(width: 6),
           Text(
             index < 0
                 ? context.l10n.vulnTableLayerUnknown
                 : '${context.l10n.vulnTableLayerLabel(index)}'
-                    '${l == null ? '' : ' (${l.shortDigest})'}',
+                      '${l == null ? '' : ' (${l.shortDigest})'}',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 8),
@@ -1692,17 +1834,22 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: severityBg(s),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text('${counts[s]}',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: severityFg(s))),
+                  child: Text(
+                    '${counts[s]}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: severityFg(s),
+                    ),
+                  ),
                 ),
               ),
         ],
@@ -1719,8 +1866,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           children: [
             const Icon(Icons.error_outline, size: 56, color: Colors.red),
             const SizedBox(height: 12),
-            Text(widget.parseFailedMessage,
-                style: const TextStyle(color: Colors.red, fontSize: 15)),
+            Text(
+              widget.parseFailedMessage,
+              style: const TextStyle(color: Colors.red, fontSize: 15),
+            ),
           ],
         ),
       );
@@ -1730,11 +1879,16 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.verified_user_outlined,
-                size: 56, color: Colors.green),
+            const Icon(
+              Icons.verified_user_outlined,
+              size: 56,
+              color: Colors.green,
+            ),
             const SizedBox(height: 12),
-            Text(context.l10n.scanNoVulnerabilities,
-                style: const TextStyle(color: Colors.green, fontSize: 15)),
+            Text(
+              context.l10n.scanNoVulnerabilities,
+              style: const TextStyle(color: Colors.green, fontSize: 15),
+            ),
           ],
         ),
       );
@@ -1755,8 +1909,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: [
-              Text(context.l10n.vulnTableFilter,
-                  style: const TextStyle(fontSize: 11)),
+              Text(
+                context.l10n.vulnTableFilter,
+                style: const TextStyle(fontSize: 11),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Wrap(
@@ -1768,10 +1924,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                         FilterChip(
                           label: Text('$s (${counts[s]})'),
                           labelStyle: TextStyle(
-                              fontSize: 11,
-                              color: _activeFilters.contains(s)
-                                  ? Colors.white
-                                  : severityFg(s)),
+                            fontSize: 11,
+                            color: _activeFilters.contains(s)
+                                ? Colors.white
+                                : severityFg(s),
+                          ),
                           backgroundColor: severityBg(s),
                           selectedColor: severityFg(s),
                           selected: _activeFilters.contains(s),
@@ -1786,16 +1943,21 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                     if (_hasExploit &&
                         (_kevOnly || widget.vulns.any((v) => _ex(v).inKev)))
                       FilterChip(
-                        avatar: Icon(Icons.local_fire_department,
-                            size: 14,
-                            color: _kevOnly ? Colors.white : Colors.red),
+                        avatar: Icon(
+                          Icons.local_fire_department,
+                          size: 14,
+                          color: _kevOnly ? Colors.white : Colors.red,
+                        ),
                         label: Text(
-                            context.l10n.vulnTableKevChip(
-                                widget.vulns.where((v) => _ex(v).inKev).length),
-                            style: const TextStyle(fontSize: 11)),
+                          context.l10n.vulnTableKevChip(
+                            widget.vulns.where((v) => _ex(v).inKev).length,
+                          ),
+                          style: const TextStyle(fontSize: 11),
+                        ),
                         labelStyle: TextStyle(
-                            fontSize: 11,
-                            color: _kevOnly ? Colors.white : Colors.red),
+                          fontSize: 11,
+                          color: _kevOnly ? Colors.white : Colors.red,
+                        ),
                         backgroundColor: Colors.red.withValues(alpha: 0.12),
                         selectedColor: Colors.red,
                         selected: _kevOnly,
@@ -1803,8 +1965,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                       ),
                     if (_activeFilters.isNotEmpty || _kevOnly)
                       ActionChip(
-                        label: Text(context.l10n.vulnTableShowAll,
-                            style: const TextStyle(fontSize: 11)),
+                        label: Text(
+                          context.l10n.vulnTableShowAll,
+                          style: const TextStyle(fontSize: 11),
+                        ),
                         onPressed: () => setState(() {
                           _activeFilters = {};
                           _kevOnly = false;
@@ -1849,8 +2013,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                             padding: EdgeInsets.zero,
                           )
                         : null,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
                     border: const OutlineInputBorder(),
                   ),
                   style: const TextStyle(fontSize: 12),
@@ -1875,14 +2041,14 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
               IconButton(
                 icon: const Icon(Icons.download_outlined, size: 18),
                 tooltip: context.l10n.vulnTableExportCsv,
-                onPressed:
-                    _filtered.isEmpty ? null : () => _exportCsv(context),
+                onPressed: _filtered.isEmpty ? null : () => _exportCsv(context),
               ),
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                 tooltip: context.l10n.vulnTableExportPdf,
-                onPressed:
-                    _filtered.isEmpty ? null : () => _exportAsciiDoc(context),
+                onPressed: _filtered.isEmpty
+                    ? null
+                    : () => _exportAsciiDoc(context),
               ),
             ],
           ),
@@ -1901,38 +2067,63 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           child: Row(
             children: [
-              SortHeader(context.l10n.vulnTableColSeverity, _sortCol == VulnSortCol.severity, _sortAsc,
-                  () => _onSort(VulnSortCol.severity)),
+              SortHeader(
+                context.l10n.vulnTableColSeverity,
+                _sortCol == VulnSortCol.severity,
+                _sortAsc,
+                () => _onSort(VulnSortCol.severity),
+              ),
               const SizedBox(width: 16),
-              SortHeader(context.l10n.vulnTableColId, _sortCol == VulnSortCol.cveId, _sortAsc,
-                  () => _onSort(VulnSortCol.cveId)),
+              SortHeader(
+                context.l10n.vulnTableColId,
+                _sortCol == VulnSortCol.cveId,
+                _sortAsc,
+                () => _onSort(VulnSortCol.cveId),
+              ),
               const SizedBox(width: 16),
-              SortHeader(context.l10n.vulnTableColPackage, _sortCol == VulnSortCol.package, _sortAsc,
-                  () => _onSort(VulnSortCol.package)),
+              SortHeader(
+                context.l10n.vulnTableColPackage,
+                _sortCol == VulnSortCol.package,
+                _sortAsc,
+                () => _onSort(VulnSortCol.package),
+              ),
               if (_hasExploit) ...[
                 const SizedBox(width: 16),
-                SortHeader('KEV', _sortCol == VulnSortCol.kev, _sortAsc,
-                    () => _onSort(VulnSortCol.kev)),
+                SortHeader(
+                  'KEV',
+                  _sortCol == VulnSortCol.kev,
+                  _sortAsc,
+                  () => _onSort(VulnSortCol.kev),
+                ),
                 const SizedBox(width: 16),
-                SortHeader('EPSS', _sortCol == VulnSortCol.epss, _sortAsc,
-                    () => _onSort(VulnSortCol.epss)),
+                SortHeader(
+                  'EPSS',
+                  _sortCol == VulnSortCol.epss,
+                  _sortAsc,
+                  () => _onSort(VulnSortCol.epss),
+                ),
               ],
-              if (widget.extraColumnHeader != null ||
-                  widget.layerScan != null)
+              if (widget.extraColumnHeader != null || widget.layerScan != null)
                 const Spacer(),
               if (widget.extraColumnHeader != null)
-                Text(widget.extraColumnHeader!,
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey)),
+                Text(
+                  widget.extraColumnHeader!,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
               if (widget.layerScan != null) ...[
                 const SizedBox(width: 16),
-                Text(context.l10n.vulnTableColLayer,
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey)),
+                Text(
+                  context.l10n.vulnTableColLayer,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
                 const SizedBox(width: 26),
               ],
             ],
@@ -1944,7 +2135,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
             child: Text(
-              context.l10n.vulnTableUnattributed(widget.layerScan!.unattributed),
+              context.l10n.vulnTableUnattributed(
+                widget.layerScan!.unattributed,
+              ),
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ),
@@ -1978,7 +2171,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                         _searchTerm.isNotEmpty
                             ? context.l10n.vulnTableNoMatchSearch(_searchTerm)
                             : context.l10n.vulnTableNoMatchFilter(
-                                _activeFilters.join(', ')),
+                                _activeFilters.join(', '),
+                              ),
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -1995,16 +2189,21 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                     final fg = severityFg(v.severity);
                     final bg = severityBg(v.severity);
                     final description = widget.descriptionOf?.call(v) ?? '';
-                    final key = '${v.id} ${v.packageName}'
+                    final key =
+                        '${v.id} ${v.packageName}'
                         ' ${v.installedVersion}';
                     final isOpen = _expanded.contains(key);
                     final tile = ListTile(
                       dense: true,
-                      onTap: () => setState(() =>
-                          isOpen ? _expanded.remove(key) : _expanded.add(key)),
+                      onTap: () => setState(
+                        () =>
+                            isOpen ? _expanded.remove(key) : _expanded.add(key),
+                      ),
                       leading: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: bg,
                           borderRadius: BorderRadius.circular(4),
@@ -2013,9 +2212,10 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                         child: Text(
                           v.severity.toUpperCase(),
                           style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: fg),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: fg,
+                          ),
                         ),
                       ),
                       title: Row(
@@ -2024,22 +2224,26 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                           Text(
                             v.id,
                             style: const TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600),
+                              fontFamily: 'monospace',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           if (v.occurrenceCount > 1) ...[
                             const SizedBox(width: 6),
                             Tooltip(
-                              message: context.l10n
-                                  .vulnTableOccurrences(v.occurrenceCount),
+                              message: context.l10n.vulnTableOccurrences(
+                                v.occurrenceCount,
+                              ),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 1),
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -2047,9 +2251,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ),
@@ -2065,18 +2269,32 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                               Text(
                                 v.packageName,
                                 style: const TextStyle(
-                                    fontFamily: 'monospace', fontSize: 11),
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                ),
                               ),
-                              Text(' ${v.installedVersion}',
-                                  style: const TextStyle(
-                                      fontSize: 11, color: Colors.grey)),
+                              Text(
+                                ' ${v.installedVersion}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
                               if (v.fixedVersion.isNotEmpty) ...[
-                                const Text(' → ',
-                                    style: TextStyle(
-                                        fontSize: 11, color: Colors.green)),
-                                Text(v.fixedVersion,
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.green)),
+                                const Text(
+                                  ' → ',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                Text(
+                                  v.fixedVersion,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.green,
+                                  ),
+                                ),
                               ],
                             ],
                           ),
@@ -2084,7 +2302,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                             Text(
                               description,
                               style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey),
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2099,18 +2319,19 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                             Text(
                               widget.extraOf!(v),
                               style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey),
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
                             ),
                           if (widget.layerScan != null) ...[
                             const SizedBox(width: 12),
                             _layerChip(context, v),
                           ],
                           Icon(
-                              isOpen
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              size: 18,
-                              color: Colors.grey[500]),
+                            isOpen ? Icons.expand_less : Icons.expand_more,
+                            size: 18,
+                            color: Colors.grey[500],
+                          ),
                         ],
                       ),
                     );
@@ -2118,8 +2339,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         tile,
-                        if (isOpen)
-                          CveDetailPanel(detail: _detailFor(v)),
+                        if (isOpen) CveDetailPanel(detail: _detailFor(v)),
                       ],
                     );
                   },

@@ -28,8 +28,9 @@ void main() {
     test('depuis une couche : retrouve le global', () {
       touch('app.spdx.json');
       touch('app.layer-01-aaaaaaaaaaaa.spdx.json');
-      final nav =
-          LayerNav.discover('${tmp.path}/app.layer-01-aaaaaaaaaaaa.spdx.json')!;
+      final nav = LayerNav.discover(
+        '${tmp.path}/app.layer-01-aaaaaaaaaaaa.spdx.json',
+      )!;
       expect(nav.currentIndex, 1);
       expect(nav.globalPath, '${tmp.path}/app.spdx.json');
     });
@@ -39,8 +40,9 @@ void main() {
       touch('sbom.layer-01-aaaaaaaaaaaa.cdx.json');
       final nav = LayerNav.discover('${tmp.path}/sbom')!;
       expect(nav.layers.single.index, 1);
-      final back =
-          LayerNav.discover('${tmp.path}/sbom.layer-01-aaaaaaaaaaaa.cdx.json')!;
+      final back = LayerNav.discover(
+        '${tmp.path}/sbom.layer-01-aaaaaaaaaaaa.cdx.json',
+      )!;
       expect(back.globalPath, '${tmp.path}/sbom');
     });
 
@@ -73,7 +75,8 @@ void main() {
       final spdx = layerFieldsOf({
         'annotations': [
           {
-            'comment': 'deb:arch=amd64; sbom_generator:layer:change=modified; '
+            'comment':
+                'deb:arch=amd64; sbom_generator:layer:change=modified; '
                 'sbom_generator:layer:previousVersion=1.2',
           },
         ],
@@ -139,9 +142,12 @@ void main() {
 
     test('SBOM sans couches : vide', () {
       expect(
-          LayerDocInfo.fromSbom({'bomFormat': 'CycloneDX', 'metadata': {}})
-              .isEmpty,
-          isTrue);
+        LayerDocInfo.fromSbom({
+          'bomFormat': 'CycloneDX',
+          'metadata': {},
+        }).isEmpty,
+        isTrue,
+      );
     });
   });
 }

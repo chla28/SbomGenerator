@@ -44,13 +44,12 @@ class CveDateFilter {
     Object? before = _sentinel,
     CveDateField? field,
     bool? includeUndated,
-  }) =>
-      CveDateFilter(
-        after: after == _sentinel ? this.after : after as DateTime?,
-        before: before == _sentinel ? this.before : before as DateTime?,
-        field: field ?? this.field,
-        includeUndated: includeUndated ?? this.includeUndated,
-      );
+  }) => CveDateFilter(
+    after: after == _sentinel ? this.after : after as DateTime?,
+    before: before == _sentinel ? this.before : before as DateTime?,
+    field: field ?? this.field,
+    includeUndated: includeUndated ?? this.includeUndated,
+  );
 
   static const Object _sentinel = Object();
 }

@@ -1,4 +1,6 @@
-// Génère les assets de l'aide en ligne de la GUI à partir de doc/user.adoc.
+// Génère les assets de l'aide en ligne de la GUI à partir de doc/user.adoc
+// (français → assets/help/manual) et doc/user.en.adoc (anglais →
+// assets/help/manual_en).
 //
 // À relancer manuellement (`dart run tool/generate_help.dart` depuis `gui/`)
 // après toute modification de doc/user.adoc — voir la note dans
@@ -18,16 +20,33 @@ import 'package:html/parser.dart' as html_parser;
 
 Future<void> main() async {
   final guiDir = File(Platform.script.toFilePath()).parent.parent;
-  final adocPath = '${guiDir.path}/doc/user.adoc';
-  final outDir = Directory('${guiDir.path}/assets/help/manual');
+  for (final (adoc, out) in const [
+    ('user.adoc', 'manual'),
+    ('user.en.adoc', 'manual_en'),
+  ]) {
+    await _generate(
+      guiDir,
+      '${guiDir.path}/doc/$adoc',
+      '${guiDir.path}/assets/help/$out',
+    );
+  }
+}
+
+Future<void> _generate(
+  Directory guiDir,
+  String adocPath,
+  String outPath,
+) async {
+  final outDir = Directory(outPath);
 
   if (!File(adocPath).existsSync()) {
     stderr.writeln('Introuvable : $adocPath');
     exit(1);
   }
 
-  final tmpHtml =
-      File('${Directory.systemTemp.path}/sbom_generator_gui_help_src.html');
+  final tmpHtml = File(
+    '${Directory.systemTemp.path}/sbom_generator_gui_help_src_${outDir.uri.pathSegments.where((e) => e.isNotEmpty).last}.html',
+  );
   final result = await Process.run('asciidoctor', [
     '-o', tmpHtml.path,
     '-a', 'icons!', // labels texte ("Note", "Astuce"…) plutôt qu'une police
@@ -45,16 +64,18 @@ Future<void> main() async {
   final content = document.querySelector('#content');
   if (content == null) {
     stderr.writeln(
-        'Structure HTML inattendue (div#content introuvable) — le script '
-        'suppose la sortie par défaut d\'asciidoctor (backend html5).');
+      'Structure HTML inattendue (div#content introuvable) — le script '
+      'suppose la sortie par défaut d\'asciidoctor (backend html5).',
+    );
     exit(1);
   }
 
   // asciidoctor enveloppe déjà chaque section de premier niveau dans un
   // <div class="sect1"> propre, enfant direct de #content — un chapitre
   // par div, pas besoin de redécouper nous-mêmes au fil des <h2>.
-  final chapters =
-      content.children.where((e) => e.classes.contains('sect1')).toList();
+  final chapters = content.children
+      .where((e) => e.classes.contains('sect1'))
+      .toList();
   if (chapters.isEmpty) {
     stderr.writeln('Aucune section (div.sect1) trouvée dans le manuel.');
     exit(1);
@@ -63,7 +84,7 @@ Future<void> main() async {
     for (final ch in chapters)
       (ch.querySelector('h2')?.text ?? '')
           .replaceFirst(RegExp(r'^\d+\.\s*'), '')
-          .trim()
+          .trim(),
   ];
 
   if (outDir.existsSync()) outDir.deleteSync(recursive: true);
@@ -95,13 +116,15 @@ Future<void> main() async {
   final manifest = {
     'chapters': [
       for (var i = 0; i < chapters.length; i++)
-        {'title': titles[i], 'file': chapterFiles[i]}
+        {'title': titles[i], 'file': chapterFiles[i]},
     ],
     'anchors': anchorIndex,
   };
-  await File('${outDir.path}/toc.json')
-      .writeAsString(const JsonEncoder.withIndent('  ').convert(manifest));
+  await File(
+    '${outDir.path}/toc.json',
+  ).writeAsString(const JsonEncoder.withIndent('  ').convert(manifest));
 
   stdout.writeln(
-      'Aide générée : ${chapters.length} chapitres → ${outDir.path}');
+    'Aide générée : ${chapters.length} chapitres → ${outDir.path}',
+  );
 }

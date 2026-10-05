@@ -16,9 +16,9 @@ enum AppLanguage {
   Locale? get locale => this == system ? null : Locale(name);
 
   static AppLanguage parse(String? value) => values.firstWhere(
-        (l) => l.name == value,
-        orElse: () => AppLanguage.system,
-      );
+    (l) => l.name == value,
+    orElse: () => AppLanguage.system,
+  );
 }
 
 /// Langue de référence (textes sources, repli).
@@ -42,3 +42,11 @@ extension AppLocalizationsContext on BuildContext {
   AppLocalizations get l10n =>
       AppLocalizations.of(this) ?? lookupAppLocalizations(fallbackLocale);
 }
+
+/// Locale effective de l'interface, mise à jour par `main.dart` : sert au code
+/// sans `BuildContext` (services, exports) qui doit produire un texte
+/// localisé.
+Locale appLocale = fallbackLocale;
+
+/// Textes de l'interface dans [appLocale] — pour le code sans `BuildContext`.
+AppLocalizations appL10n() => lookupAppLocalizations(appLocale);

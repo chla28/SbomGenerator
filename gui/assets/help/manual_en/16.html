@@ -1,0 +1,91 @@
+
+<h2 id="_sbom_merge_tab">17. SBOM Merge tab</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <strong>SBOM Merge</strong> tab combines several SBOM files into a single document,
+deduplicating the common components. It orchestrates the
+<code>sbom-generator merge</code> subcommand in the background.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ [➕ Add files…]  [📂 Generated files]   3 file(s) selected ─┐
+  │  📄 base.cdx.json         /path/to/base.cdx.json                          [✕]  │
+  │  📄 extra-1.cdx.json      /path/to/extra-1.cdx.json                       [✕]  │
+  │  📄 extra-2.cdx.json      /path/to/extra-2.cdx.json                       [✕]  │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [ Output file: merged.cdx.json ]  [ Document name (optional) ]  [🔀 Merge]
+
+  ✔ Merge succeeded → merged.cdx.json</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_selecting_the_files_to_merge">17.1. Selecting the files to merge</h3>
+<div class="paragraph">
+<p>Two ways to fill the list:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>➕ Add files…</strong>: opens a two-entry menu — <strong>.json / .jsonld</strong> (filters the
+picker on these extensions) or <strong>All files</strong> (no filter, for SBOMs whose
+extension is not <code>.json</code>, e.g. <code>.cdx</code>, <code>.spdx</code>, <code>bom</code>, or with no
+extension). Multiple selection is possible in both cases. The content must
+remain CycloneDX or SPDX 2.x JSON whatever the file name.</p>
+</li>
+<li>
+<p><strong>📂 Generated files</strong>: menu listing the SBOM files produced during the
+current session (same formats as the Tree tab, except SPDX 3.0 — see
+Constraints below).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Each file in the list can be removed individually through the <strong>✕</strong> button. The
+<strong>🔀 Merge</strong> button is only active with at least two selected files and a filled
+output path.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_output_file_and_document_name">17.2. Output file and document name</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Output file</strong>: path of the produced merged document (default value:
+<code>merged.cdx.json</code>).</p>
+</li>
+<li>
+<p><strong>Document name</strong> (optional): if filled in, replaces the document name in the
+merged file; otherwise, the name of the first source file is kept.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_launch_and_result">17.3. Launch and result</h3>
+<div class="paragraph">
+<p>The <strong>🔀 Merge</strong> button launches <code>sbom-generator merge</code> with the selected files.
+The command output (log) is displayed under the fields, followed by a result
+banner:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ Merge succeeded → &lt;file&gt;</strong> (green) on success.</p>
+</li>
+<li>
+<p><strong>✘ Merge failed (code N)</strong> (red) on failure — check the displayed log for the
+error detail.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_constraints">17.4. Constraints</h3>
+<div class="paragraph">
+<p>All the selected files must be in the same format (that of the first file in
+the list): CycloneDX or SPDX 2.3. The output format follows that of the first
+file. The SPDX 3.0 (JSON-LD) format is not supported as merge input.</p>
+</div>
+</div>
+</div>

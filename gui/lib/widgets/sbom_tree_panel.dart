@@ -9,6 +9,7 @@ import '../models/layer_nav.dart';
 import '../models/sbom_result.dart';
 import 'help_icon.dart';
 import 'layer_selector.dart';
+import '../l10n/l10n.dart';
 
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ class _SbomComponent {
   });
 
   String get key => '$name@$version';
-  String get layer => layerColumnLabel(layerFields);
+  String layerText(AppLocalizations l) => layerColumnLabel(layerFields, l: l);
 }
 
 class _SbomInfo {
@@ -52,8 +53,11 @@ class _SbomInfo {
 
   bool get hasLayers => components.any((c) => c.layerFields.isNotEmpty);
 
-  int get uniqueLicenseCount =>
-      components.map((c) => c.license).where((l) => l.isNotEmpty).toSet().length;
+  int get uniqueLicenseCount => components
+      .map((c) => c.license)
+      .where((l) => l.isNotEmpty)
+      .toSet()
+      .length;
 
   static _SbomInfo? parse(String raw) {
     try {
@@ -68,18 +72,20 @@ class _SbomInfo {
   static _SbomInfo _parseCycloneDX(Map<String, dynamic> data) {
     final meta = (data['metadata'] as Map<String, dynamic>?) ?? {};
     final root = (meta['component'] as Map<String, dynamic>?) ?? {};
-    final comps = (data['components'] as List? ?? []).map((e) {
-      final c = e as Map<String, dynamic>;
-      return _SbomComponent(
-        name: c['name'] as String? ?? '',
-        version: c['version'] as String? ?? '',
-        type: c['type'] as String? ?? 'unknown',
-        license: _cdxLicense(c['licenses']),
-        purl: c['purl'] as String? ?? '',
-        layerFields: layerFieldsOf(c),
-      );
-    }).toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final comps =
+        (data['components'] as List? ?? []).map((e) {
+          final c = e as Map<String, dynamic>;
+          return _SbomComponent(
+            name: c['name'] as String? ?? '',
+            version: c['version'] as String? ?? '',
+            type: c['type'] as String? ?? 'unknown',
+            license: _cdxLicense(c['licenses']),
+            purl: c['purl'] as String? ?? '',
+            layerFields: layerFieldsOf(c),
+          );
+        }).toList()..sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
     return _SbomInfo(
       format: 'CycloneDX',
       specVersion: data['specVersion'] as String? ?? '',
@@ -100,26 +106,28 @@ class _SbomInfo {
   }
 
   static _SbomInfo _parseSpdx(Map<String, dynamic> data) {
-    final pkgs = (data['packages'] as List? ?? []).map((e) {
-      final p = e as Map<String, dynamic>;
-      String purl = '';
-      for (final ref in (p['externalRefs'] as List? ?? [])) {
-        final r = ref as Map<String, dynamic>;
-        if (r['referenceType'] == 'purl') {
-          purl = r['referenceLocator'] as String? ?? '';
-          break;
-        }
-      }
-      return _SbomComponent(
-        name: p['name'] as String? ?? '',
-        version: p['versionInfo'] as String? ?? '',
-        type: 'package',
-        license: p['licenseConcluded'] as String? ?? '',
-        purl: purl,
-        layerFields: layerFieldsOf(p),
-      );
-    }).toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final pkgs =
+        (data['packages'] as List? ?? []).map((e) {
+          final p = e as Map<String, dynamic>;
+          String purl = '';
+          for (final ref in (p['externalRefs'] as List? ?? [])) {
+            final r = ref as Map<String, dynamic>;
+            if (r['referenceType'] == 'purl') {
+              purl = r['referenceLocator'] as String? ?? '';
+              break;
+            }
+          }
+          return _SbomComponent(
+            name: p['name'] as String? ?? '',
+            version: p['versionInfo'] as String? ?? '',
+            type: 'package',
+            license: p['licenseConcluded'] as String? ?? '',
+            purl: purl,
+            layerFields: layerFieldsOf(p),
+          );
+        }).toList()..sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
     return _SbomInfo(
       format: 'SPDX',
       specVersion: data['spdxVersion'] as String? ?? '',
@@ -135,28 +143,31 @@ class _SbomInfo {
       (e) => e['type'] == 'SpdxDocument',
       orElse: () => const {},
     );
-    final comps = graph.where((e) => e['type'] == 'software:Package').map((p) {
-      String purl = '';
-      for (final ref in (p['externalIdentifier'] as List? ?? [])) {
-        final r = ref as Map<String, dynamic>;
-        if (r['externalIdentifierType'] == 'purl') {
-          purl = r['identifier'] as String? ?? '';
-          break;
-        }
-      }
-      final license = p['concludedLicense'] as String? ??
-          p['declaredLicense'] as String? ??
-          '';
-      return _SbomComponent(
-        name: p['name'] as String? ?? '',
-        version: p['software:packageVersion'] as String? ?? '',
-        type: 'package',
-        license: license == 'NOASSERTION' ? '' : license,
-        purl: purl,
-        layerFields: layerFieldsOf(p),
-      );
-    }).toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final comps =
+        graph.where((e) => e['type'] == 'software:Package').map((p) {
+          String purl = '';
+          for (final ref in (p['externalIdentifier'] as List? ?? [])) {
+            final r = ref as Map<String, dynamic>;
+            if (r['externalIdentifierType'] == 'purl') {
+              purl = r['identifier'] as String? ?? '';
+              break;
+            }
+          }
+          final license =
+              p['concludedLicense'] as String? ??
+              p['declaredLicense'] as String? ??
+              '';
+          return _SbomComponent(
+            name: p['name'] as String? ?? '',
+            version: p['software:packageVersion'] as String? ?? '',
+            type: 'package',
+            license: license == 'NOASSERTION' ? '' : license,
+            purl: purl,
+            layerFields: layerFieldsOf(p),
+          );
+        }).toList()..sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
     return _SbomInfo(
       format: 'SPDX 3.0 JSON-LD',
       specVersion: '3.0.0',
@@ -223,8 +234,9 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     // Différé après le premier frame : _autoLoad → _loadFile appelle
     // setState() avant tout "await", donc de façon synchrone si invoqué
     // directement depuis initState (avant que le widget ait fini de monter).
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _autoLoad(widget.outputFiles));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _autoLoad(widget.outputFiles),
+    );
   }
 
   @override
@@ -245,16 +257,19 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     // Le SBOM global plutôt qu'un SBOM de couche (--per-layer) : les couches
     // restent accessibles depuis le sélecteur de couche.
     final f = files
-        .where((f) =>
-            (f.path.endsWith('.cdx.json') ||
-                f.path.endsWith('.spdx.json') ||
-                f.path.endsWith('.spdx3.jsonld')) &&
-            !isLayerSbomFile(f.path))
+        .where(
+          (f) =>
+              (f.path.endsWith('.cdx.json') ||
+                  f.path.endsWith('.spdx.json') ||
+                  f.path.endsWith('.spdx3.jsonld')) &&
+              !isLayerSbomFile(f.path),
+        )
         .firstOrNull;
     if (f != null) _loadFile(f.path);
   }
 
   Future<void> _loadFile(String path) async {
+    final l = context.l10n;
     setState(() {
       _loading = true;
       _error = null;
@@ -269,16 +284,18 @@ class _SbomTreePanelState extends State<SbomTreePanel>
       if (info != null) {
         try {
           layerInfo = LayerDocInfo.fromSbom(
-              jsonDecode(raw) as Map<String, dynamic>);
+            jsonDecode(raw) as Map<String, dynamic>,
+            l: l,
+          );
         } catch (_) {}
       }
       final labels = nav == null
           ? const <int, String>{}
           : layerInfo.layerLabels.isNotEmpty
-              ? layerInfo.layerLabels
-              : nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty
-                  ? _layerLabels
-                  : await readLayerLabels(nav.globalPath);
+          ? layerInfo.layerLabels
+          : nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty
+          ? _layerLabels
+          : await readLayerLabels(nav.globalPath, l: l);
       setState(() {
         _loading = false;
         _selectedPath = path;
@@ -289,7 +306,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
         if (_groupBy == _GroupBy.layer && info?.hasLayers != true) {
           _groupBy = _GroupBy.type;
         }
-        _error = info == null ? 'Format non reconnu (ni CycloneDX ni SPDX).' : null;
+        _error = info == null ? l.treeFormatUnknown : null;
         if (info != null) {
           // Déplier tous les groupes si peu nombreux
           final types = info.components.map((c) => c.type).toSet();
@@ -299,14 +316,14 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     } catch (e) {
       setState(() {
         _loading = false;
-        _error = 'Erreur de lecture : $e';
+        _error = l.treeReadError('$e');
       });
     }
   }
 
   Future<void> _pickFile() async {
     final r = await FilePicker.pickFiles(
-      dialogTitle: 'Sélectionner un fichier SBOM (JSON)',
+      dialogTitle: context.l10n.treePickTitle,
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
@@ -317,14 +334,17 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     final info = _info;
     if (info == null) return [];
 
+    final l = context.l10n;
     var comps = info.components;
     if (_searchTerm.isNotEmpty) {
       final q = _searchTerm.toLowerCase();
       comps = comps
-          .where((c) =>
-              c.name.toLowerCase().contains(q) ||
-              c.purl.toLowerCase().contains(q) ||
-              c.license.toLowerCase().contains(q))
+          .where(
+            (c) =>
+                c.name.toLowerCase().contains(q) ||
+                c.purl.toLowerCase().contains(q) ||
+                c.license.toLowerCase().contains(q),
+          )
           .toList();
     }
 
@@ -336,8 +356,8 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     for (final c in comps) {
       final k = switch (_groupBy) {
         _GroupBy.type => c.type,
-        _GroupBy.layer => layerGroupKey(c.layerFields),
-        _ => c.license.isEmpty ? '(non spécifié)' : c.license,
+        _GroupBy.layer => layerGroupKey(c.layerFields, l: l),
+        _ => c.license.isEmpty ? l.treeUnspecified : c.license,
       };
       (groups[k] ??= []).add(c);
     }
@@ -380,8 +400,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
           ),
 
         // ── Infos SBOM ──
-        if (info != null)
-          _InfoBar(info: info, selectedPath: _selectedPath!),
+        if (info != null) _InfoBar(info: info, selectedPath: _selectedPath!),
 
         // ── Barre outils : recherche + groupement ──
         if (info != null)
@@ -399,12 +418,16 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                       _groupBy = v;
                       _expandedGroups.clear();
                       if (v == _GroupBy.type) {
-                        final types =
-                            info.components.map((c) => c.type).toSet();
+                        final types = info.components
+                            .map((c) => c.type)
+                            .toSet();
                         if (types.length <= 6) _expandedGroups.addAll(types);
                       } else if (v == _GroupBy.layer) {
                         final keys = info.components
-                            .map((c) => layerGroupKey(c.layerFields))
+                            .map(
+                              (c) =>
+                                  layerGroupKey(c.layerFields, l: context.l10n),
+                            )
                             .toSet();
                         if (keys.length <= 6) _expandedGroups.addAll(keys);
                       }
@@ -416,7 +439,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                 if (_groupBy != _GroupBy.none) ...[
                   IconButton(
                     icon: const Icon(Icons.unfold_more, size: 16),
-                    tooltip: 'Tout déplier',
+                    tooltip: context.l10n.treeExpandAll,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() {
                       final keys = items
@@ -428,7 +451,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                   ),
                   IconButton(
                     icon: const Icon(Icons.unfold_less, size: 16),
-                    tooltip: 'Tout replier',
+                    tooltip: context.l10n.treeCollapseAll,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() => _expandedGroups.clear()),
                   ),
@@ -440,7 +463,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                     controller: _searchCtrl,
                     onChanged: (v) => setState(() => _searchTerm = v),
                     decoration: InputDecoration(
-                      hintText: 'Filtrer par nom, purl, licence…',
+                      hintText: context.l10n.treeFilterHint,
                       isDense: true,
                       prefixIcon: const Icon(Icons.search, size: 16),
                       suffixIcon: _searchTerm.isNotEmpty
@@ -454,7 +477,9 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                             )
                           : null,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 6),
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       border: const OutlineInputBorder(),
                     ),
                     style: const TextStyle(fontSize: 12),
@@ -474,60 +499,60 @@ class _SbomTreePanelState extends State<SbomTreePanel>
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? _ErrorView(message: _error!)
-                  : info == null
-                      ? _EmptyView(
-                          hasOutputFiles: widget.outputFiles.isNotEmpty,
-                          onPick: _pickFile,
-                        )
-                      : items.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.search_off,
-                                      size: 40, color: Colors.grey),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Aucun composant pour "$_searchTerm"',
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: items.length,
-                              itemBuilder: (_, i) {
-                                final item = items[i];
-                                return switch (item) {
-                                  _GroupHeader h => _GroupHeaderTile(
-                                      header: h,
-                                      expanded:
-                                          _expandedGroups.contains(h.key),
-                                      onTap: () => setState(() {
-                                        if (_expandedGroups.contains(h.key)) {
-                                          _expandedGroups.remove(h.key);
-                                        } else {
-                                          _expandedGroups.add(h.key);
-                                        }
-                                      }),
-                                    ),
-                                  _CompItem c => _ComponentTile(
-                                      comp: c.comp,
-                                      expanded:
-                                          _expandedComps.contains(c.comp.key),
-                                      onTap: () => setState(() {
-                                        if (_expandedComps
-                                            .contains(c.comp.key)) {
-                                          _expandedComps.remove(c.comp.key);
-                                        } else {
-                                          _expandedComps.add(c.comp.key);
-                                        }
-                                      }),
-                                    ),
-                                };
-                              },
-                            ),
+              ? _ErrorView(message: _error!)
+              : info == null
+              ? _EmptyView(
+                  hasOutputFiles: widget.outputFiles.isNotEmpty,
+                  onPick: _pickFile,
+                )
+              : items.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.l10n.treeNoMatch(_searchTerm),
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (_, i) {
+                    final item = items[i];
+                    return switch (item) {
+                      _GroupHeader h => _GroupHeaderTile(
+                        header: h,
+                        expanded: _expandedGroups.contains(h.key),
+                        onTap: () => setState(() {
+                          if (_expandedGroups.contains(h.key)) {
+                            _expandedGroups.remove(h.key);
+                          } else {
+                            _expandedGroups.add(h.key);
+                          }
+                        }),
+                      ),
+                      _CompItem c => _ComponentTile(
+                        comp: c.comp,
+                        expanded: _expandedComps.contains(c.comp.key),
+                        onTap: () => setState(() {
+                          if (_expandedComps.contains(c.comp.key)) {
+                            _expandedComps.remove(c.comp.key);
+                          } else {
+                            _expandedComps.add(c.comp.key);
+                          }
+                        }),
+                      ),
+                    };
+                  },
+                ),
         ),
       ],
     );
@@ -554,11 +579,13 @@ class _FileBar extends StatelessWidget {
     final theme = Theme.of(context);
     // Les SBOM de couche (--per-layer) passent par le sélecteur de couche.
     final sbomFiles = outputFiles
-        .where((f) =>
-            (f.path.endsWith('.cdx.json') ||
-                f.path.endsWith('.spdx.json') ||
-                f.path.endsWith('.spdx3.jsonld')) &&
-            !isLayerSbomFile(f.path))
+        .where(
+          (f) =>
+              (f.path.endsWith('.cdx.json') ||
+                  f.path.endsWith('.spdx.json') ||
+                  f.path.endsWith('.spdx3.jsonld')) &&
+              !isLayerSbomFile(f.path),
+        )
         .toList();
 
     return Container(
@@ -572,12 +599,13 @@ class _FileBar extends StatelessWidget {
             child: Text(
               selectedPath != null
                   ? selectedPath!.split('/').last
-                  : 'Aucun fichier SBOM sélectionné',
+                  : context.l10n.treeNoFileSelected,
               style: TextStyle(
-                  fontSize: 12,
-                  color: selectedPath != null
-                      ? theme.colorScheme.onSurface
-                      : Colors.grey),
+                fontSize: 12,
+                color: selectedPath != null
+                    ? theme.colorScheme.onSurface
+                    : Colors.grey,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -586,13 +614,17 @@ class _FileBar extends StatelessWidget {
             MenuAnchor(
               builder: (ctx, ctrl, child) => TextButton.icon(
                 icon: const Icon(Icons.folder_outlined, size: 14),
-                label: Text('Générés (${sbomFiles.length})',
-                    style: const TextStyle(fontSize: 12)),
-                onPressed: () =>
-                    ctrl.isOpen ? ctrl.close() : ctrl.open(),
+                label: Text(
+                  context.l10n.treeGenerated(sbomFiles.length),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
                 style: TextButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                ),
               ),
               menuChildren: [
                 for (final f in sbomFiles)
@@ -608,11 +640,14 @@ class _FileBar extends StatelessWidget {
           const SizedBox(width: 4),
           TextButton.icon(
             icon: const Icon(Icons.file_open_outlined, size: 14),
-            label: const Text('Ouvrir…', style: TextStyle(fontSize: 12)),
+            label: Text(
+              context.l10n.treeOpen,
+              style: const TextStyle(fontSize: 12),
+            ),
             onPressed: onPickFile,
             style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
           ),
         ],
       ),
@@ -636,17 +671,31 @@ class _InfoBar extends StatelessWidget {
       color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
       child: Row(
         children: [
-          _Chip(Icons.inventory_2_outlined, info.rootName.isEmpty ? selectedPath.split('/').last : info.rootName),
+          _Chip(
+            Icons.inventory_2_outlined,
+            info.rootName.isEmpty
+                ? selectedPath.split('/').last
+                : info.rootName,
+          ),
           if (info.rootVersion.isNotEmpty) ...[
             const SizedBox(width: 6),
             _Chip(Icons.tag, info.rootVersion),
           ],
           const SizedBox(width: 6),
-          _Chip(Icons.description_outlined, '${info.format} ${info.specVersion}'),
+          _Chip(
+            Icons.description_outlined,
+            '${info.format} ${info.specVersion}',
+          ),
           const SizedBox(width: 6),
-          _Chip(Icons.inventory_outlined, '${info.components.length} composants'),
+          _Chip(
+            Icons.inventory_outlined,
+            context.l10n.treeComponentsChip(info.components.length),
+          ),
           const SizedBox(width: 6),
-          _Chip(Icons.gavel_outlined, '${info.uniqueLicenseCount} licences'),
+          _Chip(
+            Icons.gavel_outlined,
+            context.l10n.treeLicensesChip(info.uniqueLicenseCount),
+          ),
         ],
       ),
     );
@@ -665,8 +714,7 @@ class _Chip extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: Colors.grey[600]),
         const SizedBox(width: 3),
-        Text(label,
-            style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[700])),
       ],
     );
   }
@@ -692,34 +740,36 @@ class _GroupBySelector extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Grouper :', style: TextStyle(fontSize: 11)),
+        Text(context.l10n.treeGroupBy, style: const TextStyle(fontSize: 11)),
         const SizedBox(width: 2),
-        const HelpIcon(
-          'Mode de regroupement des composants.\n'
-          '• Aucun : liste à plat alphabétique\n'
-          '• Type : groupé par écosystème (rpm, pypi…)\n'
-          '• Licence : groupé par expression SPDX\n'
-          '• Couche : groupé par couche d\'origine (SBOM global) ou par '
-          'changement (SBOM de couche) — SBOM produits avec --per-layer',
-        ),
+        HelpIcon(context.l10n.treeGroupHelp),
         const SizedBox(width: 4),
         SegmentedButton<_GroupBy>(
           segments: [
-            const ButtonSegment(value: _GroupBy.none, label: Text('Aucun')),
-            const ButtonSegment(value: _GroupBy.type, label: Text('Type')),
-            const ButtonSegment(
-                value: _GroupBy.license, label: Text('Licence')),
+            ButtonSegment(
+              value: _GroupBy.none,
+              label: Text(context.l10n.treeGroupNone),
+            ),
+            ButtonSegment(
+              value: _GroupBy.type,
+              label: Text(context.l10n.treeGroupType),
+            ),
+            ButtonSegment(
+              value: _GroupBy.license,
+              label: Text(context.l10n.treeGroupLicense),
+            ),
             if (showLayer)
-              const ButtonSegment(
-                  value: _GroupBy.layer, label: Text('Couche')),
+              ButtonSegment(
+                value: _GroupBy.layer,
+                label: Text(context.l10n.treeGroupLayer),
+              ),
           ],
           selected: {value},
           onSelectionChanged: (s) => onChanged(s.first),
           style: ButtonStyle(
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             visualDensity: VisualDensity.compact,
-            textStyle: WidgetStateProperty.all(
-                const TextStyle(fontSize: 11)),
+            textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 11)),
           ),
         ),
       ],
@@ -756,16 +806,20 @@ class _GroupHeaderTile extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(width: 6),
-            Icon(Icons.folder_outlined, size: 15,
-                color: theme.colorScheme.primary),
+            Icon(
+              Icons.folder_outlined,
+              size: 15,
+              color: theme.colorScheme.primary,
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 header.key,
                 style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: theme.colorScheme.primary),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ),
             Container(
@@ -777,8 +831,9 @@ class _GroupHeaderTile extends StatelessWidget {
               child: Text(
                 '${header.count}',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onPrimaryContainer),
+                  fontSize: 11,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
               ),
             ),
           ],
@@ -809,7 +864,12 @@ class _ComponentTile extends StatelessWidget {
         InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.only(left: 36, right: 12, top: 5, bottom: 5),
+            padding: const EdgeInsets.only(
+              left: 36,
+              right: 12,
+              top: 5,
+              bottom: 5,
+            ),
             child: Row(
               children: [
                 Icon(
@@ -818,15 +878,20 @@ class _ComponentTile extends StatelessWidget {
                   color: Colors.grey[400],
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.inventory_2_outlined, size: 14,
-                    color: Colors.grey),
+                const Icon(
+                  Icons.inventory_2_outlined,
+                  size: 14,
+                  color: Colors.grey,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 3,
                   child: Text(
                     comp.name,
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -836,9 +901,10 @@ class _ComponentTile extends StatelessWidget {
                   child: Text(
                     comp.version,
                     style: const TextStyle(
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                        color: Colors.grey),
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      color: Colors.grey,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -847,8 +913,7 @@ class _ComponentTile extends StatelessWidget {
                   flex: 3,
                   child: Text(
                     comp.license,
-                    style: TextStyle(
-                        fontSize: 10, color: Colors.blue[700]),
+                    style: TextStyle(fontSize: 10, color: Colors.blue[700]),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -870,11 +935,14 @@ class _ComponentTile extends StatelessWidget {
                 if (comp.purl.isNotEmpty)
                   _DetailRow('PURL', comp.purl, copyable: true),
                 _DetailRow('Version', comp.version),
-                if (comp.type != 'package')
-                  _DetailRow('Type', comp.type),
+                if (comp.type != 'package') _DetailRow('Type', comp.type),
                 if (comp.license.isNotEmpty)
-                  _DetailRow('Licence', comp.license),
-                if (comp.layer.isNotEmpty) _DetailRow('Couche', comp.layer),
+                  _DetailRow(context.l10n.treeDetailLicense, comp.license),
+                if (comp.layerText(context.l10n).isNotEmpty)
+                  _DetailRow(
+                    context.l10n.treeDetailLayer,
+                    comp.layerText(context.l10n),
+                  ),
               ],
             ),
           ),
@@ -900,11 +968,14 @@ class _DetailRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 58,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
           ),
           Expanded(
             child: SelectableText(
@@ -915,9 +986,8 @@ class _DetailRow extends StatelessWidget {
           if (copyable)
             IconButton(
               icon: const Icon(Icons.copy, size: 12),
-              tooltip: 'Copier',
-              onPressed: () =>
-                  Clipboard.setData(ClipboardData(text: value)),
+              tooltip: context.l10n.commonCopy,
+              onPressed: () => Clipboard.setData(ClipboardData(text: value)),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
@@ -945,15 +1015,15 @@ class _EmptyView extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             hasOutputFiles
-                ? 'Aucun fichier SBOM (JSON/JSON-LD) dans les sorties.'
-                : 'Générez un SBOM ou ouvrez un fichier existant.',
+                ? context.l10n.treeEmptyNoSbom
+                : context.l10n.treeEmptyGenerate,
             style: const TextStyle(color: Colors.grey, fontSize: 14),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.file_open_outlined, size: 16),
-            label: const Text('Ouvrir un fichier SBOM'),
+            label: Text(context.l10n.treeOpenSbom),
             onPressed: onPick,
           ),
         ],
@@ -976,9 +1046,11 @@ class _ErrorView extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 40, color: Colors.red),
             const SizedBox(height: 12),
-            Text(message,
-                style: const TextStyle(color: Colors.red),
-                textAlign: TextAlign.center),
+            Text(
+              message,
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
