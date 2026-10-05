@@ -519,8 +519,8 @@ Future<void> main(List<String> rawArguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    _err(tr(
-        'Erreur d\'argument : ${e.message}', 'Argument error: ${e.message}'));
+    _err(tr('Erreur d\'argument : ${_argError(e.message)}',
+        'Argument error: ${e.message}'));
     _printUsage(parser);
     exit(1);
   }
@@ -1032,9 +1032,6 @@ Future<void> main(List<String> rawArguments) async {
   }
 
   // --- Parse packages ---
-  final total = mainRefs.length +
-      (preloadedPackages.isNotEmpty ? 1 : 0) +
-      ociPackages.length;
   final conLabel =
       concurrencyN == 0 ? tr('illimité', 'unlimited') : '$concurrencyN';
   if (mainRefs.isNotEmpty) {
@@ -1252,9 +1249,15 @@ Future<void> main(List<String> rawArguments) async {
       ? tr('  ($dupes doublon(s) supprimé(s))',
           '  ($dupes duplicate(s) removed)')
       : '';
+  // Dénominateur = tous les paquets visés : références interrogées, paquets
+  // issus des manifestes, paquets d'image et composants imbriqués.
+  final targeted = mainRefs.length +
+      preloadedPackages.length +
+      ociPackages.length +
+      nestedCount;
   print(tr(
-      'Analysés : ${uniquePackages.length}/${total + nestedCount} paquet(s).$failedNote$dupeNote',
-      'Analysed: ${uniquePackages.length}/${total + nestedCount} package(s).$failedNote$dupeNote'));
+      'Analysés : ${uniquePackages.length}/$targeted paquet(s).$failedNote$dupeNote',
+      'Analysed: ${uniquePackages.length}/$targeted package(s).$failedNote$dupeNote'));
 
   // --- Error report ---
   if (failedRefs.isNotEmpty) {
@@ -1516,7 +1519,7 @@ Future<void> main(List<String> rawArguments) async {
     }
   }
 
-  // ── Signature cosign ─────────────────────────────────────────────────────
+// ── Signature cosign ─────────────────────────────────────────────────────
   if (signSbom) {
     final primaryOut = formats.length == 1
         ? outputPath
@@ -1557,7 +1560,7 @@ Future<void> _runDiff(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('diff: ${e.message}');
+    stderr.writeln('diff: ${_argError(e.message)}');
     _printDiffUsage(parser);
     exit(1);
   }
@@ -1651,9 +1654,12 @@ Future<void> _runMerge(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('merge: ${e.message}');
+    stderr.writeln('merge: ${_argError(e.message)}');
     _printMergeUsage(parser);
     exit(1);
+  }
+  if (!(args['help'] as bool)) {
+    _requireMandatory(parser, args, 'merge', () => _printMergeUsage(parser));
   }
   if (args['help'] as bool) {
     _printMergeUsage(parser);
@@ -1708,10 +1714,85 @@ ${parser.usage}
 '''));
 }
 
+/// Traduit les messages d'erreur du paquet `args` (toujours en anglais) dans
+/// la langue courante ; un message inconnu est renvoyé tel quel.
+String _argError(String message) {
+  if (currentLang == Lang.en) return message;
+  final rules = <(RegExp, String Function(Match))>[
+    (
+      RegExp(r'^Could not find an option named "(.+)"\.$'),
+      (m) => 'Option inconnue "${m[1]}".'
+    ),
+    (
+      RegExp(r'^Could not find an option or flag "(.+)"\.$'),
+      (m) => 'Option ou drapeau inconnu "${m[1]}".'
+    ),
+    (
+      RegExp(r'^Could not find an option with short name "(.+)"\.$'),
+      (m) => 'Option inconnue "${m[1]}".'
+    ),
+    (
+      RegExp(r'^Missing argument for "(.+)"\.$'),
+      (m) => 'Valeur manquante pour "${m[1]}".'
+    ),
+    (
+      RegExp(r'^"(.*)" is not an allowed value for option "(.+)"\.$'),
+      (m) =>
+          '"${m[1]}" n\'est pas une valeur autorisée pour l\'option "${m[2]}".'
+    ),
+    (
+      RegExp(r'^Flag option "(.+)" should not be given a value\.$'),
+      (m) => 'L\'option "${m[1]}" n\'accepte pas de valeur.'
+    ),
+    (
+      RegExp(r'^Option (.+) is mandatory\.$'),
+      (m) => 'L\'option --${m[1]} est obligatoire.'
+    ),
+    (
+      RegExp(r'^Cannot specify arguments before a command\.$'),
+      (m) => 'Aucun argument n\'est permis avant une commande.'
+    ),
+  ];
+  for (final (re, f) in rules) {
+    final m = re.firstMatch(message);
+    if (m != null) return f(m);
+  }
+  return message;
+}
+
+/// Vérifie les options `mandatory` d'une sous-commande. Le paquet `args` ne
+/// les contrôle qu'à l'accès (`ArgumentError` non rattrapée) : on les contrôle
+/// ici, juste après l'analyse, pour afficher une erreur d'usage et sortir en
+/// code 1.
+void _requireMandatory(
+    ArgParser parser, ArgResults args, String command, void Function() usage) {
+  for (final o in parser.options.values) {
+    if (o.mandatory && !args.wasParsed(o.name)) {
+      stderr
+          .writeln('$command: ${_argError('Option ${o.name} is mandatory.')}');
+      usage();
+      exit(1);
+    }
+  }
+}
+
+/// Date `AAAA-MM-JJ` stricte (jour calendaire existant) ou `null`. Évite que
+/// `DateTime.tryParse` n'accepte `2024-13-45` en le décalant au 14/02/2025.
+DateTime? _parseCliDate(String raw) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(raw.trim());
+  if (m == null) return null;
+  final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+  final dt = DateTime(y, mo, d);
+  return (dt.year == y && dt.month == mo && dt.day == d) ? dt : null;
+}
+
 // ── Signature cosign ──────────────────────────────────────────────────────────
 
 Future<void> _signWithCosign(String sbomPath, {bool verbose = false}) async {
-  final check = await Process.run('cosign', ['version']);
+  // `Process.run` lève une ProcessException quand le binaire est absent du
+  // PATH : même traitement qu'un code de retour non nul.
+  final check = await Process.run('cosign', ['version'])
+      .catchError((Object _) => ProcessResult(0, 127, '', ''));
   if (check.exitCode != 0) {
     stderr.writeln(tr('sign: cosign introuvable — signature ignorée.',
         'sign: cosign not found — signature skipped.'));
@@ -2135,7 +2216,7 @@ Future<void> _runScan(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('scan: ${e.message}');
+    stderr.writeln('scan: ${_argError(e.message)}');
     _printScanUsage(parser);
     exit(1);
   }
@@ -2252,7 +2333,7 @@ Future<void> _runScan(List<String> arguments) async {
   final rawAfter = args['cve-after'] as String?;
   final rawBefore = args['cve-before'] as String?;
   if (rawAfter != null) {
-    after = DateTime.tryParse(rawAfter);
+    after = _parseCliDate(rawAfter);
     if (after == null) {
       stderr.writeln(tr(
           'scan: format de date invalide pour --cve-after : "$rawAfter" (attendu YYYY-MM-DD)',
@@ -2261,7 +2342,7 @@ Future<void> _runScan(List<String> arguments) async {
     }
   }
   if (rawBefore != null) {
-    before = DateTime.tryParse(rawBefore);
+    before = _parseCliDate(rawBefore);
     if (before == null) {
       stderr.writeln(tr(
           'scan: format de date invalide pour --cve-before : "$rawBefore" (attendu YYYY-MM-DD)',
@@ -3459,9 +3540,13 @@ Future<void> _runConvert(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('convert: ${e.message}');
+    stderr.writeln('convert: ${_argError(e.message)}');
     _printConvertUsage(parser);
     exit(1);
+  }
+  if (!(args['help'] as bool)) {
+    _requireMandatory(
+        parser, args, 'convert', () => _printConvertUsage(parser));
   }
   if (args['help'] as bool) {
     _printConvertUsage(parser);
@@ -3636,9 +3721,13 @@ Future<void> _runLicenses(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('licenses: ${e.message}');
+    stderr.writeln('licenses: ${_argError(e.message)}');
     _printLicensesUsage(parser);
     exit(1);
+  }
+  if (!(args['help'] as bool)) {
+    _requireMandatory(
+        parser, args, 'licenses', () => _printLicensesUsage(parser));
   }
   if (args['help'] as bool) {
     _printLicensesUsage(parser);
@@ -3824,9 +3913,12 @@ Future<void> _runCra(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('cra: ${e.message}');
+    stderr.writeln('cra: ${_argError(e.message)}');
     _printCraUsage(parser);
     exit(1);
+  }
+  if (!(args['help'] as bool)) {
+    _requireMandatory(parser, args, 'cra', () => _printCraUsage(parser));
   }
   if (args['help'] as bool) {
     _printCraUsage(parser);
@@ -4075,7 +4167,7 @@ Future<void> _runValidate(List<String> arguments) async {
   try {
     args = parser.parse(arguments);
   } on ArgParserException catch (e) {
-    stderr.writeln('validate: ${e.message}');
+    stderr.writeln('validate: ${_argError(e.message)}');
     _printValidateUsage(parser);
     exit(1);
   }

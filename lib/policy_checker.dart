@@ -47,7 +47,9 @@ class PolicyChecker {
   /// Retourne le score sbomqs (0–10) du fichier [sbomPath], ou null si sbomqs
   /// est absent ou échoue.
   Future<double?> runSbomqs(String sbomPath, {bool verbose = false}) async {
-    final check = await Process.run('sbomqs', ['version']);
+    // ProcessException si le binaire est absent du PATH.
+    final check = await Process.run('sbomqs', ['version'])
+        .catchError((Object _) => ProcessResult(0, 127, '', ''));
     if (check.exitCode != 0) {
       stderr.writeln(tr(
           'policy: sbomqs introuvable — vérification qualité ignorée.',

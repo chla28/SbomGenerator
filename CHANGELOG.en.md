@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - **Packaging**: the RPM package license is `LGPL-3.0-only` (it said `MIT`), `LICENSE` and `COPYING` are shipped in the archive and the RPMs (`%license`); RPM and `pubspec.yaml` descriptions updated; removed the throw-away visual-check test file `gui/test/_visual_check_vuln_table.dart`.
 
+### Fixed
+- **CLI — mandatory options** (`cra --sbom`, `convert`/`licenses --input`, `merge --output`): a missing one now prints a usage error (`cra: Option --sbom is mandatory.`) and exits with code 1, instead of an unhandled exception (code 255).
+- **CLI — `--sign` without `cosign`** (and `--min-quality-score` without `sbomqs`): warning and carry on, instead of a `ProcessException` after the files were written.
+- **CLI — `scan --cve-after/--cve-before`**: only real `YYYY-MM-DD` dates are accepted (`2024-13-45`, `2024-02-30`, `2024-1-1` are rejected instead of being shifted).
+- **CLI — "Analysed: X/Y" summary**: the denominator counts every targeted package (references, packages read from manifests, image, nested objects); it used to show e.g. `7/6` instead of `7/8`.
+- **CLI — argument error messages**: the `args` package messages ("is not an allowed value…", "Could not find an option named…") are translated into French.
+
 ## [1.6.3] - 2026-10-05
 
 ### Added
