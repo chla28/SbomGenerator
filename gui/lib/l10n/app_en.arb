@@ -675,5 +675,22 @@
   "helpSearchHint": "Search the manual…",
   "helpClear": "Clear",
   "helpNoMatch": "No chapter contains “{query}”.",
-  "helpLoadError": "Help unavailable: unable to load the manual ({error})."
+  "helpLoadError": "Help unavailable: unable to load the manual ({error}).",
+  "vrTitle": "= Vulnerability report: {tool}",
+  "vrScannerLine": "*Scanner*: {tool} — {count, plural, one{*{count}* vulnerability} other{*{count}* vulnerabilities}}{filtered}",
+  "vrAfterDateFilter": " after date filter",
+  "vrStatsHeader": "h| Critical h| High h| CISA KEV h| Total",
+  "vrDateNote": "NOTE: Date filter applied — {summary}.",
+  "vrDetail": "== Details",
+  "vrLayerMethod": "Method: {mode}{extra}.",
+  "vrLayerUnattr": " — {count, plural, one{{count} vulnerability with no known layer} other{{count} vulnerabilities with no known layer}}",
+  "vrLayersHeader": "| Layer | Digest | Instruction | Vulnerabilities | Critical | High",
+  "vrLayersCol": "Layer(s)",
+  "vrDatePublished": "publication",
+  "vrDateModified": "last modification",
+  "vrDateLatest": "more recent of the two",
+  "vrDateAfter": "after {date}",
+  "vrDateBefore": "before {date}",
+  "vrDateNoBound": "no bound",
+  "vrDateUndated": ", including those with no known date"
 }

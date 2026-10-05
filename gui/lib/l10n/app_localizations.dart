@@ -4069,6 +4069,108 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Aide indisponible : impossible de charger le manuel ({error}).'**
   String helpLoadError(String error);
+
+  /// Titre du rapport AsciiDoc exporté depuis un onglet de scan.
+  ///
+  /// In fr, this message translates to:
+  /// **'= Rapport de vulnérabilités: {tool}'**
+  String vrTitle(String tool);
+
+  /// Ligne du résumé exécutif.
+  ///
+  /// In fr, this message translates to:
+  /// **'*Scanner* : {tool} — {count, plural, one{*{count}* vulnérabilité} other{*{count}* vulnérabilités}}{filtered}'**
+  String vrScannerLine(String tool, int count, String filtered);
+
+  /// Suffixe de la ligne du résumé quand un filtre de date est actif.
+  ///
+  /// In fr, this message translates to:
+  /// **' après filtre de date'**
+  String get vrAfterDateFilter;
+
+  /// En-tête du tableau de chiffres clés.
+  ///
+  /// In fr, this message translates to:
+  /// **'h| Critiques h| Élevées h| CISA KEV h| Total'**
+  String get vrStatsHeader;
+
+  /// Note sur le filtre de date.
+  ///
+  /// In fr, this message translates to:
+  /// **'NOTE: Filtre de date appliqué — {summary}.'**
+  String vrDateNote(String summary);
+
+  /// Titre de la section du tableau détaillé.
+  ///
+  /// In fr, this message translates to:
+  /// **'== Détail'**
+  String get vrDetail;
+
+  /// Ligne de méthode de la section des couches.
+  ///
+  /// In fr, this message translates to:
+  /// **'Méthode : {mode}{extra}.'**
+  String vrLayerMethod(String mode, String extra);
+
+  /// Complément : vulnérabilités non rattachées à une couche.
+  ///
+  /// In fr, this message translates to:
+  /// **' — {count, plural, one{{count} vulnérabilité sans couche connue} other{{count} vulnérabilités sans couche connue}}'**
+  String vrLayerUnattr(int count);
+
+  /// En-tête du tableau des couches.
+  ///
+  /// In fr, this message translates to:
+  /// **'| Couche | Digest | Instruction | Vulnérabilités | Critiques | Élevées'**
+  String get vrLayersHeader;
+
+  /// En-tête de la colonne des couches (CSV et tableau).
+  ///
+  /// In fr, this message translates to:
+  /// **'Couche(s)'**
+  String get vrLayersCol;
+
+  /// Champ de date utilisé dans la note du filtre.
+  ///
+  /// In fr, this message translates to:
+  /// **'publication'**
+  String get vrDatePublished;
+
+  /// Champ de date utilisé dans la note du filtre.
+  ///
+  /// In fr, this message translates to:
+  /// **'dernière modification'**
+  String get vrDateModified;
+
+  /// Champ de date utilisé dans la note du filtre.
+  ///
+  /// In fr, this message translates to:
+  /// **'plus récente des deux'**
+  String get vrDateLatest;
+
+  /// Borne basse du filtre de date.
+  ///
+  /// In fr, this message translates to:
+  /// **'après {date}'**
+  String vrDateAfter(String date);
+
+  /// Borne haute du filtre de date.
+  ///
+  /// In fr, this message translates to:
+  /// **'avant {date}'**
+  String vrDateBefore(String date);
+
+  /// Filtre de date sans borne.
+  ///
+  /// In fr, this message translates to:
+  /// **'aucune borne'**
+  String get vrDateNoBound;
+
+  /// Complément : CVE sans date incluses.
+  ///
+  /// In fr, this message translates to:
+  /// **', dont sans date connue'**
+  String get vrDateUndated;
 }
 
 class _AppLocalizationsDelegate

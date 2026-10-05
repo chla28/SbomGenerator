@@ -897,10 +897,10 @@ class _ConfigSection extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: fileCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Fichier SBOM',
-                      hintText: 'chemin/vers/sbom.cdx.json',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.scanSourceSbom,
+                      hintText: context.l10n.commonSbomFileHint,
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     style: const TextStyle(

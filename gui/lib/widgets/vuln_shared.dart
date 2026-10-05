@@ -74,19 +74,19 @@ Future<String?> _toolVersionFor(String toolName) => switch (toolName) {
   _ => Future.value(null),
 };
 
-String _dateFilterSummary(CveDateFilter f) {
+String _dateFilterSummary(CveDateFilter f, AppLocalizations l) {
   final fieldLabel = switch (f.field) {
-    CveDateField.published => 'publication',
-    CveDateField.modified => 'dernière modification',
-    CveDateField.latest => 'plus récente des deux',
+    CveDateField.published => l.vrDatePublished,
+    CveDateField.modified => l.vrDateModified,
+    CveDateField.latest => l.vrDateLatest,
   };
-  final parts = <String>[];
-  if (f.after != null)
-    parts.add('après ${f.after!.toIso8601String().split('T').first}');
-  if (f.before != null)
-    parts.add('avant ${f.before!.toIso8601String().split('T').first}');
-  final bounds = parts.isEmpty ? 'aucune borne' : parts.join(', ');
-  final undated = f.includeUndated ? ', dont sans date connue' : '';
+  String day(DateTime d) => d.toIso8601String().split('T').first;
+  final parts = <String>[
+    if (f.after != null) l.vrDateAfter(day(f.after!)),
+    if (f.before != null) l.vrDateBefore(day(f.before!)),
+  ];
+  final bounds = parts.isEmpty ? l.vrDateNoBound : parts.join(', ');
+  final undated = f.includeUndated ? l.vrDateUndated : '';
   return '$fieldLabel — $bounds$undated';
 }
 
@@ -941,7 +941,14 @@ class DateFilterBar extends StatelessWidget {
             style: ButtonStyle(
               visualDensity: VisualDensity.compact,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 10)),
+              textStyle: WidgetStateProperty.all(
+                // Hérite de la police du thème (un TextStyle sans famille
+                // retombait sur la police par défaut de la plateforme).
+                Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(fontSize: 10) ??
+                    const TextStyle(fontSize: 10),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -1472,17 +1479,20 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     );
   }
 
-  List<String> _exploitCells(T v) {
+  List<String> _exploitCells(T v, AppLocalizations l) {
     final e = _ex(v);
     final epss = e.epssScore == null
         ? '—'
         : '${e.epssScore!.toStringAsFixed(2)} '
               '(p${((e.epssPercentile ?? 0) * 100).round()})';
-    final poc = e.pocCount > 0 ? '${e.pocCount}' : (e.pocKnown ? 'oui' : '—');
-    return [e.inKev ? 'oui' : '—', epss, poc];
+    final poc = e.pocCount > 0
+        ? '${e.pocCount}'
+        : (e.pocKnown ? l.adocYes : '—');
+    return [e.inKev ? l.adocYes : '—', epss, poc];
   }
 
   Future<void> _exportCsv(BuildContext context) async {
+    final l = context.l10n;
     final rows = _filtered;
     final buf = StringBuffer();
     final withLayers = widget.layerScan != null;
@@ -1490,13 +1500,13 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       [
         widget.csvHeader,
         if (_hasExploit) _exploitHeaders.join(','),
-        if (withLayers) 'Couche(s)',
+        if (withLayers) l.vrLayersCol,
       ].join(','),
     );
     for (final v in rows) {
       final cells = [
         ...widget.csvRow(v),
-        if (_hasExploit) ..._exploitCells(v),
+        if (_hasExploit) ..._exploitCells(v, l),
         if (withLayers) _layerLabel(v),
       ];
       buf.writeln(cells.map(csvEscape).join(','));
@@ -1520,6 +1530,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   }
 
   Future<void> _exportAsciiDoc(BuildContext context) async {
+    final l = context.l10n;
     final rows = _filtered;
     final path = await FilePicker.saveFile(
       dialogTitle: context.l10n.vulnTableExportPdfDialog(widget.toolName),
@@ -1537,7 +1548,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final columns = [
       ...widget.csvHeader.split(','),
       if (_hasExploit) ..._exploitHeaders,
-      if (layerScan != null) 'Couche(s)',
+      if (layerScan != null) l.vrLayersCol,
     ];
     final kevCount = _hasExploit ? rows.where((v) => _ex(v).inKev).length : 0;
 
@@ -1548,35 +1559,37 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final high = cnt('high');
 
     final buf = StringBuffer();
-    buf.writeln('= Rapport de vulnérabilités: ${widget.toolName}');
+    buf.writeln(l.vrTitle(widget.toolName));
     buf.writeln('SBOM Generator $kGuiVersion');
     buf.writeln(':doctype: article');
     buf.writeln(':title-page:');
     buf.writeln(':toc:');
-    buf.writeln(':toc-title: Sommaire');
+    buf.writeln(l.repTocTitle);
     buf.writeln(':toclevels: 2');
-    buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now())}');
+    buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now(), l: l)}');
     buf.writeln(':icons: font');
     buf.writeln();
-    buf.writeln('== Résumé exécutif');
+    buf.writeln(l.repExecSummary);
     buf.writeln();
     if (widget.scanTarget != null) {
-      buf.writeln('*Cible analysée* : ${adocEscape(widget.scanTarget!)} +');
+      buf.writeln(l.repTarget(adocEscape(widget.scanTarget!)));
     }
     buf.writeln(
-      '*Scanner* : ${widget.toolName} — *${rows.length}* '
-      'vulnérabilité(s)'
-      '${widget.dateFilter.hasConstraints ? ' après filtre de date' : ''}',
+      l.vrScannerLine(
+        widget.toolName,
+        rows.length,
+        widget.dateFilter.hasConstraints ? l.vrAfterDateFilter : '',
+      ),
     );
     buf.writeln();
     final svg = buildSeverityBarSvg(counts);
     if (svg != null) {
-      buf.writeln(svgImageMacro(svg));
+      buf.writeln(svgImageMacro(svg, l: l));
       buf.writeln();
     }
     buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
     buf.writeln('|===');
-    buf.writeln('h| Critiques h| Élevées h| CISA KEV h| Total');
+    buf.writeln(l.vrStatsHeader);
     buf.writeln(
       '| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
       '| [.h1-num]*$high* '
@@ -1586,18 +1599,15 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('|===');
     buf.writeln();
     if (widget.dateFilter.hasConstraints) {
-      buf.writeln(
-        'NOTE: Filtre de date appliqué — '
-        '${_dateFilterSummary(widget.dateFilter)}.',
-      );
+      buf.writeln(l.vrDateNote(_dateFilterSummary(widget.dateFilter, l)));
       buf.writeln();
     }
     buf.writeln('[cols="<2,>1",options="header"]');
     buf.writeln('|===');
-    buf.writeln('| Sévérité | Nombre');
+    buf.writeln(l.repSevCountHeader);
     for (final s in widget.severityOrder) {
       if (counts.containsKey(s)) {
-        buf.writeln('| ${pdfSeverityBadge(s)} | ${counts[s]}');
+        buf.writeln('| ${pdfSeverityBadge(s, l: l)} | ${counts[s]}');
       }
     }
     buf.writeln('|===');
@@ -1605,43 +1615,44 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
 
     // Versions détectées au moment de l'export (pas au moment du scan) —
     // toujours à jour même si l'outil a été mis à jour depuis.
-    buf.writeln('== Outils');
+    buf.writeln(l.repTools);
     buf.writeln();
     buf.writeln('[cols="<3,<1",options="header"]');
     buf.writeln('|===');
-    buf.writeln('| Outil | Version');
-    buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion));
+    buf.writeln(l.repToolHeader);
+    buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion, l: l));
     buf.writeln(
       pdfToolVersionRow(
         widget.toolName,
         await _toolVersionFor(widget.toolName),
+        l: l,
       ),
     );
     buf.writeln('|===');
     buf.writeln();
 
     if (layerScan != null) {
-      buf.writeln('== Couches de l\'image');
+      buf.writeln(l.repLayersTitle);
       buf.writeln();
       buf.writeln(
-        'Méthode : ${layerScan.modeLabel}'
-        '${layerScan.unattributed > 0 ? ' — ${layerScan.unattributed} '
-                  'vulnérabilité(s) sans couche connue' : ''}.',
+        l.vrLayerMethod(
+          layerScan.modeLabelFor(l),
+          layerScan.unattributed > 0
+              ? l.vrLayerUnattr(layerScan.unattributed)
+              : '',
+        ),
       );
       buf.writeln();
       buf.writeln('[cols="2,3,7,2,3,3",options="header"]');
       buf.writeln('|===');
-      buf.writeln(
-        '| Couche | Digest | Instruction | Vulnérabilités '
-        '| Critiques | Élevées',
-      );
-      for (final l in layerScan.layers) {
-        final inLayer = rows.where((v) => _layersOf(v).contains(l.index));
+      buf.writeln(l.vrLayersHeader);
+      for (final layer in layerScan.layers) {
+        final inLayer = rows.where((v) => _layersOf(v).contains(layer.index));
         int sev(String k) =>
             inLayer.where((v) => v.severity.toLowerCase() == k).length;
-        final by = l.createdBy ?? '—';
+        final by = layer.createdBy ?? '—';
         buf.writeln(
-          '| ${l.index} | `${l.shortDigest}` '
+          '| ${layer.index} | `${layer.shortDigest}` '
           '| ${adocEscape(by.length > 160 ? '${by.substring(0, 159)}…' : by)} '
           '| ${inLayer.length} | ${sev('critical')} | ${sev('high')}',
         );
@@ -1650,7 +1661,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       buf.writeln();
     }
 
-    buf.writeln('== Détail');
+    buf.writeln(l.vrDetail);
     buf.writeln();
     buf.writeln(
       '[cols="${List.filled(columns.length, "<1").join(',')}",options="header"]',
@@ -1661,11 +1672,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     for (final v in rows) {
       final cells = [
         ...widget.csvRow(v),
-        if (_hasExploit) ..._exploitCells(v),
+        if (_hasExploit) ..._exploitCells(v, l),
         if (layerScan != null) _layerLabel(v),
       ];
       final formatted = [
-        pdfSeverityBadge(cells.first),
+        pdfSeverityBadge(cells.first, l: l),
         ...cells.skip(1).map(adocEscape),
       ];
       buf.writeln('| ${formatted.join(' | ')}');

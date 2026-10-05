@@ -2849,4 +2849,90 @@ class AppLocalizationsEn extends AppLocalizations {
   String helpLoadError(String error) {
     return 'Help unavailable: unable to load the manual ($error).';
   }
+
+  @override
+  String vrTitle(String tool) {
+    return '= Vulnerability report: $tool';
+  }
+
+  @override
+  String vrScannerLine(String tool, int count, String filtered) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '*$countString* vulnerabilities',
+      one: '*$countString* vulnerability',
+    );
+    return '*Scanner*: $tool — $_temp0$filtered';
+  }
+
+  @override
+  String get vrAfterDateFilter => ' after date filter';
+
+  @override
+  String get vrStatsHeader => 'h| Critical h| High h| CISA KEV h| Total';
+
+  @override
+  String vrDateNote(String summary) {
+    return 'NOTE: Date filter applied — $summary.';
+  }
+
+  @override
+  String get vrDetail => '== Details';
+
+  @override
+  String vrLayerMethod(String mode, String extra) {
+    return 'Method: $mode$extra.';
+  }
+
+  @override
+  String vrLayerUnattr(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString vulnerabilities with no known layer',
+      one: '$countString vulnerability with no known layer',
+    );
+    return ' — $_temp0';
+  }
+
+  @override
+  String get vrLayersHeader =>
+      '| Layer | Digest | Instruction | Vulnerabilities | Critical | High';
+
+  @override
+  String get vrLayersCol => 'Layer(s)';
+
+  @override
+  String get vrDatePublished => 'publication';
+
+  @override
+  String get vrDateModified => 'last modification';
+
+  @override
+  String get vrDateLatest => 'more recent of the two';
+
+  @override
+  String vrDateAfter(String date) {
+    return 'after $date';
+  }
+
+  @override
+  String vrDateBefore(String date) {
+    return 'before $date';
+  }
+
+  @override
+  String get vrDateNoBound => 'no bound';
+
+  @override
+  String get vrDateUndated => ', including those with no known date';
 }

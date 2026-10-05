@@ -3582,5 +3582,119 @@
         "type": "String"
       }
     }
+  },
+  "vrTitle": "= Rapport de vulnérabilités: {tool}",
+  "@vrTitle": {
+    "description": "Titre du rapport AsciiDoc exporté depuis un onglet de scan.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "vrScannerLine": "*Scanner* : {tool} — {count, plural, one{*{count}* vulnérabilité} other{*{count}* vulnérabilités}}{filtered}",
+  "@vrScannerLine": {
+    "description": "Ligne du résumé exécutif.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "filtered": {
+        "type": "String"
+      }
+    }
+  },
+  "vrAfterDateFilter": " après filtre de date",
+  "@vrAfterDateFilter": {
+    "description": "Suffixe de la ligne du résumé quand un filtre de date est actif."
+  },
+  "vrStatsHeader": "h| Critiques h| Élevées h| CISA KEV h| Total",
+  "@vrStatsHeader": {
+    "description": "En-tête du tableau de chiffres clés."
+  },
+  "vrDateNote": "NOTE: Filtre de date appliqué — {summary}.",
+  "@vrDateNote": {
+    "description": "Note sur le filtre de date.",
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "vrDetail": "== Détail",
+  "@vrDetail": {
+    "description": "Titre de la section du tableau détaillé."
+  },
+  "vrLayerMethod": "Méthode : {mode}{extra}.",
+  "@vrLayerMethod": {
+    "description": "Ligne de méthode de la section des couches.",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      },
+      "extra": {
+        "type": "String"
+      }
+    }
+  },
+  "vrLayerUnattr": " — {count, plural, one{{count} vulnérabilité sans couche connue} other{{count} vulnérabilités sans couche connue}}",
+  "@vrLayerUnattr": {
+    "description": "Complément : vulnérabilités non rattachées à une couche.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "vrLayersHeader": "| Couche | Digest | Instruction | Vulnérabilités | Critiques | Élevées",
+  "@vrLayersHeader": {
+    "description": "En-tête du tableau des couches."
+  },
+  "vrLayersCol": "Couche(s)",
+  "@vrLayersCol": {
+    "description": "En-tête de la colonne des couches (CSV et tableau)."
+  },
+  "vrDatePublished": "publication",
+  "@vrDatePublished": {
+    "description": "Champ de date utilisé dans la note du filtre."
+  },
+  "vrDateModified": "dernière modification",
+  "@vrDateModified": {
+    "description": "Champ de date utilisé dans la note du filtre."
+  },
+  "vrDateLatest": "plus récente des deux",
+  "@vrDateLatest": {
+    "description": "Champ de date utilisé dans la note du filtre."
+  },
+  "vrDateAfter": "après {date}",
+  "@vrDateAfter": {
+    "description": "Borne basse du filtre de date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "vrDateBefore": "avant {date}",
+  "@vrDateBefore": {
+    "description": "Borne haute du filtre de date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "vrDateNoBound": "aucune borne",
+  "@vrDateNoBound": {
+    "description": "Filtre de date sans borne."
+  },
+  "vrDateUndated": ", dont sans date connue",
+  "@vrDateUndated": {
+    "description": "Complément : CVE sans date incluses."
   }
 }

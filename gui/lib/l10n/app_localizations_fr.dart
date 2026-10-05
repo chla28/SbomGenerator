@@ -2856,4 +2856,90 @@ class AppLocalizationsFr extends AppLocalizations {
   String helpLoadError(String error) {
     return 'Aide indisponible : impossible de charger le manuel ($error).';
   }
+
+  @override
+  String vrTitle(String tool) {
+    return '= Rapport de vulnérabilités: $tool';
+  }
+
+  @override
+  String vrScannerLine(String tool, int count, String filtered) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '*$countString* vulnérabilités',
+      one: '*$countString* vulnérabilité',
+    );
+    return '*Scanner* : $tool — $_temp0$filtered';
+  }
+
+  @override
+  String get vrAfterDateFilter => ' après filtre de date';
+
+  @override
+  String get vrStatsHeader => 'h| Critiques h| Élevées h| CISA KEV h| Total';
+
+  @override
+  String vrDateNote(String summary) {
+    return 'NOTE: Filtre de date appliqué — $summary.';
+  }
+
+  @override
+  String get vrDetail => '== Détail';
+
+  @override
+  String vrLayerMethod(String mode, String extra) {
+    return 'Méthode : $mode$extra.';
+  }
+
+  @override
+  String vrLayerUnattr(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString vulnérabilités sans couche connue',
+      one: '$countString vulnérabilité sans couche connue',
+    );
+    return ' — $_temp0';
+  }
+
+  @override
+  String get vrLayersHeader =>
+      '| Couche | Digest | Instruction | Vulnérabilités | Critiques | Élevées';
+
+  @override
+  String get vrLayersCol => 'Couche(s)';
+
+  @override
+  String get vrDatePublished => 'publication';
+
+  @override
+  String get vrDateModified => 'dernière modification';
+
+  @override
+  String get vrDateLatest => 'plus récente des deux';
+
+  @override
+  String vrDateAfter(String date) {
+    return 'après $date';
+  }
+
+  @override
+  String vrDateBefore(String date) {
+    return 'avant $date';
+  }
+
+  @override
+  String get vrDateNoBound => 'aucune borne';
+
+  @override
+  String get vrDateUndated => ', dont sans date connue';
 }
