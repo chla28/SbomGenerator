@@ -1574,7 +1574,7 @@ graphique transmet sa propre langue au CLI qu'elle lance (via `SBOM_LANG`).
 |Date/heure de génération (UTC ISO 8601)
 
 |Outil
-|`sbom_generator 1.6.5`
+|`sbom_generator 1.6.6`
 
 |Auteur
 |Fixé à `sbom_generator` (non configurable)

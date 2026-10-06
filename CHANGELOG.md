@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.6] - 2026-10-06
+
 ### Fixed
 - **Nom du fichier avec un seul format** : `-o sbom` produit désormais `sbom.cdx.json` (l'extension du format est ajoutée comme avec plusieurs formats ; un `-o` portant déjà une extension SBOM connue reste inchangé). L'aperçu des fichiers attendus de la GUI applique la même règle.
 - **Outils externes absents** (`rpm`, `python3`, `dpkg-deb`, `unzip`, `skopeo`, `syft`, `trivy`, `sbomqs`) : message d'erreur clair au lieu d'une exception système (utilitaire commun `runTool`, code 127).

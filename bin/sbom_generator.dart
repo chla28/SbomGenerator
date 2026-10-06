@@ -38,7 +38,7 @@ import 'package:sbom_generator/cra_report.dart';
 import 'package:sbom_generator/i18n.dart';
 import 'package:sbom_generator/tool_runner.dart';
 
-const _version = '1.6.5';
+const _version = '1.6.6';
 
 const _validFormats = {
   'cyclonedx',
