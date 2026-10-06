@@ -2946,4 +2946,113 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get vrDateUndated => ', dont sans date connue';
+
+  @override
+  String get remedTitle => 'Remédiation : quoi mettre à jour';
+
+  @override
+  String remedSubtitle(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString paquets à mettre à jour',
+      one: '1 paquet à mettre à jour',
+    );
+    return '$_temp0, classés par gain de risque (sévérité, exploitation active KEV, EPSS).';
+  }
+
+  @override
+  String remedUpgrade(String pkg, String from, String to) {
+    return '$pkg $from → $to';
+  }
+
+  @override
+  String remedNoFixTitle(String pkg, String from) {
+    return '$pkg $from — aucun correctif connu';
+  }
+
+  @override
+  String remedFixes(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'corrige $countString CVE',
+      one: 'corrige 1 CVE',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remedKev(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString exploitée(s) (KEV)';
+  }
+
+  @override
+  String remedRemaining(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString CVE resteront sans correctif',
+      one: '1 CVE restera sans correctif',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remedGain(String gain) {
+    return 'Gain de risque : $gain';
+  }
+
+  @override
+  String remedShowAll(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Afficher les $countString paquets';
+  }
+
+  @override
+  String get remedShowLess => 'Réduire la liste';
+
+  @override
+  String get remedExportCsv => 'Exporter en CSV';
+
+  @override
+  String get remedCopyCommand => 'Copier la liste';
+
+  @override
+  String get remedCopied => 'Plan de remédiation copié';
+
+  @override
+  String get remedCsvDialog => 'Exporter le plan de remédiation';
+
+  @override
+  String get remedCsvHeader =>
+      'paquet,version installée,version cible,CVE corrigées,dont KEV,CVE sans correctif,gain de risque';
+
+  @override
+  String remedCsvSaved(String path) {
+    return 'Plan de remédiation exporté → $path';
+  }
+
+  @override
+  String get remedHelpNote =>
+      'Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.';
 }

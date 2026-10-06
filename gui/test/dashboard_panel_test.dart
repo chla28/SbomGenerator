@@ -35,6 +35,7 @@ TrivyVuln _t(String id, String sev) => TrivyVuln(
 );
 
 void main() {
+  remediationTests();
   testWidgets(
     'Comparaison inter-scanners affiche l\'union complète (pas seulement les CVE communes)',
     (tester) async {
@@ -629,4 +630,35 @@ void main() {
       );
     },
   );
+}
+
+void remediationTests() {
+  testWidgets('section Remédiation : paquet à mettre à jour, dépliable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardPanel(
+            grypeVulns: [_g('CVE-1', 'Critical'), _g('CVE-2', 'High')],
+            osvVulns: null,
+            trivyVulns: null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('remediation-section')), findsOneWidget);
+    expect(find.text('pkg 1.0 → 1.1'), findsOneWidget);
+    expect(find.textContaining('corrige 2 CVE'), findsOneWidget);
+
+    await tester.tap(find.text('pkg 1.0 → 1.1'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('CVE-1', findRichText: true), findsWidgets);
+  });
 }

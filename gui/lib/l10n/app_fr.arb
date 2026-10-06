@@ -3700,5 +3700,132 @@
   "vrDateUndated": ", dont sans date connue",
   "@vrDateUndated": {
     "description": "Complément : CVE sans date incluses."
+  },
+  "remedTitle": "Remédiation : quoi mettre à jour",
+  "@remedTitle": {
+    "description": "Titre de la section de remédiation du tableau de bord."
+  },
+  "remedSubtitle": "{count, plural, =1{1 paquet à mettre à jour} other{{count} paquets à mettre à jour}}, classés par gain de risque (sévérité, exploitation active KEV, EPSS).",
+  "@remedSubtitle": {
+    "description": "Sous-titre de la section de remédiation.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "remedUpgrade": "{pkg} {from} → {to}",
+  "@remedUpgrade": {
+    "description": "Ligne de remédiation : paquet, version installée, version cible.",
+    "placeholders": {
+      "pkg": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "remedNoFixTitle": "{pkg} {from} — aucun correctif connu",
+  "@remedNoFixTitle": {
+    "description": "Ligne de remédiation d'un paquet dont aucune CVE n'a de correctif.",
+    "placeholders": {
+      "pkg": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      }
+    }
+  },
+  "remedFixes": "{count, plural, =1{corrige 1 CVE} other{corrige {count} CVE}}",
+  "@remedFixes": {
+    "description": "Nombre de CVE corrigées par la mise à jour.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "remedKev": "{count} exploitée(s) (KEV)",
+  "@remedKev": {
+    "description": "Nombre de CVE corrigées présentes au catalogue CISA KEV.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "remedRemaining": "{count, plural, =1{1 CVE restera sans correctif} other{{count} CVE resteront sans correctif}}",
+  "@remedRemaining": {
+    "description": "CVE d'un paquet sans correctif connu, restant après mise à jour.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "remedGain": "Gain de risque : {gain}",
+  "@remedGain": {
+    "description": "Score de gain de risque d'une mise à jour.",
+    "placeholders": {
+      "gain": {
+        "type": "String"
+      }
+    }
+  },
+  "remedShowAll": "Afficher les {count} paquets",
+  "@remedShowAll": {
+    "description": "Bouton : déplier la liste complète de remédiation.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "remedShowLess": "Réduire la liste",
+  "@remedShowLess": {
+    "description": "Bouton : replier la liste de remédiation."
+  },
+  "remedExportCsv": "Exporter en CSV",
+  "@remedExportCsv": {
+    "description": "Bouton d'export CSV de la remédiation."
+  },
+  "remedCopyCommand": "Copier la liste",
+  "@remedCopyCommand": {
+    "description": "Info-bulle : copier le plan de remédiation dans le presse-papiers."
+  },
+  "remedCopied": "Plan de remédiation copié",
+  "@remedCopied": {
+    "description": "Message : plan de remédiation copié."
+  },
+  "remedCsvDialog": "Exporter le plan de remédiation",
+  "@remedCsvDialog": {
+    "description": "Titre du dialogue d'enregistrement du CSV de remédiation."
+  },
+  "remedCsvHeader": "paquet,version installée,version cible,CVE corrigées,dont KEV,CVE sans correctif,gain de risque",
+  "@remedCsvHeader": {
+    "description": "En-tête CSV du plan de remédiation (séparé par des virgules, sans retour à la ligne)."
+  },
+  "remedCsvSaved": "Plan de remédiation exporté → {path}",
+  "@remedCsvSaved": {
+    "description": "Message : CSV de remédiation enregistré.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "remedHelpNote": "Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.",
+  "@remedHelpNote": {
+    "description": "Avertissement sous la liste de remédiation."
   }
 }

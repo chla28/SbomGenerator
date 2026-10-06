@@ -693,5 +693,22 @@
   "vrDateAfter": "after {date}",
   "vrDateBefore": "before {date}",
   "vrDateNoBound": "no bound",
-  "vrDateUndated": ", including those with no known date"
+  "vrDateUndated": ", including those with no known date",
+  "remedTitle": "Remediation: what to update",
+  "remedSubtitle": "{count, plural, =1{1 package to update} other{{count} packages to update}}, ranked by risk reduction (severity, active exploitation KEV, EPSS).",
+  "remedUpgrade": "{pkg} {from} → {to}",
+  "remedNoFixTitle": "{pkg} {from} — no known fix",
+  "remedFixes": "{count, plural, =1{fixes 1 CVE} other{fixes {count} CVEs}}",
+  "remedKev": "{count} actively exploited (KEV)",
+  "remedRemaining": "{count, plural, =1{1 CVE will remain unfixed} other{{count} CVEs will remain unfixed}}",
+  "remedGain": "Risk reduction: {gain}",
+  "remedShowAll": "Show all {count} packages",
+  "remedShowLess": "Show fewer",
+  "remedExportCsv": "Export as CSV",
+  "remedCopyCommand": "Copy the list",
+  "remedCopied": "Remediation plan copied",
+  "remedCsvDialog": "Export the remediation plan",
+  "remedCsvHeader": "package,installed version,target version,CVEs fixed,of which KEV,CVEs without fix,risk reduction",
+  "remedCsvSaved": "Remediation plan exported → {path}",
+  "remedHelpNote": "Heuristic: the target version is the smallest that fixes every fixable CVE of the package; check it with your package manager."
 }

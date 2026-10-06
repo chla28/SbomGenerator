@@ -10,6 +10,8 @@ import 'cve_detail.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
+import 'remediation_section.dart';
+import '../models/remediation.dart';
 import 'trivy_panel.dart';
 import 'vuln_shared.dart' show adocEscape, SortHeader, VulnRow;
 import '../l10n/l10n.dart';
@@ -212,6 +214,17 @@ class _DashboardPanelState extends State<DashboardPanel> {
                     );
             },
           ),
+
+          // ── Remédiation : mises à jour classées par gain de risque ──
+          if (scansRun > 0) ...[
+            const SizedBox(height: 24),
+            RemediationSection(
+              items: buildRemediation(
+                remediationInputs(grype: grype, osv: osv, trivy: trivy),
+                exploitById: widget.exploitById,
+              ),
+            ),
+          ],
 
           // ── Couches de l'image (analyse par couche) ──
           if (layers != null) ...[

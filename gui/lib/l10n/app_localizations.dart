@@ -4177,6 +4177,108 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **', dont sans date connue'**
   String get vrDateUndated;
+
+  /// Titre de la section de remédiation du tableau de bord.
+  ///
+  /// In fr, this message translates to:
+  /// **'Remédiation : quoi mettre à jour'**
+  String get remedTitle;
+
+  /// Sous-titre de la section de remédiation.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{1 paquet à mettre à jour} other{{count} paquets à mettre à jour}}, classés par gain de risque (sévérité, exploitation active KEV, EPSS).'**
+  String remedSubtitle(int count);
+
+  /// Ligne de remédiation : paquet, version installée, version cible.
+  ///
+  /// In fr, this message translates to:
+  /// **'{pkg} {from} → {to}'**
+  String remedUpgrade(String pkg, String from, String to);
+
+  /// Ligne de remédiation d'un paquet dont aucune CVE n'a de correctif.
+  ///
+  /// In fr, this message translates to:
+  /// **'{pkg} {from} — aucun correctif connu'**
+  String remedNoFixTitle(String pkg, String from);
+
+  /// Nombre de CVE corrigées par la mise à jour.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{corrige 1 CVE} other{corrige {count} CVE}}'**
+  String remedFixes(int count);
+
+  /// Nombre de CVE corrigées présentes au catalogue CISA KEV.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} exploitée(s) (KEV)'**
+  String remedKev(int count);
+
+  /// CVE d'un paquet sans correctif connu, restant après mise à jour.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{1 CVE restera sans correctif} other{{count} CVE resteront sans correctif}}'**
+  String remedRemaining(int count);
+
+  /// Score de gain de risque d'une mise à jour.
+  ///
+  /// In fr, this message translates to:
+  /// **'Gain de risque : {gain}'**
+  String remedGain(String gain);
+
+  /// Bouton : déplier la liste complète de remédiation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Afficher les {count} paquets'**
+  String remedShowAll(int count);
+
+  /// Bouton : replier la liste de remédiation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Réduire la liste'**
+  String get remedShowLess;
+
+  /// Bouton d'export CSV de la remédiation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Exporter en CSV'**
+  String get remedExportCsv;
+
+  /// Info-bulle : copier le plan de remédiation dans le presse-papiers.
+  ///
+  /// In fr, this message translates to:
+  /// **'Copier la liste'**
+  String get remedCopyCommand;
+
+  /// Message : plan de remédiation copié.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plan de remédiation copié'**
+  String get remedCopied;
+
+  /// Titre du dialogue d'enregistrement du CSV de remédiation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Exporter le plan de remédiation'**
+  String get remedCsvDialog;
+
+  /// En-tête CSV du plan de remédiation (séparé par des virgules, sans retour à la ligne).
+  ///
+  /// In fr, this message translates to:
+  /// **'paquet,version installée,version cible,CVE corrigées,dont KEV,CVE sans correctif,gain de risque'**
+  String get remedCsvHeader;
+
+  /// Message : CSV de remédiation enregistré.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plan de remédiation exporté → {path}'**
+  String remedCsvSaved(String path);
+
+  /// Avertissement sous la liste de remédiation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.'**
+  String get remedHelpNote;
 }
 
 class _AppLocalizationsDelegate
