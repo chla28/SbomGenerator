@@ -14,6 +14,7 @@ class SettingsService {
   static const _scanEnrichKey = 'scan_enrich_online_v1';
   static const _reportSeverityKey = 'dashboard_report_severity_v1';
   static const _languageKey = 'ui_language_v1';
+  static const _vexKey = 'vex_statements_v1';
 
   /// Langue (`fr` / `en`) imposée aux messages du CLI, alignée sur celle de
   /// l'interface ; `null` = laisser le CLI décider (variables LANG/LC_*).
@@ -87,6 +88,21 @@ class SettingsService {
   static Future<void> saveScanEnrichOnline(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_scanEnrichKey, value);
+  }
+
+  /// Déclarations VEX de l'utilisateur (document OpenVEX sérialisé).
+  static Future<String?> loadVex() async {
+    try {
+      return (await SharedPreferences.getInstance()).getString(_vexKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveVex(String json) async {
+    try {
+      await (await SharedPreferences.getInstance()).setString(_vexKey, json);
+    } catch (_) {}
   }
 
   /// Langue de l'interface (`system`, `fr`, `en` — voir `AppLanguage`).

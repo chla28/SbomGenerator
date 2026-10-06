@@ -3887,7 +3887,7 @@
   "@sessHistoryEmpty": {
     "description": "Historique vide."
   },
-  "sessHistoryItem": "{count, plural, =1{1 CVE} other{{count} CVE}}",
+  "sessHistoryItem": "{count} CVE",
   "@sessHistoryItem": {
     "description": "Nombre de CVE d'une session de l'historique.",
     "placeholders": {
@@ -4038,7 +4038,7 @@
   "@tasksStatusRunning": {
     "description": "Statut d'une analyse en cours."
   },
-  "tasksStatusDone": "Terminée — {count, plural, =1{1 vulnérabilité} other{{count} vulnérabilités}}",
+  "tasksStatusDone": "Terminée — {count, plural, =1{{count} vulnérabilité} other{{count} vulnérabilités}}",
   "@tasksStatusDone": {
     "description": "Statut d'une analyse terminée avec son nombre de vulnérabilités.",
     "placeholders": {
@@ -4119,5 +4119,198 @@
         "type": "String"
       }
     }
+  },
+  "vexTitle": "VEX (non affecté / corrigé)",
+  "@vexTitle": {
+    "description": "Titre de la section VEX de la fiche CVE et de la barre du tableau de bord."
+  },
+  "vexDeclare": "Déclarer via VEX…",
+  "@vexDeclare": {
+    "description": "Bouton de la fiche CVE : créer une déclaration VEX."
+  },
+  "vexEdit": "Modifier",
+  "@vexEdit": {
+    "description": "Bouton : modifier une déclaration VEX."
+  },
+  "vexRemove": "Retirer",
+  "@vexRemove": {
+    "description": "Bouton : retirer une déclaration VEX."
+  },
+  "vexCurrent": "VEX : {status}{detail}",
+  "@vexCurrent": {
+    "description": "Déclaration VEX existante d'une CVE (statut puis détail éventuel).",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "vexStatusNotAffected": "non affectée",
+  "@vexStatusNotAffected": {
+    "description": "Statut VEX not_affected."
+  },
+  "vexStatusAffected": "affectée",
+  "@vexStatusAffected": {
+    "description": "Statut VEX affected."
+  },
+  "vexStatusFixed": "corrigée",
+  "@vexStatusFixed": {
+    "description": "Statut VEX fixed."
+  },
+  "vexStatusInvestigation": "à l'étude",
+  "@vexStatusInvestigation": {
+    "description": "Statut VEX under_investigation."
+  },
+  "vexJustComponentNotPresent": "composant absent",
+  "@vexJustComponentNotPresent": {
+    "description": "Justification VEX component_not_present."
+  },
+  "vexJustCodeNotPresent": "code vulnérable absent",
+  "@vexJustCodeNotPresent": {
+    "description": "Justification VEX vulnerable_code_not_present."
+  },
+  "vexJustNotInExecutePath": "code vulnérable jamais exécuté",
+  "@vexJustNotInExecutePath": {
+    "description": "Justification VEX vulnerable_code_not_in_execute_path."
+  },
+  "vexJustCannotBeControlled": "code non contrôlable par un attaquant",
+  "@vexJustCannotBeControlled": {
+    "description": "Justification VEX vulnerable_code_cannot_be_controlled_by_adversary."
+  },
+  "vexJustInlineMitigations": "mesures d'atténuation déjà en place",
+  "@vexJustInlineMitigations": {
+    "description": "Justification VEX inline_mitigations_already_exist."
+  },
+  "vexDialogTitle": "Déclaration VEX — {id}",
+  "@vexDialogTitle": {
+    "description": "Titre du dialogue de déclaration VEX.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "vexFieldStatus": "État",
+  "@vexFieldStatus": {
+    "description": "Champ : état VEX."
+  },
+  "vexFieldJustification": "Justification",
+  "@vexFieldJustification": {
+    "description": "Champ : justification VEX."
+  },
+  "vexFieldImpact": "Explication (facultative)",
+  "@vexFieldImpact": {
+    "description": "Champ : explication libre de la déclaration VEX."
+  },
+  "vexFieldScope": "Portée",
+  "@vexFieldScope": {
+    "description": "Champ : paquets visés par la déclaration."
+  },
+  "vexScopeAll": "Tous les paquets",
+  "@vexScopeAll": {
+    "description": "Portée : la déclaration vise tous les paquets."
+  },
+  "vexNeedJustification": "Une justification est requise pour « non affectée ».",
+  "@vexNeedJustification": {
+    "description": "Erreur : justification absente."
+  },
+  "vexSave": "Enregistrer",
+  "@vexSave": {
+    "description": "Bouton d'enregistrement du dialogue VEX."
+  },
+  "vexBarSummary": "VEX : {count, plural, =1{{count} déclaration} other{{count} déclarations}}",
+  "@vexBarSummary": {
+    "description": "Résumé de la barre VEX du tableau de bord.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "vexHideSuppressed": "Masquer les CVE couvertes par un VEX ({count})",
+  "@vexHideSuppressed": {
+    "description": "Case à cocher : masquer les CVE déclarées non affectées ou corrigées.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "vexImport": "Importer un VEX…",
+  "@vexImport": {
+    "description": "Bouton : importer un document VEX."
+  },
+  "vexExport": "Exporter",
+  "@vexExport": {
+    "description": "Menu : exporter les déclarations VEX."
+  },
+  "vexExportOpenVex": "OpenVEX (.json)",
+  "@vexExportOpenVex": {
+    "description": "Entrée de menu : export OpenVEX."
+  },
+  "vexExportCdx": "CycloneDX VEX (.json)",
+  "@vexExportCdx": {
+    "description": "Entrée de menu : export CycloneDX VEX."
+  },
+  "vexManage": "Gérer",
+  "@vexManage": {
+    "description": "Bouton : ouvrir la liste des déclarations VEX."
+  },
+  "vexManageTitle": "Déclarations VEX",
+  "@vexManageTitle": {
+    "description": "Titre de la liste des déclarations VEX."
+  },
+  "vexDialogImport": "Importer un document VEX",
+  "@vexDialogImport": {
+    "description": "Titre du dialogue d'import VEX."
+  },
+  "vexDialogExport": "Exporter les déclarations VEX",
+  "@vexDialogExport": {
+    "description": "Titre du dialogue d'export VEX."
+  },
+  "vexImported": "{count} déclaration(s) VEX importée(s)",
+  "@vexImported": {
+    "description": "Message : déclarations importées.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "vexExported": "VEX exporté → {path}",
+  "@vexExported": {
+    "description": "Message : VEX exporté.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "vexInvalid": "Document VEX illisible : {error}",
+  "@vexInvalid": {
+    "description": "Message : import VEX échoué.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "vexNothingToExport": "Aucune déclaration VEX à exporter.",
+  "@vexNothingToExport": {
+    "description": "Message : rien à exporter."
+  },
+  "vexClearAll": "Tout retirer",
+  "@vexClearAll": {
+    "description": "Bouton : supprimer toutes les déclarations VEX."
+  },
+  "vexAnyPackage": "tous les paquets",
+  "@vexAnyPackage": {
+    "description": "Libellé d'une déclaration visant tous les paquets (liste VEX)."
   }
 }

@@ -39,6 +39,9 @@ class DashboardPanel extends StatefulWidget {
   /// Sauvegarde / chargement / historique / tendance ; `null` = barre masquée.
   final SessionActions? sessions;
 
+  /// Barre VEX (déclarations, masquage) ; `null` = masquée.
+  final Widget? vexBar;
+
   const DashboardPanel({
     super.key,
     required this.grypeVulns,
@@ -48,6 +51,7 @@ class DashboardPanel extends StatefulWidget {
     this.scanTargets = const [],
     this.layerScans = const {},
     this.sessions,
+    this.vexBar,
   });
 
   // Normalise les sévérités en clé minuscule commune
@@ -152,6 +156,11 @@ class _DashboardPanelState extends State<DashboardPanel> {
         children: [
           if (widget.sessions != null) ...[
             SessionBar(actions: widget.sessions!),
+            const SizedBox(height: 16),
+          ],
+
+          if (widget.vexBar != null) ...[
+            widget.vexBar!,
             const SizedBox(height: 16),
           ],
 

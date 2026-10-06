@@ -4349,7 +4349,7 @@ abstract class AppLocalizations {
   /// Nombre de CVE d'une session de l'historique.
   ///
   /// In fr, this message translates to:
-  /// **'{count, plural, =1{1 CVE} other{{count} CVE}}'**
+  /// **'{count} CVE'**
   String sessHistoryItem(int count);
 
   /// Action : charger une session de l'historique dans le tableau de bord.
@@ -4517,7 +4517,7 @@ abstract class AppLocalizations {
   /// Statut d'une analyse terminée avec son nombre de vulnérabilités.
   ///
   /// In fr, this message translates to:
-  /// **'Terminée — {count, plural, =1{1 vulnérabilité} other{{count} vulnérabilités}}'**
+  /// **'Terminée — {count, plural, =1{{count} vulnérabilité} other{{count} vulnérabilités}}'**
   String tasksStatusDone(int count);
 
   /// Statut d'une analyse en échec.
@@ -4573,6 +4573,234 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Sortie de {tool} illisible : {error}'**
   String tasksParseFailed(String tool, String error);
+
+  /// Titre de la section VEX de la fiche CVE et de la barre du tableau de bord.
+  ///
+  /// In fr, this message translates to:
+  /// **'VEX (non affecté / corrigé)'**
+  String get vexTitle;
+
+  /// Bouton de la fiche CVE : créer une déclaration VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Déclarer via VEX…'**
+  String get vexDeclare;
+
+  /// Bouton : modifier une déclaration VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier'**
+  String get vexEdit;
+
+  /// Bouton : retirer une déclaration VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retirer'**
+  String get vexRemove;
+
+  /// Déclaration VEX existante d'une CVE (statut puis détail éventuel).
+  ///
+  /// In fr, this message translates to:
+  /// **'VEX : {status}{detail}'**
+  String vexCurrent(String status, String detail);
+
+  /// Statut VEX not_affected.
+  ///
+  /// In fr, this message translates to:
+  /// **'non affectée'**
+  String get vexStatusNotAffected;
+
+  /// Statut VEX affected.
+  ///
+  /// In fr, this message translates to:
+  /// **'affectée'**
+  String get vexStatusAffected;
+
+  /// Statut VEX fixed.
+  ///
+  /// In fr, this message translates to:
+  /// **'corrigée'**
+  String get vexStatusFixed;
+
+  /// Statut VEX under_investigation.
+  ///
+  /// In fr, this message translates to:
+  /// **'à l\'étude'**
+  String get vexStatusInvestigation;
+
+  /// Justification VEX component_not_present.
+  ///
+  /// In fr, this message translates to:
+  /// **'composant absent'**
+  String get vexJustComponentNotPresent;
+
+  /// Justification VEX vulnerable_code_not_present.
+  ///
+  /// In fr, this message translates to:
+  /// **'code vulnérable absent'**
+  String get vexJustCodeNotPresent;
+
+  /// Justification VEX vulnerable_code_not_in_execute_path.
+  ///
+  /// In fr, this message translates to:
+  /// **'code vulnérable jamais exécuté'**
+  String get vexJustNotInExecutePath;
+
+  /// Justification VEX vulnerable_code_cannot_be_controlled_by_adversary.
+  ///
+  /// In fr, this message translates to:
+  /// **'code non contrôlable par un attaquant'**
+  String get vexJustCannotBeControlled;
+
+  /// Justification VEX inline_mitigations_already_exist.
+  ///
+  /// In fr, this message translates to:
+  /// **'mesures d\'atténuation déjà en place'**
+  String get vexJustInlineMitigations;
+
+  /// Titre du dialogue de déclaration VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Déclaration VEX — {id}'**
+  String vexDialogTitle(String id);
+
+  /// Champ : état VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'État'**
+  String get vexFieldStatus;
+
+  /// Champ : justification VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Justification'**
+  String get vexFieldJustification;
+
+  /// Champ : explication libre de la déclaration VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Explication (facultative)'**
+  String get vexFieldImpact;
+
+  /// Champ : paquets visés par la déclaration.
+  ///
+  /// In fr, this message translates to:
+  /// **'Portée'**
+  String get vexFieldScope;
+
+  /// Portée : la déclaration vise tous les paquets.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tous les paquets'**
+  String get vexScopeAll;
+
+  /// Erreur : justification absente.
+  ///
+  /// In fr, this message translates to:
+  /// **'Une justification est requise pour « non affectée ».'**
+  String get vexNeedJustification;
+
+  /// Bouton d'enregistrement du dialogue VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Enregistrer'**
+  String get vexSave;
+
+  /// Résumé de la barre VEX du tableau de bord.
+  ///
+  /// In fr, this message translates to:
+  /// **'VEX : {count, plural, =1{{count} déclaration} other{{count} déclarations}}'**
+  String vexBarSummary(int count);
+
+  /// Case à cocher : masquer les CVE déclarées non affectées ou corrigées.
+  ///
+  /// In fr, this message translates to:
+  /// **'Masquer les CVE couvertes par un VEX ({count})'**
+  String vexHideSuppressed(int count);
+
+  /// Bouton : importer un document VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Importer un VEX…'**
+  String get vexImport;
+
+  /// Menu : exporter les déclarations VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Exporter'**
+  String get vexExport;
+
+  /// Entrée de menu : export OpenVEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'OpenVEX (.json)'**
+  String get vexExportOpenVex;
+
+  /// Entrée de menu : export CycloneDX VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'CycloneDX VEX (.json)'**
+  String get vexExportCdx;
+
+  /// Bouton : ouvrir la liste des déclarations VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Gérer'**
+  String get vexManage;
+
+  /// Titre de la liste des déclarations VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Déclarations VEX'**
+  String get vexManageTitle;
+
+  /// Titre du dialogue d'import VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Importer un document VEX'**
+  String get vexDialogImport;
+
+  /// Titre du dialogue d'export VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Exporter les déclarations VEX'**
+  String get vexDialogExport;
+
+  /// Message : déclarations importées.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} déclaration(s) VEX importée(s)'**
+  String vexImported(int count);
+
+  /// Message : VEX exporté.
+  ///
+  /// In fr, this message translates to:
+  /// **'VEX exporté → {path}'**
+  String vexExported(String path);
+
+  /// Message : import VEX échoué.
+  ///
+  /// In fr, this message translates to:
+  /// **'Document VEX illisible : {error}'**
+  String vexInvalid(String error);
+
+  /// Message : rien à exporter.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune déclaration VEX à exporter.'**
+  String get vexNothingToExport;
+
+  /// Bouton : supprimer toutes les déclarations VEX.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tout retirer'**
+  String get vexClearAll;
+
+  /// Libellé d'une déclaration visant tous les paquets (liste VEX).
+  ///
+  /// In fr, this message translates to:
+  /// **'tous les paquets'**
+  String get vexAnyPackage;
 }
 
 class _AppLocalizationsDelegate

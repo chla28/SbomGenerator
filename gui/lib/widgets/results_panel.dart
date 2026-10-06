@@ -25,6 +25,10 @@ import 'sbom_tree_panel.dart';
 import 'pdf_report.dart' show kGuiVersion;
 import 'sbom_viewer_panel.dart';
 import 'session_bar.dart';
+import 'vex_ui.dart';
+import 'vuln_shared.dart' show VulnRow;
+import '../services/settings_service.dart';
+import '../services/vex_controller.dart';
 import 'tasks_panel.dart';
 import 'trivy_panel.dart';
 import '../l10n/l10n.dart';
@@ -109,6 +113,44 @@ class _ResultsPanelState extends State<ResultsPanel>
         _osvTarget,
         _trivyTarget,
       ].whereType<String>().toSet().toList();
+
+  // ── VEX : déclarations de l'utilisateur et masquage des CVE couvertes ────
+  final VexController _vex = VexController(persist: SettingsService.saveVex);
+  bool _hideVex = true;
+
+  List<GrypeVuln>? get _grypeShown => _filterVex(_grypeVulns);
+  List<OsvVuln>? get _osvShown => _filterVex(_osvVulns);
+  List<TrivyVuln>? get _trivyShown => _filterVex(_trivyVulns);
+
+  List<T>? _filterVex<T extends VulnRow>(List<T>? l) => !_hideVex
+      ? l
+      : filterByVex<T>(
+          l,
+          _vex,
+          (v) => (id: v.id, name: v.packageName, version: v.installedVersion),
+        );
+
+  /// CVE (id normalisé) retirées de l'affichage par le VEX.
+  int get _vexHidden {
+    final all = <String>{};
+    final shown = <String>{};
+    void add(List<VulnRow>? a, List<VulnRow>? f) {
+      for (final v in a ?? const <VulnRow>[]) {
+        all.add(normalizeCveId(v.id));
+      }
+      for (final v in f ?? const <VulnRow>[]) {
+        shown.add(normalizeCveId(v.id));
+      }
+    }
+
+    add(_grypeVulns, filterByVex<GrypeVuln>(_grypeVulns, _vex, _vexKey));
+    add(_osvVulns, filterByVex<OsvVuln>(_osvVulns, _vex, _vexKey));
+    add(_trivyVulns, filterByVex<TrivyVuln>(_trivyVulns, _vex, _vexKey));
+    return all.difference(shown).length;
+  }
+
+  static ({String id, String name, String version}) _vexKey(VulnRow v) =>
+      (id: v.id, name: v.packageName, version: v.installedVersion);
 
   // ── Sessions : sauvegarde automatique, chargement, tendance ──────────────
   ScanSession? _baseline;
@@ -199,11 +241,16 @@ class _ResultsPanelState extends State<ResultsPanel>
   void initState() {
     super.initState();
     _tabs = TabController(length: 15, vsync: this);
+    _vex.addListener(() {
+      if (mounted) setState(() {});
+    });
+    SettingsService.loadVex().then(_vex.restore);
   }
 
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _vex.dispose();
     _tabs.dispose();
     _logScroll.dispose();
     super.dispose();
@@ -508,170 +555,179 @@ class _ResultsPanelState extends State<ResultsPanel>
         ),
 
         Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: [
-              // Tab 0 : Progression
-              hasActivity
-                  ? Column(
-                      children: [
-                        if (!widget.isRunning && widget.logLines.isNotEmpty)
-                          _LogExportBar(lines: widget.logLines),
-                        Expanded(
-                          child: _LogView(
-                            lines: widget.logLines,
-                            scrollController: _logScroll,
+          child: VexScope(
+            controller: _vex,
+            child: TabBarView(
+              controller: _tabs,
+              children: [
+                // Tab 0 : Progression
+                hasActivity
+                    ? Column(
+                        children: [
+                          if (!widget.isRunning && widget.logLines.isNotEmpty)
+                            _LogExportBar(lines: widget.logLines),
+                          Expanded(
+                            child: _LogView(
+                              lines: widget.logLines,
+                              scrollController: _logScroll,
+                            ),
                           ),
-                        ),
-                        if (!isBusy &&
-                            widget.exitCode == 0 &&
-                            widget.progressTotal > 0)
-                          _StatsCard(
-                            packageCount: widget.progressTotal,
-                            fileCount: widget.outputFiles.length,
-                            warningCount: widget.warnings.length,
-                          ),
-                      ],
-                    )
-                  : const _EmptyHint(),
+                          if (!isBusy &&
+                              widget.exitCode == 0 &&
+                              widget.progressTotal > 0)
+                            _StatsCard(
+                              packageCount: widget.progressTotal,
+                              fileCount: widget.outputFiles.length,
+                              warningCount: widget.warnings.length,
+                            ),
+                        ],
+                      )
+                    : const _EmptyHint(),
 
-              // Tab 1 : Résultats
-              _ResultsView(
-                outputFiles: widget.outputFiles,
-                warnings: widget.warnings,
-                fatalError: widget.fatalError,
-                exitCode: widget.exitCode,
-                sbomqsOutput: widget.sbomqsOutput,
-              ),
-
-              // Tab 2 : Tableau de bord
-              DashboardPanel(
-                grypeVulns: _grypeVulns,
-                osvVulns: _osvVulns,
-                trivyVulns: _trivyVulns,
-                exploitById: _mergedExploit,
-                scanTargets: _scanTargets,
-                layerScans: Map.of(_layerScans),
-                sessions: SessionActions(
-                  current: _currentSession,
-                  onLoad: _loadSession,
-                  baseline: _baseline,
-                  onBaseline: (b) => setState(() => _baseline = b),
-                  store: widget.historyStore,
+                // Tab 1 : Résultats
+                _ResultsView(
+                  outputFiles: widget.outputFiles,
+                  warnings: widget.warnings,
+                  fatalError: widget.fatalError,
+                  exitCode: widget.exitCode,
+                  sbomqsOutput: widget.sbomqsOutput,
                 ),
-              ),
 
-              // Tab 3 : Tâches (file d'attente d'analyses)
-              TasksPanel(
-                outputFiles: widget.outputFiles,
-                onResult: _applyJobResult,
-              ),
-
-              // Tab 4 : Grype
-              GrypePanel(
-                outputFiles: widget.outputFiles,
-                onVulnsChanged: (v) {
-                  setState(() => _grypeVulns = v);
-                  _scheduleSave();
-                },
-                onExploitChanged: (m) {
-                  setState(() => _grypeExploit = m);
-                  _scheduleSave();
-                },
-                onScanTargetChanged: (t) => setState(() => _grypeTarget = t),
-                onLayerScanChanged: (r) => setState(
-                  () => r == null
-                      ? _layerScans.remove('Grype')
-                      : _layerScans['Grype'] = r,
+                // Tab 2 : Tableau de bord
+                DashboardPanel(
+                  grypeVulns: _grypeShown,
+                  osvVulns: _osvShown,
+                  trivyVulns: _trivyShown,
+                  vexBar: VexBar(
+                    controller: _vex,
+                    hide: _hideVex,
+                    onHideChanged: (v) => setState(() => _hideVex = v),
+                    hiddenCount: _vexHidden,
+                  ),
+                  exploitById: _mergedExploit,
+                  scanTargets: _scanTargets,
+                  layerScans: Map.of(_layerScans),
+                  sessions: SessionActions(
+                    current: _currentSession,
+                    onLoad: _loadSession,
+                    baseline: _baseline,
+                    onBaseline: (b) => setState(() => _baseline = b),
+                    store: widget.historyStore,
+                  ),
                 ),
-                dateFilter: _grypeFilter,
-                onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
-                onPropagate: (f) => setState(() {
-                  _osvFilter = f;
-                  _trivyFilter = f;
-                }),
-              ),
 
-              // Tab 5 : OSV-Scanner
-              OsvPanel(
-                outputFiles: widget.outputFiles,
-                onVulnsChanged: (v) {
-                  setState(() => _osvVulns = v);
-                  _scheduleSave();
-                },
-                onExploitChanged: (m) {
-                  setState(() => _osvExploit = m);
-                  _scheduleSave();
-                },
-                onScanTargetChanged: (t) => setState(() => _osvTarget = t),
-                onLayerScanChanged: (r) => setState(
-                  () => r == null
-                      ? _layerScans.remove('OSV-Scanner')
-                      : _layerScans['OSV-Scanner'] = r,
+                // Tab 3 : Tâches (file d'attente d'analyses)
+                TasksPanel(
+                  outputFiles: widget.outputFiles,
+                  onResult: _applyJobResult,
                 ),
-                dateFilter: _osvFilter,
-                onDateFilterChanged: (f) => setState(() => _osvFilter = f),
-                onPropagate: (f) => setState(() {
-                  _grypeFilter = f;
-                  _trivyFilter = f;
-                }),
-              ),
 
-              // Tab 6 : Trivy
-              TrivyPanel(
-                outputFiles: widget.outputFiles,
-                onVulnsChanged: (v) {
-                  setState(() => _trivyVulns = v);
-                  _scheduleSave();
-                },
-                onExploitChanged: (m) {
-                  setState(() => _trivyExploit = m);
-                  _scheduleSave();
-                },
-                onScanTargetChanged: (t) => setState(() => _trivyTarget = t),
-                onLayerScanChanged: (r) => setState(
-                  () => r == null
-                      ? _layerScans.remove('Trivy')
-                      : _layerScans['Trivy'] = r,
+                // Tab 4 : Grype
+                GrypePanel(
+                  outputFiles: widget.outputFiles,
+                  onVulnsChanged: (v) {
+                    setState(() => _grypeVulns = v);
+                    _scheduleSave();
+                  },
+                  onExploitChanged: (m) {
+                    setState(() => _grypeExploit = m);
+                    _scheduleSave();
+                  },
+                  onScanTargetChanged: (t) => setState(() => _grypeTarget = t),
+                  onLayerScanChanged: (r) => setState(
+                    () => r == null
+                        ? _layerScans.remove('Grype')
+                        : _layerScans['Grype'] = r,
+                  ),
+                  dateFilter: _grypeFilter,
+                  onDateFilterChanged: (f) => setState(() => _grypeFilter = f),
+                  onPropagate: (f) => setState(() {
+                    _osvFilter = f;
+                    _trivyFilter = f;
+                  }),
                 ),
-                dateFilter: _trivyFilter,
-                onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
-                onPropagate: (f) => setState(() {
-                  _grypeFilter = f;
-                  _osvFilter = f;
-                }),
-              ),
 
-              // Tab 7 : Conformité CRA
-              CraPanel(outputFiles: widget.outputFiles),
+                // Tab 5 : OSV-Scanner
+                OsvPanel(
+                  outputFiles: widget.outputFiles,
+                  onVulnsChanged: (v) {
+                    setState(() => _osvVulns = v);
+                    _scheduleSave();
+                  },
+                  onExploitChanged: (m) {
+                    setState(() => _osvExploit = m);
+                    _scheduleSave();
+                  },
+                  onScanTargetChanged: (t) => setState(() => _osvTarget = t),
+                  onLayerScanChanged: (r) => setState(
+                    () => r == null
+                        ? _layerScans.remove('OSV-Scanner')
+                        : _layerScans['OSV-Scanner'] = r,
+                  ),
+                  dateFilter: _osvFilter,
+                  onDateFilterChanged: (f) => setState(() => _osvFilter = f),
+                  onPropagate: (f) => setState(() {
+                    _grypeFilter = f;
+                    _trivyFilter = f;
+                  }),
+                ),
 
-              // Tab 8 : Qualité SBOM
-              QualityPanel(outputFiles: widget.outputFiles),
+                // Tab 6 : Trivy
+                TrivyPanel(
+                  outputFiles: widget.outputFiles,
+                  onVulnsChanged: (v) {
+                    setState(() => _trivyVulns = v);
+                    _scheduleSave();
+                  },
+                  onExploitChanged: (m) {
+                    setState(() => _trivyExploit = m);
+                    _scheduleSave();
+                  },
+                  onScanTargetChanged: (t) => setState(() => _trivyTarget = t),
+                  onLayerScanChanged: (r) => setState(
+                    () => r == null
+                        ? _layerScans.remove('Trivy')
+                        : _layerScans['Trivy'] = r,
+                  ),
+                  dateFilter: _trivyFilter,
+                  onDateFilterChanged: (f) => setState(() => _trivyFilter = f),
+                  onPropagate: (f) => setState(() {
+                    _grypeFilter = f;
+                    _osvFilter = f;
+                  }),
+                ),
 
-              // Tab 9 : Arborescence SBOM
-              SbomTreePanel(outputFiles: widget.outputFiles),
+                // Tab 7 : Conformité CRA
+                CraPanel(outputFiles: widget.outputFiles),
 
-              // Tab 10 : Comparaison SBOM
-              SbomDiffPanel(outputFiles: widget.outputFiles),
+                // Tab 8 : Qualité SBOM
+                QualityPanel(outputFiles: widget.outputFiles),
 
-              // Tab 11 : Fusion SBOM
-              SbomMergePanel(outputFiles: widget.outputFiles),
+                // Tab 9 : Arborescence SBOM
+                SbomTreePanel(outputFiles: widget.outputFiles),
 
-              // Tab 12 : Licences SBOM
-              SbomLicensesPanel(outputFiles: widget.outputFiles),
+                // Tab 10 : Comparaison SBOM
+                SbomDiffPanel(outputFiles: widget.outputFiles),
 
-              // Tab 13 : Visionneuse SBOM
-              const SbomViewerPanel(),
+                // Tab 11 : Fusion SBOM
+                SbomMergePanel(outputFiles: widget.outputFiles),
 
-              // Tab 14 : Aperçu SBOM
-              _SbomPreviewTab(
-                files: previewableFiles,
-                selectedFile: _previewFile,
-                content: _previewContent,
-                isLoading: _previewLoading,
-                onSelectFile: _loadPreview,
-              ),
-            ],
+                // Tab 12 : Licences SBOM
+                SbomLicensesPanel(outputFiles: widget.outputFiles),
+
+                // Tab 13 : Visionneuse SBOM
+                const SbomViewerPanel(),
+
+                // Tab 14 : Aperçu SBOM
+                _SbomPreviewTab(
+                  files: previewableFiles,
+                  selectedFile: _previewFile,
+                  content: _previewContent,
+                  isLoading: _previewLoading,
+                  onSelectFile: _loadPreview,
+                ),
+              ],
+            ),
           ),
         ),
       ],

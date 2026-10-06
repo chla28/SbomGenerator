@@ -3102,13 +3102,7 @@ class AppLocalizationsFr extends AppLocalizations {
         intl.NumberFormat.decimalPattern(localeName);
     final String countString = countNumberFormat.format(count);
 
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$countString CVE',
-      one: '1 CVE',
-    );
-    return '$_temp0';
+    return '$countString CVE';
   }
 
   @override
@@ -3232,7 +3226,7 @@ class AppLocalizationsFr extends AppLocalizations {
       count,
       locale: localeName,
       other: '$countString vulnérabilités',
-      one: '1 vulnérabilité',
+      one: '$countString vulnérabilité',
     );
     return 'Terminée — $_temp0';
   }
@@ -3282,4 +3276,152 @@ class AppLocalizationsFr extends AppLocalizations {
   String tasksParseFailed(String tool, String error) {
     return 'Sortie de $tool illisible : $error';
   }
+
+  @override
+  String get vexTitle => 'VEX (non affecté / corrigé)';
+
+  @override
+  String get vexDeclare => 'Déclarer via VEX…';
+
+  @override
+  String get vexEdit => 'Modifier';
+
+  @override
+  String get vexRemove => 'Retirer';
+
+  @override
+  String vexCurrent(String status, String detail) {
+    return 'VEX : $status$detail';
+  }
+
+  @override
+  String get vexStatusNotAffected => 'non affectée';
+
+  @override
+  String get vexStatusAffected => 'affectée';
+
+  @override
+  String get vexStatusFixed => 'corrigée';
+
+  @override
+  String get vexStatusInvestigation => 'à l\'étude';
+
+  @override
+  String get vexJustComponentNotPresent => 'composant absent';
+
+  @override
+  String get vexJustCodeNotPresent => 'code vulnérable absent';
+
+  @override
+  String get vexJustNotInExecutePath => 'code vulnérable jamais exécuté';
+
+  @override
+  String get vexJustCannotBeControlled =>
+      'code non contrôlable par un attaquant';
+
+  @override
+  String get vexJustInlineMitigations => 'mesures d\'atténuation déjà en place';
+
+  @override
+  String vexDialogTitle(String id) {
+    return 'Déclaration VEX — $id';
+  }
+
+  @override
+  String get vexFieldStatus => 'État';
+
+  @override
+  String get vexFieldJustification => 'Justification';
+
+  @override
+  String get vexFieldImpact => 'Explication (facultative)';
+
+  @override
+  String get vexFieldScope => 'Portée';
+
+  @override
+  String get vexScopeAll => 'Tous les paquets';
+
+  @override
+  String get vexNeedJustification =>
+      'Une justification est requise pour « non affectée ».';
+
+  @override
+  String get vexSave => 'Enregistrer';
+
+  @override
+  String vexBarSummary(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString déclarations',
+      one: '$countString déclaration',
+    );
+    return 'VEX : $_temp0';
+  }
+
+  @override
+  String vexHideSuppressed(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Masquer les CVE couvertes par un VEX ($countString)';
+  }
+
+  @override
+  String get vexImport => 'Importer un VEX…';
+
+  @override
+  String get vexExport => 'Exporter';
+
+  @override
+  String get vexExportOpenVex => 'OpenVEX (.json)';
+
+  @override
+  String get vexExportCdx => 'CycloneDX VEX (.json)';
+
+  @override
+  String get vexManage => 'Gérer';
+
+  @override
+  String get vexManageTitle => 'Déclarations VEX';
+
+  @override
+  String get vexDialogImport => 'Importer un document VEX';
+
+  @override
+  String get vexDialogExport => 'Exporter les déclarations VEX';
+
+  @override
+  String vexImported(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString déclaration(s) VEX importée(s)';
+  }
+
+  @override
+  String vexExported(String path) {
+    return 'VEX exporté → $path';
+  }
+
+  @override
+  String vexInvalid(String error) {
+    return 'Document VEX illisible : $error';
+  }
+
+  @override
+  String get vexNothingToExport => 'Aucune déclaration VEX à exporter.';
+
+  @override
+  String get vexClearAll => 'Tout retirer';
+
+  @override
+  String get vexAnyPackage => 'tous les paquets';
 }

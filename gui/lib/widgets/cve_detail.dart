@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/scan_enrichment.dart';
+import 'vex_ui.dart';
 import 'pdf_report.dart' show frenchSeverityLabel;
 import '../l10n/l10n.dart';
 
@@ -180,6 +181,17 @@ class CveDetail {
 
 /// Panneau de détail d'une CVE, affiché dans une ligne dépliée (tableau de
 /// bord) ou sous une ligne de la table (onglets Grype / OSV / Trivy).
+/// Paquets (nom, version) distincts rapportés pour la CVE.
+List<({String name, String version})> _vexPackages(CveDetail d) {
+  final seen = <String>{};
+  return [
+    for (final v in d.views)
+      if (v.packageName.isNotEmpty &&
+          seen.add('${v.packageName}@${v.installedVersion}'))
+        (name: v.packageName, version: v.installedVersion),
+  ];
+}
+
 class CveDetailPanel extends StatelessWidget {
   final CveDetail detail;
 
@@ -369,6 +381,19 @@ class CveDetailPanel extends StatelessWidget {
               ),
           ],
           const SizedBox(height: 8),
+
+          // ── VEX : déclarer la CVE non affectée / corrigée ──
+          if (VexScope.maybeOf(context) case final vex?) ...[
+            ListenableBuilder(
+              listenable: vex,
+              builder: (context, _) => CveVexRow(
+                controller: vex,
+                vulnId: detail.id,
+                packages: _vexPackages(detail),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
 
           // ── Liens externes ──
           if (detail.links.isNotEmpty) ...[
