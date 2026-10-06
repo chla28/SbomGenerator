@@ -231,12 +231,12 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |`--license-map <fichier>`
 |`-l`
 |—
-|Fichier de substitution de licences (`nom: SPDX-expression` par ligne)
+|Fichier de substitution de licences (`clé: SPDX-expression` par ligne ; la clé est un nom de paquet, un `groupId:artifactId` Maven ou un PURL sans version ; séparateur `->`, `=` ou dernier `:`)
 
 |`--deny-license <motif>`
 |—
 |—
-|Refuser les composants dont la licence correspond au motif SPDX (correspondance partielle,
+|Refuser les composants dont la licence correspond au motif SPDX (identifiant exact ou variante de version : `GPL-3.0` couvre `GPL-3.0-only` mais pas `LGPL-3.0` ni `AGPL-3.0` ; `\*GPL*` pour une recherche par sous-chaîne ;
 répétable). Code retour 2 si au moins une violation est détectée.
 
 |`--sdk-version <sdk>=<ver>`
@@ -375,6 +375,9 @@ dans Excel, Jira ou tout outil de reporting.
 
 En mode multi-format (`-f cyclonedx,spdx,markdown`), `--output` est traité comme
 un chemin de base auquel chaque extension est ajoutée.
+Avec un seul format, un `--output` sans extension SBOM connue est complété par
+l'extension du format (`-o sbom` → `sbom.cdx.json`) ; avec une extension connue
+(`-o sbom.json`), il est utilisé tel quel.
 
 == Format du fichier d'entrée
 

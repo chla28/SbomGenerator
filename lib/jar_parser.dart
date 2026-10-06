@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'tool_runner.dart';
 import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
 import 'i18n.dart';
@@ -192,7 +193,7 @@ class JarParser {
       String path) async {
     final ProcessResult listResult;
     try {
-      listResult = await Process.run('unzip', ['-l', path]);
+      listResult = await runTool('unzip', ['-l', path]);
     } on ProcessException {
       return const [];
     }
@@ -220,7 +221,7 @@ class JarParser {
       String path, String entryPath) async {
     final ProcessResult result;
     try {
-      result = await Process.run('unzip', ['-p', path, entryPath]);
+      result = await runTool('unzip', ['-p', path, entryPath]);
     } on ProcessException {
       return null;
     }
@@ -260,7 +261,7 @@ class JarParser {
   Future<String?> _groupIdFromManifest(String path) async {
     final ProcessResult result;
     try {
-      result = await Process.run('unzip', ['-p', path, 'META-INF/MANIFEST.MF']);
+      result = await runTool('unzip', ['-p', path, 'META-INF/MANIFEST.MF']);
     } on ProcessException {
       return null;
     }

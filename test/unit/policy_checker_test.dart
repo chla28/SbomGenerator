@@ -99,5 +99,31 @@ void main() {
       final violations = checker.checkDenyLicenses(packages, ['GPL-3.0']);
       expect(violations, hasLength(1));
     });
+
+    test('GPL ne bloque pas LGPL ni AGPL (jeton SPDX, pas sous-chaîne)', () {
+      final packages = [
+        _pkg(name: 'a', license: 'LGPL-3.0-only'),
+        _pkg(name: 'b', license: 'AGPL-3.0-or-later'),
+        _pkg(name: 'c', license: 'GPL-3.0-or-later'),
+        _pkg(
+            name: 'd',
+            license: 'MIT OR (GPL-2.0-only WITH Classpath-exception-2.0)'),
+      ];
+      final v = checker.checkDenyLicenses(packages, ['GPL-3.0', 'GPL-2.0']);
+      expect(v.map((e) => e.packageName), ['c', 'd']);
+      expect(
+          checker
+              .checkDenyLicenses(packages, ['GPL']).map((e) => e.packageName),
+          ['c', 'd']);
+    });
+
+    test('un motif entre *…* garde la correspondance par sous-chaîne', () {
+      final packages = [
+        _pkg(name: 'a', license: 'LGPL-3.0-only'),
+        _pkg(name: 'b', license: 'MIT'),
+      ];
+      expect(checker.checkDenyLicenses(packages, ['*GPL*']).single.packageName,
+          'a');
+    });
   });
 }

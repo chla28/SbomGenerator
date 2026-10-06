@@ -231,12 +231,12 @@ scanned recursively (see <<Input file format>>)
 |`--license-map <file>`
 |`-l`
 |—
-|License override file (`name: SPDX-expression` per line)
+|License override file (`key: SPDX-expression` per line; the key is a package name, a Maven `groupId:artifactId` or a version-less PURL; separator `->`, `=` or the last `:`)
 
 |`--deny-license <pattern>`
 |—
 |—
-|Reject components whose license matches the SPDX pattern (partial matching,
+|Reject components whose license matches the SPDX pattern (exact identifier or version variant: `GPL-3.0` covers `GPL-3.0-only` but not `LGPL-3.0` or `AGPL-3.0`; `\*GPL*` for substring matching;
 repeatable). Exit code 2 if at least one violation is detected.
 
 |`--sdk-version <sdk>=<ver>`
@@ -375,6 +375,9 @@ into Excel, Jira or any reporting tool.
 
 In multi-format mode (`-f cyclonedx,spdx,markdown`), `--output` is treated as
 a base path to which each extension is appended.
+With a single format, an `--output` without a known SBOM extension is completed
+with the format's extension (`-o sbom` → `sbom.cdx.json`); with a known extension
+(`-o sbom.json`) it is used as is.
 
 == Input file format
 

@@ -36,6 +36,7 @@ import 'package:sbom_generator/license_report_generator.dart';
 import 'package:sbom_generator/vuln_enrichment.dart';
 import 'package:sbom_generator/cra_report.dart';
 import 'package:sbom_generator/i18n.dart';
+import 'package:sbom_generator/tool_runner.dart';
 
 const _version = '1.6.5';
 
@@ -379,11 +380,15 @@ Future<void> main(List<String> rawArguments) async {
       abbr: 'l',
       help: tr(
         'Chemin d\'un fichier de substitution de licences.\n'
-            'Format : un « nom_de_paquet: expression-SPDX » par ligne.\n'
+            'Format : un « nom_de_paquet: expression-SPDX » par ligne ; la clé\n'
+            'peut être un nom, un « groupId:artifactId » Maven ou un PURL sans\n'
+            'version (séparateur : « -> », « = » ou le dernier « : »).\n'
             'Les lignes commençant par # sont ignorées.\n'
             'Remplace la licence détectée pour les noms de paquet concernés.',
         'Path to a license override file.\n'
-            'Format: one "package_name: SPDX-expression" per line.\n'
+            'Format: one "package_name: SPDX-expression" per line; the key may\n'
+            'be a name, a Maven "groupId:artifactId" or a version-less PURL\n'
+            '(separator: "->", "=" or the last ":").\n'
             'Lines starting with # are ignored.\n'
             'Overrides the detected license for matching package names.',
       ),
@@ -652,7 +657,7 @@ Future<void> main(List<String> rawArguments) async {
     if (layerMode == 'rootfs' &&
         ociTool != 'skopeo' &&
         OciParser.detectRefType(imageRef) == OciRefType.registry &&
-        (await Process.run('skopeo', ['--version'])).exitCode != 0) {
+        (await runTool('skopeo', ['--version'])).exitCode != 0) {
       _err(tr(
           '--layer-mode rootfs sur une image de registre nécessite skopeo '
               '(copie locale des couches).',
@@ -891,7 +896,7 @@ Future<void> main(List<String> rawArguments) async {
   OsInfo? ociOs;
   if (imageRef != null) {
     // Vérifier la disponibilité de l'outil OCI
-    final ociCheck = await Process.run(ociTool, ['--version']);
+    final ociCheck = await runTool(ociTool, ['--version']);
     if (ociCheck.exitCode != 0) {
       _err(tr(
           '$ociTool introuvable ou non fonctionnel — requis pour '
@@ -987,7 +992,7 @@ Future<void> main(List<String> rawArguments) async {
   final hasJar = mainRefs.any(_isJar);
 
   if (hasRpm) {
-    final rpmCheck = await Process.run('rpm', ['--version']);
+    final rpmCheck = await runTool('rpm', ['--version']);
     if (rpmCheck.exitCode != 0) {
       _err(tr('binaire rpm introuvable ou non fonctionnel.',
           'rpm binary not found or not functional.'));
@@ -997,7 +1002,7 @@ Future<void> main(List<String> rawArguments) async {
   }
 
   if (hasWhl || hasTar || hasZip) {
-    final py3Check = await Process.run('python3', ['--version']);
+    final py3Check = await runTool('python3', ['--version']);
     if (py3Check.exitCode != 0) {
       _err(tr(
           'python3 introuvable — requis pour lire les archives .whl, tar et zip.',
@@ -1008,7 +1013,7 @@ Future<void> main(List<String> rawArguments) async {
   }
 
   if (hasDeb) {
-    final debCheck = await Process.run('dpkg-deb', ['--version']);
+    final debCheck = await runTool('dpkg-deb', ['--version']);
     if (debCheck.exitCode != 0) {
       _err(tr('dpkg-deb introuvable — requis pour lire les fichiers .deb.',
           'dpkg-deb not found — required to read .deb files.'));
@@ -1020,7 +1025,7 @@ Future<void> main(List<String> rawArguments) async {
   }
 
   if (hasJar) {
-    final unzipCheck = await Process.run('unzip', ['-v']);
+    final unzipCheck = await runTool('unzip', ['-v']);
     if (unzipCheck.exitCode != 0) {
       _err(tr('unzip introuvable — requis pour lire les fichiers .jar.',
           'unzip not found — required to read .jar files.'));
@@ -1434,12 +1439,10 @@ Future<void> main(List<String> rawArguments) async {
     );
   }
 
-  final outputBase = formats.length > 1 ? _basePath(outputPath) : null;
   await writeAll(
     uniquePackages,
     dependencies,
-    (fmt) =>
-        outputBase != null ? '$outputBase${_formatExtension(fmt)}' : outputPath,
+    (fmt) => _outputPathFor(outputPath, formats, fmt),
     layers: globalLayers,
   );
 
@@ -1502,9 +1505,7 @@ Future<void> main(List<String> rawArguments) async {
           '--min-quality-score: invalid value "$minQualityScore"'));
       exit(1);
     }
-    final primaryOut = formats.length == 1
-        ? outputPath
-        : '${_basePath(outputPath)}${_formatExtension(formats.first)}';
+    final primaryOut = _outputPathFor(outputPath, formats, formats.first);
     final score = await checker.runSbomqs(primaryOut, verbose: verbose);
     if (score != null) {
       if (score < threshold) {
@@ -1521,9 +1522,7 @@ Future<void> main(List<String> rawArguments) async {
 
 // ── Signature cosign ─────────────────────────────────────────────────────
   if (signSbom) {
-    final primaryOut = formats.length == 1
-        ? outputPath
-        : '${_basePath(outputPath)}${_formatExtension(formats.first)}';
+    final primaryOut = _outputPathFor(outputPath, formats, formats.first);
     await _signWithCosign(primaryOut, verbose: verbose);
     for (final p in [...layerPrimaryPaths, ...nestedPrimaryPaths]) {
       await _signWithCosign(p, verbose: verbose);
@@ -1939,6 +1938,7 @@ String _basePath(String output) {
     '.json',
     '.md',
     '.adoc',
+    '.html',
     '.csv',
   ];
   for (final ext in exts) {
@@ -1947,6 +1947,16 @@ String _basePath(String output) {
     }
   }
   return output;
+}
+
+/// Chemin du fichier écrit pour [fmt] : avec plusieurs formats, le chemin de
+/// base (extension SBOM connue retirée) + l'extension du format ; avec un
+/// seul format, [output] tel quel s'il porte déjà une extension SBOM connue,
+/// sinon complété par l'extension du format (`-o sbom` → `sbom.cdx.json`).
+String _outputPathFor(String output, List<String> formats, String fmt) {
+  final base = _basePath(output);
+  if (formats.length == 1 && base != output) return output;
+  return '$base${_formatExtension(fmt)}';
 }
 
 // ── License override helpers ──────────────────────────────────────────────────
@@ -1963,10 +1973,22 @@ Map<String, String> _parseLicenseMap(String path) {
   for (final line in file.readAsLinesSync()) {
     final trimmed = line.trim();
     if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
-    final idx = trimmed.indexOf(':');
+    // Séparateur : `->`, puis `=`, sinon le DERNIER `:` (une licence ne
+    // contient pas de `:`, alors qu'un nom Maven « groupId:artifactId » ou un
+    // PURL oui).
+    var idx = trimmed.indexOf('->');
+    var sepLen = 2;
+    if (idx < 1) {
+      idx = trimmed.indexOf('=');
+      sepLen = 1;
+    }
+    if (idx < 1) {
+      idx = trimmed.lastIndexOf(':');
+      sepLen = 1;
+    }
     if (idx < 1) continue;
     final name = trimmed.substring(0, idx).trim();
-    final license = trimmed.substring(idx + 1).trim();
+    final license = trimmed.substring(idx + sepLen).trim();
     if (name.isNotEmpty && license.isNotEmpty) result[name] = license;
   }
   return result;
@@ -3474,11 +3496,28 @@ List<Package> _applyLicenseOverrides(
   if (overrides.isEmpty) return packages;
   return [
     for (final pkg in packages)
-      if (overrides[pkg.name] case final lic?)
+      if (_licenseOverrideFor(pkg, overrides) case final lic?)
         pkg.copyWith(license: lic)
       else
         pkg,
   ];
+}
+
+/// Licence de substitution d'un paquet : par nom, puis par PURL sans version
+/// (`pkg:maven/org.yaml/snakeyaml`), puis, pour Maven, par
+/// `groupId:artifactId`.
+String? _licenseOverrideFor(Package pkg, Map<String, String> overrides) {
+  if (overrides[pkg.name] case final lic?) return lic;
+  final purl = pkg.purl.split('?').first;
+  final bare = purl.split('@').first;
+  if (overrides[bare] case final lic?) return lic;
+  final m = RegExp(r'^pkg:maven/([^/]+)/([^/]+)$').firstMatch(bare);
+  if (m != null) {
+    final ga = '${Uri.decodeComponent(m.group(1)!)}:'
+        '${Uri.decodeComponent(m.group(2)!)}';
+    return overrides[ga];
+  }
+  return null;
 }
 
 /// Renseigne le fournisseur des paquets qui n'en ont pas avec la valeur de
@@ -3623,10 +3662,8 @@ Future<void> _runConvert(List<String> arguments) async {
       'Conversion : $inputPath ($formatLabel, ${packages.length} composant(s))',
       'Conversion: $inputPath ($formatLabel, ${packages.length} component(s))'));
 
-  final outputBase = formats.length > 1 ? _basePath(outputPath) : null;
   for (final fmt in formats) {
-    final outPath =
-        outputBase != null ? '$outputBase${_formatExtension(fmt)}' : outputPath;
+    final outPath = _outputPathFor(outputPath, formats, fmt);
     try {
       switch (fmt) {
         case 'cyclonedx':

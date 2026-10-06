@@ -207,10 +207,23 @@ class CraReportGenerator {
             .where((p) => p['SPDXID'] != rootId)
             .toList();
       case SbomFormat.spdx3:
+        return _spdx3Nodes
+            .where((n) => '${n['type']}'.endsWith('Package'))
+            .toList();
       case SbomFormat.unknown:
         return const [];
     }
   }
+
+  /// Nœuds du graphe JSON-LD d'un SBOM SPDX 3.0.
+  List<Map<String, dynamic>> get _spdx3Nodes =>
+      ((sbom['@graph'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList();
+
+  Iterable<Map<String, dynamic>> _spdx3Of(String type) =>
+      _spdx3Nodes.where((n) => n['type'] == type);
 
   String? get _spdxRootId {
     final describes = (sbom['documentDescribes'] as List?)?.cast<String>();
@@ -238,6 +251,10 @@ class CraReportGenerator {
                 false)
             .length;
       case SbomFormat.spdx3:
+        return _spdx3Of('Relationship')
+            .where(
+                (r) => '${r['relationshipType']}'.toLowerCase() == 'dependson')
+            .length;
       case SbomFormat.unknown:
         return 0;
     }
@@ -251,18 +268,30 @@ class CraReportGenerator {
     if (total == 0) return const [];
 
     final cdx = _format == SbomFormat.cyclonedx;
+    final s3 = _format == SbomFormat.spdx3;
 
-    bool hasSupplier(Map<String, dynamic> c) => cdx
-        ? _nonEmpty(c['supplier']) ||
-            _nonEmpty(c['publisher']) ||
-            _nonEmpty(c['author'])
-        : _nonEmptyStr(c['supplier']) &&
-            c['supplier'] != 'NOASSERTION' &&
-            c['supplier'] != 'NONE';
+    bool hasSupplier(Map<String, dynamic> c) => s3
+        ? _nonEmpty(c['suppliedBy'])
+        : cdx
+            ? _nonEmpty(c['supplier']) ||
+                _nonEmpty(c['publisher']) ||
+                _nonEmpty(c['author'])
+            : _nonEmptyStr(c['supplier']) &&
+                c['supplier'] != 'NOASSERTION' &&
+                c['supplier'] != 'NONE';
     bool hasName(Map<String, dynamic> c) => _nonEmptyStr(c['name']);
-    bool hasVersion(Map<String, dynamic> c) =>
-        cdx ? _nonEmptyStr(c['version']) : _nonEmptyStr(c['versionInfo']);
+    bool hasVersion(Map<String, dynamic> c) => s3
+        ? _nonEmptyStr(c['software:packageVersion'])
+        : cdx
+            ? _nonEmptyStr(c['version'])
+            : _nonEmptyStr(c['versionInfo']);
     bool hasId(Map<String, dynamic> c) {
+      if (s3) {
+        return ((c['externalIdentifier'] as List?) ?? const []).any((r) {
+          final t = '${(r as Map)['externalIdentifierType']}';
+          return t == 'purl' || t.contains('cpe');
+        });
+      }
       if (cdx) return _nonEmptyStr(c['purl']) || _nonEmptyStr(c['cpe']);
       final refs = (c['externalRefs'] as List?) ?? const [];
       return refs.any((r) =>
@@ -270,19 +299,38 @@ class CraReportGenerator {
           '${r['referenceType']}'.contains('cpe'));
     }
 
-    bool hasHash(Map<String, dynamic> c) => cdx
-        ? ((c['hashes'] as List?) ?? const []).isNotEmpty
-        : ((c['checksums'] as List?) ?? const []).isNotEmpty;
+    bool hasHash(Map<String, dynamic> c) => s3
+        ? ((c['verifiedUsing'] as List?) ?? const []).isNotEmpty
+        : cdx
+            ? ((c['hashes'] as List?) ?? const []).isNotEmpty
+            : ((c['checksums'] as List?) ?? const []).isNotEmpty;
     bool hasLicense(Map<String, dynamic> c) {
+      if (s3) {
+        bool ok(Object? v) =>
+            v != null &&
+            !(v is String &&
+                (v.trim().isEmpty ||
+                    v.endsWith('NoAssertion') ||
+                    v.endsWith('NoneLicense') ||
+                    v == 'NOASSERTION' ||
+                    v == 'NONE')) &&
+            !(v is Map && v.isEmpty);
+        return ok(c['concludedLicense']) || ok(c['declaredLicense']);
+      }
       if (cdx) return ((c['licenses'] as List?) ?? const []).isNotEmpty;
       final lc = c['licenseConcluded'], ld = c['licenseDeclared'];
       bool ok(v) => _nonEmptyStr(v) && v != 'NOASSERTION' && v != 'NONE';
       return ok(lc) || ok(ld);
     }
 
+    final verKey = s3
+        ? 'software:packageVersion'
+        : cdx
+            ? 'version'
+            : 'versionInfo';
     String nameOf(Map<String, dynamic> c) =>
-        '${c['name'] ?? c['SPDXID'] ?? '?'}'
-        '${_nonEmptyStr(c[cdx ? 'version' : 'versionInfo']) ? '@${c[cdx ? 'version' : 'versionInfo']}' : ''}';
+        '${c['name'] ?? c['SPDXID'] ?? c['spdxId'] ?? '?'}'
+        '${_nonEmptyStr(c[verKey]) ? '@${c[verKey]}' : ''}';
 
     _FieldCheck check(String id, String label, bool mandatory,
         bool Function(Map<String, dynamic>) pred) {
@@ -338,6 +386,8 @@ class CraReportGenerator {
                 ?.isNotEmpty ==
             true;
       case SbomFormat.spdx3:
+        return _spdx3Of('CreationInfo')
+            .any((ci) => ((ci['createdBy'] as List?) ?? const []).isNotEmpty);
       case SbomFormat.unknown:
         return false;
     }
@@ -350,6 +400,10 @@ class CraReportGenerator {
       case SbomFormat.spdx2:
         return (sbom['creationInfo'] as Map?)?['created'] as String?;
       case SbomFormat.spdx3:
+        for (final ci in _spdx3Of('CreationInfo')) {
+          if (ci['created'] is String) return ci['created'] as String;
+        }
+        return null;
       case SbomFormat.unknown:
         return null;
     }
@@ -362,6 +416,8 @@ class CraReportGenerator {
       case SbomFormat.spdx2:
         return _spdxRootId != null;
       case SbomFormat.spdx3:
+        return _spdx3Of('SpdxDocument')
+            .any((d) => ((d['rootElement'] as List?) ?? const []).isNotEmpty);
       case SbomFormat.unknown:
         return false;
     }

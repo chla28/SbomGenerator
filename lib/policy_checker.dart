@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'tool_runner.dart';
 import 'models.dart';
 import 'i18n.dart';
 
@@ -48,7 +49,7 @@ class PolicyChecker {
   /// est absent ou échoue.
   Future<double?> runSbomqs(String sbomPath, {bool verbose = false}) async {
     // ProcessException si le binaire est absent du PATH.
-    final check = await Process.run('sbomqs', ['version'])
+    final check = await runTool('sbomqs', ['version'])
         .catchError((Object _) => ProcessResult(0, 127, '', ''));
     if (check.exitCode != 0) {
       stderr.writeln(tr(
@@ -63,7 +64,7 @@ class PolicyChecker {
     }
     // --basic force une sortie sur une seule ligne (score en premier champ) ;
     // sans ce flag, sbomqs >= 2.0 imprime un tableau détaillé illisible ici.
-    final result = await Process.run('sbomqs', ['score', '--basic', sbomPath]);
+    final result = await runTool('sbomqs', ['score', '--basic', sbomPath]);
     if (result.exitCode != 0) {
       stderr.writeln(tr('sbomqs: échec (code ${result.exitCode})',
           'sbomqs: failed (code ${result.exitCode})'));
@@ -82,12 +83,32 @@ class PolicyChecker {
     return null;
   }
 
+  /// Un motif correspond si la licence lui est égale ou si l'un des
+  /// identifiants SPDX de l'expression (découpée sur `AND`/`OR`/`WITH` et les
+  /// parenthèses) lui est égal ou en est une variante de version : `GPL-3.0`
+  /// couvre `GPL-3.0-only` et `GPL-3.0-or-later`, mais **pas** `LGPL-3.0` ni
+  /// `AGPL-3.0`. Un motif entre `*…*` (ex. `*GPL*`) garde l'ancienne
+  /// correspondance par sous-chaîne.
   bool _licenseMatches(String license, String pattern) {
     final lcLicense = license.toLowerCase();
-    final lcPattern = pattern.toLowerCase();
-    // Correspondance exacte ou expression SPDX composée (AND/OR/WITH)
+    var lcPattern = pattern.trim().toLowerCase();
+    if (lcPattern.length > 2 &&
+        lcPattern.startsWith('*') &&
+        lcPattern.endsWith('*')) {
+      return lcLicense.contains(lcPattern.substring(1, lcPattern.length - 1));
+    }
     if (lcLicense == lcPattern) return true;
-    // Sous-chaîne : "GPL-3.0" matche "GPL-3.0-only", "GPL-3.0-or-later"…
-    return lcLicense.contains(lcPattern);
+    final tokens = lcLicense
+        .split(RegExp(r'[\s()]+|\b(?:and|or|with)\b'))
+        .where((t) => t.isNotEmpty && t != 'and' && t != 'or' && t != 'with');
+    for (final t in tokens) {
+      if (t == lcPattern) return true;
+      // « GPL-3.0 » couvre « GPL-3.0-only » / « GPL-3.0-or-later » / « GPL-3.0+ ».
+      if (t.startsWith(lcPattern) &&
+          (t[lcPattern.length] == '-' || t[lcPattern.length] == '+')) {
+        return true;
+      }
+    }
+    return false;
   }
 }

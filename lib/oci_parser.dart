@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'tool_runner.dart';
 import 'hash_utils.dart'
     show
         hashesFromCycloneDx,
@@ -407,7 +408,7 @@ class OciParser {
       };
 
   Future<Map<String, dynamic>> _runSyftJson(List<String> args) async {
-    final result = await Process.run('syft', [...args, '--output', 'json']);
+    final result = await runTool('syft', [...args, '--output', 'json']);
     if (result.exitCode != 0) {
       throw Exception(tr(
           'syft a échoué (code ${result.exitCode}) : ${result.stderr}',
@@ -734,12 +735,12 @@ class OciParser {
   }
 
   Future<Map<String, dynamic>> _runTrivyJson(List<String> args) async {
-    ProcessResult result = await Process.run('trivy', args);
+    ProcessResult result = await runTool('trivy', args);
     // --list-all-pkgs non supporté sur les vieilles versions → réessai sans
     if (result.exitCode > 1 &&
         (result.stderr as String).contains('--list-all-pkgs')) {
       args.remove('--list-all-pkgs');
-      result = await Process.run('trivy', args);
+      result = await runTool('trivy', args);
     }
     if (result.exitCode > 1) {
       throw Exception(tr(

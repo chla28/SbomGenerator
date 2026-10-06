@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'tool_runner.dart';
 import 'hash_utils.dart';
 import 'models.dart';
 import 'i18n.dart';
@@ -24,9 +25,9 @@ class RpmParser {
 
     // Run all three queries concurrently (metadata + requires + provides)
     final results = await Future.wait([
-      Process.run('rpm', [qFlag, '--queryformat', _queryFormat, packageRef]),
-      Process.run('rpm', [qFlag, '--requires', packageRef]),
-      Process.run('rpm', [qFlag, '--provides', packageRef]),
+      runTool('rpm', [qFlag, '--queryformat', _queryFormat, packageRef]),
+      runTool('rpm', [qFlag, '--requires', packageRef]),
+      runTool('rpm', [qFlag, '--provides', packageRef]),
     ]);
 
     final infoResult = results[0];

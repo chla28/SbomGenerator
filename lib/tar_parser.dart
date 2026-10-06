@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'tool_runner.dart';
 import 'archive_helpers.dart';
 import 'models.dart';
 import 'wheel_parser.dart';
@@ -74,7 +75,7 @@ class TarParser {
   final _wheelParser = WheelParser();
 
   Future<Package?> parseTarFile(String path) async {
-    final result = await Process.run('python3', ['-c', _extractScript, path]);
+    final result = await runTool('python3', ['-c', _extractScript, path]);
 
     if (result.exitCode != 0) {
       stderr.writeln('Warning: ' +

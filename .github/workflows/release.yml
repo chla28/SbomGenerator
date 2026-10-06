@@ -12,6 +12,7 @@ env:
 
 jobs:
   release:
+    timeout-minutes: 60
     name: Build & publish release
     runs-on: ubuntu-latest
     # AlmaLinux 9 (glibc 2.34): the CLI, the GUI bundle and the RPMs then also

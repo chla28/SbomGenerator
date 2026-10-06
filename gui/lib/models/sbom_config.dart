@@ -11,6 +11,26 @@ const _formatExtensions = {
   'csv': '.csv',
 };
 
+const _knownExtensions = [
+  '.cdx.json',
+  '.spdx.json',
+  '.spdx3.jsonld',
+  '.custom.json',
+  '.jsonld',
+  '.json',
+  '.md',
+  '.adoc',
+  '.html',
+  '.csv',
+];
+
+String _stripKnownExtension(String path) {
+  for (final ext in _knownExtensions) {
+    if (path.endsWith(ext)) return path.substring(0, path.length - ext.length);
+  }
+  return path;
+}
+
 String formatExtension(String fmt) => _formatExtensions[fmt] ?? '.json';
 
 const allFormats = [
@@ -228,9 +248,10 @@ class SbomConfig {
   /// Chemins de sortie attendus (prévisualisation avant exécution).
   List<String> expectedOutputPaths() {
     final base = outputBase.isEmpty ? 'sbom' : outputBase;
-    if (formats.length == 1) {
-      return ['$base${formatExtension(formats.first)}'];
-    }
-    return formats.map((f) => '$base${formatExtension(f)}').toList();
+    // Même règle que le CLI (`_outputPathFor`) : avec un seul format, un
+    // chemin déjà muni d'une extension SBOM connue est conservé tel quel.
+    final stripped = _stripKnownExtension(base);
+    if (formats.length == 1 && stripped != base) return [base];
+    return formats.map((f) => '$stripped${formatExtension(f)}').toList();
   }
 }

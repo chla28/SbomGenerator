@@ -188,5 +188,55 @@ void main() {
       expect(gen.fieldChecks.firstWhere((c) => c.label == 'Licence').status,
           CraStatus.ok);
     });
+
+    test('SPDX 3.0 : composants, champs et métadonnées lus dans le graphe', () {
+      final gen = CraReportGenerator(
+        sbomPath: 's.spdx3.jsonld',
+        sbom: {
+          '@context': 'https://spdx.org/rdf/3.0.1/spdx-context.jsonld',
+          '@graph': [
+            {
+              'type': 'CreationInfo',
+              '@id': '_:ci',
+              'created': '2026-01-01T00:00:00Z',
+              'createdBy': ['t'],
+            },
+            {
+              'type': 'SpdxDocument',
+              'spdxId': 'd',
+              'rootElement': ['p1'],
+            },
+            {
+              'type': 'software:Package',
+              'spdxId': 'p1',
+              'name': 'foo',
+              'software:packageVersion': '1.0',
+              'suppliedBy': 'org',
+              'externalIdentifier': [
+                {'externalIdentifierType': 'purl', 'identifier': 'pkg:x/foo'}
+              ],
+              'verifiedUsing': [
+                {'type': 'Hash', 'algorithm': 'sha256', 'hashValue': 'ab'}
+              ],
+              'concludedLicense': 'MIT',
+            },
+            {
+              'type': 'Relationship',
+              'from': 'p1',
+              'to': ['p2'],
+              'relationshipType': 'dependsOn',
+            },
+          ],
+        },
+        meta: const CraMetadata(),
+      );
+      expect(gen.fieldChecks, hasLength(6));
+      expect(gen.fieldChecks.every((c) => c.status == CraStatus.ok), isTrue);
+      expect(gen.dependencyStatus, CraStatus.ok);
+      final md = gen.toJson()['sbom']['documentMetadata'];
+      expect(md['author'], isTrue);
+      expect(md['timestamp'], '2026-01-01T00:00:00Z');
+      expect(md['primaryComponent'], isTrue);
+    });
   });
 }

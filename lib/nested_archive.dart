@@ -21,6 +21,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'tool_runner.dart';
 
 import 'deb_parser.dart';
 import 'go_parser.dart';
@@ -252,7 +253,7 @@ class NestedExplorer {
       String archive, String dest, NestedResult out, String label) async {
     final ProcessResult r;
     try {
-      r = await Process.run('python3', [
+      r = await runTool('python3', [
         '-c',
         _extractScript,
         archive,

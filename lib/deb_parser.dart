@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'tool_runner.dart';
 import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
 import 'i18n.dart';
@@ -10,7 +11,7 @@ import 'i18n.dart';
 /// used when present.
 class DebParser {
   Future<DebPackage?> parseDebFile(String path) async {
-    final result = await Process.run('dpkg-deb', ['-f', path]);
+    final result = await runTool('dpkg-deb', ['-f', path]);
 
     if (result.exitCode != 0) {
       stderr.writeln('Warning: ' +

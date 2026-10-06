@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'tool_runner.dart';
 import 'hash_utils.dart' show hashLocalFile;
 import 'models.dart';
 import 'i18n.dart';
@@ -22,7 +23,7 @@ sys.stdout.buffer.write(z.read(name))
 ''';
 
   Future<WheelPackage?> parseWheelFile(String path) async {
-    final result = await Process.run('python3', ['-c', _extractScript, path]);
+    final result = await runTool('python3', ['-c', _extractScript, path]);
 
     if (result.exitCode != 0) {
       stderr.writeln('Warning: ' +

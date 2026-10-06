@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Nom du fichier avec un seul format** : `-o sbom` produit désormais `sbom.cdx.json` (l'extension du format est ajoutée comme avec plusieurs formats ; un `-o` portant déjà une extension SBOM connue reste inchangé). L'aperçu des fichiers attendus de la GUI applique la même règle.
+- **Outils externes absents** (`rpm`, `python3`, `dpkg-deb`, `unzip`, `skopeo`, `syft`, `trivy`, `sbomqs`) : message d'erreur clair au lieu d'une exception système (utilitaire commun `runTool`, code 127).
+- **`--deny-license`** : `GPL-3.0` ne bloque plus `LGPL-3.0` ni `AGPL-3.0` (correspondance par identifiant SPDX et variantes de version) ; `*GPL*` conserve la recherche par sous-chaîne.
+- **`--license-map`** : les clés `groupId:artifactId` Maven et les PURL sans version sont acceptées ; séparateurs `->`, `=` ou dernier `:`.
+- **`cra` et SPDX 3.0** : le rapport lit désormais les composants, relations, auteur, horodatage et composant principal d'un SBOM SPDX 3.0 (JSON-LD).
+- **CI** : `timeout-minutes` sur tous les jobs.
+
 ## [1.6.5] - 2026-10-06
 
 ### Fixed
