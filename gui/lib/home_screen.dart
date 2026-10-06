@@ -7,6 +7,7 @@ import 'models/app_themes.dart';
 import 'models/sbom_config.dart';
 import 'models/sbom_result.dart';
 import 'services/sbom_runner.dart';
+import 'services/session_store.dart';
 import 'services/settings_service.dart';
 import 'widgets/config_panel.dart';
 import 'widgets/help_viewer.dart';
@@ -344,6 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
               progressPercent: _progressPercent,
               progressLabel: _progressLabel,
               sbomqsOutput: _sbomqsOutput,
+              historyStore: SessionStore(SessionStore.defaultDir()),
             ),
           ),
         ],

@@ -3055,4 +3055,128 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get remedHelpNote =>
       'Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.';
+
+  @override
+  String get sessSave => 'Enregistrer la session…';
+
+  @override
+  String get sessOpen => 'Ouvrir une session…';
+
+  @override
+  String get sessHistory => 'Historique';
+
+  @override
+  String get sessNothingToSave => 'Aucun résultat de scan à enregistrer.';
+
+  @override
+  String get sessDialogSave => 'Enregistrer la session';
+
+  @override
+  String get sessDialogOpen => 'Ouvrir une session';
+
+  @override
+  String sessSaved(String path) {
+    return 'Session enregistrée → $path';
+  }
+
+  @override
+  String sessLoaded(String date) {
+    return 'Session du $date chargée dans le tableau de bord';
+  }
+
+  @override
+  String sessInvalid(String error) {
+    return 'Fichier de session illisible : $error';
+  }
+
+  @override
+  String get sessHistoryTitle => 'Historique des analyses';
+
+  @override
+  String get sessHistoryEmpty =>
+      'Aucune analyse enregistrée. Les résultats des scans sont conservés automatiquement (une entrée par cible et par jour).';
+
+  @override
+  String sessHistoryItem(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString CVE',
+      one: '1 CVE',
+      zero: 'aucune CVE',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sessOpenAction => 'Ouvrir';
+
+  @override
+  String get sessCompareAction => 'Comparer';
+
+  @override
+  String get sessDeleteAction => 'Supprimer';
+
+  @override
+  String get sessClearHistory => 'Vider l\'historique';
+
+  @override
+  String get sessClearConfirm => 'Supprimer toutes les analyses enregistrées ?';
+
+  @override
+  String sessTrendTitle(String date) {
+    return 'Tendance depuis le $date';
+  }
+
+  @override
+  String sessTrendNew(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString nouvelle(s)';
+  }
+
+  @override
+  String sessTrendFixed(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString disparue(s)';
+  }
+
+  @override
+  String sessTrendSame(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString inchangée(s)';
+  }
+
+  @override
+  String sessTrendTotals(int before, int after) {
+    final intl.NumberFormat beforeNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String beforeString = beforeNumberFormat.format(before);
+    final intl.NumberFormat afterNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String afterString = afterNumberFormat.format(after);
+
+    return 'Total : $beforeString → $afterString';
+  }
+
+  @override
+  String get sessTrendNewList => 'Nouvelles :';
+
+  @override
+  String get sessTrendClear => 'Retirer la comparaison';
+
+  @override
+  String get sessTrendNone => 'Aucune différence avec la session de référence.';
 }

@@ -11,6 +11,7 @@ import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
 import 'remediation_section.dart';
+import 'session_bar.dart';
 import '../models/remediation.dart';
 import 'trivy_panel.dart';
 import 'vuln_shared.dart' show adocEscape, SortHeader, VulnRow;
@@ -35,6 +36,9 @@ class DashboardPanel extends StatefulWidget {
   /// « Grype », « OSV-Scanner », « Trivy »). Vide = pas de section Couches.
   final Map<String, LayerScanResult> layerScans;
 
+  /// Sauvegarde / chargement / historique / tendance ; `null` = barre masquée.
+  final SessionActions? sessions;
+
   const DashboardPanel({
     super.key,
     required this.grypeVulns,
@@ -43,6 +47,7 @@ class DashboardPanel extends StatefulWidget {
     this.exploitById = const {},
     this.scanTargets = const [],
     this.layerScans = const {},
+    this.sessions,
   });
 
   // Normalise les sévérités en clé minuscule commune
@@ -145,6 +150,11 @@ class _DashboardPanelState extends State<DashboardPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.sessions != null) ...[
+            SessionBar(actions: widget.sessions!),
+            const SizedBox(height: 16),
+          ],
+
           // ── Synthèse globale ──
           _GlobalSummary(
             uniqueIds: allIds.length,

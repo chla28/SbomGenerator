@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -8,7 +9,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
 import '../models/sbom_result.dart';
+import '../models/scan_session.dart';
 import '../services/scan_enrichment.dart';
+import '../services/session_store.dart';
 import 'cra_panel.dart';
 import 'dashboard_panel.dart';
 import 'grype_panel.dart';
@@ -18,7 +21,9 @@ import 'sbom_diff_panel.dart';
 import 'sbom_licenses_panel.dart';
 import 'sbom_merge_panel.dart';
 import 'sbom_tree_panel.dart';
+import 'pdf_report.dart' show kGuiVersion;
 import 'sbom_viewer_panel.dart';
+import 'session_bar.dart';
 import 'trivy_panel.dart';
 import '../l10n/l10n.dart';
 
@@ -36,6 +41,9 @@ class ResultsPanel extends StatefulWidget {
   final String progressLabel;
   final String? sbomqsOutput;
 
+  /// Historique automatique des analyses ; `null` = pas de sauvegarde.
+  final SessionStore? historyStore;
+
   const ResultsPanel({
     super.key,
     required this.logLines,
@@ -50,6 +58,7 @@ class ResultsPanel extends StatefulWidget {
     this.progressPercent = 0,
     this.progressLabel = '',
     this.sbomqsOutput,
+    this.historyStore,
   });
 
   @override
@@ -87,11 +96,59 @@ class _ResultsPanelState extends State<ResultsPanel>
   String? _osvTarget;
   String? _trivyTarget;
 
-  List<String> get _scanTargets => <String?>[
-    _grypeTarget,
-    _osvTarget,
-    _trivyTarget,
-  ].whereType<String>().toSet().toList();
+  // Cibles d'une session chargée (prioritaires tant que les onglets de scan
+  // n'ont pas produit de nouveaux résultats).
+  List<String>? _loadedTargets;
+
+  List<String> get _scanTargets =>
+      _loadedTargets ??
+      <String?>[
+        _grypeTarget,
+        _osvTarget,
+        _trivyTarget,
+      ].whereType<String>().toSet().toList();
+
+  // ── Sessions : sauvegarde automatique, chargement, tendance ──────────────
+  ScanSession? _baseline;
+  Timer? _saveTimer;
+
+  ScanSession _currentSession() => ScanSession(
+    savedAt: DateTime.now(),
+    guiVersion: kGuiVersion,
+    targets: _scanTargets,
+    grype: _grypeVulns,
+    osv: _osvVulns,
+    trivy: _trivyVulns,
+    exploit: _mergedExploit,
+  );
+
+  /// Sauvegarde dans l'historique 2 s après la dernière modification des
+  /// résultats (les signaux KEV/EPSS arrivent après les scans).
+  void _scheduleSave() {
+    _loadedTargets =
+        null; // de nouveaux résultats remplacent la session chargée
+    final store = widget.historyStore;
+    if (store == null) return;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 2), () {
+      final s = _currentSession();
+      if (s.isEmpty) return;
+      store.save(s).catchError((Object _) => File(''));
+    });
+  }
+
+  void _loadSession(ScanSession s) => setState(() {
+    _grypeVulns = s.grype;
+    _osvVulns = s.osv;
+    _trivyVulns = s.trivy;
+    // Les signaux sont fusionnés pour le tableau de bord : on les place dans
+    // l'un des trois accumulateurs.
+    _grypeExploit = s.exploit;
+    _osvExploit = const {};
+    _trivyExploit = const {};
+    _layerScans.clear();
+    _loadedTargets = s.targets;
+  });
 
   Map<String, ExploitInfo> get _mergedExploit {
     final out = <String, ExploitInfo>{};
@@ -122,6 +179,7 @@ class _ResultsPanelState extends State<ResultsPanel>
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _tabs.dispose();
     _logScroll.dispose();
     super.dispose();
@@ -460,13 +518,26 @@ class _ResultsPanelState extends State<ResultsPanel>
                 exploitById: _mergedExploit,
                 scanTargets: _scanTargets,
                 layerScans: Map.of(_layerScans),
+                sessions: SessionActions(
+                  current: _currentSession,
+                  onLoad: _loadSession,
+                  baseline: _baseline,
+                  onBaseline: (b) => setState(() => _baseline = b),
+                  store: widget.historyStore,
+                ),
               ),
 
               // Tab 3 : Grype
               GrypePanel(
                 outputFiles: widget.outputFiles,
-                onVulnsChanged: (v) => setState(() => _grypeVulns = v),
-                onExploitChanged: (m) => setState(() => _grypeExploit = m),
+                onVulnsChanged: (v) {
+                  setState(() => _grypeVulns = v);
+                  _scheduleSave();
+                },
+                onExploitChanged: (m) {
+                  setState(() => _grypeExploit = m);
+                  _scheduleSave();
+                },
                 onScanTargetChanged: (t) => setState(() => _grypeTarget = t),
                 onLayerScanChanged: (r) => setState(
                   () => r == null
@@ -484,8 +555,14 @@ class _ResultsPanelState extends State<ResultsPanel>
               // Tab 4 : OSV-Scanner
               OsvPanel(
                 outputFiles: widget.outputFiles,
-                onVulnsChanged: (v) => setState(() => _osvVulns = v),
-                onExploitChanged: (m) => setState(() => _osvExploit = m),
+                onVulnsChanged: (v) {
+                  setState(() => _osvVulns = v);
+                  _scheduleSave();
+                },
+                onExploitChanged: (m) {
+                  setState(() => _osvExploit = m);
+                  _scheduleSave();
+                },
                 onScanTargetChanged: (t) => setState(() => _osvTarget = t),
                 onLayerScanChanged: (r) => setState(
                   () => r == null
@@ -503,8 +580,14 @@ class _ResultsPanelState extends State<ResultsPanel>
               // Tab 5 : Trivy
               TrivyPanel(
                 outputFiles: widget.outputFiles,
-                onVulnsChanged: (v) => setState(() => _trivyVulns = v),
-                onExploitChanged: (m) => setState(() => _trivyExploit = m),
+                onVulnsChanged: (v) {
+                  setState(() => _trivyVulns = v);
+                  _scheduleSave();
+                },
+                onExploitChanged: (m) {
+                  setState(() => _trivyExploit = m);
+                  _scheduleSave();
+                },
                 onScanTargetChanged: (t) => setState(() => _trivyTarget = t),
                 onLayerScanChanged: (r) => setState(
                   () => r == null

@@ -3827,5 +3827,159 @@
   "remedHelpNote": "Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.",
   "@remedHelpNote": {
     "description": "Avertissement sous la liste de remédiation."
+  },
+  "sessSave": "Enregistrer la session…",
+  "@sessSave": {
+    "description": "Bouton du tableau de bord : enregistrer les résultats de scan dans un fichier."
+  },
+  "sessOpen": "Ouvrir une session…",
+  "@sessOpen": {
+    "description": "Bouton du tableau de bord : charger un fichier de session."
+  },
+  "sessHistory": "Historique",
+  "@sessHistory": {
+    "description": "Bouton du tableau de bord : ouvrir l'historique des analyses."
+  },
+  "sessNothingToSave": "Aucun résultat de scan à enregistrer.",
+  "@sessNothingToSave": {
+    "description": "Message : session vide, rien à enregistrer."
+  },
+  "sessDialogSave": "Enregistrer la session",
+  "@sessDialogSave": {
+    "description": "Titre du dialogue d'enregistrement d'une session."
+  },
+  "sessDialogOpen": "Ouvrir une session",
+  "@sessDialogOpen": {
+    "description": "Titre du dialogue d'ouverture d'une session."
+  },
+  "sessSaved": "Session enregistrée → {path}",
+  "@sessSaved": {
+    "description": "Message : session enregistrée.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "sessLoaded": "Session du {date} chargée dans le tableau de bord",
+  "@sessLoaded": {
+    "description": "Message : session chargée.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "sessInvalid": "Fichier de session illisible : {error}",
+  "@sessInvalid": {
+    "description": "Message : fichier de session invalide.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "sessHistoryTitle": "Historique des analyses",
+  "@sessHistoryTitle": {
+    "description": "Titre du dialogue d'historique."
+  },
+  "sessHistoryEmpty": "Aucune analyse enregistrée. Les résultats des scans sont conservés automatiquement (une entrée par cible et par jour).",
+  "@sessHistoryEmpty": {
+    "description": "Historique vide."
+  },
+  "sessHistoryItem": "{count, plural, =0{aucune CVE} =1{1 CVE} other{{count} CVE}}",
+  "@sessHistoryItem": {
+    "description": "Nombre de CVE d'une session de l'historique.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "sessOpenAction": "Ouvrir",
+  "@sessOpenAction": {
+    "description": "Action : charger une session de l'historique dans le tableau de bord."
+  },
+  "sessCompareAction": "Comparer",
+  "@sessCompareAction": {
+    "description": "Action : comparer la session courante à une session de l'historique."
+  },
+  "sessDeleteAction": "Supprimer",
+  "@sessDeleteAction": {
+    "description": "Action : supprimer une session de l'historique."
+  },
+  "sessClearHistory": "Vider l'historique",
+  "@sessClearHistory": {
+    "description": "Bouton : supprimer toutes les sessions de l'historique."
+  },
+  "sessClearConfirm": "Supprimer toutes les analyses enregistrées ?",
+  "@sessClearConfirm": {
+    "description": "Confirmation de la suppression de l'historique."
+  },
+  "sessTrendTitle": "Tendance depuis le {date}",
+  "@sessTrendTitle": {
+    "description": "Titre de la carte de tendance (date de la session de référence).",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "sessTrendNew": "{count} nouvelle(s)",
+  "@sessTrendNew": {
+    "description": "Tendance : nombre de CVE apparues.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "sessTrendFixed": "{count} disparue(s)",
+  "@sessTrendFixed": {
+    "description": "Tendance : nombre de CVE disparues (corrigées ou plus détectées).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "sessTrendSame": "{count} inchangée(s)",
+  "@sessTrendSame": {
+    "description": "Tendance : nombre de CVE inchangées.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "sessTrendTotals": "Total : {before} → {after}",
+  "@sessTrendTotals": {
+    "description": "Tendance : total de CVE avant → après.",
+    "placeholders": {
+      "before": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "after": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "sessTrendNewList": "Nouvelles :",
+  "@sessTrendNewList": {
+    "description": "Tendance : légende de la liste des nouvelles CVE."
+  },
+  "sessTrendClear": "Retirer la comparaison",
+  "@sessTrendClear": {
+    "description": "Bouton : retirer la session de référence de la tendance."
+  },
+  "sessTrendNone": "Aucune différence avec la session de référence.",
+  "@sessTrendNone": {
+    "description": "Tendance : aucune évolution."
   }
 }

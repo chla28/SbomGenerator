@@ -4279,6 +4279,156 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.'**
   String get remedHelpNote;
+
+  /// Bouton du tableau de bord : enregistrer les résultats de scan dans un fichier.
+  ///
+  /// In fr, this message translates to:
+  /// **'Enregistrer la session…'**
+  String get sessSave;
+
+  /// Bouton du tableau de bord : charger un fichier de session.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir une session…'**
+  String get sessOpen;
+
+  /// Bouton du tableau de bord : ouvrir l'historique des analyses.
+  ///
+  /// In fr, this message translates to:
+  /// **'Historique'**
+  String get sessHistory;
+
+  /// Message : session vide, rien à enregistrer.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun résultat de scan à enregistrer.'**
+  String get sessNothingToSave;
+
+  /// Titre du dialogue d'enregistrement d'une session.
+  ///
+  /// In fr, this message translates to:
+  /// **'Enregistrer la session'**
+  String get sessDialogSave;
+
+  /// Titre du dialogue d'ouverture d'une session.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir une session'**
+  String get sessDialogOpen;
+
+  /// Message : session enregistrée.
+  ///
+  /// In fr, this message translates to:
+  /// **'Session enregistrée → {path}'**
+  String sessSaved(String path);
+
+  /// Message : session chargée.
+  ///
+  /// In fr, this message translates to:
+  /// **'Session du {date} chargée dans le tableau de bord'**
+  String sessLoaded(String date);
+
+  /// Message : fichier de session invalide.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fichier de session illisible : {error}'**
+  String sessInvalid(String error);
+
+  /// Titre du dialogue d'historique.
+  ///
+  /// In fr, this message translates to:
+  /// **'Historique des analyses'**
+  String get sessHistoryTitle;
+
+  /// Historique vide.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune analyse enregistrée. Les résultats des scans sont conservés automatiquement (une entrée par cible et par jour).'**
+  String get sessHistoryEmpty;
+
+  /// Nombre de CVE d'une session de l'historique.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =0{aucune CVE} =1{1 CVE} other{{count} CVE}}'**
+  String sessHistoryItem(int count);
+
+  /// Action : charger une session de l'historique dans le tableau de bord.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir'**
+  String get sessOpenAction;
+
+  /// Action : comparer la session courante à une session de l'historique.
+  ///
+  /// In fr, this message translates to:
+  /// **'Comparer'**
+  String get sessCompareAction;
+
+  /// Action : supprimer une session de l'historique.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer'**
+  String get sessDeleteAction;
+
+  /// Bouton : supprimer toutes les sessions de l'historique.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vider l\'historique'**
+  String get sessClearHistory;
+
+  /// Confirmation de la suppression de l'historique.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer toutes les analyses enregistrées ?'**
+  String get sessClearConfirm;
+
+  /// Titre de la carte de tendance (date de la session de référence).
+  ///
+  /// In fr, this message translates to:
+  /// **'Tendance depuis le {date}'**
+  String sessTrendTitle(String date);
+
+  /// Tendance : nombre de CVE apparues.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} nouvelle(s)'**
+  String sessTrendNew(int count);
+
+  /// Tendance : nombre de CVE disparues (corrigées ou plus détectées).
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} disparue(s)'**
+  String sessTrendFixed(int count);
+
+  /// Tendance : nombre de CVE inchangées.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} inchangée(s)'**
+  String sessTrendSame(int count);
+
+  /// Tendance : total de CVE avant → après.
+  ///
+  /// In fr, this message translates to:
+  /// **'Total : {before} → {after}'**
+  String sessTrendTotals(int before, int after);
+
+  /// Tendance : légende de la liste des nouvelles CVE.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouvelles :'**
+  String get sessTrendNewList;
+
+  /// Bouton : retirer la session de référence de la tendance.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retirer la comparaison'**
+  String get sessTrendClear;
+
+  /// Tendance : aucune évolution.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune différence avec la session de référence.'**
+  String get sessTrendNone;
 }
 
 class _AppLocalizationsDelegate
