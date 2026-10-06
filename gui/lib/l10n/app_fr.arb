@@ -4312,5 +4312,41 @@
   "vexAnyPackage": "tous les paquets",
   "@vexAnyPackage": {
     "description": "Libellé d'une déclaration visant tous les paquets (liste VEX)."
+  },
+  "shortcutsTooltip": "Raccourcis clavier",
+  "@shortcutsTooltip": {
+    "description": "Info-bulle du bouton d'aide sur les raccourcis clavier."
+  },
+  "shortcutsTitle": "Raccourcis clavier",
+  "@shortcutsTitle": {
+    "description": "Titre du dialogue des raccourcis clavier."
+  },
+  "shortcutRun": "Lancer la génération",
+  "@shortcutRun": {
+    "description": "Raccourci : lancer la génération."
+  },
+  "shortcutStop": "Arrêter l'exécution en cours",
+  "@shortcutStop": {
+    "description": "Raccourci : arrêter."
+  },
+  "shortcutTabs": "Aller à l'onglet 1 à 9",
+  "@shortcutTabs": {
+    "description": "Raccourci : choisir un onglet par son numéro."
+  },
+  "shortcutNextTab": "Onglet suivant / précédent",
+  "@shortcutNextTab": {
+    "description": "Raccourci : changer d'onglet."
+  },
+  "shortcutHelp": "Ouvrir l'aide",
+  "@shortcutHelp": {
+    "description": "Raccourci : aide."
+  },
+  "shortcutShortcuts": "Afficher cette liste",
+  "@shortcutShortcuts": {
+    "description": "Raccourci : liste des raccourcis."
+  },
+  "shortcutNavigate": "Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace",
+  "@shortcutNavigate": {
+    "description": "Rappel : navigation au clavier dans les tableaux."
   }
 }

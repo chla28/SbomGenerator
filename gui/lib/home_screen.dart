@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'l10n/l10n.dart';
 import 'models/app_themes.dart';
@@ -42,6 +43,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late SbomConfig _config;
+  final _configKey = GlobalKey<ConfigPanelState>();
+  final _resultsKey = GlobalKey<ResultsPanelState>();
   final _runner = SbomRunner();
 
   List<String> _logLines = [];
@@ -245,6 +248,44 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = widget.themeMode == ThemeMode.dark;
+    return CallbackShortcuts(
+      bindings: _shortcutBindings(context),
+      child: Focus(autofocus: true, child: _scaffold(context, isDark)),
+    );
+  }
+
+  /// Raccourcis clavier globaux (voir [_showShortcuts]).
+  Map<ShortcutActivator, VoidCallback> _shortcutBindings(
+    BuildContext context,
+  ) => {
+    const SingleActivator(LogicalKeyboardKey.enter, control: true): () =>
+        _configKey.currentState?.triggerRun(),
+    const SingleActivator(LogicalKeyboardKey.escape): () {
+      if (_isRunning) _stopScan();
+    },
+    const SingleActivator(LogicalKeyboardKey.f1): () => _showHelp(context),
+    const SingleActivator(LogicalKeyboardKey.slash, control: true): () =>
+        _showShortcuts(context),
+    const SingleActivator(LogicalKeyboardKey.pageDown, control: true): () =>
+        _resultsKey.currentState?.moveTab(1),
+    const SingleActivator(LogicalKeyboardKey.pageUp, control: true): () =>
+        _resultsKey.currentState?.moveTab(-1),
+    for (final (i, key) in [
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+      LogicalKeyboardKey.digit7,
+      LogicalKeyboardKey.digit8,
+      LogicalKeyboardKey.digit9,
+    ].indexed)
+      SingleActivator(key, control: true): () =>
+          _resultsKey.currentState?.selectTab(i),
+  };
+
+  Widget _scaffold(BuildContext context, bool isDark) {
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -277,6 +318,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          IconButton(
+            icon: const Icon(Icons.keyboard_outlined),
+            tooltip: context.l10n.shortcutsTooltip,
+            onPressed: () => _showShortcuts(context),
+          ),
           IconButton(
             icon: const Icon(Icons.help_outline),
             tooltip: context.l10n.homeHelpTooltip,
@@ -324,6 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ConfigPanel(
+            key: _configKey,
             config: _config,
             isRunning: _isBusy,
             onRun: _startScan,
@@ -333,6 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const VerticalDivider(width: 1),
           Expanded(
             child: ResultsPanel(
+              key: _resultsKey,
               logLines: _logLines,
               outputFiles: _outputFiles,
               warnings: _warnings,
@@ -347,6 +395,63 @@ class _HomeScreenState extends State<HomeScreen> {
               sbomqsOutput: _sbomqsOutput,
               historyStore: SessionStore(SessionStore.defaultDir()),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showShortcuts(BuildContext context) {
+    final l = context.l10n;
+    final rows = <(String, String)>[
+      ('Ctrl+Entrée', l.shortcutRun),
+      ('Échap', l.shortcutStop),
+      ('Ctrl+1 … Ctrl+9', l.shortcutTabs),
+      ('Ctrl+PgSuiv / Ctrl+PgPréc', l.shortcutNextTab),
+      ('F1', l.shortcutHelp),
+      ('Ctrl+/', l.shortcutShortcuts),
+    ];
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(l.shortcutsTitle),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (keys, what) in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 190,
+                        child: Text(
+                          keys,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Text(what)),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                l.shortcutNavigate,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l.commonClose),
           ),
         ],
       ),

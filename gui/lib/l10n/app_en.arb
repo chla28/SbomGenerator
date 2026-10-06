@@ -797,5 +797,14 @@
   "vexInvalid": "Unreadable VEX document: {error}",
   "vexNothingToExport": "No VEX statement to export.",
   "vexClearAll": "Remove all",
-  "vexAnyPackage": "all packages"
+  "vexAnyPackage": "all packages",
+  "shortcutsTooltip": "Keyboard shortcuts",
+  "shortcutsTitle": "Keyboard shortcuts",
+  "shortcutRun": "Start the generation",
+  "shortcutStop": "Stop the running task",
+  "shortcutTabs": "Go to tab 1 to 9",
+  "shortcutNextTab": "Next / previous tab",
+  "shortcutHelp": "Open the help",
+  "shortcutShortcuts": "Show this list",
+  "shortcutNavigate": "Navigate: Tab / arrow keys; open a row: Enter or Space"
 }

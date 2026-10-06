@@ -15,6 +15,7 @@ import '../services/layer_scan_service.dart';
 import '../services/trivy_runner.dart';
 import 'help_icon.dart';
 import '../services/version_service.dart';
+import 'on_pale.dart';
 import 'vuln_shared.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
@@ -1153,32 +1154,34 @@ class _TrivyBanner extends StatelessWidget {
     return Container(
       color: Colors.orange[50],
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            context.l10n.scanBannerCount(vulns.length),
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          Expanded(
-            child: Wrap(
-              spacing: 8,
-              children: [
-                for (final s in order)
-                  if (counts.containsKey(s))
-                    Text(
-                      '${counts[s]} $s',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colors[s],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-              ],
+      child: OnPale(
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              context.l10n.scanBannerCount(vulns.length),
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-          ),
-        ],
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final s in order)
+                    if (counts.containsKey(s))
+                      Text(
+                        '${counts[s]} $s',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors[s],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

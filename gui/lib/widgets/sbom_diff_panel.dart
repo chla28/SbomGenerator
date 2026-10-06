@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../models/sbom_result.dart';
 import '../l10n/l10n.dart';
+import 'on_pale.dart';
 
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
@@ -1043,97 +1044,103 @@ class _DiffRow extends StatelessWidget {
             ? Border(left: BorderSide(color: border, width: 3))
             : null,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        child: Row(
-          children: [
-            Icon(icon, size: 14, color: iconColor),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 72,
-              child: Text(
-                statusLabel,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: iconColor,
+      child: paleIf(
+        bg != null,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          child: Row(
+            children: [
+              Icon(icon, size: 14, color: iconColor),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 72,
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: iconColor,
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                entry.name,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                flex: 3,
+                child: Text(
+                  entry.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            // Version A
-            Expanded(
-              flex: 2,
-              child: Text(
-                versionA,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: entry.versionChanged
-                      ? Colors.red[700]
-                      : Colors.grey[600],
+              // Version A
+              Expanded(
+                flex: 2,
+                child: Text(
+                  versionA,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    color: entry.versionChanged
+                        ? Colors.red[700]
+                        : Colors.grey[600],
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            // Version B
-            Expanded(
-              flex: 2,
-              child: Text(
-                versionB,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: entry.versionChanged
-                      ? Colors.green[700]
-                      : Colors.grey[600],
+              // Version B
+              Expanded(
+                flex: 2,
+                child: Text(
+                  versionB,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    color: entry.versionChanged
+                        ? Colors.green[700]
+                        : Colors.grey[600],
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            // Licence (affiche A→B si différente)
-            Expanded(
-              flex: 2,
-              child: entry.licenseChanged
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          licA,
-                          style: TextStyle(
-                            fontSize: 10,
-                            decoration: TextDecoration.lineThrough,
-                            color: Colors.red[700],
+              // Licence (affiche A→B si différente)
+              Expanded(
+                flex: 2,
+                child: entry.licenseChanged
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            licA,
+                            style: TextStyle(
+                              fontSize: 10,
+                              decoration: TextDecoration.lineThrough,
+                              color: Colors.red[700],
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          licB,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.green[700],
+                          Text(
+                            licB,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.green[700],
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
+                        ],
+                      )
+                    : Text(
+                        licB.isNotEmpty ? licB : licA,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
                         ),
-                      ],
-                    )
-                  : Text(
-                      licB.isNotEmpty ? licB : licA,
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-            ),
-          ],
+                        overflow: TextOverflow.ellipsis,
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -11,6 +11,7 @@ import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
 import 'remediation_section.dart';
+import 'on_pale.dart';
 import 'session_bar.dart';
 import '../models/remediation.dart';
 import 'trivy_panel.dart';
@@ -1724,102 +1725,105 @@ class _CrossRow extends StatelessWidget {
                 bottom: BorderSide(color: Colors.grey[200]!, width: 0.5),
               ),
             ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 80,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: bg,
-                      borderRadius: BorderRadius.circular(3),
-                      border: Border.all(color: fg, width: 0.6),
-                    ),
-                    child: Text(
-                      severity.isEmpty ? '?' : severity,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: fg,
+            child: paleIf(
+              isIsolated,
+              Row(
+                children: [
+                  SizedBox(
+                    width: 80,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: bg,
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border.all(color: fg, width: 0.6),
+                      ),
+                      child: Text(
+                        severity.isEmpty ? '?' : severity,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: fg,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (isIsolated) ...[
-                  Tooltip(
-                    message: context.l10n.dashSeenByOne(scansRun),
-                    child: Icon(
-                      Icons.error_outline,
-                      size: 13,
-                      color: Colors.amber[800],
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          id,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                  if (isIsolated) ...[
+                    Tooltip(
+                      message: context.l10n.dashSeenByOne(scansRun),
+                      child: Icon(
+                        Icons.error_outline,
+                        size: 13,
+                        color: Colors.amber[800],
                       ),
-                      if (exploit?.pocKnown ?? false) ...[
-                        const SizedBox(width: 6),
-                        Tooltip(
-                          message: context.l10n.cvePocKnown,
-                          child: const Icon(
-                            Icons.code,
-                            size: 12,
-                            color: Colors.purple,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            id,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
+                        if (exploit?.pocKnown ?? false) ...[
+                          const SizedBox(width: 6),
+                          Tooltip(
+                            message: context.l10n.cvePocKnown,
+                            child: const Icon(
+                              Icons.code,
+                              size: 12,
+                              color: Colors.purple,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                if (hasExploit) ...[
-                  SizedBox(width: 44, child: _kevCell(context)),
-                  SizedBox(width: 56, child: _epssCell(context)),
-                ],
-                for (final present in [inGrype, inOsv, inTrivy])
+                  if (hasExploit) ...[
+                    SizedBox(width: 44, child: _kevCell(context)),
+                    SizedBox(width: 56, child: _epssCell(context)),
+                  ],
+                  for (final present in [inGrype, inOsv, inTrivy])
+                    SizedBox(
+                      width: 58,
+                      child: Icon(
+                        present
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        size: 14,
+                        color: present ? Colors.green[600] : Colors.grey[300],
+                      ),
+                    ),
+                  if (layers != null)
+                    SizedBox(
+                      width: 70,
+                      child: Text(
+                        layers!.isEmpty ? '—' : layers!,
+                        style: const TextStyle(fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   SizedBox(
-                    width: 58,
+                    width: 24,
                     child: Icon(
-                      present
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      size: 14,
-                      color: present ? Colors.green[600] : Colors.grey[300],
+                      expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: Colors.grey[500],
                     ),
                   ),
-                if (layers != null)
-                  SizedBox(
-                    width: 70,
-                    child: Text(
-                      layers!.isEmpty ? '—' : layers!,
-                      style: const TextStyle(fontSize: 11),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                SizedBox(
-                  width: 24,
-                  child: Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: Colors.grey[500],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

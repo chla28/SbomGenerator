@@ -15,6 +15,7 @@ import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
 import '../services/version_service.dart';
 import 'help_icon.dart';
+import 'on_pale.dart';
 import 'vuln_shared.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
@@ -1041,32 +1042,34 @@ class _OsvBanner extends StatelessWidget {
     return Container(
       color: Colors.orange[50],
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            context.l10n.scanBannerCount(vulns.length),
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          Expanded(
-            child: Wrap(
-              spacing: 8,
-              children: [
-                for (final s in order)
-                  if (counts.containsKey(s))
-                    Text(
-                      '${counts[s]} $s',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _severityColor(s),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-              ],
+      child: OnPale(
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              context.l10n.scanBannerCount(vulns.length),
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-          ),
-        ],
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final s in order)
+                    if (counts.containsKey(s))
+                      Text(
+                        '${counts[s]} $s',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _severityColor(s),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

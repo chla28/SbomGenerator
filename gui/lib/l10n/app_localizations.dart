@@ -4801,6 +4801,60 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'tous les paquets'**
   String get vexAnyPackage;
+
+  /// Info-bulle du bouton d'aide sur les raccourcis clavier.
+  ///
+  /// In fr, this message translates to:
+  /// **'Raccourcis clavier'**
+  String get shortcutsTooltip;
+
+  /// Titre du dialogue des raccourcis clavier.
+  ///
+  /// In fr, this message translates to:
+  /// **'Raccourcis clavier'**
+  String get shortcutsTitle;
+
+  /// Raccourci : lancer la génération.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lancer la génération'**
+  String get shortcutRun;
+
+  /// Raccourci : arrêter.
+  ///
+  /// In fr, this message translates to:
+  /// **'Arrêter l\'exécution en cours'**
+  String get shortcutStop;
+
+  /// Raccourci : choisir un onglet par son numéro.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aller à l\'onglet 1 à 9'**
+  String get shortcutTabs;
+
+  /// Raccourci : changer d'onglet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Onglet suivant / précédent'**
+  String get shortcutNextTab;
+
+  /// Raccourci : aide.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir l\'aide'**
+  String get shortcutHelp;
+
+  /// Raccourci : liste des raccourcis.
+  ///
+  /// In fr, this message translates to:
+  /// **'Afficher cette liste'**
+  String get shortcutShortcuts;
+
+  /// Rappel : navigation au clavier dans les tableaux.
+  ///
+  /// In fr, this message translates to:
+  /// **'Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace'**
+  String get shortcutNavigate;
 }
 
 class _AppLocalizationsDelegate

@@ -24,6 +24,7 @@ import 'sbom_merge_panel.dart';
 import 'sbom_tree_panel.dart';
 import 'pdf_report.dart' show kGuiVersion;
 import 'sbom_viewer_panel.dart';
+import 'on_pale.dart';
 import 'session_bar.dart';
 import 'vex_ui.dart';
 import 'vuln_shared.dart' show VulnRow;
@@ -68,10 +69,10 @@ class ResultsPanel extends StatefulWidget {
   });
 
   @override
-  State<ResultsPanel> createState() => _ResultsPanelState();
+  State<ResultsPanel> createState() => ResultsPanelState();
 }
 
-class _ResultsPanelState extends State<ResultsPanel>
+class ResultsPanelState extends State<ResultsPanel>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   final ScrollController _logScroll = ScrollController();
@@ -257,10 +258,10 @@ class _ResultsPanelState extends State<ResultsPanel>
   }
 
   @override
-  void didUpdateWidget(ResultsPanel old) {
-    super.didUpdateWidget(old);
+  void didUpdateWidget(ResultsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
     // Auto-scroll log
-    if (widget.logLines.length != old.logLines.length) {
+    if (widget.logLines.length != oldWidget.logLines.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_logScroll.hasClients) {
           _logScroll.animateTo(
@@ -272,18 +273,30 @@ class _ResultsPanelState extends State<ResultsPanel>
       });
     }
     // Basculer vers Progression dès le démarrage
-    if (widget.isRunning && !old.isRunning) _tabs.animateTo(0);
+    if (widget.isRunning && !oldWidget.isRunning) _tabs.animateTo(0);
     // Basculer vers Résultats une fois SBOM + PDF terminés
-    final wasBusy = old.isRunning || old.isPdfRunning;
+    final wasBusy = oldWidget.isRunning || oldWidget.isPdfRunning;
     final isBusy = widget.isRunning || widget.isPdfRunning;
     if (!isBusy && wasBusy && widget.exitCode == 0) {
       _tabs.animateTo(1);
     }
     // Auto-sélectionner un fichier pour la prévisualisation
-    if (widget.outputFiles != old.outputFiles && _previewFile == null) {
+    if (widget.outputFiles != oldWidget.outputFiles && _previewFile == null) {
       _autoSelectPreview();
     }
   }
+
+  /// Nombre d'onglets.
+  int get tabCount => _tabs.length;
+
+  /// Affiche l'onglet [index] (ignoré hors bornes).
+  void selectTab(int index) {
+    if (index >= 0 && index < _tabs.length) _tabs.animateTo(index);
+  }
+
+  /// Onglet suivant (+1) ou précédent (−1), en boucle.
+  void moveTab(int delta) =>
+      _tabs.animateTo((_tabs.index + delta) % _tabs.length);
 
   void _autoSelectPreview() {
     final previewable = widget.outputFiles
@@ -1101,7 +1114,11 @@ class _ResultsView extends StatelessWidget {
             ),
             child: SelectableText(
               sbomqsOutput!,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: kOnPale,
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -1378,6 +1395,7 @@ class _WarningsListState extends State<_WarningsList> {
                     style: const TextStyle(
                       fontSize: 12,
                       fontFamily: 'monospace',
+                      color: kOnPale,
                     ),
                   ),
                 ),

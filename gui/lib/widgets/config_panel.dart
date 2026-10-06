@@ -24,10 +24,10 @@ class ConfigPanel extends StatefulWidget {
   });
 
   @override
-  State<ConfigPanel> createState() => _ConfigPanelState();
+  State<ConfigPanel> createState() => ConfigPanelState();
 }
 
-class _ConfigPanelState extends State<ConfigPanel> {
+class ConfigPanelState extends State<ConfigPanel> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _inputCtrl;
   late TextEditingController _outputCtrl;
@@ -129,6 +129,12 @@ class _ConfigPanelState extends State<ConfigPanel> {
     if (!_formKey.currentState!.validate()) return;
     _sync();
     widget.onRun();
+  }
+
+  /// Lance la génération (même validation que le bouton) ; sans effet si une
+  /// exécution est déjà en cours.
+  void triggerRun() {
+    if (!widget.isRunning) _run();
   }
 
   Future<void> _pickFile(

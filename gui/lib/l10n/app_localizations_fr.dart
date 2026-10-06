@@ -3424,4 +3424,32 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get vexAnyPackage => 'tous les paquets';
+
+  @override
+  String get shortcutsTooltip => 'Raccourcis clavier';
+
+  @override
+  String get shortcutsTitle => 'Raccourcis clavier';
+
+  @override
+  String get shortcutRun => 'Lancer la génération';
+
+  @override
+  String get shortcutStop => 'Arrêter l\'exécution en cours';
+
+  @override
+  String get shortcutTabs => 'Aller à l\'onglet 1 à 9';
+
+  @override
+  String get shortcutNextTab => 'Onglet suivant / précédent';
+
+  @override
+  String get shortcutHelp => 'Ouvrir l\'aide';
+
+  @override
+  String get shortcutShortcuts => 'Afficher cette liste';
+
+  @override
+  String get shortcutNavigate =>
+      'Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace';
 }
