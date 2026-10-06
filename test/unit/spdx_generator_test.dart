@@ -56,7 +56,7 @@ void main() {
       expect(
           creators,
           containsAll([
-            'Tool: sbom_generator-1.6.6',
+            'Tool: sbom_generator-1.7.0',
             'Tool: flutter-3.47.2',
             'Tool: dart-3.9.0',
           ]));

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-06
+
 ### Added
 - **VEX**: `scan --vex <file>` (OpenVEX or CycloneDX VEX) drops "not affected" / "fixed" CVEs; `scan --vex-out` (`--vex-format openvex|cyclonedx`) writes the VEX of the remaining CVEs; new `vex` subcommand to create or extend a VEX document. `cra --vex` applies the same filter to the inventory.
 - **`scan --baseline <report.json>`**: shows only the *new* CVEs compared with an earlier `scan --format json`; **`--fail-on critical|high|medium|low`**: exit code 1 only from that threshold.

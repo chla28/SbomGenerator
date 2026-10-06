@@ -41,7 +41,7 @@ import 'package:sbom_generator/schema_validator.dart';
 import 'package:sbom_generator/vex.dart';
 import 'package:sbom_generator/scan_policy.dart';
 
-const _version = '1.6.6';
+const _version = '1.7.0';
 
 const _validFormats = {
   'cyclonedx',
