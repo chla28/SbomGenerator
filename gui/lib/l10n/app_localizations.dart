@@ -4205,7 +4205,7 @@ abstract class AppLocalizations {
   /// Nombre de CVE corrigées par la mise à jour.
   ///
   /// In fr, this message translates to:
-  /// **'{count, plural, =1{corrige 1 CVE} other{corrige {count} CVE}}'**
+  /// **'{count, plural, =1{1 CVE corrigée} other{{count} CVE corrigées}}'**
   String remedFixes(int count);
 
   /// Nombre de CVE corrigées présentes au catalogue CISA KEV.
@@ -4349,7 +4349,7 @@ abstract class AppLocalizations {
   /// Nombre de CVE d'une session de l'historique.
   ///
   /// In fr, this message translates to:
-  /// **'{count, plural, =0{aucune CVE} =1{1 CVE} other{{count} CVE}}'**
+  /// **'{count, plural, =1{1 CVE} other{{count} CVE}}'**
   String sessHistoryItem(int count);
 
   /// Action : charger une session de l'historique dans le tableau de bord.
@@ -4429,6 +4429,150 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Aucune différence avec la session de référence.'**
   String get sessTrendNone;
+
+  /// Libellé de l'onglet de la file d'attente des analyses.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tâches'**
+  String get tabTasks;
+
+  /// Introduction de l'onglet Tâches.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mettez en file des analyses de vulnérabilités : elles s\'exécutent une à une, peuvent être annulées ou relancées, et leurs résultats alimentent le tableau de bord.'**
+  String get tasksIntro;
+
+  /// Libellé du choix du fichier SBOM de l'onglet Tâches.
+  ///
+  /// In fr, this message translates to:
+  /// **'SBOM à analyser'**
+  String get tasksTargetLabel;
+
+  /// Texte quand aucun SBOM n'est choisi.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun SBOM sélectionné'**
+  String get tasksTargetNone;
+
+  /// Bouton de choix d'un fichier SBOM.
+  ///
+  /// In fr, this message translates to:
+  /// **'Parcourir…'**
+  String get tasksBrowse;
+
+  /// Titre du dialogue de choix d'un SBOM.
+  ///
+  /// In fr, this message translates to:
+  /// **'Choisir un SBOM à analyser'**
+  String get tasksPickDialog;
+
+  /// Bouton : mettre en file les analyses des scanners cochés.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajouter à la file'**
+  String get tasksEnqueue;
+
+  /// Message : aucun SBOM choisi.
+  ///
+  /// In fr, this message translates to:
+  /// **'Choisissez d\'abord un SBOM.'**
+  String get tasksNeedTarget;
+
+  /// Message : aucun scanner coché.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cochez au moins un scanner.'**
+  String get tasksNeedScanner;
+
+  /// Liste de tâches vide.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune analyse en file.'**
+  String get tasksEmpty;
+
+  /// Bouton : annuler toutes les analyses en attente ou en cours.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tout annuler'**
+  String get tasksCancelAll;
+
+  /// Bouton : retirer les analyses terminées de la liste.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retirer les terminées'**
+  String get tasksClearFinished;
+
+  /// Statut d'une analyse en attente.
+  ///
+  /// In fr, this message translates to:
+  /// **'En attente'**
+  String get tasksStatusQueued;
+
+  /// Statut d'une analyse en cours.
+  ///
+  /// In fr, this message translates to:
+  /// **'En cours…'**
+  String get tasksStatusRunning;
+
+  /// Statut d'une analyse terminée avec son nombre de vulnérabilités.
+  ///
+  /// In fr, this message translates to:
+  /// **'Terminée — {count, plural, =1{1 vulnérabilité} other{{count} vulnérabilités}}'**
+  String tasksStatusDone(int count);
+
+  /// Statut d'une analyse en échec.
+  ///
+  /// In fr, this message translates to:
+  /// **'Échec : {error}'**
+  String tasksStatusFailed(String error);
+
+  /// Statut d'une analyse annulée.
+  ///
+  /// In fr, this message translates to:
+  /// **'Annulée'**
+  String get tasksStatusCancelled;
+
+  /// Durée d'une analyse en secondes.
+  ///
+  /// In fr, this message translates to:
+  /// **'{seconds} s'**
+  String tasksDuration(int seconds);
+
+  /// Info-bulle : annuler une analyse.
+  ///
+  /// In fr, this message translates to:
+  /// **'Annuler'**
+  String get tasksCancel;
+
+  /// Info-bulle : relancer une analyse échouée ou annulée.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relancer'**
+  String get tasksRetry;
+
+  /// Info-bulle : retirer une analyse de la liste.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retirer de la liste'**
+  String get tasksRemove;
+
+  /// Erreur : outil de scan absent.
+  ///
+  /// In fr, this message translates to:
+  /// **'{tool} introuvable (installez-le ou retirez-le de la sélection).'**
+  String tasksToolMissing(String tool);
+
+  /// Erreur : le scanner n'a rien renvoyé.
+  ///
+  /// In fr, this message translates to:
+  /// **'{tool} n\'a produit aucun résultat (code {code}) : {detail}'**
+  String tasksNoOutput(String tool, int code, String detail);
+
+  /// Erreur : JSON du scanner invalide.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sortie de {tool} illisible : {error}'**
+  String tasksParseFailed(String tool, String error);
 }
 
 class _AppLocalizationsDelegate

@@ -11,6 +11,7 @@ import '../models/layer_scan.dart';
 import '../models/sbom_result.dart';
 import '../models/scan_session.dart';
 import '../services/scan_enrichment.dart';
+import '../services/scan_job_runner.dart';
 import '../services/session_store.dart';
 import 'cra_panel.dart';
 import 'dashboard_panel.dart';
@@ -24,6 +25,7 @@ import 'sbom_tree_panel.dart';
 import 'pdf_report.dart' show kGuiVersion;
 import 'sbom_viewer_panel.dart';
 import 'session_bar.dart';
+import 'tasks_panel.dart';
 import 'trivy_panel.dart';
 import '../l10n/l10n.dart';
 
@@ -137,6 +139,28 @@ class _ResultsPanelState extends State<ResultsPanel>
     });
   }
 
+  /// Résultat d'une analyse de la file : remplace celui du scanner concerné.
+  void _applyJobResult(ScanJobResult r) {
+    if (!mounted) return;
+    setState(() {
+      switch (r.scanner) {
+        case 'Grype':
+          _grypeVulns = r.grype;
+          _grypeExploit = r.exploit;
+          _grypeTarget = r.target;
+        case 'OSV-Scanner':
+          _osvVulns = r.osv;
+          _osvExploit = r.exploit;
+          _osvTarget = r.target;
+        case 'Trivy':
+          _trivyVulns = r.trivy;
+          _trivyExploit = r.exploit;
+          _trivyTarget = r.target;
+      }
+    });
+    _scheduleSave();
+  }
+
   void _loadSession(ScanSession s) => setState(() {
     _grypeVulns = s.grype;
     _osvVulns = s.osv;
@@ -174,7 +198,7 @@ class _ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 14, vsync: this);
+    _tabs = TabController(length: 15, vsync: this);
   }
 
   @override
@@ -353,6 +377,16 @@ class _ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.playlist_play, size: 16),
+                    const SizedBox(width: 6),
+                    Text(context.l10n.tabTasks),
+                  ],
+                ),
+              ),
               const Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -527,7 +561,13 @@ class _ResultsPanelState extends State<ResultsPanel>
                 ),
               ),
 
-              // Tab 3 : Grype
+              // Tab 3 : Tâches (file d'attente d'analyses)
+              TasksPanel(
+                outputFiles: widget.outputFiles,
+                onResult: _applyJobResult,
+              ),
+
+              // Tab 4 : Grype
               GrypePanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) {
@@ -552,7 +592,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 }),
               ),
 
-              // Tab 4 : OSV-Scanner
+              // Tab 5 : OSV-Scanner
               OsvPanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) {
@@ -577,7 +617,7 @@ class _ResultsPanelState extends State<ResultsPanel>
                 }),
               ),
 
-              // Tab 5 : Trivy
+              // Tab 6 : Trivy
               TrivyPanel(
                 outputFiles: widget.outputFiles,
                 onVulnsChanged: (v) {
@@ -602,28 +642,28 @@ class _ResultsPanelState extends State<ResultsPanel>
                 }),
               ),
 
-              // Tab 6 : Conformité CRA
+              // Tab 7 : Conformité CRA
               CraPanel(outputFiles: widget.outputFiles),
 
-              // Tab 7 : Qualité SBOM
+              // Tab 8 : Qualité SBOM
               QualityPanel(outputFiles: widget.outputFiles),
 
-              // Tab 8 : Arborescence SBOM
+              // Tab 9 : Arborescence SBOM
               SbomTreePanel(outputFiles: widget.outputFiles),
 
-              // Tab 9 : Comparaison SBOM
+              // Tab 10 : Comparaison SBOM
               SbomDiffPanel(outputFiles: widget.outputFiles),
 
-              // Tab 10 : Fusion SBOM
+              // Tab 11 : Fusion SBOM
               SbomMergePanel(outputFiles: widget.outputFiles),
 
-              // Tab 11 : Licences SBOM
+              // Tab 12 : Licences SBOM
               SbomLicensesPanel(outputFiles: widget.outputFiles),
 
-              // Tab 12 : Visionneuse SBOM
+              // Tab 13 : Visionneuse SBOM
               const SbomViewerPanel(),
 
-              // Tab 13 : Aperçu SBOM
+              // Tab 14 : Aperçu SBOM
               _SbomPreviewTab(
                 files: previewableFiles,
                 selectedFile: _previewFile,

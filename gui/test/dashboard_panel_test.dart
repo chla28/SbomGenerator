@@ -655,7 +655,7 @@ void remediationTests() {
 
     expect(find.byKey(const Key('remediation-section')), findsOneWidget);
     expect(find.text('pkg 1.0 → 1.1'), findsOneWidget);
-    expect(find.textContaining('corrige 2 CVE'), findsOneWidget);
+    expect(find.textContaining('2 CVE corrigées'), findsOneWidget);
 
     await tester.tap(find.text('pkg 1.0 → 1.1'));
     await tester.pumpAndSettle();

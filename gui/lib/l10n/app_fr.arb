@@ -3742,7 +3742,7 @@
       }
     }
   },
-  "remedFixes": "{count, plural, =1{corrige 1 CVE} other{corrige {count} CVE}}",
+  "remedFixes": "{count, plural, =1{1 CVE corrigée} other{{count} CVE corrigées}}",
   "@remedFixes": {
     "description": "Nombre de CVE corrigées par la mise à jour.",
     "placeholders": {
@@ -3887,7 +3887,7 @@
   "@sessHistoryEmpty": {
     "description": "Historique vide."
   },
-  "sessHistoryItem": "{count, plural, =0{aucune CVE} =1{1 CVE} other{{count} CVE}}",
+  "sessHistoryItem": "{count, plural, =1{1 CVE} other{{count} CVE}}",
   "@sessHistoryItem": {
     "description": "Nombre de CVE d'une session de l'historique.",
     "placeholders": {
@@ -3981,5 +3981,143 @@
   "sessTrendNone": "Aucune différence avec la session de référence.",
   "@sessTrendNone": {
     "description": "Tendance : aucune évolution."
+  },
+  "tabTasks": "Tâches",
+  "@tabTasks": {
+    "description": "Libellé de l'onglet de la file d'attente des analyses."
+  },
+  "tasksIntro": "Mettez en file des analyses de vulnérabilités : elles s'exécutent une à une, peuvent être annulées ou relancées, et leurs résultats alimentent le tableau de bord.",
+  "@tasksIntro": {
+    "description": "Introduction de l'onglet Tâches."
+  },
+  "tasksTargetLabel": "SBOM à analyser",
+  "@tasksTargetLabel": {
+    "description": "Libellé du choix du fichier SBOM de l'onglet Tâches."
+  },
+  "tasksTargetNone": "Aucun SBOM sélectionné",
+  "@tasksTargetNone": {
+    "description": "Texte quand aucun SBOM n'est choisi."
+  },
+  "tasksBrowse": "Parcourir…",
+  "@tasksBrowse": {
+    "description": "Bouton de choix d'un fichier SBOM."
+  },
+  "tasksPickDialog": "Choisir un SBOM à analyser",
+  "@tasksPickDialog": {
+    "description": "Titre du dialogue de choix d'un SBOM."
+  },
+  "tasksEnqueue": "Ajouter à la file",
+  "@tasksEnqueue": {
+    "description": "Bouton : mettre en file les analyses des scanners cochés."
+  },
+  "tasksNeedTarget": "Choisissez d'abord un SBOM.",
+  "@tasksNeedTarget": {
+    "description": "Message : aucun SBOM choisi."
+  },
+  "tasksNeedScanner": "Cochez au moins un scanner.",
+  "@tasksNeedScanner": {
+    "description": "Message : aucun scanner coché."
+  },
+  "tasksEmpty": "Aucune analyse en file.",
+  "@tasksEmpty": {
+    "description": "Liste de tâches vide."
+  },
+  "tasksCancelAll": "Tout annuler",
+  "@tasksCancelAll": {
+    "description": "Bouton : annuler toutes les analyses en attente ou en cours."
+  },
+  "tasksClearFinished": "Retirer les terminées",
+  "@tasksClearFinished": {
+    "description": "Bouton : retirer les analyses terminées de la liste."
+  },
+  "tasksStatusQueued": "En attente",
+  "@tasksStatusQueued": {
+    "description": "Statut d'une analyse en attente."
+  },
+  "tasksStatusRunning": "En cours…",
+  "@tasksStatusRunning": {
+    "description": "Statut d'une analyse en cours."
+  },
+  "tasksStatusDone": "Terminée — {count, plural, =1{1 vulnérabilité} other{{count} vulnérabilités}}",
+  "@tasksStatusDone": {
+    "description": "Statut d'une analyse terminée avec son nombre de vulnérabilités.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "tasksStatusFailed": "Échec : {error}",
+  "@tasksStatusFailed": {
+    "description": "Statut d'une analyse en échec.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksStatusCancelled": "Annulée",
+  "@tasksStatusCancelled": {
+    "description": "Statut d'une analyse annulée."
+  },
+  "tasksDuration": "{seconds} s",
+  "@tasksDuration": {
+    "description": "Durée d'une analyse en secondes.",
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "tasksCancel": "Annuler",
+  "@tasksCancel": {
+    "description": "Info-bulle : annuler une analyse."
+  },
+  "tasksRetry": "Relancer",
+  "@tasksRetry": {
+    "description": "Info-bulle : relancer une analyse échouée ou annulée."
+  },
+  "tasksRemove": "Retirer de la liste",
+  "@tasksRemove": {
+    "description": "Info-bulle : retirer une analyse de la liste."
+  },
+  "tasksToolMissing": "{tool} introuvable (installez-le ou retirez-le de la sélection).",
+  "@tasksToolMissing": {
+    "description": "Erreur : outil de scan absent.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksNoOutput": "{tool} n'a produit aucun résultat (code {code}) : {detail}",
+  "@tasksNoOutput": {
+    "description": "Erreur : le scanner n'a rien renvoyé.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "code": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksParseFailed": "Sortie de {tool} illisible : {error}",
+  "@tasksParseFailed": {
+    "description": "Erreur : JSON du scanner invalide.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

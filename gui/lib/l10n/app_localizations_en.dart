@@ -2977,8 +2977,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'fixes $countString CVEs',
-      one: 'fixes 1 CVE',
+      other: '$countString CVEs fixed',
+      one: '1 CVE fixed',
     );
     return '$_temp0';
   }
@@ -3100,7 +3100,6 @@ class AppLocalizationsEn extends AppLocalizations {
       locale: localeName,
       other: '$countString CVEs',
       one: '1 CVE',
-      zero: 'no CVE',
     );
     return '$_temp0';
   }
@@ -3172,4 +3171,108 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessTrendNone => 'No difference from the reference session.';
+
+  @override
+  String get tabTasks => 'Tasks';
+
+  @override
+  String get tasksIntro =>
+      'Queue vulnerability scans: they run one at a time, can be cancelled or retried, and their results feed the dashboard.';
+
+  @override
+  String get tasksTargetLabel => 'SBOM to scan';
+
+  @override
+  String get tasksTargetNone => 'No SBOM selected';
+
+  @override
+  String get tasksBrowse => 'Browse…';
+
+  @override
+  String get tasksPickDialog => 'Choose an SBOM to scan';
+
+  @override
+  String get tasksEnqueue => 'Add to queue';
+
+  @override
+  String get tasksNeedTarget => 'Choose an SBOM first.';
+
+  @override
+  String get tasksNeedScanner => 'Tick at least one scanner.';
+
+  @override
+  String get tasksEmpty => 'No queued analysis.';
+
+  @override
+  String get tasksCancelAll => 'Cancel all';
+
+  @override
+  String get tasksClearFinished => 'Remove finished';
+
+  @override
+  String get tasksStatusQueued => 'Queued';
+
+  @override
+  String get tasksStatusRunning => 'Running…';
+
+  @override
+  String tasksStatusDone(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString vulnerabilities',
+      one: '1 vulnerability',
+    );
+    return 'Done — $_temp0';
+  }
+
+  @override
+  String tasksStatusFailed(String error) {
+    return 'Failed: $error';
+  }
+
+  @override
+  String get tasksStatusCancelled => 'Cancelled';
+
+  @override
+  String tasksDuration(int seconds) {
+    final intl.NumberFormat secondsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String secondsString = secondsNumberFormat.format(seconds);
+
+    return '$secondsString s';
+  }
+
+  @override
+  String get tasksCancel => 'Cancel';
+
+  @override
+  String get tasksRetry => 'Retry';
+
+  @override
+  String get tasksRemove => 'Remove from list';
+
+  @override
+  String tasksToolMissing(String tool) {
+    return '$tool not found (install it or remove it from the selection).';
+  }
+
+  @override
+  String tasksNoOutput(String tool, int code, String detail) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return '$tool produced no result (code $codeString): $detail';
+  }
+
+  @override
+  String tasksParseFailed(String tool, String error) {
+    return 'Unreadable $tool output: $error';
+  }
 }
