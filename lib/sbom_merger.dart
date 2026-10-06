@@ -159,7 +159,7 @@ class SbomMerger {
       'spdxVersion': (base['spdxVersion'] as String?) ?? 'SPDX-2.3',
       'creationInfo': {
         'created': DateTime.now().toUtc().toIso8601String(),
-        'creators': ['Tool: sbom_generator-1.6.4'],
+        'creators': ['Tool: sbom_generator-1.6.5'],
         'licenseListVersion': baseCreationInfo?['licenseListVersion'] ?? '3.21',
       },
       'name': documentName ?? (base['name'] as String? ?? 'Merged SBOM'),

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-10-06
+
 ### Fixed
 - **GUI, OSV-Scanner**: a `.tar.gz` / `.tgz` image archive is now accepted (as with Grype and Trivy) — `osv-scanner` only accepts an uncompressed tar, so the application decompresses the archive to a temporary file deleted after the scan; the "CLI Command" preview mentions it.
 

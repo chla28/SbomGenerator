@@ -4,7 +4,7 @@ description: >
   lockfiles, container images or binaries (CycloneDX 1.6/1.7, SPDX 2.3/3.0,
   JSON, Markdown, AsciiDoc, HTML, CSV), with diff, merge, convert, validate,
   licenses, scan (CVE) and cra (Cyber Resilience Act) subcommands.
-version: 1.6.4
+version: 1.6.5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
