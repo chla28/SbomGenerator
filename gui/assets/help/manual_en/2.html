@@ -1,75 +1,139 @@
 
-<h2 id="_interface_overview">3. Interface overview</h2>
+<h2 id="_requirements_installation">3. Requirements &amp; installation</h2>
 <div class="sectionbody">
-<div class="paragraph">
-<p>The interface is split into two panels separated by a vertical divider.</p>
-</div>
+<div class="sect2">
+<h3 id="_requirements">3.1. Requirements</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Component</th>
+<th class="tableblock halign-left valign-top">Mandatory</th>
+<th class="tableblock halign-left valign-top">Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-generator</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Yes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM file generation</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>syft</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OCI image analysis (Configuration panel — default OCI tool)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>skopeo</code> / <code>trivy</code> / <code>cdxgen</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OCI image analysis — alternative backends (Configuration panel — OCI tool);
+<code>cdxgen</code> requires Node.js</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> (CVE analysis)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Trivy tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Grype tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>osv-scanner</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (OSV-Scanner tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Trivy tab)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>asciidoctor-pdf</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Automatic PDF conversion of the AsciiDoc report (SBOM, or vulnerability
+export from Grype/OSV-Scanner/Trivy)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM quality score (option in Configuration)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="sect3">
+<h4 id="_checking_that_the_tools_are_available">3.1.1. Checking that the tools are available</h4>
 <div class="listingblock">
 <div class="content">
-<pre>┌────────────────────────────────────────────────────────────────────────────┐
-│  🗒 SBOM Generator                     [❓] [🎨] [🌙] [ℹ]                 │
-├───────────────────────┬────────────────────────────────────────────────────┤
-│                       │                                                    │
-│   Configuration       │ [Progress][Results][Grype][OSV][Trivy][Merge][Licenses][Viewer][Preview]│
-│   ─────────────────   │ ─────────────────────────────────────────────────  │
-│   INPUT               │                                                    │
-│   [file.lst     📂▾]  │   12 / 23  52%    bash-5.1.8-6.el9.x86_64         │
-│   (drag &amp; drop)       │   ████████████████░░░░░░░░░░░░                    │
-│                       │                                                    │
-│   OUTPUT              │   $ sbom-generator --input …                      │
-│   [sbom        📂▾]   │   Generating CycloneDX…                           │
-│   [x] CycloneDX       │   Resolved bash-5.1.8                             │
-│   [ ] SPDX 2.3        │   SBOM written → sbom.cdx.json  (42.3 KB)         │
-│   [ ] AsciiDoc        │                         [Copy] [Save]             │
-│   ...                 │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │
-│   OPTIONS             │  ✔ 23 packages  •  1 SBOM file                    │
-│   [Document name]     │                                                    │
-│   Concurrency: 4      │                                                    │
-│   [ ] Verbose         │                                                    │
-│   [ ] sbomqs score    │                                                    │
-│                       │                                                    │
-│  [▶ Generate SBOM]    │                                                    │
-│  $ sbom-generator …   │                                                    │
-│                       │                                                    │
-└───────────────────────┴────────────────────────────────────────────────────┘</pre>
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator --version
+syft version
+grype version
+osv-scanner --version
+trivy --version
+cdxgen --version
+asciidoctor-pdf --version
+sbomqs version</code></pre>
 </div>
 </div>
-<div class="paragraph">
-<p><strong>Left panel — Configuration</strong>: setting of all the options before launching.
-Fixed width (390 px). Settings are restored automatically at each start. The
-equivalent CLI command is displayed under the <strong>▶ Generate the SBOM</strong> button and
-is updated in real time.</p>
 </div>
-<div class="paragraph">
-<p><strong>Right panel — Results</strong>: fourteen tabs — Progress (with log export and
-summary), Results (files + sbomqs score), Dashboard (multi-scanner CVE
-synthesis), Grype, OSV-Scanner and Trivy (CVE analyses), CRA Compliance
-(Cyber Resilience Act compliance report), SBOM Quality (sbomqs<br>
-sbom-scorecard), SBOM Tree (exploration of the SBOM components), SBOM
-Comparison (diff of two SBOMs), SBOM Merge (combines several SBOMs into one),
-SBOM Licenses (visualization of the SBOM licenses and compliance report in
-AsciiDoc, Markdown, HTML, CSV or JSON), SBOM Viewer (interactive exploration
-of an external SBOM file) and Preview (preview of the SBOM content).</p>
+<div class="sect3">
+<h4 id="_installing_syft_optional">3.1.2. Installing syft (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Anchore script
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+syft version</code></pre>
 </div>
-<div class="paragraph">
-<p>The <strong>❓</strong> button in the title bar opens this user manual directly in the
-application (table of contents on the left, selected chapter on the right) —
-not to be confused with the smaller ❓ icons present on each field/section,
-which display a short tooltip on hover instead of opening the full manual.
-The search field at the top of the table of contents filters the chapters by
-title <strong>and</strong> by content as you type; an excerpt of the passage found is
-displayed under the title of the matching chapter.</p>
 </div>
-<div class="paragraph">
-<p>The <strong>🌙 / ☀</strong> button in the title bar switches between dark and light mode.
-The <strong>🎨</strong> button opens the theme color picker. Both preferences are saved.</p>
 </div>
-<div class="paragraph">
-<p>The <strong>文A</strong> button (interface language) offers <strong>System</strong>, <strong>Français</strong> and
-<strong>English</strong>. <strong>System</strong> follows the language of the workstation, falling back to
-French if it is not supported. The choice applies immediately and is saved.
-The language is also forwarded to the <code>sbom-generator</code> CLI launched by the
-GUI (via <code>SBOM_LANG</code>), so the messages of the Progress tab follow it.</p>
+<div class="sect3">
+<h4 id="_installing_cdxgen_optional">3.1.3. Installing cdxgen (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Via npm (requires Node.js ≥ 20)
+npm install -g @cyclonedx/cdxgen
+
+# Check
+cdxgen --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_grype">3.1.4. Installing grype</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Anchore script
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+grype version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_osv_scanner_optional">3.1.5. Installing osv-scanner (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Google script
+curl -sSfL \
+  https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Or via Go (if Go is installed)
+go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+# Check
+osv-scanner --version</code></pre>
+</div>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -78,11 +142,67 @@ GUI (via <code>SBOM_LANG</code>), so the messages of the Progress tab follow it.
 <div class="title">Note</div>
 </td>
 <td class="content">
-The interface, the exported reports (AsciiDoc/PDF), the CLI messages and
-this manual are available in French and English. Machine-read contents (SBOM
-files, <code>Error:</code> / <code>Warning:</code> prefixes, JSON keys) are never translated.
+<code>osv-scanner</code> must be reachable in the PATH when the GUI is launched.
+If the tool is installed through Go in <code>~/go/bin</code>, add that folder to the PATH
+of your graphical session (<code>~/.profile</code> or <code>~/.bash_profile</code>).
 </td>
 </tr>
 </tbody></table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_trivy_optional">3.1.6. Installing trivy (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Aqua Security script
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Or via the package manager (Fedora/RHEL)
+sudo rpm -ivh https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.rpm
+
+# Check
+trivy --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_asciidoctor_pdf_optional">3.1.7. Installing asciidoctor-pdf (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">gem install asciidoctor-pdf</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_sbomqs_optional">3.1.8. Installing sbomqs (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Download the latest release from GitHub
+# https://github.com/interlynk-io/sbomqs/releases
+curl -sSfL https://raw.githubusercontent.com/interlynk-io/sbomqs/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+
+# Check
+sbomqs version</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_starting_the_interface">3.2. Starting the interface</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom_generator_gui</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If the binary is not in the PATH, run it directly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">/path/to/sbom_generator_gui</code></pre>
+</div>
+</div>
 </div>
 </div>

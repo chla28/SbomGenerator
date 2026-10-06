@@ -1,134 +1,152 @@
 
-<h2 id="_sbom_tree_tab">14. SBOM Tree tab</h2>
+<h2 id="_sbom_quality_tab_quality_assessment">14. SBOM Quality tab — Quality assessment</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The <strong>SBOM Tree</strong> tab lets you explore the components of an SBOM file
-(CycloneDX or SPDX) without opening a JSON editor.</p>
+<p>The <strong>SBOM Quality</strong> tab assesses the quality of an SBOM file with two
+complementary tools: <strong>sbomqs</strong> (Interlynk) and <strong>sbom-scorecard</strong> (eBay). A
+single click on <strong>Analyze</strong> runs both in parallel.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ File: [ sbom.cdx.json ▼ ]  [📂 Open…]                            ─┐
-  │  CycloneDX 1.6  •  My Application 2.1.0  •  246 components          │
-  ├─ Group by: [None] [Type] [License]                                    │
-  ├────────────────────────────────────────────────────────────────────────┤
-  │ ▶ rpm  (132)                                                           │
-  │ ▼ python  (89)                                                         │
-  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
-  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
-  │    ...                                                                 │
-  │ ▶ deb  (25)                                                            │
-  └────────────────────────────────────────────────────────────────────────┘</pre>
+<pre>  ┌──────────────────────────────────────────────────────────────────┐
+  │  SBOM file : [ /project/sbom.cdx.json        ] [📂▾]  [Analyze] │
+  │  Profiles: [NTIA 2021] [NTIA 2025] [FSCT] [BSI] [BSI v1.1]     │
+  │            [BSI v2.0] [BSI v2.1] [OpenChain v1.1] [Interlynk]  │
+  ├──────────────────────────────────────────────────────────────────┤
+  │ ┌─ sbomqs ──────────────────────────────────────── 5.8 / 10 ──┐ │
+  │ │ Filter : [Identification] [Provenance] [Integrity] ...       │ │
+  │ │                                                              │ │
+  │ │  ✔ comp_with_name           Identification   10/10           │ │
+  │ │  ✔ comp_with_version        Identification   10/10           │ │
+  │ │  ✘ sbom_authors             Provenance        0/10           │ │
+  │ │  ✘ comp_with_strong_checksums  Integrity      0/10           │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ Industry profiles ──────────────────────────────────────────┐ │
+  │ │  [A] NTIA Minimum Elements (2021)       10.0/10  ▶ details  │ │
+  │ │  [C] Interlynk                           7.2/10  ▶ details  │ │
+  │ │  [D] BSI TR-03183-2 v1.1                6.7/10  ▶ details  │ │
+  │ │  ...                                                         │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  │                                                                   │
+  │ ┌─ sbom-scorecard ──────────────────────────────── 69 / 100 ──┐ │
+  │ │  Spec          ████████████████████████████████████  100    │ │
+  │ │  Quality       ████████████████████████░░░░░░░░░░░░   63    │ │
+  │ │  NTIA-minimum  ████████████████████████████████░░░░   88    │ │
+  │ │  Total         ██████████████████████████░░░░░░░░░░   69    │ │
+  │ └──────────────────────────────────────────────────────────────┘ │
+  └──────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_selecting_the_sbom_file">14.1. Selecting the SBOM file</h3>
-<div class="paragraph">
-<p>The drop-down menu lists the SBOM files generated in the current session. The
-first <code>.cdx.json</code>, <code>.spdx.json</code> or <code>.spdx3.jsonld</code> file is selected
-automatically. Layer SBOMs (<code>--per-layer</code>) are not listed there: they are
-opened from the layer selector (see <a href="#sec-nav-couches">Per-layer navigation (<code>--per-layer</code>)</a>).</p>
-</div>
-<div class="paragraph">
-<p>The <strong>Open…</strong> button lets you load any file from the file system.</p>
-</div>
-<div class="paragraph">
-<p>Supported formats:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>CycloneDX 1.6</strong> — <code>.cdx.json</code> (<code>components[]</code> field)</p>
-</li>
-<li>
-<p><strong>SPDX 2.x</strong> — <code>.spdx.json</code> (<code>packages[]</code> field)</p>
-</li>
-<li>
-<p><strong>SPDX 3.0 JSON-LD</strong> — <code>.spdx3.jsonld</code></p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_information_bar">14.2. Information bar</h3>
-<div class="paragraph">
-<p>After loading, a metadata line is displayed:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>SBOM format and version</p>
-</li>
-<li>
-<p>Document name / main component</p>
-</li>
-<li>
-<p>Total number of components</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_grouping">14.3. Grouping</h3>
-<div class="paragraph">
-<p>The <strong>Group by</strong> selector offers three modes:</p>
-</div>
+<h3 id="_requirements_4">14.1. Requirements</h3>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
 <col style="width: 40%;">
-<col style="width: 60%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
 </colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Tool</th>
+<th class="tableblock halign-left valign-top">Source</th>
+<th class="tableblock halign-left valign-top">Role</th>
+</tr>
+</thead>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>None</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">All components in a flat list sorted by name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Global score + detailed criteria per category (Identification, Provenance, Integrity…) and industry profiles</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Type</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Grouping by package type (rpm, python, deb…)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>License</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Grouping by SPDX license expression</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Layer</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM produced with <code>--per-layer</code> only: grouping by originating
-layer (<code>Layer 01</code>, <code>Layer 02</code>… in the global SBOM) or by change (<code>Added</code> /
-<code>Modified</code> in a layer SBOM)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-scorecard</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">eBay</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Global score as a percentage, broken down by category</p></td>
 </tr>
 </tbody>
 </table>
 <div class="paragraph">
-<p>The icons to the right of the selector expand or collapse all the groups.</p>
+<p>Both tools are optional: if one is not installed, its section displays an
+error message without blocking the other.</p>
 </div>
-<div class="paragraph">
-<p>Groups are collapsible. Click a group header to open or close it.</p>
+<div class="sect3">
+<h4 id="_installing_sbom_scorecard_optional">14.1.1. Installing sbom-scorecard (optional)</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Via Go
+go install github.com/eBay/sbom-scorecard@latest
+
+# Or download the binary from the GitHub releases
+# https://github.com/eBay/sbom-scorecard/releases
+
+# Check
+sbom-scorecard --version</code></pre>
+</div>
+</div>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_component_details">14.4. Component details</h3>
+<h3 id="_selecting_profiles">14.2. Selecting profiles</h3>
 <div class="paragraph">
-<p>Click a component to display its details (expandable field):</p>
+<p>The <strong>Profiles</strong> line under the file picker contains nine independently
+selectable `FilterChip`s:</p>
 </div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>PURL</strong> (Package URL) — clickable to copy to the clipboard</p>
-</li>
-<li>
-<p><strong>Version</strong></p>
-</li>
-<li>
-<p><strong>Type</strong></p>
-</li>
-<li>
-<p><strong>License</strong></p>
-</li>
-<li>
-<p><strong>Layer</strong> — originating layer (global SBOM) or change (layer SBOM), for an
-SBOM produced with <code>--per-layer</code></p>
-</li>
-</ul>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 66.6667%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Chip</th>
+<th class="tableblock halign-left valign-top">sbomqs profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA 2021</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA Minimum Elements (2021)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA 2025</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA Minimum Elements (2025) — RFC</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">FSCT</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Framing Software Component Transparency (3rd Edition)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 (latest version, alias of bsi-v2.1)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v1.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v2.0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v2.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v2.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v2.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OpenChain v1.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OpenChain Telco SBOM Guide v1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk Scoring Profile</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>With no selection, sbomqs only performs the full analysis (<strong>Comprehensive</strong>).
+With one or more profiles checked, sbomqs receives <code>--profile p1,p2,…​</code> and
+the criteria detail per profile is displayed in the <strong>Industry profiles</strong> card.</p>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -137,48 +155,121 @@ SBOM produced with <code>--per-layer</code></p>
 <div class="title">Note</div>
 </td>
 <td class="content">
-Components with no PURL in the SBOM do not display this field.
+Choosing profiles does not replace the full analysis — both sections are
+always displayed simultaneously.
 </td>
 </tr>
 </tbody></table>
 </div>
 </div>
 <div class="sect2">
-<h3 id="sec-nav-couches">14.5. Per-layer navigation (<code>--per-layer</code>)</h3>
+<h3 id="_sbomqs_section">14.3. sbomqs section</h3>
 <div class="paragraph">
-<p>When the opened file belongs to a set produced with <code>--per-layer</code> (global SBOM
-or layer SBOM), an <strong>N layer(s)</strong> banner is displayed under the file bar, in
-this tab as in the <strong>SBOM Viewer</strong>:</p>
+<p>Displays a table of quality criteria per category (Identification,
+Provenance, Integrity, Completeness, Licensing, Vulnerability, Structural,
+Component Quality). A ✔ (green) / ✘ (red) icon indicates whether the criterion
+is met (score = 10/10).</p>
+</div>
+<div class="paragraph">
+<p><strong>Category filters</strong>: the FilterChips at the top of the table let you display
+only the criteria of one or more categories.</p>
+</div>
+<div class="paragraph">
+<p>The <code>{ }</code> / ≡ button toggles between the table and the raw JSON.
+The 📋 button copies the raw JSON to the clipboard.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_industry_profiles_section">14.4. Industry profiles section</h3>
+<div class="paragraph">
+<p>Always present after a successful analysis. It displays for each available
+profile:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>a <strong>Global SBOM / Layer 1/N (digest) …</strong> drop-down menu directly opens the
-chosen SBOM; for each layer, it recalls the counters
-(<code>+added ~modified -removed</code>) and the build instruction;</p>
+<p>A colored badge with the grade (A / B / C / D / F)</p>
 </li>
 <li>
-<p>under the menu, the description of the displayed document: digest,
-instruction, counters of the layer (or number of layers and mode for the
-global one);</p>
+<p>The full name of the profile</p>
 </li>
 <li>
-<p>an <strong>N removed</strong> badge lists on hover the components removed by the layer
-(rootfs mode).</p>
+<p>The score out of 10</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>The files of the same set are found by their name in the directory of the
-opened file (<code>&lt;base&gt;.&lt;ext&gt;</code> and <code>&lt;base&gt;.layer-NN-&lt;digest&gt;.&lt;ext&gt;</code>, same
-format): navigation also works for a set opened through <strong>Open…</strong>.</p>
+<p>If profiles were selected in the configuration bar before the analysis, each
+profile has an expand button (▶) that reveals the list of its criteria with:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>✔/✘ icon, criterion name, short description, score</p>
+</li>
+<li>
+<p>“N / M criteria” counter in the subtitle</p>
+</li>
+<li>
+<p><code><strong></strong></code><strong> marker for the *mandatory</strong> (required) criteria of the profile</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+When no profile is selected, the section header displays an ⓘ tooltip
+recalling how to enable the detail.
+</td>
+</tr>
+</tbody></table>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_state_persistence_2">14.6. State persistence</h3>
+<h3 id="_sbom_scorecard_section">14.5. sbom-scorecard section</h3>
 <div class="paragraph">
-<p>The tab remembers its state (selected file, grouping, open/closed groups) when
-navigating between tabs.</p>
+<p>Displays a bar chart for each score category.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Color</th>
+<th class="tableblock halign-left valign-top">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Green</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score ≥ 80 % — excellent quality</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score between 60 % and 80 % — acceptable quality</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Red</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Score &lt; 60 % — insufficient quality</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The <code>{ }</code> / ≡ button toggles between the chart and the raw output.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_state_persistence">14.6. State persistence</h3>
+<div class="paragraph">
+<p>Like the other analysis tabs, the <strong>SBOM Quality</strong> tab remembers its state when
+navigating between tabs: the selected file and the results remain displayed
+even after viewing another tab.</p>
 </div>
 </div>
 </div>

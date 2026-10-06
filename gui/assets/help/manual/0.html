@@ -1,136 +1,67 @@
 
-<h2 id="_introduction">1. Introduction</h2>
+<h2 id="_démarrage_rapide">1. Démarrage rapide</h2>
 <div class="sectionbody">
-<div class="sect2">
-<h3 id="_quest_ce_quun_sbom">1.1. Qu’est-ce qu’un SBOM ?</h3>
-<div class="paragraph">
-<p>Un <strong>SBOM</strong> (Software Bill of Materials — inventaire logiciel) est un fichier
-structuré listant tous les composants d’un logiciel : paquets, bibliothèques,
-versions, licences. Il joue le rôle d’une nomenclature, au sens industriel
-du terme.</p>
+<div id="sec-quickstart" class="paragraph">
+<p>Ce chapitre est le parcours de première utilisation : en cinq minutes, de
+l’ouverture de l’application à un tableau de bord de vulnérabilités. Le détail
+de chaque écran est dans les chapitres suivants.</p>
 </div>
-<div class="paragraph">
-<p>Les formats les plus répandus sont :</p>
-</div>
-<div class="ulist">
-<ul>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
-<p><strong>CycloneDX</strong> (JSON, recommandé par l’OWASP et l’ANSSI)</p>
+<p><strong>Vérifier les prérequis.</strong> L’application pilote des outils externes : le CLI
+<code>sbom-generator</code> (fourni avec l’application), puis, selon ce que vous voulez
+faire, <code>syft</code>/<code>skopeo</code> (images de conteneur), <code>grype</code>, <code>osv-scanner</code>, <code>trivy</code>
+(analyse de vulnérabilités), <code>sbomqs</code> (qualité), <code>asciidoctor-pdf</code> (rapports PDF).
+Les onglets concernés indiquent clairement l’outil manquant. Voir
+<a href="#_prérequis_installation">Prérequis &amp; installation</a>.</p>
 </li>
 <li>
-<p><strong>SPDX</strong> (standard ISO/IEC 5962:2021, adopté par la Linux Foundation)</p>
+<p><strong>Générer un premier SBOM.</strong> Dans le panneau de gauche, section <strong>Entrée</strong>,
+choisissez (ou glissez-déposez) un fichier de paquets, un lockfile
+(<code>package-lock.json</code>, <code>pubspec.lock</code>…) ou un dossier ; dans <strong>Sortie</strong>, donnez un
+nom de base et cochez au moins un format (CycloneDX pour commencer). Cliquez sur
+<strong>▶ Générer le SBOM</strong> (ou <strong>Ctrl+Entrée</strong>). L’onglet <strong>Progression</strong> montre
+l’avancement ; l’onglet <strong>Résultats</strong> liste les fichiers produits.</p>
 </li>
-</ul>
+<li>
+<p><strong>Analyser les vulnérabilités.</strong> Ouvrez l’onglet <strong>Grype</strong>, <strong>OSV-Scanner</strong> ou
+<strong>Trivy</strong> : le SBOM qui vient d’être généré est déjà sélectionné. Cliquez sur
+<strong>Analyser</strong>. Pour lancer les trois scanners d’un coup, utilisez l’onglet
+<strong>Tâches</strong> : mettez les analyses en file, elles s’exécutent une à une et peuvent
+être annulées ou relancées.</p>
+</li>
+<li>
+<p><strong>Lire le tableau de bord.</strong> L’onglet <strong>Tableau de bord</strong> réunit les résultats : cartes
+par scanner, comparaison inter-scanners, <strong>remédiation</strong> (quelle mise à jour
+corrige le plus de risque), et — si vous avez déjà analysé la cible — la
+<strong>tendance</strong> depuis une session précédente.</p>
+</li>
+<li>
+<p><strong>Décider.</strong> Dans la fiche d’une CVE, <strong>Déclarer via VEX…</strong> marque une CVE comme
+non affectée (avec justification) : elle disparaît du tableau de bord et
+s’exporte en OpenVEX ou CycloneDX VEX.</p>
+</li>
+<li>
+<p><strong>Partager.</strong> <strong>Enregistrer la session…</strong> conserve les résultats dans un fichier ;
+<strong>Export AsciiDoc + PDF</strong> produit un rapport.</p>
+</li>
+</ol>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_quest_ce_que_grype">1.2. Qu’est-ce que Grype ?</h3>
-<div class="paragraph">
-<p><strong>Grype</strong> (Anchore) est un scanner de vulnérabilités CVE open-source.
-Il analyse un fichier SBOM et le compare à des bases de données de
-vulnérabilités (NVD, GitHub Security Advisories…) pour identifier les
-paquets affectés et leur niveau de sévérité.</p>
-</div>
-<div class="paragraph">
-<p>Niveaux de sévérité (du plus critique au plus bénin) :</p>
-</div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 20%;">
-<col style="width: 60%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Niveau</th>
-<th class="tableblock halign-left valign-top">Couleur dans l’UI</th>
-<th class="tableblock halign-left valign-top">Signification</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Critical</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rouge foncé</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Exploitation immédiate, impact maximal (RCE, élévation de privilèges…)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">High</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rouge-orange</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Impact important, exploitation probable</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Medium</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Exploitable sous conditions particulières</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Low</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Vert</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Impact limité, exploitation difficile</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Negligible</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Gris</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Impact théorique, généralement non exploitable en pratique (Grype uniquement)</p></td>
-</tr>
-</tbody>
-</table>
-<div class="admonitionblock note">
+<div class="admonitionblock tip">
 <table>
 <tbody><tr>
 <td class="icon">
-<div class="title">Note</div>
+<div class="title">Tip</div>
 </td>
 <td class="content">
-Les bases de données utilisées par OSV-Scanner emploient parfois le
-libellé <code>MODERATE</code> (GitHub Advisory, npm) à la place de <code>MEDIUM</code>. L’application
-les unifie automatiquement : toute sévérité <code>MODERATE</code> est affichée comme
-<code>Medium</code> dans le tableau et les filtres.
+Tout est aussi disponible au clavier : <strong>Ctrl+Entrée</strong> lance la génération,
+<strong>Échap</strong> l’arrête, <strong>Ctrl+1…9</strong> change d’onglet, <strong>F1</strong> ouvre ce manuel et <strong>Ctrl+/</strong>
+affiche la liste des raccourcis (voir <a href="#sec-raccourcis">Raccourcis clavier</a>). Dans le manuel, le
+champ de recherche surligne les occurrences dans le chapitre ; <strong>F3</strong> /
+<strong>Maj+F3</strong> passent à l’occurrence suivante / précédente.
 </td>
 </tr>
 </tbody></table>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_présentation_de_loutil">1.3. Présentation de l’outil</h3>
-<div class="paragraph">
-<p><strong>SBOM Generator GUI</strong> est une interface graphique de bureau Linux qui orchestre
-des outils en ligne de commande :</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><code>sbom-generator</code> : génère des fichiers SBOM depuis une liste de paquets ou une image OCI</p>
-</li>
-<li>
-<p><code>grype</code> : analyse les SBOM générés pour détecter les vulnérabilités CVE (Anchore)</p>
-</li>
-<li>
-<p><code>osv-scanner</code> : analyse les SBOM pour détecter les vulnérabilités CVE (Google)</p>
-</li>
-<li>
-<p><code>trivy</code> : analyse les SBOM pour détecter les vulnérabilités CVE (Aqua Security)</p>
-</li>
-<li>
-<p><code>sbomqs</code> : calcule un score de qualité SBOM (optionnel)</p>
-</li>
-<li>
-<p><code>asciidoctor-pdf</code> : convertit le rapport AsciiDoc en PDF (optionnel)</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>L’interface permet de configurer les options, suivre l’exécution en temps réel,
-accéder aux fichiers produits, les prévisualiser, et lancer une analyse de
-vulnérabilités sans jamais ouvrir un terminal.</p>
-</div>
-<div class="paragraph">
-<p>Pour chaque lancement, la <strong>ligne de commande équivalente</strong> est affichée dans
-l’interface — sous le bouton <strong>▶ Générer le SBOM</strong> et comme première entrée du
-journal de progression.</p>
-</div>
-<div class="paragraph">
-<p>Les paramètres sont <strong>automatiquement sauvegardés</strong> entre les sessions.</p>
-</div>
 </div>
 </div>

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI, tableau de bord** : section *Remédiation* (mises à jour à effectuer par paquet, version cible minimale, classées par gain de risque : sévérité, KEV, EPSS) avec export CSV ; *sessions* de scan (enregistrer / ouvrir un fichier, *historique* automatique par cible et par jour, *tendance* entre deux sessions : CVE nouvelles / disparues / inchangées) ; barre *VEX*.
+- **GUI, onglet Tâches** : file d'attente d'analyses (Grype, OSV-Scanner, Trivy) exécutées une à une, annulables et relançables ; les résultats alimentent le tableau de bord.
+- **GUI, VEX** : *Déclarer via VEX…* dans la fiche d'une CVE (non affectée / corrigée / affectée / à l'étude, justification OpenVEX, portée), masquage des CVE couvertes, import et export OpenVEX / CycloneDX VEX (compatible avec `scan --vex` du CLI).
+- **GUI, clavier et accessibilité** : *Ctrl+Entrée* (générer), *Échap* (arrêter), *Ctrl+1…9* et *Ctrl+Page suiv./préc.* (onglets), *F1* (aide), *Ctrl+/* (liste des raccourcis) ; texte sombre forcé sur les fonds pastel pour rester lisible en thème sombre (ligne « vue par un seul scanner », bandeaux, lignes de comparaison).
+- **GUI, aide en ligne** : chapitre *Démarrage rapide* (première utilisation) en tête du manuel ; recherche *dans le chapitre* avec surlignage, compteur « Occurrence n sur N » et navigation (▲ ▼, F3 / Maj+F3, Entrée) ; chapitres *Onglet Tâches* et *Raccourcis clavier*, sections Remédiation / Sessions / VEX.
+
 ## [1.7.0] - 2026-10-06
 
 ### Added

@@ -4348,5 +4348,31 @@
   "shortcutNavigate": "Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace",
   "@shortcutNavigate": {
     "description": "Rappel : navigation au clavier dans les tableaux."
+  },
+  "helpHitCount": "Occurrence {current} sur {total}",
+  "@helpHitCount": {
+    "description": "Navigation dans le chapitre : numéro de l'occurrence courante.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "helpHitNone": "Aucune occurrence dans ce chapitre",
+  "@helpHitNone": {
+    "description": "Recherche : le chapitre affiché ne contient pas le terme."
+  },
+  "helpPrevHit": "Occurrence précédente (Maj+F3)",
+  "@helpPrevHit": {
+    "description": "Info-bulle : occurrence précédente dans le chapitre."
+  },
+  "helpNextHit": "Occurrence suivante (F3 / Entrée)",
+  "@helpNextHit": {
+    "description": "Info-bulle : occurrence suivante dans le chapitre."
   }
 }

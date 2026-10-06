@@ -1,140 +1,79 @@
 
-<h2 id="_requirements_installation">2. Requirements &amp; installation</h2>
+<h2 id="_introduction">2. Introduction</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_requirements">2.1. Requirements</h3>
+<h3 id="_what_is_an_sbom">2.1. What is an SBOM?</h3>
+<div class="paragraph">
+<p>An <strong>SBOM</strong> (Software Bill of Materials) is a structured file listing all the
+components of a piece of software: packages, libraries, versions, licenses.
+It plays the role of a bill of materials, in the industrial sense of the term.</p>
+</div>
+<div class="paragraph">
+<p>The most widespread formats are:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>CycloneDX</strong> (JSON, recommended by OWASP and ANSSI)</p>
+</li>
+<li>
+<p><strong>SPDX</strong> (ISO/IEC 5962:2021 standard, adopted by the Linux Foundation)</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_what_is_grype">2.2. What is Grype?</h3>
+<div class="paragraph">
+<p><strong>Grype</strong> (Anchore) is an open-source CVE vulnerability scanner.
+It analyzes an SBOM file and compares it with vulnerability databases
+(NVD, GitHub Security Advisories…) to identify the affected packages and
+their severity level.</p>
+</div>
+<div class="paragraph">
+<p>Severity levels (from most critical to most benign):</p>
+</div>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
-<col style="width: 40%;">
 <col style="width: 20%;">
-<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 60%;">
 </colgroup>
 <thead>
 <tr>
-<th class="tableblock halign-left valign-top">Component</th>
-<th class="tableblock halign-left valign-top">Mandatory</th>
-<th class="tableblock halign-left valign-top">Role</th>
+<th class="tableblock halign-left valign-top">Level</th>
+<th class="tableblock halign-left valign-top">Color in the UI</th>
+<th class="tableblock halign-left valign-top">Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-generator</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Yes</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM file generation</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Critical</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dark red</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Immediate exploitation, maximum impact (RCE, privilege escalation…)</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>syft</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">OCI image analysis (Configuration panel — default OCI tool)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">High</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Red-orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Significant impact, likely exploitation</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>skopeo</code> / <code>trivy</code> / <code>cdxgen</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">OCI image analysis — alternative backends (Configuration panel — OCI tool);
-<code>cdxgen</code> requires Node.js</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Medium</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Exploitable under particular conditions</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code> (CVE analysis)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Trivy tab)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Low</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Green</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Limited impact, hard to exploit</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Grype tab)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>osv-scanner</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (OSV-Scanner tab)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>trivy</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">CVE vulnerability analysis (Trivy tab)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>asciidoctor-pdf</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Automatic PDF conversion of the AsciiDoc report (SBOM, or vulnerability
-export from Grype/OSV-Scanner/Trivy)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">No</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM quality score (option in Configuration)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Negligible</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Grey</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Theoretical impact, generally not exploitable in practice (Grype only)</p></td>
 </tr>
 </tbody>
 </table>
-<div class="sect3">
-<h4 id="_checking_that_the_tools_are_available">2.1.1. Checking that the tools are available</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator --version
-syft version
-grype version
-osv-scanner --version
-trivy --version
-cdxgen --version
-asciidoctor-pdf --version
-sbomqs version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_installing_syft_optional">2.1.2. Installing syft (optional)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Anchore script
-curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-  | sh -s -- -b /usr/local/bin
-
-# Check
-syft version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_installing_cdxgen_optional">2.1.3. Installing cdxgen (optional)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Via npm (requires Node.js ≥ 20)
-npm install -g @cyclonedx/cdxgen
-
-# Check
-cdxgen --version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_installing_grype">2.1.4. Installing grype</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Anchore script
-curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
-  | sh -s -- -b /usr/local/bin
-
-# Check
-grype version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_installing_osv_scanner_optional">2.1.5. Installing osv-scanner (optional)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Google script
-curl -sSfL \
-  https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
-  | sh -s -- -b /usr/local/bin
-
-# Or via Go (if Go is installed)
-go install github.com/google/osv-scanner/cmd/osv-scanner@latest
-
-# Check
-osv-scanner --version</code></pre>
-</div>
-</div>
 <div class="admonitionblock note">
 <table>
 <tbody><tr>
@@ -142,67 +81,55 @@ osv-scanner --version</code></pre>
 <div class="title">Note</div>
 </td>
 <td class="content">
-<code>osv-scanner</code> must be reachable in the PATH when the GUI is launched.
-If the tool is installed through Go in <code>~/go/bin</code>, add that folder to the PATH
-of your graphical session (<code>~/.profile</code> or <code>~/.bash_profile</code>).
+The databases used by OSV-Scanner sometimes use the label <code>MODERATE</code>
+(GitHub Advisory, npm) instead of <code>MEDIUM</code>. The application unifies them
+automatically: any <code>MODERATE</code> severity is displayed as <code>Medium</code> in the table
+and the filters.
 </td>
 </tr>
 </tbody></table>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_installing_trivy_optional">2.1.6. Installing trivy (optional)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Official Aqua Security script
-curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-  | sh -s -- -b /usr/local/bin
-
-# Or via the package manager (Fedora/RHEL)
-sudo rpm -ivh https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.rpm
-
-# Check
-trivy --version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_installing_asciidoctor_pdf_optional">2.1.7. Installing asciidoctor-pdf (optional)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">gem install asciidoctor-pdf</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_installing_sbomqs_optional">2.1.8. Installing sbomqs (optional)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Download the latest release from GitHub
-# https://github.com/interlynk-io/sbomqs/releases
-curl -sSfL https://raw.githubusercontent.com/interlynk-io/sbomqs/main/install.sh \
-  | sh -s -- -b /usr/local/bin
-
-# Check
-sbomqs version</code></pre>
-</div>
-</div>
-</div>
-</div>
 <div class="sect2">
-<h3 id="_starting_the_interface">2.2. Starting the interface</h3>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">sbom_generator_gui</code></pre>
+<h3 id="_about_the_tool">2.3. About the tool</h3>
+<div class="paragraph">
+<p><strong>SBOM Generator GUI</strong> is a Linux desktop graphical interface that orchestrates
+command-line tools:</p>
 </div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>sbom-generator</code>: generates SBOM files from a list of packages or an OCI image</p>
+</li>
+<li>
+<p><code>grype</code>: analyzes the generated SBOMs to detect CVE vulnerabilities (Anchore)</p>
+</li>
+<li>
+<p><code>osv-scanner</code>: analyzes SBOMs to detect CVE vulnerabilities (Google)</p>
+</li>
+<li>
+<p><code>trivy</code>: analyzes SBOMs to detect CVE vulnerabilities (Aqua Security)</p>
+</li>
+<li>
+<p><code>sbomqs</code>: computes an SBOM quality score (optional)</p>
+</li>
+<li>
+<p><code>asciidoctor-pdf</code>: converts the AsciiDoc report to PDF (optional)</p>
+</li>
+</ul>
 </div>
 <div class="paragraph">
-<p>If the binary is not in the PATH, run it directly:</p>
+<p>The interface lets you configure the options, follow the execution in real
+time, access the produced files, preview them, and run a vulnerability
+analysis without ever opening a terminal.</p>
 </div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">/path/to/sbom_generator_gui</code></pre>
+<div class="paragraph">
+<p>For each run, the <strong>equivalent command line</strong> is displayed in the interface —
+under the <strong>▶ Generate the SBOM</strong> button and as the first entry of the progress
+log.</p>
 </div>
+<div class="paragraph">
+<p>Settings are <strong>automatically saved</strong> between sessions.</p>
 </div>
 </div>
 </div>

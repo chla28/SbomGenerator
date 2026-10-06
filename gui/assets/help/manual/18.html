@@ -1,77 +1,94 @@
 
-<h2 id="_personnalisation_de_lapparence">19. Personnalisation de l’apparence</h2>
+<h2 id="_onglet_fusion_sbom">19. Onglet Fusion SBOM</h2>
 <div class="sectionbody">
-<div class="sect2">
-<h3 id="_sélecteur_de_thème_de_couleur">19.1. Sélecteur de thème de couleur</h3>
 <div class="paragraph">
-<p>Cliquez sur l’icône 🎨 dans la barre de titre pour ouvrir le sélecteur
-de couleurs. Dix thèmes prédéfinis sont proposés :</p>
+<p>L’onglet <strong>Fusion SBOM</strong> combine plusieurs fichiers SBOM en un seul document,
+en dédupliquant les composants communs. Il orchestre la sous-commande
+<code>sbom-generator merge</code> en arrière-plan.</p>
 </div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 50%;">
-<col style="width: 50%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Thème</th>
-<th class="tableblock halign-left valign-top">Couleur principale</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Indigo (défaut)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Indigo foncé (#1A237E)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Bleu</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Bleu foncé (#1565C0)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Violet</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Violet profond (#4A148C)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Teal</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Vert-bleu foncé (#004D40)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Vert</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Vert forêt (#1B5E20)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Orange brûlé (#BF360C)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rouge</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rouge sang (#B71C1C)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rose</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rose profond (#880E4F)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Ardoise</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Gris ardoise (#37474F)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Marron</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Marron (#4E342E)</p></td>
-</tr>
-</tbody>
-</table>
-<div class="paragraph">
-<p>Le thème sélectionné est appliqué immédiatement et <strong>sauvegardé</strong> pour la
-prochaine session.</p>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ [➕ Ajouter des fichiers…]  [📂 Fichiers générés]   3 fichier(s) sélectionné(s) ─┐
+  │  📄 base.cdx.json         /chemin/vers/base.cdx.json                      [✕]  │
+  │  📄 extra-1.cdx.json      /chemin/vers/extra-1.cdx.json                   [✕]  │
+  │  📄 extra-2.cdx.json      /chemin/vers/extra-2.cdx.json                   [✕]  │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [ Fichier de sortie : merged.cdx.json ]  [ Nom du document (optionnel) ]  [🔀 Fusionner]
+
+  ✔ Fusion réussie → merged.cdx.json</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_bascule_clair_sombre">19.2. Bascule clair / sombre</h3>
+<h3 id="_sélection_des_fichiers_à_fusionner">19.1. Sélection des fichiers à fusionner</h3>
 <div class="paragraph">
-<p>Le bouton 🌙 / ☀ alterne entre mode sombre et mode clair. La couleur du
-thème reste identique dans les deux modes — seule la luminosité globale
-change. La préférence est également sauvegardée.</p>
+<p>Deux façons d’alimenter la liste :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>➕ Ajouter des fichiers…</strong> : ouvre un menu à deux entrées —
+<strong>.json / .jsonld</strong> (filtre le sélecteur sur ces extensions) ou
+<strong>Tous les fichiers</strong> (aucun filtre, pour les SBOM dont l’extension n’est pas
+<code>.json</code>, ex. <code>.cdx</code>, <code>.spdx</code>, <code>bom</code>, ou sans extension). Sélection multiple
+possible dans les deux cas. Le contenu doit rester du JSON CycloneDX ou
+SPDX 2.x quel que soit le nom du fichier.</p>
+</li>
+<li>
+<p><strong>📂 Fichiers générés</strong> : menu listant les fichiers SBOM produits pendant la
+session courante (mêmes formats que l’onglet Arborescence, hors SPDX 3.0
+— voir Contraintes ci-dessous).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Chaque fichier de la liste peut être retiré individuellement via le bouton
+<strong>✕</strong>. Le bouton <strong>🔀 Fusionner</strong> n’est actif qu’à partir de deux fichiers
+sélectionnés et d’un chemin de sortie renseigné.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fichier_de_sortie_et_nom_du_document">19.2. Fichier de sortie et nom du document</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Fichier de sortie</strong> : chemin du document fusionné produit (valeur par
+défaut : <code>merged.cdx.json</code>).</p>
+</li>
+<li>
+<p><strong>Nom du document</strong> (optionnel) : s’il est renseigné, remplace le nom du
+document dans le fichier fusionné ; sinon, le nom du premier fichier
+source est conservé.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancement_et_résultat">19.3. Lancement et résultat</h3>
+<div class="paragraph">
+<p>Le bouton <strong>🔀 Fusionner</strong> lance <code>sbom-generator merge</code> avec les fichiers
+sélectionnés. Le déroulé de la commande (journal) s’affiche sous les
+champs, suivi d’une bannière de résultat :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ Fusion réussie → &lt;fichier&gt;</strong> (vert) en cas de succès.</p>
+</li>
+<li>
+<p><strong>✘ Échec de la fusion (code N)</strong> (rouge) en cas d’échec — consultez le
+journal affiché pour le détail de l’erreur.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_contraintes">19.4. Contraintes</h3>
+<div class="paragraph">
+<p>Tous les fichiers sélectionnés doivent être dans le même format (celui du
+premier fichier de la liste) : CycloneDX ou SPDX 2.3. Le format de sortie
+suit celui du premier fichier. Le format SPDX 3.0 (JSON-LD) n’est pas pris
+en charge en entrée pour la fusion.</p>
 </div>
 </div>
 </div>

@@ -1,332 +1,133 @@
 
-<h2 id="_typical_workflows">20. Typical workflows</h2>
+<h2 id="_sbom_licenses_tab">20. SBOM Licenses tab</h2>
 <div class="sectionbody">
-<div class="sect2">
-<h3 id="_scenario_1_generating_an_sbom_from_an_rpm_list">20.1. Scenario 1 — Generating an SBOM from an RPM list</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Prepare an <code>rpm.lst</code> file containing the list of RPM packages
-(output of <code>rpm -qa</code>, one package per line)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">In the <strong>Packages to analyze</strong> field, select <code>rpm.lst</code></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">In the <strong>Base path</strong> field, enter the output path: <code>sbom</code> or
-<code>/tmp/audit/sbom</code></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Check <strong>CycloneDX 1.6</strong> (recommended format for the grype analysis)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optionally fill in the <strong>SBOM document name</strong> (e.g. <code>RHEL 9.3 — HA Server</code>)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Click <strong>▶ Generate the SBOM</strong></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">7</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Follow the progress in the <strong>Progress</strong> tab</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">8</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">At the end, the <strong>Results</strong> tab opens automatically.
-Use ↗ to open the generated JSON file.</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="sect2">
-<h3 id="_scenario_1b_generating_an_sbom_from_an_oci_image">20.2. Scenario 1b — Generating an SBOM from an OCI image</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Make sure <code>syft</code> (or <code>trivy</code> / <code>skopeo</code> / <code>cdxgen</code>) is installed
-(see <a href="#_installing_syft_optional">Installing syft (optional)</a>)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">In the <strong>OCI image</strong> field, enter the reference: <code>nginx:latest</code>,
-<code>/path/ubuntu.tar</code> (or <code>.tar.gz</code> / <code>.tgz</code>), or use 📂 to browse
-(tar archives or OCI layout directory)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Select the OCI backend if needed (Syft is the default)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">In the <strong>Base path</strong> field, enter the output path: <code>sbom</code></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Check the desired format(s) (CycloneDX recommended)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Click <strong>▶ Generate the SBOM</strong>. The interface first displays the message
-<code>Analysing OCI image …</code> while the tool analyzes the image, then starts the
-SBOM generation.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">7</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">At the end, the <strong>Results</strong> tab opens. Continue with Grype to analyze the
-vulnerabilities (Grype tab — the SBOM file is pre-filled).</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="sect2">
-<h3 id="_scenario_2_generating_an_sbom_then_analyzing_vulnerabilities_with_grype">20.3. Scenario 2 — Generating an SBOM then analyzing vulnerabilities with Grype</h3>
 <div class="paragraph">
-<p>Continuation of scenario 1:</p>
+<p>The <strong>SBOM Licenses</strong> tab displays the licenses contained in an existing SBOM
+file and lets you generate a compliance report (AsciiDoc, Markdown, HTML, CSV
+or JSON) at the bottom of the page. It orchestrates the
+<code>sbom-generator licenses</code> subcommand in the background.</p>
 </div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">9</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Go to the <strong>Grype</strong> tab. The <strong>SBOM file</strong> field is already filled in with the
-<code>.cdx.json</code> generated in the previous step.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">10</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Select the RHEL version in the <strong>Distro</strong> menu: e.g. <code>rhel:9</code></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">11</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Leave <strong>--platform linux</strong>, <strong>--add-cpes-if-none</strong> and <strong>--by-cve</strong> checked</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">12</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: select a <code>--fail-on</code> <strong>threshold</strong> (e.g. <code>high</code>) and check
-<strong>--only-fixed</strong> to filter on fixable vulnerabilities</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">13</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: fill in the <strong>Template (-t)</strong> field with <code>./grype_csv.tmpl</code>
-to produce a CSV export</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">14</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Click <strong>Analyze</strong></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">15</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Look at the <strong>Table</strong> view for an overview by severity, the <strong>JSON</strong> view for
-the technical details, and the <strong>Template</strong> view for the CSV export</p></td>
-</tr>
-</tbody>
-</table>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ [📄 Choose a file…]  [📂 Generated files]   /path/to/sbom.cdx.json ─┐
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [12 package(s)] [5 license(s)] [2 strong copyleft] [1 unlicensed]
+  [🔍 Filter by license or package…]             [By license | Table]
+  ▸ Apache-2.0                                                     3
+  ▾ GPL-3.0-or-later  [strong copyleft]                            2
+        bash 5.3.9-3.fc44
+        …
+  ▸ No license detected  [unlicensed]                              1
+  ────────────────────────────────────────────────────────────────────
+  [Format ▾] [ Output file: licenses.adoc ] [ Name (optional) ] [⚖ Generate]
+
+  ✔ Report generated → licenses.adoc</pre>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_scenario_2b_cross_checking_osv_scanner_and_trivy_results">20.4. Scenario 2b — Cross-checking OSV-Scanner and Trivy results</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">After an SBOM generation, go to the <strong>OSV-Scanner</strong> tab.
-The <strong>SBOM file</strong> field is pre-filled.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Click <strong>Analyze</strong>. Look at the <strong>Vulnerabilities</strong> view with the severity
-filters.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Go to the <strong>Trivy</strong> tab. The <strong>SBOM file</strong> field is also pre-filled (the tabs
-remember their state when navigating).</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: check <strong>--ignore-unfixed</strong> to only see fixable vulnerabilities.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Click <strong>Analyze</strong>. Compare the Trivy results with those of OSV-Scanner to
-detect possible false positives or false negatives.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Look at the <strong>Raw JSON</strong> view of each tab to access the detailed metadata
-(CVSS, references, affected packages).</p></td>
-</tr>
-</tbody>
-</table>
+<h3 id="_sbom_licenses">20.1. SBOM licenses</h3>
+<div class="paragraph">
+<p>As soon as a file is selected, its licenses are displayed:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>A row of chips summarizes the SBOM: number of packages, distinct licenses,
+packages under strong copyleft (red), weak copyleft (orange) and with no
+detected license (yellow).</p>
+</li>
+<li>
+<p>The <strong>By license</strong> view lists the licenses (with the number of packages); a
+click expands the matching packages. The <strong>Table</strong> view lists one package per
+row (package, version, license), sortable by clicking a header.</p>
+</li>
+<li>
+<p>The filter field keeps the licenses whose identifier contains the entered
+text, or the packages whose name matches (case-insensitive).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The grouping and the copyleft classification are those of the CLI: they are
+exactly those of the generated report.</p>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_scenario_2c_filtering_cves_by_publication_period">20.5. Scenario 2c — Filtering CVEs by publication period</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">After running a Grype (or OSV-Scanner / Trivy) analysis, open the
-matching tab. The date filter bar is visible above the table.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">To only display the CVEs published since January 1st, 2024, click the
-<strong>After…</strong> chip and select <code>2024-01-01</code> in the calendar. The table updates
-instantly.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">To add an upper bound, click <strong>Before…</strong> and select the desired end date.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">If you want to filter on the last update rather than on the initial
-publication date, change the <strong>Published</strong> selector to <strong>Modified</strong> or <strong>Most
-recent</strong>.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Check <strong>Undated</strong> to include in the results the CVEs whose date is absent from
-the scanner data (empty field in the JSON).</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Click <strong>Apply to other tabs</strong> to apply the same filter to the OSV-Scanner and
-Trivy tabs without having to reconfigure them.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">7</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">To clear a bound, click the × of the matching chip.</p></td>
-</tr>
-</tbody>
-</table>
+<h3 id="_selecting_the_source_file">20.2. Selecting the source file</h3>
+<div class="paragraph">
+<p>Two ways to designate the file:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>📄 Choose a file…</strong>: opens a system file picker.</p>
+</li>
+<li>
+<p><strong>📂 Generated files</strong>: menu listing the SBOM files produced during the
+current session (same formats as the Tree tab: CycloneDX, SPDX 2.3,
+SPDX 3.0 JSON-LD).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The <strong>⚖ Generate</strong> button is only active once a file is selected and an output
+path is filled in.</p>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_scenario_3_assessing_sbom_quality_with_sbomqs">20.6. Scenario 3 — Assessing SBOM quality with sbomqs</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Install <code>sbomqs</code> (see <a href="#_installing_sbomqs_optional">Installing sbomqs (optional)</a>)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">In the <strong>Options</strong> section, check <strong>sbomqs quality score</strong></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Launch the generation normally (CycloneDX format recommended)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">After the generation, the <strong>Results</strong> tab opens and displays the sbomqs score
-in an indigo box under the file list</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Select the score text to copy it into a report</p></td>
-</tr>
-</tbody>
-</table>
+<h3 id="_output_file_and_document_name_2">20.3. Output file and document name</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Format</strong>: AsciiDoc (default), Markdown, HTML (standalone), CSV or JSON.
+The extension of the output file follows the format as long as it has not
+been modified by hand.</p>
+</li>
+<li>
+<p><strong>Output file</strong>: path of the produced report (default value:
+<code>licenses.adoc</code>).</p>
+</li>
+<li>
+<p><strong>Document name</strong> (optional): if filled in, replaces the document name in the
+report header; otherwise, the name of the source file is kept.</p>
+</li>
+</ul>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_scenario_4_asciidoc_pdf_report">20.7. Scenario 4 — AsciiDoc + PDF report</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 80%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Step</th>
-<th class="tableblock halign-left valign-top">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Check the <strong>AsciiDoc</strong> format (and optionally other formats)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Check <strong>Convert to PDF (asciidoctor-pdf)</strong></p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: fill in a PDF path in the field that appears</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Launch the generation. The PDF is created automatically after the <code>.adoc</code>.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Both files (<code>.adoc</code> and <code>.pdf</code>) appear in the <strong>Results</strong> tab</p></td>
-</tr>
-</tbody>
-</table>
+<h3 id="_launch_and_result_2">20.4. Launch and result</h3>
+<div class="paragraph">
+<p>The <strong>⚖ Generate</strong> button launches <code>sbom-generator licenses</code> on the selected
+file. The command output (log) is displayed under the fields, followed by a
+result banner:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ Report generated → &lt;file&gt;</strong> (green) on success.</p>
+</li>
+<li>
+<p><strong>✘ Generation failed (code N)</strong> (red) on failure — check the displayed log
+for the error detail.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The report (AsciiDoc; the other formats reproduce the same content) groups
+the packages by exact license, with a figures summary at the top (analyzed
+packages, distinct licenses, packages under strong/weak copyleft license,
+packages with no detected license), a warning listing the detected copyleft
+identifiers (GPL/AGPL as strong; LGPL, MPL, EPL, CDDL, CPL, EUPL as weak), and
+one section per license listing the matching packages.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_constraints_2">20.5. Constraints</h3>
+<div class="paragraph">
+<p>The source format must be recognized (CycloneDX, SPDX 2.3 or SPDX 3.0). The
+copyleft classification is a detection heuristic based on the SPDX
+identifier, not a legal analysis.</p>
+</div>
 </div>
 </div>

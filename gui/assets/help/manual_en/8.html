@@ -1,61 +1,47 @@
 
-<h2 id="_osv_scanner_tab_vulnerability_analysis">9. OSV-Scanner tab — Vulnerability analysis</h2>
+<h2 id="sec-tasks">9. Tasks tab — Scan queue</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The <strong>OSV-Scanner</strong> tab uses Google’s tool to look for vulnerabilities from an
-SBOM file or a container image. Its interface is identical to that of the
-Grype tab.</p>
+<p>The <strong>Tasks</strong> tab queues vulnerability scans: they run <strong>one at a time</strong> (scanners are
+heavy and share their vulnerability database) and their results feed the
+<strong>Dashboard</strong> (cards, comparison, remediation, trend, report).</p>
 </div>
-<div class="listingblock">
-<div class="content">
-<pre>  ┌───────────────────────────────────────────────────────────────────┐
-  │  [ SBOM file ] [ Container image ]                                │
-  │  SBOM file : [ /project/sbom.cdx.json           ] [Choose ▾]    │
-  │  Toml config: [                                 ] [Choose ▾]    │
-  │                                                      [Analyze]   │
-  ├───────────────────────────────────────────────────────────────────┤
-  │  ⚠ 3 vulnerability(ies): 1 Critical, 2 High                      │
-  ├───────────────────────┬───────────────────────────────────────────┤
-  │ [Vulnerabilities (3)] │ [Raw JSON]                                │
-  └───────────────────────┴───────────────────────────────────────────┘</pre>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Choose the <strong>SBOM to scan</strong>: the first generated JSON SBOM is proposed
+automatically, <strong>Browse…</strong> picks another one.</p>
+</li>
+<li>
+<p>Tick the scanners (Grype, OSV-Scanner, Trivy).</p>
+</li>
+<li>
+<p><strong>Add to queue</strong>: one scan per ticked scanner appears.</p>
+</li>
+</ol>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_version_indicator_2">9.1. Version indicator</h3>
 <div class="paragraph">
-<p>Same behavior as in the Grype tab (see <a href="#_version_indicator">Version indicator</a>), applied to
-<code>osv-scanner</code>. The badge is displayed at the top of the configuration panel
-as soon as the startup check is finished.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_requirements_2">9.2. Requirements</h3>
-<div class="paragraph">
-<p><code>osv-scanner</code> must be installed and reachable in the PATH
-(see <a href="#_installing_osv_scanner_optional">Installing osv-scanner (optional)</a>).</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="sec-onglet-osv-source">9.3. Selecting the source to analyze</h3>
-<div class="paragraph">
-<p>Same <strong>SBOM file / Container image</strong> toggle as in the Grype tab
-(see <a href="#sec-source-scan">Selecting the source to analyze</a>). In <strong>SBOM file</strong> mode, the field is pre-filled with
-the last generated file; the <strong>Choose</strong> button offers:</p>
+<p>Each row shows its state — <strong>Queued</strong>, <strong>Running…</strong> (with the duration), <strong>Done</strong>
+(number of vulnerabilities), <strong>Failed</strong> (error message: tool not found, unreadable
+output…) or <strong>Cancelled</strong> — and offers:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Filtered type</strong>: <code>.json</code> and <code>.jsonld</code> files</p>
+<p><strong>Cancel</strong> (⏹): removes a queued scan, or stops the process of a running one;</p>
 </li>
 <li>
-<p><strong>All files</strong></p>
+<p><strong>Retry</strong> (↺): puts a failed or cancelled scan back in the queue;</p>
+</li>
+<li>
+<p><strong>Remove</strong> (✕): deletes the row.</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>In <strong>Container image</strong> mode, the field accepts a <strong>registry</strong> reference
-(e.g. <code>nginx:latest</code>) or a local <strong>archive</strong> (<code>docker save</code>, through the
-dedicated button) — in <code>.tar</code>, <code>.tar.gz</code> or <code>.tgz</code> format.</p>
+<p><strong>Cancel all</strong> interrupts every queued or running scan; <strong>Remove finished</strong> cleans
+the list. CISA KEV / EPSS / PoC enrichment follows the "enrich online" setting of
+the scan tabs.</p>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -64,125 +50,11 @@ dedicated button) — in <code>.tar</code>, <code>.tar.gz</code> or <code>.tgz</
 <div class="title">Note</div>
 </td>
 <td class="content">
-Unlike Grype and Trivy, OSV-Scanner cannot read an OCI layout directory
-directly: only the archive is offered here. It also has no platform option
-(<code>--platform</code>).
+The results of a queued scan replace those of the same scanner in the
+dashboard; the Grype / OSV-Scanner / Trivy tab tables do not show them (they keep
+their own scans).
 </td>
 </tr>
 </tbody></table>
-</div>
-<div class="paragraph">
-<p>The <strong>Per layer</strong> option is available in image mode, as for Grype —
-see <a href="#sec-scan-couches">Per-layer analysis (“Container image” source)</a>.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_optional_configuration_toml">9.4. Optional configuration (toml)</h3>
-<div class="paragraph">
-<p>Path to an <code>osv-scanner.toml</code> configuration file used to define ignore rules
-by vulnerability ID. This parameter is optional.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_starting_the_analysis">9.5. Starting the analysis</h3>
-<div class="paragraph">
-<p>Click <strong>Analyze</strong>. In <strong>SBOM file</strong> mode, OSV-Scanner runs with:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">osv-scanner --format json --sbom /path/to/sbom.cdx.json</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>In <strong>Container image</strong> mode, the subcommand changes (<code>--sbom</code> cannot scan an
-image):</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">osv-scanner scan image --format json nginx:latest
-# or, for a local archive:
-osv-scanner scan image --format json --archive /path/to/image.tar</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>An exit code of 1 indicates that at least one vulnerability was found (this is
-normal, not an error); a code greater than 1 indicates an error.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_results">9.6. Results</h3>
-<div class="sect3">
-<h4 id="_vulnerabilities_view">9.6.1. Vulnerabilities view</h4>
-<div class="paragraph">
-<p>Same interface as the Grype tab: search bar + sort + CSV export, severity
-filters, then the list of vulnerabilities.</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>  [ Search...                            ] [⬇]
-  Filter : [Critical (1)] [High (2)] [Medium (0)] [Low (0)]  [Show all]
-
-  ┌────────────┬────────────────────┬────────────────┬────────────────────────┐
-  │ SEVERITY ↕ │ CVE/ID ↕           │ PACKAGE ↕      │ FIXED VERSION ↕        │
-  ├────────────┼────────────────────┼────────────────┼────────────────────────┤
-  │ CRITICAL   │ CVE-2023-12345     │ requests 2.28  │ 2.31.0                 │
-  └────────────┴────────────────────┴────────────────┴────────────────────────┘</pre>
-</div>
-</div>
-<div class="paragraph">
-<p><strong>Search and sort</strong>: identical to the Grype tab (see <a href="#sec-vue-table">[sec-vue-table]</a>).</p>
-</div>
-<div class="paragraph">
-<p><strong>Merging of visual duplicates</strong>: same behavior (×N badge) as the Grype tab —
-see <a href="#sec-vue-table">[sec-vue-table]</a>.</p>
-</div>
-<div class="paragraph">
-<p><strong>CSV export</strong>: the ⬇ button exports the filtered (already merged) view.
-Columns: Severity, CVE/ID, Package, Installed version, Fixed version,
-Ecosystem, Locations.</p>
-</div>
-<div class="paragraph">
-<p><strong>AsciiDoc + PDF export</strong>: the ⬥ button exports the same filtered view into an
-AsciiDoc report (summary by severity + detailed table), with automatic PDF
-conversion if <code>asciidoctor-pdf</code> is installed — see the full description in the
-Grype tab (<a href="#sec-vue-table">[sec-vue-table]</a>).</p>
-</div>
-<div class="paragraph">
-<p><strong>Date filter</strong>: same bar as the Grype tab (see <a href="#sec-vue-table">[sec-vue-table]</a>). The
-<strong>Published</strong> field corresponds to <code>published</code> of the OSV JSON, the <strong>Modified</strong>
-field to <code>modified</code>. The <strong>Apply</strong> option copies the filter to the Grype and
-Trivy tabs.</p>
-</div>
-<div class="paragraph">
-<p>Columns:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Colored severity badge</p>
-</li>
-<li>
-<p>CVE identifier (clickable — copies to the clipboard)</p>
-</li>
-<li>
-<p>Name and version of the affected package</p>
-</li>
-<li>
-<p>Fixed version (if available)</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>The severity is determined from the <code>database_specific.severity</code> field or from
-the CVSS scores present in the OSV JSON.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_raw_json_view">9.6.2. Raw JSON view</h4>
-<div class="paragraph">
-<p>Displays the complete JSON returned by <code>osv-scanner</code>, useful to inspect the
-detailed metadata of each vulnerability.</p>
-</div>
-</div>
 </div>
 </div>

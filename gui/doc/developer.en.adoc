@@ -117,6 +117,9 @@ gui/
 │   │   ├── app_themes.dart           # Predefined color themes (kAppThemes, AppTheme)
 │   │   ├── cve_date_filter.dart      # CVE time filter (CveDateFilter, CveDateField)
 │   │   ├── layer_nav.dart            # --per-layer SBOM set: global ↔ layers, layer fields
+│   │   ├── remediation.dart          # Remediation plan (target versions, risk reduction)
+│   │   ├── scan_session.dart         # Scan session (JSON) + trend
+│   │   ├── vex.dart                  # OpenVEX / CycloneDX VEX (copy of the CLI core)
 │   │   └── layer_scan.dart           # Per-layer vulnerability analysis: set, result, JSON merges
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Runs sbom-generator, event stream
@@ -128,10 +131,14 @@ gui/
 │   │   ├── layer_scan_service.dart   # Per-layer SBOM (CLI --per-layer) + per-layer scan orchestration
 │   │   ├── package_scan_service.dart # SBOM of a package/archive (CLI --input --depth) before scan, session cache
 │   │   ├── version_service.dart      # Installed version detection + latest GitHub release
+│   │   ├── scan_queue.dart           # Scan queue (sequential, cancellable)
+│   │   ├── scan_job_runner.dart      # Real queue executor (runners + enrichment)
+│   │   ├── session_store.dart        # Analysis history (JSON files)
+│   │   ├── vex_controller.dart       # VEX statements (persistence, filter)
 │   │   └── settings_service.dart     # Binary lookup + settings persistence + theme + enrichment
 │   └── widgets/
 │       ├── config_panel.dart         # Left panel: form + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Right panel: 14 tabs; merges the ExploitInfo of the 3 tabs
+│       ├── results_panel.dart        # Right panel: 15 tabs; merges the ExploitInfo of the 3 tabs
 │       ├── grype_panel.dart          # Grype tab (standalone + KeepAlive)
 │       ├── osv_panel.dart            # OSV-Scanner tab (standalone + KeepAlive)
 │       ├── trivy_panel.dart          # Trivy tab (standalone + KeepAlive)
@@ -143,6 +150,12 @@ gui/
 │       ├── cve_detail.dart           # CveDetail / ScannerCveView / CveDetailPanel — shared CVE detail
 │       ├── quality_panel.dart        # SBOM Quality tab — sbomqs + sbom-scorecard
 │       ├── dashboard_panel.dart      # Dashboard tab — multi-scanner CVE synthesis
+│       ├── tasks_panel.dart          # Tasks tab — scan queue
+│       ├── remediation_section.dart  # Dashboard Remediation section
+│       ├── session_bar.dart          # Sessions: bar, trend, history
+│       ├── vex_ui.dart               # VEX: scope, dialog, bar
+│       ├── on_pale.dart              # Dark text on pastel background (dark theme)
+│       ├── help_highlight.dart       # Match highlighting in the help
 │       │                             #   (sortable cross-scanner comparison + expandable rows)
 │       ├── layer_selector.dart       # “Global SBOM / layer N” banner (--per-layer)
 │       ├── sbom_tree_panel.dart      # SBOM Tree tab — component exploration
@@ -1621,7 +1634,7 @@ and the Viewer:
 
 ==== `widgets/results_panel.dart` — Results panel
 
-`ResultsPanel` is a `StatefulWidget` that manages a `TabController` with **14
+`ResultsPanel` is a `StatefulWidget` that manages a `TabController` with **15
 tabs**:
 
 [cols="1,1,2", options="header"]
@@ -1641,46 +1654,50 @@ tabs**:
 |`DashboardPanel` — multi-scanner CVE synthesis
 
 |3
+|Tasks
+|`TasksPanel` — scan queue (cancel, retry)
+
+|4
 |Grype
 |`GrypePanel(onVulnsChanged: ...)` — standalone grype analysis panel
 
-|4
+|5
 |OSV-Scanner
 |`OsvPanel(onVulnsChanged: ...)` — standalone osv-scanner analysis panel
 
-|5
+|6
 |Trivy
 |`TrivyPanel(onVulnsChanged: ...)` — standalone trivy analysis panel
 
-|6
+|7
 |CRA Compliance
 |`CraPanel` — drives `sbom-generator cra`, displays the compliance verdict
 
-|7
+|8
 |SBOM Quality
 |`QualityPanel` — sbomqs + sbom-scorecard in parallel
 
-|8
+|9
 |Tree
 |`SbomTreePanel` — exploration of the SBOM components
 
-|9
+|10
 |Comparison
 |`SbomDiffPanel` — diff between two SBOM files
 
-|10
+|11
 |Merge
 |`SbomMergePanel` — merges several SBOMs through `sbom-generator merge`
 
-|11
+|12
 |Licenses
 |`SbomLicensesPanel` — AsciiDoc license report through `sbom-generator licenses`
 
-|12
+|13
 |Viewer
 |`SbomViewerPanel` — interactive exploration of an external SBOM file
 
-|13
+|14
 |Preview (N)
 |`_SbomPreviewTab` — preview of the content of an SBOM file
 |===
@@ -1795,6 +1812,78 @@ version, Fixed version, Type, Locations, and `extraColumnHeader: 'TYPE'` /
 <<sec-vuln-shared>> since it is strictly identical for Grype, OSV and Trivy.
 
 [[sec-vuln-shared]]
+== Sessions, history, tasks, VEX and remediation (GUI 1.7)
+
+These features are carried by *widget-free* modules (testable without a UI) and thin
+widgets:
+
+[cols="2,3", options="header"]
+|===
+|Module |Role
+
+|`models/remediation.dart`
+|`buildRemediation`: groups CVEs (normalized id) by (package, installed version),
+computes the minimal target version (`compareVersions`, `fixedVersionsOf`) and the risk
+reduction (`cveRisk`: severity + KEV + EPSS). `widgets/remediation_section.dart` shows it
+(`RemediationSection`), exports to CSV / clipboard; `dashboard_panel.dart` inserts it.
+
+|`models/scan_session.dart`
+|`ScanSession` (results of the three scanners + `ExploitInfo` signals + targets,
+versioned JSON serialization `kSessionFormat`) and `SessionTrend.compare` (new / gone /
+unchanged by `id\0package` key).
+
+|`services/session_store.dart`
+|`SessionStore`: history in `$XDG_DATA_HOME/sbom-generator-gui/history`, one file per
+(targets, day) — `session-YYYYMMDD-<fnv>.json` — pruned beyond 50 entries.
+`ResultsPanel` saves 2 s after the last results change (`_scheduleSave`). The store is
+injected (`historyStore`, `null` in tests) so that no test writes into the user's folder.
+
+|`widgets/session_bar.dart`
+|`SessionActions` (bridge `ResultsPanel` → dashboard), `SessionBar`, `TrendCard`,
+`SessionHistoryDialog` (`initialEntries` for tests).
+
+|`services/scan_queue.dart`
+|`ScanQueue` (`ChangeNotifier`): scans run *one at a time*, cancellation
+(`JobCancel.onCancel` hooks `runner.kill`), retry, purge. The executor is injected
+(`ScanJobExecutor`): tests use a fake one; `scan_job_runner.dart` provides the real one
+(runners → `fromJson` → `dedupeVulns` → `enrichCves`).
+
+|`widgets/tasks_panel.dart`
+|*Tasks* tab (index 3). Results go up through `ResultsPanel._applyJobResult`.
+
+|`models/vex.dart` + `services/vex_controller.dart`
+|Copy of the CLI's VEX core (`lib/vex.dart`): OpenVEX / CycloneDX VEX read and write,
+product matching (PURL, `name`, `name@version`). `VexController` (`ChangeNotifier`) holds
+the statements, persists them (`SettingsService.saveVex`) and `filterByVex` hides covered
+CVEs. `widgets/vex_ui.dart`: `VexScope` (`InheritedNotifier`, so `CveDetailPanel` reaches
+it wherever it is shown), `showVexDialog`, `CveVexRow`, `VexBar`.
+
+|`widgets/on_pale.dart`
+|`OnPale` / `paleIf` / `kOnPale`: dark text forced on pastel backgrounds (readability in
+dark theme).
+
+|`widgets/help_highlight.dart`
+|`highlightHtml`: wraps matches in `<mark id="hit-N">` (`.cur` for the current match); used
+by `HelpViewerScreen` (counter, ▲▼, F3).
+|===
+
+*Keyboard shortcuts*: `HomeScreen._shortcutBindings` (`CallbackShortcuts` around a
+`Focus(autofocus: true)`); `ConfigPanelState.triggerRun`, `ResultsPanelState.selectTab` /
+`moveTab` are public for this (global keys `_configKey` / `_resultsKey`).
+
+*Pitfalls met*:
+
+* do not use `PageStorageKey` on an `ExpansionTile` containing a `SelectableText` (both
+write into `PageStorage`: `type 'bool' is not a subtype of type 'double?'`);
+* ICU: `=1{…}` maps to the `one` category, which in French also covers **0** — never hard-code
+a "1" there when the counter can be 0 (`=1{{count} …}`); the ARB test (`l10n_test.dart`)
+also reads `{word` as a parameter: a branch must not start with a letter;
+* tests: real file I/O in `testWidgets` → prepare data with `tester.runAsync`, then pass the
+already-loaded list (`initialEntries`); layout overflows caused by the test font are filtered
+through `FlutterError.onError` *inside the test body*;
+* `flutter_html`: do not pass a constant `anchorKey` (the content stops refreshing when the
+chapter changes).
+
 == `widgets/vuln_shared.dart` — Components shared between Grype, OSV and Trivy
 
 Until an earlier session, the three vulnerability scan tabs displayed a
@@ -2468,7 +2557,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 14, vsync: this);  // ResultsPanel: 14 tabs
+    _tabs = TabController(length: 15, vsync: this);  // ResultsPanel: 15 tabs
   }
 
   @override
@@ -2543,17 +2632,17 @@ Stream<GrypeEvent> run({
 
 === Adding a tab in ResultsPanel
 
-The `TabController` is currently at `length: 14` (Progress, Results,
-Dashboard, Grype, OSV-Scanner, Trivy, CRA Compliance, SBOM Quality, Tree,
+The `TabController` is currently at `length: 15` (Progress, Results,
+Dashboard, Tasks, Grype, OSV-Scanner, Trivy, CRA Compliance, SBOM Quality, Tree,
 Comparison, Merge, Licenses, Viewer, Preview). Real example: the addition of
-the *CRA Compliance* tab (`CraPanel`, inserted at index 6, `length` 13 → 14)
+the *CRA Compliance* tab (`CraPanel`, inserted at index 6, `length` 13 → 14, then *Tasks* at index 3, 14 → 15)
 followed exactly these steps.
 
 . In `results_panel.dart`, modify the controller initialization:
 +
 [source,dart]
 ----
-_tabs = TabController(length: 14, vsync: this);  // was 13
+_tabs = TabController(length: 15, vsync: this);  // was 14
 ----
 
 . Add a `Tab(...)` in the `TabBar`, at the chosen position:

@@ -1,0 +1,123 @@
+
+<h2 id="_sous_commande_scan_analyse_cve_en_ligne_de_commande">24. Sous-commande <code>scan</code> — Analyse CVE en ligne de commande</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>La sous-commande <code>scan</code> permet d’exécuter les mêmes analyses CVE que le GUI
+directement depuis le terminal, avec filtrage par date intégré. Elle ne
+nécessite pas d’interface graphique.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sbom-generator scan --sbom &lt;fichier.cdx.json&gt; [options]</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_options">24.1. Options</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 16.6666%;">
+<col style="width: 50.0001%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Option</th>
+<th class="tableblock halign-left valign-top">Défaut</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--sbom &lt;chemin&gt;</code> (ou <code>-s</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>obligatoire</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fichier SBOM à analyser (CycloneDX, SPDX…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--scanner &lt;nom&gt;</code> (ou <code>-S</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>grype</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Scanner à utiliser : <code>grype</code>, <code>osv</code>, <code>trivy</code>, ou <code>all</code> (les trois)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-after &lt;YYYY-MM-DD&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>aucun</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">N’afficher que les CVE dont la date est postérieure à cette valeur (inclusive)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-before &lt;YYYY-MM-DD&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>aucun</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">N’afficher que les CVE dont la date est antérieure à cette valeur (inclusive,
+fin de journée)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--cve-date-field &lt;champ&gt;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>published</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Champ de date utilisé : <code>published</code>, <code>modified</code>, ou <code>latest</code> (la plus récente
+des deux)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--include-undated</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><em>désactivé</em></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Inclure les CVE dont le champ de date est absent des données du scanner</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>--help</code> (ou <code>-h</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">—</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Afficher l’aide de la sous-commande</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_codes_de_retour">24.2. Codes de retour</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>0</strong> — aucune CVE dans la plage demandée (ou aucune CVE trouvée du tout)</p>
+</li>
+<li>
+<p><strong>1</strong> — au moins une CVE trouvée dans la plage, ou erreur d’un scanner</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_exemples">24.3. Exemples</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Toutes les CVE Grype depuis le 1er janvier 2024
+sbom-generator scan --sbom sbom.cdx.json --cve-after 2024-01-01
+
+# CVE OSV-Scanner entre deux dates
+sbom-generator scan --sbom sbom.cdx.json --scanner osv \
+  --cve-after 2023-06-01 --cve-before 2024-01-01
+
+# Tous les scanners, date de modification, CVE sans date incluses
+sbom-generator scan --sbom sbom.cdx.json --scanner all \
+  --cve-date-field modified --cve-after 2023-01-01 --include-undated
+
+# Utiliser dans un script CI (retour 1 si CVE récentes détectées)
+sbom-generator scan --sbom sbom.cdx.json \
+  --cve-after "$(date -d '90 days ago' +%F)" &amp;&amp; echo "OK" || echo "CVE récentes !"</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_format_de_sortie">24.4. Format de sortie</h3>
+<div class="paragraph">
+<p>La commande affiche pour chaque scanner une table textuelle triée par
+sévérité décroissante :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>── Grype ──────────────────────────────────────────
+  3 CVE(s) trouvée(s)  Filtre : champ=published  après=2024-01-01
+
+SÉVÉRITÉ      CVE / ID              PAQUET
+------------  --------------------  ------------------------------------
+Critical      CVE-2024-1234         openssl@1.1.1k
+High          CVE-2024-5678         bash@5.0.17
+Medium        CVE-2024-9012         zlib@1.2.11</pre>
+</div>
+</div>
+</div>
+</div>

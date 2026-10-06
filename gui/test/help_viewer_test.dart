@@ -21,12 +21,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Sommaire chargé depuis assets/help/manual/toc.json — "1. Introduction"
-    // apparaît deux fois (entrée de sommaire + titre <h2> du contenu).
-    expect(find.text('1. Introduction'), findsWidgets);
-    expect(find.textContaining('Onglet Tableau de bord'), findsOneWidget);
+    // Sommaire chargé depuis assets/help/manual/toc.json — le premier
+    // chapitre est « Démarrage rapide » (parcours de première utilisation) :
+    // son titre apparaît deux fois (entrée de sommaire + titre <h2>).
+    expect(find.text('1. Démarrage rapide'), findsWidgets);
+    expect(find.textContaining('Prérequis'), findsWidgets);
 
     // Contenu du premier chapitre affiché par défaut.
-    expect(find.textContaining('Qu’est-ce qu’un SBOM'), findsWidgets);
+    expect(find.textContaining('Générer un premier SBOM'), findsWidgets);
   });
 }

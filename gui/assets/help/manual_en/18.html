@@ -1,76 +1,91 @@
 
-<h2 id="_customizing_the_appearance">19. Customizing the appearance</h2>
+<h2 id="_sbom_merge_tab">19. SBOM Merge tab</h2>
 <div class="sectionbody">
-<div class="sect2">
-<h3 id="_color_theme_picker">19.1. Color theme picker</h3>
 <div class="paragraph">
-<p>Click the 🎨 icon in the title bar to open the color picker. Ten predefined
-themes are offered:</p>
+<p>The <strong>SBOM Merge</strong> tab combines several SBOM files into a single document,
+deduplicating the common components. It orchestrates the
+<code>sbom-generator merge</code> subcommand in the background.</p>
 </div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 50%;">
-<col style="width: 50%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Theme</th>
-<th class="tableblock halign-left valign-top">Main color</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Indigo (default)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Dark indigo (#1A237E)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Blue</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Dark blue (#1565C0)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Purple</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Deep purple (#4A148C)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Teal</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Dark blue-green (#004D40)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Green</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Forest green (#1B5E20)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Burnt orange (#BF360C)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Red</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Blood red (#B71C1C)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Pink</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Deep pink (#880E4F)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Slate</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Slate grey (#37474F)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Brown</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Brown (#4E342E)</p></td>
-</tr>
-</tbody>
-</table>
-<div class="paragraph">
-<p>The selected theme is applied immediately and <strong>saved</strong> for the next session.</p>
+<div class="listingblock">
+<div class="content">
+<pre>  ┌─ [➕ Add files…]  [📂 Generated files]   3 file(s) selected ─┐
+  │  📄 base.cdx.json         /path/to/base.cdx.json                          [✕]  │
+  │  📄 extra-1.cdx.json      /path/to/extra-1.cdx.json                       [✕]  │
+  │  📄 extra-2.cdx.json      /path/to/extra-2.cdx.json                       [✕]  │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  [ Output file: merged.cdx.json ]  [ Document name (optional) ]  [🔀 Merge]
+
+  ✔ Merge succeeded → merged.cdx.json</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_light_dark_toggle">19.2. Light / dark toggle</h3>
+<h3 id="_selecting_the_files_to_merge">19.1. Selecting the files to merge</h3>
 <div class="paragraph">
-<p>The 🌙 / ☀ button alternates between dark and light mode. The theme color
-stays the same in both modes — only the overall brightness changes. The
-preference is also saved.</p>
+<p>Two ways to fill the list:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>➕ Add files…</strong>: opens a two-entry menu — <strong>.json / .jsonld</strong> (filters the
+picker on these extensions) or <strong>All files</strong> (no filter, for SBOMs whose
+extension is not <code>.json</code>, e.g. <code>.cdx</code>, <code>.spdx</code>, <code>bom</code>, or with no
+extension). Multiple selection is possible in both cases. The content must
+remain CycloneDX or SPDX 2.x JSON whatever the file name.</p>
+</li>
+<li>
+<p><strong>📂 Generated files</strong>: menu listing the SBOM files produced during the
+current session (same formats as the Tree tab, except SPDX 3.0 — see
+Constraints below).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Each file in the list can be removed individually through the <strong>✕</strong> button. The
+<strong>🔀 Merge</strong> button is only active with at least two selected files and a filled
+output path.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_output_file_and_document_name">19.2. Output file and document name</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Output file</strong>: path of the produced merged document (default value:
+<code>merged.cdx.json</code>).</p>
+</li>
+<li>
+<p><strong>Document name</strong> (optional): if filled in, replaces the document name in the
+merged file; otherwise, the name of the first source file is kept.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_launch_and_result">19.3. Launch and result</h3>
+<div class="paragraph">
+<p>The <strong>🔀 Merge</strong> button launches <code>sbom-generator merge</code> with the selected files.
+The command output (log) is displayed under the fields, followed by a result
+banner:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>✔ Merge succeeded → &lt;file&gt;</strong> (green) on success.</p>
+</li>
+<li>
+<p><strong>✘ Merge failed (code N)</strong> (red) on failure — check the displayed log for the
+error detail.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_constraints">19.4. Constraints</h3>
+<div class="paragraph">
+<p>All the selected files must be in the same format (that of the first file in
+the list): CycloneDX or SPDX 2.3. The output format follows that of the first
+file. The SPDX 3.0 (JSON-LD) format is not supported as merge input.</p>
 </div>
 </div>
 </div>

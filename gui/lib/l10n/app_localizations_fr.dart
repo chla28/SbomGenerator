@@ -3452,4 +3452,25 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get shortcutNavigate =>
       'Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace';
+
+  @override
+  String helpHitCount(int current, int total) {
+    final intl.NumberFormat currentNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String currentString = currentNumberFormat.format(current);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return 'Occurrence $currentString sur $totalString';
+  }
+
+  @override
+  String get helpHitNone => 'Aucune occurrence dans ce chapitre';
+
+  @override
+  String get helpPrevHit => 'Occurrence précédente (Maj+F3)';
+
+  @override
+  String get helpNextHit => 'Occurrence suivante (F3 / Entrée)';
 }

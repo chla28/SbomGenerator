@@ -17,8 +17,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Le chapitre 1 (Prérequis & installation) doit maintenant être affiché
-    // — un texte propre au chapitre 0 (Introduction) ne doit plus l'être.
-    expect(find.textContaining('Qu’est-ce qu’un SBOM'), findsNothing);
+    // Le chapitre 1 (Introduction) doit maintenant être affiché — un texte
+    // propre au chapitre 0 (Démarrage rapide) ne doit plus l'être.
+    expect(find.textContaining('Générer un premier SBOM'), findsNothing);
+    expect(find.textContaining('Qu’est-ce qu’un SBOM'), findsWidgets);
   });
 }

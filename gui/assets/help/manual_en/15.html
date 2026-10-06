@@ -1,102 +1,184 @@
 
-<h2 id="_sbom_comparison_tab">16. SBOM Comparison tab</h2>
+<h2 id="_sbom_tree_tab">16. SBOM Tree tab</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The <strong>SBOM Comparison</strong> tab highlights the differences between two SBOM files
-(for example before / after an update).</p>
+<p>The <strong>SBOM Tree</strong> tab lets you explore the components of an SBOM file
+(CycloneDX or SPDX) without opening a JSON editor.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
-  │ [ /path/to/before.cdx.json ] [📂]     │  │ [ /path/to/after.cdx.json ] [📂]     │
-  └───────────────────────────────────────┘  └──────────────────────────────────────┘
-                                                                    [Compare]
-
-  Added: 5  │  Removed: 3  │  Modified: 8  │  Unchanged: 230
-
-  Filter : [✓ Added] [✓ Removed] [✓ Modified] [ Unchanged]
-  Search : [ openssl…                                ]
-
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
-  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
-  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
-  └─────────────────────────────────────────────────────────────────────────┘</pre>
+<pre>  ┌─ File: [ sbom.cdx.json ▼ ]  [📂 Open…]                            ─┐
+  │  CycloneDX 1.6  •  My Application 2.1.0  •  246 components          │
+  ├─ Group by: [None] [Type] [License]                                    │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ ▶ rpm  (132)                                                           │
+  │ ▼ python  (89)                                                         │
+  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
+  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
+  │    ...                                                                 │
+  │ ▶ deb  (25)                                                            │
+  └────────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_loading_the_files">16.1. Loading the files</h3>
+<h3 id="_selecting_the_sbom_file">16.1. Selecting the SBOM file</h3>
 <div class="paragraph">
-<p>Select a file in each slot (SBOM A and SBOM B) through the 📂 button or by
-typing a path. The CycloneDX, SPDX 2.x and SPDX 3.0 JSON-LD formats are
-supported (same formats as the Tree tab); the two compared files do not need
-to be in the same format.</p>
-</div>
-<div class="paragraph">
-<p>Click <strong>Compare</strong> to start the comparison. The button is only active if both
-files are selected.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_counter_bar">16.2. Counter bar</h3>
-<div class="paragraph">
-<p>Displays the number of components in each category:</p>
-</div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 20%;">
-<col style="width: 60%;">
-</colgroup>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">+  (green)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Added</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Present in B, absent from A</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">−  (red)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Removed</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Present in A, absent from B</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">~  (orange)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Modified</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Present in A and B, but with a different version or license</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">=  (grey)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Unchanged</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Identical in A and B</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="sect2">
-<h3 id="_filters_and_search">16.3. Filters and search</h3>
-<div class="paragraph">
-<p>The filter chips let you show or hide each category. By default, <strong>Unchanged</strong>
-components are hidden to focus on the differences.</p>
+<p>The drop-down menu lists the SBOM files generated in the current session. The
+first <code>.cdx.json</code>, <code>.spdx.json</code> or <code>.spdx3.jsonld</code> file is selected
+automatically. Layer SBOMs (<code>--per-layer</code>) are not listed there: they are
+opened from the layer selector (see <a href="#sec-nav-couches">Per-layer navigation (<code>--per-layer</code>)</a>).</p>
 </div>
 <div class="paragraph">
-<p>The search field filters on the component name in real time, in combination
-with the category filters.</p>
+<p>The <strong>Open…</strong> button lets you load any file from the file system.</p>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_differences_column">16.4. Differences column</h3>
 <div class="paragraph">
-<p>For <strong>Modified</strong> components:</p>
+<p>Supported formats:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>The <strong>version</strong> shows the old value struck through and the new value in green</p>
+<p><strong>CycloneDX 1.6</strong> — <code>.cdx.json</code> (<code>components[]</code> field)</p>
 </li>
 <li>
-<p>The <strong>license</strong> shows the old value struck through and the new value in green</p>
+<p><strong>SPDX 2.x</strong> — <code>.spdx.json</code> (<code>packages[]</code> field)</p>
+</li>
+<li>
+<p><strong>SPDX 3.0 JSON-LD</strong> — <code>.spdx3.jsonld</code></p>
 </li>
 </ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_information_bar">16.2. Information bar</h3>
+<div class="paragraph">
+<p>After loading, a metadata line is displayed:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>SBOM format and version</p>
+</li>
+<li>
+<p>Document name / main component</p>
+</li>
+<li>
+<p>Total number of components</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_grouping">16.3. Grouping</h3>
+<div class="paragraph">
+<p>The <strong>Group by</strong> selector offers three modes:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>None</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">All components in a flat list sorted by name</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Type</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Grouping by package type (rpm, python, deb…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>License</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Grouping by SPDX license expression</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Layer</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM produced with <code>--per-layer</code> only: grouping by originating
+layer (<code>Layer 01</code>, <code>Layer 02</code>… in the global SBOM) or by change (<code>Added</code> /
+<code>Modified</code> in a layer SBOM)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The icons to the right of the selector expand or collapse all the groups.</p>
+</div>
+<div class="paragraph">
+<p>Groups are collapsible. Click a group header to open or close it.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_component_details">16.4. Component details</h3>
+<div class="paragraph">
+<p>Click a component to display its details (expandable field):</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>PURL</strong> (Package URL) — clickable to copy to the clipboard</p>
+</li>
+<li>
+<p><strong>Version</strong></p>
+</li>
+<li>
+<p><strong>Type</strong></p>
+</li>
+<li>
+<p><strong>License</strong></p>
+</li>
+<li>
+<p><strong>Layer</strong> — originating layer (global SBOM) or change (layer SBOM), for an
+SBOM produced with <code>--per-layer</code></p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Components with no PURL in the SBOM do not display this field.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-nav-couches">16.5. Per-layer navigation (<code>--per-layer</code>)</h3>
+<div class="paragraph">
+<p>When the opened file belongs to a set produced with <code>--per-layer</code> (global SBOM
+or layer SBOM), an <strong>N layer(s)</strong> banner is displayed under the file bar, in
+this tab as in the <strong>SBOM Viewer</strong>:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>a <strong>Global SBOM / Layer 1/N (digest) …</strong> drop-down menu directly opens the
+chosen SBOM; for each layer, it recalls the counters
+(<code>+added ~modified -removed</code>) and the build instruction;</p>
+</li>
+<li>
+<p>under the menu, the description of the displayed document: digest,
+instruction, counters of the layer (or number of layers and mode for the
+global one);</p>
+</li>
+<li>
+<p>an <strong>N removed</strong> badge lists on hover the components removed by the layer
+(rootfs mode).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The files of the same set are found by their name in the directory of the
+opened file (<code>&lt;base&gt;.&lt;ext&gt;</code> and <code>&lt;base&gt;.layer-NN-&lt;digest&gt;.&lt;ext&gt;</code>, same
+format): navigation also works for a set opened through <strong>Open…</strong>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_state_persistence_2">16.6. State persistence</h3>
+<div class="paragraph">
+<p>The tab remembers its state (selected file, grouping, open/closed groups) when
+navigating between tabs.</p>
 </div>
 </div>
 </div>

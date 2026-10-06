@@ -1,103 +1,187 @@
 
-<h2 id="_onglet_comparaison_sbom">16. Onglet Comparaison SBOM</h2>
+<h2 id="_onglet_arborescence_sbom">16. Onglet Arborescence SBOM</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Comparaison SBOM</strong> met en évidence les différences entre deux
-fichiers SBOM (par exemple avant / après une mise à jour).</p>
+<p>L’onglet <strong>Arborescence SBOM</strong> permet d’explorer les composants d’un fichier
+SBOM (CycloneDX ou SPDX) sans ouvrir un éditeur JSON.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
-  │ [ /chemin/vers/avant.cdx.json ] [📂]  │  │ [ /chemin/vers/après.cdx.json ] [📂] │
-  └───────────────────────────────────────┘  └──────────────────────────────────────┘
-                                                                    [Comparer]
-
-  Ajoutés : 5  │  Supprimés : 3  │  Modifiés : 8  │  Inchangés : 230
-
-  Filtre : [✓ Ajoutés] [✓ Supprimés] [✓ Modifiés] [ Inchangés]
-  Recherche : [ openssl…                             ]
-
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
-  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
-  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
-  └─────────────────────────────────────────────────────────────────────────┘</pre>
+<pre>  ┌─ Fichier : [ sbom.cdx.json ▼ ]  [📂 Ouvrir…]                      ─┐
+  │  CycloneDX 1.6  •  Mon Application 2.1.0  •  246 composants          │
+  ├─ Grouper par : [Aucun] [Type] [Licence]                               │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ ▶ rpm  (132)                                                           │
+  │ ▼ python  (89)                                                         │
+  │    requests  2.31.0  MIT  pkg:pypi/requests@2.31.0                    │
+  │    urllib3   1.26.14 MIT  pkg:pypi/urllib3@1.26.14                    │
+  │    ...                                                                 │
+  │ ▶ deb  (25)                                                            │
+  └────────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_chargement_des_fichiers">16.1. Chargement des fichiers</h3>
+<h3 id="_sélection_du_fichier_sbom">16.1. Sélection du fichier SBOM</h3>
 <div class="paragraph">
-<p>Sélectionnez un fichier dans chaque emplacement (SBOM A et SBOM B) via le
-bouton 📂 ou en saisissant un chemin. Les formats CycloneDX, SPDX 2.x et
-SPDX 3.0 JSON-LD sont supportés (mêmes formats que l’onglet Arborescence) ;
-les deux fichiers comparés n’ont pas besoin d’être dans le même format.</p>
-</div>
-<div class="paragraph">
-<p>Cliquez sur <strong>Comparer</strong> pour lancer la comparaison. Le bouton est actif
-uniquement si les deux fichiers sont sélectionnés.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_barre_de_compteurs">16.2. Barre de compteurs</h3>
-<div class="paragraph">
-<p>Affiche le nombre de composants dans chaque catégorie :</p>
-</div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 20%;">
-<col style="width: 20%;">
-<col style="width: 60%;">
-</colgroup>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">+  (vert)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Ajoutés</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans B, absents de A</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">−  (rouge)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Supprimés</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans A, absents de B</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">~  (orange)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Modifiés</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Présents dans A et B, mais avec version ou licence différente</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">=  (gris)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Inchangés</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Identiques dans A et B</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="sect2">
-<h3 id="_filtres_et_recherche">16.3. Filtres et recherche</h3>
-<div class="paragraph">
-<p>Les puces de filtre permettent d’afficher ou masquer chaque catégorie.
-Par défaut, les composants <strong>Inchangés</strong> sont masqués pour se concentrer
-sur les différences.</p>
+<p>Le menu déroulant liste les fichiers SBOM générés dans la session courante.
+Le premier fichier <code>.cdx.json</code>, <code>.spdx.json</code> ou <code>.spdx3.jsonld</code> est
+sélectionné automatiquement. Les SBOM de couche (<code>--per-layer</code>) n’y
+figurent pas : ils s’ouvrent depuis le sélecteur de couche (voir
+<a href="#sec-nav-couches">Navigation par couche (<code>--per-layer</code>)</a>).</p>
 </div>
 <div class="paragraph">
-<p>Le champ de recherche filtre sur le nom du composant en temps réel, en
-combinaison avec les filtres de catégorie.</p>
+<p>Le bouton <strong>Ouvrir…</strong> permet de charger n’importe quel fichier du système
+de fichiers.</p>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_colonne_de_différences">16.4. Colonne de différences</h3>
 <div class="paragraph">
-<p>Pour les composants <strong>Modifiés</strong> :</p>
+<p>Formats supportés :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>La <strong>version</strong> affiche l’ancienne valeur barrée et la nouvelle valeur en vert</p>
+<p><strong>CycloneDX 1.6</strong> — <code>.cdx.json</code> (champ <code>components[]</code>)</p>
 </li>
 <li>
-<p>La <strong>licence</strong> affiche l’ancienne valeur barrée et la nouvelle valeur en vert</p>
+<p><strong>SPDX 2.x</strong> — <code>.spdx.json</code> (champ <code>packages[]</code>)</p>
+</li>
+<li>
+<p><strong>SPDX 3.0 JSON-LD</strong> — <code>.spdx3.jsonld</code></p>
 </li>
 </ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_barre_dinformations">16.2. Barre d’informations</h3>
+<div class="paragraph">
+<p>Après le chargement, une ligne de métadonnées s’affiche :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Format et version du SBOM</p>
+</li>
+<li>
+<p>Nom du document / composant principal</p>
+</li>
+<li>
+<p>Nombre total de composants</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_groupement">16.3. Groupement</h3>
+<div class="paragraph">
+<p>Le sélecteur <strong>Grouper par</strong> propose trois modes :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Aucun</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Tous les composants dans une liste plate triée par nom</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Type</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Regroupement par type de paquet (rpm, python, deb…)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Licence</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Regroupement par expression de licence SPDX</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Couche</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SBOM produit avec <code>--per-layer</code> uniquement : regroupement par
+couche d’origine (<code>Couche 01</code>, <code>Couche 02</code>… dans le SBOM global) ou par
+changement (<code>Ajoutés</code> / <code>Modifiés</code> dans un SBOM de couche)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Les icônes à droite du sélecteur déplient ou replient tous les groupes.</p>
+</div>
+<div class="paragraph">
+<p>Les groupes sont repliables. Cliquez sur l’en-tête d’un groupe pour
+l’ouvrir ou le fermer.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_détails_dun_composant">16.4. Détails d’un composant</h3>
+<div class="paragraph">
+<p>Cliquez sur un composant pour afficher ses détails (champ expansible) :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>PURL</strong> (Package URL) — cliquable pour copier dans le presse-papiers</p>
+</li>
+<li>
+<p><strong>Version</strong></p>
+</li>
+<li>
+<p><strong>Type</strong></p>
+</li>
+<li>
+<p><strong>Licence</strong></p>
+</li>
+<li>
+<p><strong>Couche</strong> — couche d’origine (SBOM global) ou changement (SBOM de couche),
+pour un SBOM produit avec <code>--per-layer</code></p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Les composants sans PURL dans le SBOM n’affichent pas ce champ.
+</td>
+</tr>
+</tbody></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-nav-couches">16.5. Navigation par couche (<code>--per-layer</code>)</h3>
+<div class="paragraph">
+<p>Quand le fichier ouvert appartient à un jeu produit avec <code>--per-layer</code>
+(SBOM global ou SBOM de couche), un bandeau <strong>N couche(s)</strong> s’affiche sous la
+barre de fichier, dans cet onglet comme dans la <strong>Visionneuse SBOM</strong> :</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>un menu déroulant <strong>SBOM global / Couche 1/N (digest) …</strong> ouvre directement
+le SBOM choisi ; pour chaque couche, il rappelle les compteurs
+(<code>+ajoutés ~modifiés -supprimés</code>) et l’instruction de build ;</p>
+</li>
+<li>
+<p>sous le menu, la description du document affiché : digest, instruction,
+compteurs de la couche (ou nombre de couches et mode pour le global) ;</p>
+</li>
+<li>
+<p>un badge <strong>N supprimé(s)</strong> liste au survol les composants supprimés par la
+couche (mode rootfs).</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Les fichiers d’un même jeu sont retrouvés par leur nom dans le répertoire du
+fichier ouvert (<code>&lt;base&gt;.&lt;ext&gt;</code> et <code>&lt;base&gt;.layer-NN-&lt;digest&gt;.&lt;ext&gt;</code>, même
+format) : la navigation fonctionne aussi pour un jeu ouvert via
+<strong>Ouvrir…</strong>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_persistance_de_létat_2">16.6. Persistance de l’état</h3>
+<div class="paragraph">
+<p>L’onglet mémorise son état (fichier sélectionné, groupement, groupes
+ouverts/fermés) lors de la navigation entre onglets.</p>
 </div>
 </div>
 </div>

@@ -1,0 +1,335 @@
+
+<h2 id="_flux_de_travail_typiques">23. Flux de travail typiques</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_scénario_1_générer_un_sbom_depuis_une_liste_rpm">23.1. Scénario 1 — Générer un SBOM depuis une liste RPM</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Préparez un fichier <code>rpm.lst</code> contenant la liste des paquets RPM
+(sortie de <code>rpm -qa</code>, un paquet par ligne)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dans le champ <strong>Fichier d’entrée</strong>, sélectionnez <code>rpm.lst</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dans le champ <strong>Chemin de base</strong>, saisissez le chemin de sortie : <code>sbom</code> ou
+<code>/tmp/audit/sbom</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cochez <strong>CycloneDX 1.6</strong> (format recommandé pour l’analyse grype)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Renseignez optionnellement le <strong>Nom du document</strong> (ex: <code>RHEL 9.3 — Serveur HA</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cliquez sur <strong>▶ Générer le SBOM</strong></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Suivez la progression dans l’onglet <strong>Progression</strong></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">À la fin, l’onglet <strong>Résultats</strong> s’ouvre automatiquement.
+Utilisez ↗ pour ouvrir le fichier JSON généré.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_scénario_1b_générer_un_sbom_depuis_une_image_oci">23.2. Scénario 1b — Générer un SBOM depuis une image OCI</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Assurez-vous que <code>syft</code> (ou <code>trivy</code> / <code>skopeo</code> / <code>cdxgen</code>) est installé
+(voir <a href="#_installer_syft_optionnel">Installer syft (optionnel)</a>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dans le champ <strong>Image OCI</strong>, saisissez la référence : <code>nginx:latest</code>,
+<code>/path/ubuntu.tar</code> (ou <code>.tar.gz</code> / <code>.tgz</code>), ou utilisez 📂 pour parcourir
+(archives tar ou répertoire OCI layout)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Sélectionnez le backend OCI si nécessaire (Syft est le défaut)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dans le champ <strong>Chemin de base</strong>, saisissez le chemin de sortie : <code>sbom</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cochez le(s) format(s) souhaité(s) (CycloneDX recommandé)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cliquez sur <strong>▶ Générer le SBOM</strong>. L’interface affiche d’abord le message
+<code>Analyse de l’image OCI…</code> pendant que l’outil analyse l’image, puis lance
+la génération du SBOM.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">À la fin, l’onglet <strong>Résultats</strong> s’ouvre. Continuez avec Grype pour analyser
+les vulnérabilités (onglet Grype — le fichier SBOM est pré-rempli).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_scénario_2_générer_un_sbom_puis_analyser_les_vulnérabilités_avec_grype">23.3. Scénario 2 — Générer un SBOM puis analyser les vulnérabilités avec Grype</h3>
+<div class="paragraph">
+<p>Suite du scénario 1 :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">9</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Passez sur l’onglet <strong>Grype</strong>. Le champ <strong>Fichier SBOM</strong> est déjà rempli
+avec le <code>.cdx.json</code> généré à l’étape précédente.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">10</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Sélectionnez la version RHEL dans le menu <strong>Distro</strong> : ex. <code>rhel:9</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">11</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Laissez <strong>--platform linux</strong>, <strong>--add-cpes-if-none</strong> et <strong>--by-cve</strong> cochés</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">12</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optionnel : sélectionnez un <strong>seuil</strong> <code>--fail-on</code> (ex. <code>high</code>) et cochez
+<strong>--only-fixed</strong> pour filtrer sur les vulnérabilités corrigeables</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">13</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optionnel : renseignez le champ <strong>Template (-t)</strong> avec <code>./grype_csv.tmpl</code>
+pour produire un export CSV</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">14</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cliquez sur <strong>Analyser</strong></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">15</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Consultez la vue <strong>Table</strong> pour un aperçu par sévérité, la vue <strong>JSON</strong> pour
+les détails techniques, et la vue <strong>Template</strong> pour l’export CSV</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_scénario_2b_croiser_les_résultats_osv_scanner_et_trivy">23.4. Scénario 2b — Croiser les résultats OSV-Scanner et Trivy</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Après une génération SBOM, passez sur l’onglet <strong>OSV-Scanner</strong>.
+Le champ <strong>Fichier SBOM</strong> est pré-rempli.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cliquez sur <strong>Analyser</strong>. Consultez la vue <strong>Vulnérabilités</strong> avec les
+filtres par sévérité.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Passez sur l’onglet <strong>Trivy</strong>. Le champ <strong>Fichier SBOM</strong> est également
+pré-rempli (les onglets mémorisent leur état lors de la navigation).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optionnel : cochez <strong>--ignore-unfixed</strong> pour ne voir que les
+vulnérabilités corrigeables.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cliquez sur <strong>Analyser</strong>. Comparez les résultats Trivy avec ceux
+d’OSV-Scanner pour détecter d’éventuels faux-positifs ou faux-négatifs.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Consultez la vue <strong>JSON brut</strong> de chaque onglet pour accéder aux
+métadonnées détaillées (CVSS, références, packages affectés).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_scénario_2c_filtrer_les_cve_par_période_de_publication">23.5. Scénario 2c — Filtrer les CVE par période de publication</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Après avoir lancé une analyse Grype (ou OSV-Scanner / Trivy), consultez
+l’onglet correspondant. La barre de filtre par date est visible au-dessus
+du tableau.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Pour n’afficher que les CVE publiées depuis le 1er janvier 2024, cliquez
+sur la chip <strong>Après le…</strong> et sélectionnez <code>2024-01-01</code> dans le calendrier.
+Le tableau se met à jour instantanément.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Pour ajouter une borne haute, cliquez sur <strong>Avant le…</strong> et sélectionnez
+la date de fin souhaitée.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Si vous souhaitez filtrer sur la dernière mise à jour plutôt que sur la
+date de publication initiale, changez le sélecteur <strong>Publication</strong> en
+<strong>Modification</strong> ou <strong>La plus récente</strong>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cochez <strong>Sans date</strong> pour inclure dans les résultats les CVE dont la date
+est absente des données du scanner (champ vide dans le JSON).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cliquez sur <strong>Propager aux autres onglets</strong> pour appliquer le même filtre
+aux onglets OSV-Scanner et Trivy sans avoir à les re-configurer.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Pour effacer une borne, cliquez sur le × de la chip correspondante.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_scénario_3_évaluation_de_la_qualité_sbom_avec_sbomqs">23.6. Scénario 3 — Évaluation de la qualité SBOM avec sbomqs</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Installez <code>sbomqs</code> (voir <a href="#_installer_sbomqs_optionnel">Installer sbomqs (optionnel)</a>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dans la section <strong>Options</strong>, cochez <strong>Score qualité sbomqs</strong></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Lancez la génération normalement (format CycloneDX recommandé)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Après la génération, l’onglet <strong>Résultats</strong> s’ouvre et affiche le score sbomqs
+dans un encadré indigo sous la liste des fichiers</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Sélectionnez le texte du score pour le copier dans un rapport</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_scénario_4_rapport_asciidoc_pdf">23.7. Scénario 4 — Rapport AsciiDoc + PDF</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Étape</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cochez les formats <strong>AsciiDoc</strong> (et optionnellement d’autres formats)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cochez <strong>Convertir en PDF (asciidoctor-pdf)</strong></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optionnel : renseignez un chemin de PDF dans le champ qui apparaît</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Lancez la génération. Le PDF est créé automatiquement après le <code>.adoc</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Les deux fichiers (<code>.adoc</code> et <code>.pdf</code>) apparaissent dans l’onglet <strong>Résultats</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>

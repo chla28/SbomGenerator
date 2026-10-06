@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **GUI, dashboard**: *Remediation* section (updates to apply per package, minimal target version, ranked by risk reduction: severity, KEV, EPSS) with CSV export; scan *sessions* (save / open a file, automatic *history* per target and per day, *trend* between two sessions: new / gone / unchanged CVEs); *VEX* bar.
+- **GUI, Tasks tab**: queue of scans (Grype, OSV-Scanner, Trivy) run one at a time, cancellable and retryable; results feed the dashboard.
+- **GUI, VEX**: *Declare via VEX…* in a CVE's detail (not affected / fixed / affected / under investigation, OpenVEX justification, scope), hiding of covered CVEs, OpenVEX / CycloneDX VEX import and export (compatible with the CLI's `scan --vex`).
+- **GUI, keyboard and accessibility**: *Ctrl+Enter* (generate), *Esc* (stop), *Ctrl+1…9* and *Ctrl+Page Down/Up* (tabs), *F1* (help), *Ctrl+/* (shortcut list); dark text forced on pastel backgrounds to stay readable in dark theme ("seen by a single scanner" row, banners, comparison rows).
+- **GUI, online help**: *Quick start* chapter (first use) at the top of the manual; search *inside the chapter* with highlighting, "Match n of N" counter and navigation (▲ ▼, F3 / Shift+F3, Enter); *Tasks tab* and *Keyboard shortcuts* chapters, Remediation / Sessions / VEX sections.
+
 ## [1.7.0] - 2026-10-06
 
 ### Added

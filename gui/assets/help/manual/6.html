@@ -1,75 +1,111 @@
 
-<h2 id="_onglet_aperçu_prévisualisation_sbom">7. Onglet Aperçu — Prévisualisation SBOM</h2>
+<h2 id="_onglet_résultats">7. Onglet Résultats</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Aperçu (N)</strong> affiche le contenu brut des fichiers SBOM générés
-directement dans l’interface, sans avoir à ouvrir un éditeur externe.</p>
+<p>L’onglet <strong>Résultats (N)</strong> affiche le nombre de fichiers générés dans son libellé.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ Fichier : [ sbom.cdx.json ▼ ]                     [📋] ─┐
-  │                                                            │
-  │  {                                                         │
-  │    "bomFormat": "CycloneDX",                               │
-  │    "specVersion": "1.6",                                   │
-  │    "version": 1,                                           │
-  │    "metadata": {                                           │
-  │      "component": {                                        │
-  │        "name": "Mon Application 2.1.0",                   │
-  │        ...                                                 │
-  └────────────────────────────────────────────────────────────┘</pre>
+<pre>  ✔  2 fichier(s) SBOM généré(s) — 1 avertissement(s)
+  ┌─────────────────────────────────────────────────────┐
+  │ 📄 sbom.cdx.json                                    │
+  │    /home/user/projet/sbom.cdx.json     [📋] [↗]    │
+  │    42.3 KB                                          │
+  ├─────────────────────────────────────────────────────┤
+  │ 📄 sbom.spdx.json                                   │
+  │    /home/user/projet/sbom.spdx.json    [📋] [↗]    │
+  │    38.1 KB                                          │
+  └─────────────────────────────────────────────────────┘
+
+  ⚠ Avertissements (1)
+  Warning: licence inconnue pour 'mylib-1.2.3'</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sélection_du_fichier">7.1. Sélection du fichier</h3>
-<div class="paragraph">
-<p>Un menu déroulant en haut de l’onglet liste tous les fichiers non-PDF générés
-dans la session courante. Le premier fichier est sélectionné automatiquement
-à la fin de la génération.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_comportement_du_rendu">7.2. Comportement du rendu</h3>
+<h3 id="_bannière_de_résultat">7.1. Bannière de résultat</h3>
 <div class="ulist">
 <ul>
 <li>
-<p>Le contenu est affiché en police monospace sur fond sombre, comme le terminal.</p>
+<p><strong>Fond vert</strong> : génération réussie. Le nombre de fichiers et d’avertissements
+est affiché.</p>
 </li>
 <li>
-<p>Les fichiers JSON (CycloneDX, SPDX) sont affichés tels quels.</p>
-</li>
-<li>
-<p>Les fichiers Markdown et AsciiDoc sont également affichés en texte brut.</p>
-</li>
-<li>
-<p>Au-delà de <strong>50 000 caractères</strong>, le contenu est tronqué avec une note
-indiquant la taille totale réelle.</p>
-</li>
-<li>
-<p>Le texte est sélectionnable.</p>
+<p><strong>Fond rouge</strong> : la génération a échoué. Le message d’erreur est affiché
+directement dans la bannière.</p>
 </li>
 </ul>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_copier_le_contenu">7.3. Copier le contenu</h3>
+<h3 id="_fichiers_générés">7.2. Fichiers générés</h3>
 <div class="paragraph">
-<p>Le bouton 📋 en haut à droite copie l’intégralité du contenu affiché dans
-le presse-papiers.</p>
+<p>Chaque fichier est présenté dans une carte avec :</p>
 </div>
-<div class="admonitionblock note">
-<table>
-<tbody><tr>
-<td class="icon">
-<div class="title">Note</div>
-</td>
-<td class="content">
-L’onglet Aperçu ne remplace pas un outil dédié pour explorer de gros
-fichiers JSON. Pour les fichiers très volumineux, utilisez le bouton ↗
-(onglet Résultats) pour ouvrir le fichier dans votre application système.
-</td>
+<div class="ulist">
+<ul>
+<li>
+<p>son nom (en gras, police monospace)</p>
+</li>
+<li>
+<p>son chemin complet</p>
+</li>
+<li>
+<p>sa taille</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Deux boutons sont disponibles à droite de chaque carte :</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">📋</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copie le chemin complet dans le presse-papiers</p></td>
 </tr>
-</tbody></table>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">↗</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Ouvre le fichier avec l’application système par défaut (visionneuse JSON, éditeur…)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_score_sbomqs">7.3. Score sbomqs</h3>
+<div class="paragraph">
+<p>Si l’option <strong>Score qualité sbomqs</strong> est cochée et que <code>sbomqs</code> est installé,
+un bloc indigo s’affiche après la liste des fichiers avec la sortie complète
+de <code>sbomqs score</code> :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  ── Score sbomqs ──────────────────────────────────
+  sbomqs score sbom.cdx.json
+  Document Name  Format  Spec   Score   Avg
+  sbom.cdx.json  cdx     1.6    8.3/10  8.3</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Le texte est sélectionnable pour copier-coller le score.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_avertissements">7.4. Avertissements</h3>
+<div class="paragraph">
+<p>Les avertissements sont affichés dans un bloc orange replié. Si leur nombre
+dépasse 5, un bouton <strong>Voir N de plus…</strong> permet de les afficher tous.
+Ces avertissements sont non bloquants : les fichiers SBOM ont bien été générés.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_erreur_fatale">7.5. Erreur fatale</h3>
+<div class="paragraph">
+<p>En cas d’échec (code de retour non nul), le message d’erreur apparaît dans
+un bloc rouge sélectionnable pour faciliter le copier-coller.</p>
 </div>
 </div>
 </div>

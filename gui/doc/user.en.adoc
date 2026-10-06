@@ -10,6 +10,44 @@
 
 🇫🇷 link:user.adoc[Français] · 🇬🇧 *English*
 
+== Quick start
+
+[[sec-quickstart]]
+This chapter is the first-use walkthrough: in five minutes, from opening the
+application to a vulnerability dashboard. Each screen is detailed in the
+following chapters.
+
+. *Check the requirements.* The application drives external tools: the
+`sbom-generator` CLI (shipped with the application), then, depending on what you
+want to do, `syft`/`skopeo` (container images), `grype`, `osv-scanner`, `trivy`
+(vulnerability analysis), `sbomqs` (quality), `asciidoctor-pdf` (PDF reports).
+The tabs concerned clearly name a missing tool. See <<_requirements_installation>>.
+. *Generate a first SBOM.* In the left panel, *Input* section, choose (or
+drag and drop) a package list file, a lockfile (`package-lock.json`,
+`pubspec.lock`…) or a folder; in *Output*, give a base name and tick at least one
+format (CycloneDX to start with). Click *▶ Generate SBOM* (or press
+*Ctrl+Enter*). The *Progress* tab shows the progress; the *Results* tab lists
+the files produced.
+. *Scan for vulnerabilities.* Open the *Grype*, *OSV-Scanner* or *Trivy* tab:
+the SBOM you just generated is already selected. Click *Scan*. To run the three
+scanners at once, use the *Tasks* tab: queue the scans, they run one at a time
+and can be cancelled or retried.
+. *Read the dashboard.* The *Dashboard* tab gathers the results: one card per
+scanner, cross-scanner comparison, *remediation* (which update removes the most
+risk), and — if you already scanned the target — the *trend* since an earlier
+session.
+. *Decide.* In a CVE's detail, *Declare via VEX…* marks a CVE as not affected
+(with a justification): it disappears from the dashboard and can be exported as
+OpenVEX or CycloneDX VEX.
+. *Share.* *Save session…* keeps the results in a file; *AsciiDoc + PDF export*
+produces a report.
+
+TIP: Everything is also available from the keyboard: *Ctrl+Enter* starts the
+generation, *Esc* stops it, *Ctrl+1…9* switches tab, *F1* opens this manual and
+*Ctrl+/* lists the shortcuts (see <<sec-shortcuts>>). In the manual, the search
+field highlights the matches inside the chapter; *F3* / *Shift+F3* jump to the
+next / previous match.
+
 == Introduction
 
 === What is an SBOM?
@@ -287,9 +325,10 @@ Fixed width (390 px). Settings are restored automatically at each start. The
 equivalent CLI command is displayed under the *▶ Generate the SBOM* button and
 is updated in real time.
 
-*Right panel — Results*: fourteen tabs — Progress (with log export and
+*Right panel — Results*: fifteen tabs — Progress (with log export and
 summary), Results (files + sbomqs score), Dashboard (multi-scanner CVE
-synthesis), Grype, OSV-Scanner and Trivy (CVE analyses), CRA Compliance
+synthesis, remediation, sessions, VEX), Tasks (scan queue), Grype, OSV-Scanner
+and Trivy (CVE analyses), CRA Compliance
 (Cyber Resilience Act compliance report), SBOM Quality (sbomqs +
 sbom-scorecard), SBOM Tree (exploration of the SBOM components), SBOM
 Comparison (diff of two SBOMs), SBOM Merge (combines several SBOMs into one),
@@ -303,7 +342,10 @@ not to be confused with the smaller ❓ icons present on each field/section,
 which display a short tooltip on hover instead of opening the full manual.
 The search field at the top of the table of contents filters the chapters by
 title *and* by content as you type; an excerpt of the passage found is
-displayed under the title of the matching chapter.
+displayed under the title of the matching chapter. Inside the displayed chapter
+the matches are *highlighted* and a bar shows "Match n of N" with ▲ ▼ buttons (or
+*F3* / *Shift+F3*, or *Enter* in the search field). The *⌨* button shows the
+keyboard shortcuts (<<sec-shortcuts>>).
 
 The *🌙 / ☀* button in the title bar switches between dark and light mode.
 The *🎨* button opens the theme color picker. Both preferences are saved.
@@ -914,6 +956,34 @@ clipboard.
 NOTE: The Preview tab does not replace a dedicated tool for exploring large
 JSON files. For very large files, use the ↗ button (Results tab) to open the
 file in your system application.
+
+[[sec-tasks]]
+== Tasks tab — Scan queue
+
+The *Tasks* tab queues vulnerability scans: they run *one at a time* (scanners are
+heavy and share their vulnerability database) and their results feed the
+*Dashboard* (cards, comparison, remediation, trend, report).
+
+. Choose the *SBOM to scan*: the first generated JSON SBOM is proposed
+automatically, *Browse…* picks another one.
+. Tick the scanners (Grype, OSV-Scanner, Trivy).
+. *Add to queue*: one scan per ticked scanner appears.
+
+Each row shows its state — *Queued*, *Running…* (with the duration), *Done*
+(number of vulnerabilities), *Failed* (error message: tool not found, unreadable
+output…) or *Cancelled* — and offers:
+
+* *Cancel* (⏹): removes a queued scan, or stops the process of a running one;
+* *Retry* (↺): puts a failed or cancelled scan back in the queue;
+* *Remove* (✕): deletes the row.
+
+*Cancel all* interrupts every queued or running scan; *Remove finished* cleans
+the list. CISA KEV / EPSS / PoC enrichment follows the "enrich online" setting of
+the scan tabs.
+
+NOTE: The results of a queued scan replace those of the same scanner in the
+dashboard; the Grype / OSV-Scanner / Trivy tab tables do not show them (they keep
+their own scans).
 
 == Grype tab — Vulnerability analysis
 
@@ -1994,6 +2064,54 @@ scanner is recalled at the top. The *Cross-scanner comparison* gains a
 the same column.
 
 [[sec-pourquoi-ecarts-scanners]]
+=== Remediation
+
+The *Remediation* section answers "what should I update?". CVEs from every scanner
+are grouped by installed package; for each package the *target version* is the
+smallest one that fixes every fixable CVE (e.g. `log4j-core 2.14.1 → 2.17.1 — 5 CVEs
+fixed`). Packages are ranked by *risk reduction*: severity (critical 10, high 5,
+medium 2, low 1), +20 if the CVE is actively exploited (CISA KEV), + 10 × EPSS. A
+package none of whose CVEs has a fix is flagged "no known fix"; unfixable CVEs of a
+fixable package are shown as remaining. Expand a row to see its CVEs; the *Copy* and
+*CSV* buttons export the plan.
+
+NOTE: The target version is a heuristic (numeric version comparison, distribution
+suffixes ignored): check it with your package manager.
+
+=== Sessions, history and trend
+
+At the top of the dashboard:
+
+* *Save session…* writes the scan results (scanner lists, KEV/EPSS signals, targets)
+to a JSON file; *Open session…* reloads it into the dashboard. Per-layer analyses
+are not kept.
+* *History*: every analysis is kept automatically (one entry per target and per day,
+50 at most) in `~/.local/share/sbom-generator-gui/history`. You can *Open* an old
+analysis, *Compare* it with the current results, *Delete* an entry or *Clear
+history*.
+* *Trend*: once a reference session is chosen (*Compare*), a card shows the *new*,
+*gone* (fixed or no longer detected) and *unchanged* CVEs since that date, the total
+before → after and the list of new CVEs. *Remove the comparison* hides it.
+
+=== VEX statements
+
+A *VEX* (_Vulnerability Exploitability eXchange_) document says that a CVE does not
+affect you, or is fixed. In a CVE's detail (click a row), *Declare via VEX…* opens a
+dialog: *status* (not affected, affected, fixed, under investigation),
+*justification* (required for "not affected": component not present, vulnerable
+code not present, never executed, cannot be controlled by an attacker, inline
+mitigations), a free *explanation* and the *scope* (one package or all). The
+dashboard's *VEX* bar:
+
+* hides covered CVEs ("not affected" / "fixed") while *Hide CVEs covered by a VEX*
+is ticked — the counts, the comparison, the remediation and the report follow;
+* *Import a VEX…* reads an OpenVEX or CycloneDX VEX document;
+* *Export* writes the statements as OpenVEX or CycloneDX VEX (usable with
+`sbom-generator scan --vex`);
+* *Manage* lists and deletes statements.
+
+Statements are remembered between application sessions.
+
 === Why Grype, OSV-Scanner and Trivy do not find the same CVEs
 
 It is normal — and expected — that a good part of the rows of the
@@ -2536,6 +2654,28 @@ one section per license listing the matching packages.
 The source format must be recognized (CycloneDX, SPDX 2.3 or SPDX 3.0). The
 copyleft classification is a detection heuristic based on the SPDX
 identifier, not a legal analysis.
+
+[[sec-shortcuts]]
+== Keyboard shortcuts
+
+The *⌨* button in the title bar (or *Ctrl+/*) shows this list.
+
+[cols="2,3", options="header"]
+|===
+|Shortcut |Action
+
+|*Ctrl+Enter* |Start the generation (same validation as the button)
+|*Esc* |Stop the running task
+|*Ctrl+1* … *Ctrl+9* |Go to tab 1 to 9
+|*Ctrl+Page Down* / *Ctrl+Page Up* |Next / previous tab (wraps around)
+|*F1* |Open this manual
+|*Ctrl+/* |Show the shortcut list
+|*F3* / *Shift+F3* |In the manual: next / previous search match
+|===
+
+In tables, *Tab* and the arrow keys move between rows; *Enter* or *Space* opens a
+row's detail. In dark theme, light-background areas (banners, "seen by a single
+scanner" rows, comparison rows) keep a readable dark text.
 
 == Customizing the appearance
 

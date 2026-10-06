@@ -1,152 +1,55 @@
 
-<h2 id="_onglet_qualité_sbom_évaluation_de_la_qualité">12. Onglet Qualité SBOM — Évaluation de la qualité</h2>
+<h2 id="_onglet_trivy_analyse_de_vulnérabilités">12. Onglet Trivy — Analyse de vulnérabilités</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Qualité SBOM</strong> évalue la qualité d’un fichier SBOM avec deux outils
-complémentaires : <strong>sbomqs</strong> (Interlynk) et <strong>sbom-scorecard</strong> (eBay). Un seul
-clic sur <strong>Analyser</strong> lance les deux en parallèle.</p>
+<p>L’onglet <strong>Trivy</strong> utilise l’outil d’Aqua Security. Il propose des options
+supplémentaires par rapport à OSV-Scanner et Grype.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌──────────────────────────────────────────────────────────────────┐
-  │  Fichier SBOM : [ /projet/sbom.cdx.json      ] [📂▾]  [Analyser]│
-  │  Profils : [NTIA 2021] [NTIA 2025] [FSCT] [BSI] [BSI v1.1]     │
-  │            [BSI v2.0] [BSI v2.1] [OpenChain v1.1] [Interlynk]  │
-  ├──────────────────────────────────────────────────────────────────┤
-  │ ┌─ sbomqs ──────────────────────────────────────── 5.8 / 10 ──┐ │
-  │ │ Filtre : [Identification] [Provenance] [Integrity] ...       │ │
-  │ │                                                              │ │
-  │ │  ✔ comp_with_name           Identification   10/10           │ │
-  │ │  ✔ comp_with_version        Identification   10/10           │ │
-  │ │  ✘ sbom_authors             Provenance        0/10           │ │
-  │ │  ✘ comp_with_strong_checksums  Integrity      0/10           │ │
-  │ │  ...                                                         │ │
-  │ └──────────────────────────────────────────────────────────────┘ │
+<pre>  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
+  │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
   │                                                                   │
-  │ ┌─ Profils d'industrie ────────────────────────────────────────┐ │
-  │ │  [A] NTIA Minimum Elements (2021)       10.0/10  ▶ détails  │ │
-  │ │  [C] Interlynk                           7.2/10  ▶ détails  │ │
-  │ │  [D] BSI TR-03183-2 v1.1                6.7/10  ▶ détails  │ │
-  │ │  ...                                                         │ │
-  │ └──────────────────────────────────────────────────────────────┘ │
-  │                                                                   │
-  │ ┌─ sbom-scorecard ──────────────────────────────── 69 / 100 ──┐ │
-  │ │  Spec          ████████████████████████████████████  100    │ │
-  │ │  Quality       ████████████████████████░░░░░░░░░░░░   63    │ │
-  │ │  NTIA-minimum  ████████████████████████████████░░░░   88    │ │
-  │ │  Total         ██████████████████████████░░░░░░░░░░   69    │ │
-  │ └──────────────────────────────────────────────────────────────┘ │
-  └──────────────────────────────────────────────────────────────────┘</pre>
+  │  Sévérités : [CRITICAL] [HIGH] [MEDIUM] [LOW] [UNKNOWN]          │
+  │  [ ] --ignore-unfixed   [ ] --skip-db-update                     │
+  │  trivy.yaml   : [                               ] [Choisir ▾]   │
+  │                                                      [Analyser]  │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 4 vulnérabilité(s) : 1 CRITICAL, 3 HIGH                       │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnérabilités (4)]  │ [JSON brut]                               │
+  └───────────────────────┴───────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_prérequis_4">12.1. Prérequis</h3>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 40%;">
-<col style="width: 20%;">
-<col style="width: 40%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Outil</th>
-<th class="tableblock halign-left valign-top">Source</th>
-<th class="tableblock halign-left valign-top">Rôle</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbomqs</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Score global + critères détaillés par catégorie (Identification, Provenance, Integrity…) et profils d’industrie</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sbom-scorecard</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">eBay</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Score global en pourcentage, décomposé par catégorie</p></td>
-</tr>
-</tbody>
-</table>
+<h3 id="_indicateur_de_version_3">12.1. Indicateur de version</h3>
 <div class="paragraph">
-<p>Les deux outils sont optionnels : si l’un n’est pas installé, sa section
-affiche un message d’erreur sans bloquer l’autre.</p>
-</div>
-<div class="sect3">
-<h4 id="_installer_sbom_scorecard_optionnel">12.1.1. Installer sbom-scorecard (optionnel)</h4>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Via Go
-go install github.com/eBay/sbom-scorecard@latest
-
-# Ou télécharger le binaire depuis les releases GitHub
-# https://github.com/eBay/sbom-scorecard/releases
-
-# Vérifier
-sbom-scorecard --version</code></pre>
-</div>
-</div>
+<p>Même comportement que dans l’onglet Grype (voir <a href="#_indicateur_de_version">Indicateur de version</a>),
+appliqué à <code>trivy</code>. Le badge est affiché en haut du panneau de configuration
+dès que la vérification de démarrage est terminée.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sélection_des_profils">12.2. Sélection des profils</h3>
+<h3 id="_prérequis_3">12.2. Prérequis</h3>
 <div class="paragraph">
-<p>La ligne <strong>Profils</strong> sous le sélecteur de fichier contient neuf <code>FilterChip</code>
-sélectionnables indépendamment :</p>
+<p><code>trivy</code> doit être installé et accessible dans le PATH
+(voir <a href="#_installer_trivy_optionnel">Installer trivy (optionnel)</a>).</p>
 </div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 33.3333%;">
-<col style="width: 66.6667%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Chip</th>
-<th class="tableblock halign-left valign-top">Profil sbomqs</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA 2021</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA Minimum Elements (2021)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA 2025</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">NTIA Minimum Elements (2025) — RFC</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">FSCT</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Framing Software Component Transparency (3rd Edition)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 (dernière version, alias de bsi-v2.1)</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v1.1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v1.1</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v2.0</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v2.0</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI v2.1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">BSI TR-03183-2 v2.1</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">OpenChain v1.1</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">OpenChain Telco SBOM Guide v1.1</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Interlynk Scoring Profile</p></td>
-</tr>
-</tbody>
-</table>
+</div>
+<div class="sect2">
+<h3 id="sec-onglet-trivy-source">12.3. Sélection de la source à analyser</h3>
 <div class="paragraph">
-<p>Sans sélection, sbomqs effectue uniquement l’analyse complète (<strong>Comprehensive</strong>).
-Avec un ou plusieurs profils cochés, sbomqs reçoit <code>--profile p1,p2,…​</code> et
-le détail des critères par profil est affiché dans la carte <strong>Profils d’industrie</strong>.</p>
+<p>Même bascule <strong>Fichier SBOM / Image de conteneur</strong>, mêmes formats acceptés
+en mode image (registre, archive locale, répertoire OCI layout) que dans
+l’onglet Grype (voir <a href="#sec-source-scan">Sélection de la source à analyser</a>), y compris le champ optionnel
+<strong>Plateforme</strong> (<code>--platform</code>, ex. <code>linux/arm64</code>).</p>
+</div>
+<div class="paragraph">
+<p>En mode <strong>Fichier SBOM</strong>, Trivy est lancé via sa sous-commande <code>trivy sbom</code> ;
+en mode <strong>Image de conteneur</strong>, via <code>trivy image</code> (une archive ou un
+répertoire local est alors passé via <code>--input</code>, une référence de registre
+en argument direct).</p>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -155,122 +58,119 @@ le détail des critères par profil est affiché dans la carte <strong>Profils d
 <div class="title">Note</div>
 </td>
 <td class="content">
-Le choix des profils ne remplace pas l’analyse complète — les deux
-sections sont toujours affichées simultanément.
+Sur un SBOM CycloneDX/SPDX généré par <code>sbom_generator</code> avec le
+backend <code>syft</code>, il est normal que le mode <strong>Fichier SBOM</strong> trouve quelques
+CVE Java de <strong>plus</strong> que le mode <strong>Image de conteneur</strong> sur la même image —
+ce n’est pas un faux positif du SBOM, mais une sous-détection de
+l’analyseur de jars intégré à Trivy pour les jars sans <code>pom.properties</code>
+(ex. rebuilds internes Red Hat), que le cataloguer de syft détecte via le
+nom de fichier là où Trivy échoue. Voir <a href="#sec-pourquoi-ecarts-scanners">Remédiation</a>
+pour le détail avec des chiffres réels.
 </td>
 </tr>
 </tbody></table>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_section_sbomqs">12.3. Section sbomqs</h3>
 <div class="paragraph">
-<p>Affiche un tableau de critères de qualité par catégorie (Identification,
-Provenance, Integrity, Completeness, Licensing, Vulnerability, Structural,
-Component Quality). Une icône ✔ (vert) / ✘ (rouge) indique si le critère
-est atteint (score = 10/10).</p>
-</div>
-<div class="paragraph">
-<p><strong>Filtres par catégorie</strong> : les FilterChips en haut du tableau permettent
-d’afficher uniquement les critères d’une ou plusieurs catégories.</p>
-</div>
-<div class="paragraph">
-<p>Le bouton <code>{ }</code> / ≡ bascule entre le tableau et le JSON brut.
-Le bouton 📋 copie le JSON brut dans le presse-papiers.</p>
+<p>L’option <strong>Par couche</strong> est disponible en mode image, comme pour Grype ;
+en rattachement, la couche indiquée par Trivy lui-même (<code>Layer.DiffID</code>) est
+utilisée — voir <a href="#sec-scan-couches">Analyse par couche (source « Image de conteneur »)</a>.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_section_profils_dindustrie">12.4. Section Profils d’industrie</h3>
+<h3 id="_options_de_scan_2">12.4. Options de scan</h3>
+<div class="sect3">
+<h4 id="_filtre_de_sévérités_severity">12.4.1. Filtre de sévérités (<code>--severity</code>)</h4>
 <div class="paragraph">
-<p>Toujours présente après une analyse réussie. Elle affiche pour chaque profil
-disponible :</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Un badge coloré avec la note (A / B / C / D / F)</p>
-</li>
-<li>
-<p>Le nom complet du profil</p>
-</li>
-<li>
-<p>Le score sur 10</p>
-</li>
-</ul>
+<p>Cochez une ou plusieurs sévérités pour limiter l’analyse.
+Si aucune n’est cochée, toutes les sévérités sont analysées.</p>
 </div>
 <div class="paragraph">
-<p>Si des profils ont été sélectionnés dans la barre de configuration avant
-l’analyse, chaque profil dispose d’un bouton d’expansion (▶) qui révèle la
-liste de ses critères avec :</p>
+<p>Niveaux disponibles : <strong>CRITICAL</strong>, <strong>HIGH</strong>, <strong>MEDIUM</strong>, <strong>LOW</strong>, <strong>UNKNOWN</strong>.</p>
 </div>
-<div class="ulist">
-<ul>
-<li>
-<p>Icône ✔/✘, nom du critère, description courte, score</p>
-</li>
-<li>
-<p>Compteur "N / M critères" dans le sous-titre</p>
-</li>
-<li>
-<p>Marqueur <code><strong></strong></code><strong> pour les critères *obligatoires</strong> (required) du profil</p>
-</li>
-</ul>
 </div>
-<div class="admonitionblock tip">
-<table>
-<tbody><tr>
-<td class="icon">
-<div class="title">Tip</div>
-</td>
-<td class="content">
-Quand aucun profil n’est sélectionné, l’en-tête de la section affiche
-une info-bulle ⓘ rappelant comment activer le détail.
-</td>
-</tr>
-</tbody></table>
+<div class="sect3">
+<h4 id="_ignore_unfixed">12.4.2. <code>--ignore-unfixed</code></h4>
+<div class="paragraph">
+<p>N’affiche que les vulnérabilités pour lesquelles une version corrigée
+est disponible. Équivalent à <code>--only-fixed</code> dans Grype.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_skip_db_update">12.4.3. <code>--skip-db-update</code></h4>
+<div class="paragraph">
+<p>Empêche Trivy de mettre à jour sa base de données locale au démarrage.
+Utile en environnement hors-ligne ou pour des analyses répétées rapides
+lorsque la base est déjà à jour.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_fichier_de_configuration_trivy_yaml">12.4.4. Fichier de configuration (<code>trivy.yaml</code>)</h4>
+<div class="paragraph">
+<p>Chemin vers un fichier de configuration Trivy au format YAML.
+Permet de définir des règles d’ignorance, des proxies, des registres
+privés, etc.</p>
+</div>
+<div class="paragraph">
+<p>Ce paramètre est optionnel. Le bouton <strong>Choisir</strong> propose un filtre
+<code>.yaml</code> / <code>.yml</code> ou tous les fichiers.</p>
+</div>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_section_sbom_scorecard">12.5. Section sbom-scorecard</h3>
+<h3 id="_commande_équivalente">12.5. Commande équivalente</h3>
 <div class="paragraph">
-<p>Affiche un graphique à barres pour chaque catégorie de score.</p>
+<p>En mode <strong>Fichier SBOM</strong>, Trivy est lancé avec les arguments :</p>
 </div>
-<table class="tableblock frame-all grid-all stretch">
-<colgroup>
-<col style="width: 40%;">
-<col style="width: 60%;">
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Couleur</th>
-<th class="tableblock halign-left valign-top">Signification</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Vert</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Score ≥ 80 % — excellente qualité</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Score entre 60 % et 80 % — qualité correcte</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Rouge</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Score &lt; 60 % — qualité insuffisante</p></td>
-</tr>
-</tbody>
-</table>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">trivy sbom --format json --quiet \
+  [--severity CRITICAL,HIGH,...] \
+  [--ignore-unfixed] \
+  [--skip-db-update] \
+  [--config trivy.yaml] \
+  /chemin/vers/sbom.cdx.json</code></pre>
+</div>
+</div>
 <div class="paragraph">
-<p>Le bouton <code>{ }</code> / ≡ bascule entre le graphique et la sortie brute.</p>
+<p>En mode <strong>Image de conteneur</strong> :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">trivy image --format json --quiet \
+  [--severity CRITICAL,HIGH,...] [--ignore-unfixed] [--skip-db-update] \
+  [--config trivy.yaml] [--platform linux/arm64] \
+  nginx:latest
+# ou, pour une archive/un répertoire OCI local :
+trivy image --format json --quiet [...] --input /chemin/vers/image.tar</code></pre>
+</div>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_persistance_de_létat">12.6. Persistance de l’état</h3>
+<h3 id="_résultats_2">12.6. Résultats</h3>
 <div class="paragraph">
-<p>Comme les autres onglets d’analyse, l’onglet <strong>Qualité SBOM</strong> mémorise son
-état lors de la navigation entre onglets : le fichier sélectionné et les
-résultats restent affichés même après avoir consulté un autre onglet.</p>
+<p>Même interface que les onglets Grype et OSV-Scanner : barre de recherche
++ tri + export CSV/AsciiDoc+PDF, filtres par sévérité, fusion des doublons
+visuels (badge ×N, voir <a href="#sec-vue-table">[sec-vue-table]</a>), puis liste des vulnérabilités.</p>
+</div>
+<div class="paragraph">
+<p><strong>Export CSV</strong> (bouton ⬇) : colonnes Sévérité, CVE/ID, Paquet, Version
+installée, Version corrigée, Titre, Emplacements.</p>
+</div>
+<div class="paragraph">
+<p><strong>Export AsciiDoc + PDF</strong> (bouton ⬥) : même rapport que sur les onglets
+Grype/OSV-Scanner (résumé par sévérité + tableau détaillé, conversion PDF
+automatique si <code>asciidoctor-pdf</code> est installé) — voir <a href="#sec-vue-table">[sec-vue-table]</a>.</p>
+</div>
+<div class="paragraph">
+<p>La colonne <strong>Titre</strong> correspond au champ <code>Title</code> du JSON Trivy (description
+courte de la CVE). Elle apparaît en sous-titre de chaque entrée dans la
+liste.</p>
+</div>
+<div class="paragraph">
+<p><strong>Filtre par date</strong> : même barre que l’onglet Grype (voir <a href="#sec-vue-table">[sec-vue-table]</a>).
+Le champ <strong>Publication</strong> correspond à <code>PublishedDate</code> du JSON Trivy, le
+champ <strong>Modification</strong> à <code>LastModifiedDate</code>. L’option <strong>Propager</strong> copie le
+filtre vers les onglets Grype et OSV-Scanner.</p>
 </div>
 </div>
 </div>

@@ -806,5 +806,9 @@
   "shortcutNextTab": "Next / previous tab",
   "shortcutHelp": "Open the help",
   "shortcutShortcuts": "Show this list",
-  "shortcutNavigate": "Navigate: Tab / arrow keys; open a row: Enter or Space"
+  "shortcutNavigate": "Navigate: Tab / arrow keys; open a row: Enter or Space",
+  "helpHitCount": "Match {current} of {total}",
+  "helpHitNone": "No match in this chapter",
+  "helpPrevHit": "Previous match (Shift+F3)",
+  "helpNextHit": "Next match (F3 / Enter)"
 }

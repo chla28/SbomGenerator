@@ -1,118 +1,189 @@
 
-<h2 id="sec-onglet-cra">11. Onglet Conformité CRA — Cyber Resilience Act</h2>
+<h2 id="_onglet_osv_scanner_analyse_de_vulnérabilités">11. Onglet OSV-Scanner — Analyse de vulnérabilités</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Conformité CRA</strong> produit un rapport de conformité au <strong>Règlement
-(UE) 2024/2847</strong> (Cyber Resilience Act) à partir d’un SBOM. Il pilote la
-sous-commande <code>sbom-generator cra</code> (le binaire configuré dans les
-paramètres) et affiche son résultat.</p>
+<p>L’onglet <strong>OSV-Scanner</strong> utilise l’outil de Google pour rechercher les
+vulnérabilités à partir d’un fichier SBOM ou d’une image de conteneur. Son
+interface est identique à celle de l’onglet Grype.</p>
 </div>
-<div class="admonitionblock important">
-<table>
-<tbody><tr>
-<td class="icon">
-<div class="title">Important</div>
-</td>
-<td class="content">
+<div class="listingblock">
+<div class="content">
+<pre>  ┌───────────────────────────────────────────────────────────────────┐
+  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
+  │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
+  │  Config toml  : [                               ] [Choisir ▾]   │
+  │                                                      [Analyser]  │
+  ├───────────────────────────────────────────────────────────────────┤
+  │  ⚠ 3 vulnérabilité(s) : 1 Critical, 2 High                       │
+  ├───────────────────────┬───────────────────────────────────────────┤
+  │ [Vulnérabilités (3)]  │ [JSON brut]                               │
+  └───────────────────────┴───────────────────────────────────────────┘</pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_indicateur_de_version_2">11.1. Indicateur de version</h3>
 <div class="paragraph">
-<p>Le rapport ne couvre que les exigences du CRA <strong>vérifiables automatiquement</strong>
-à partir d’un SBOM et d’une analyse de vulnérabilités connues :</p>
+<p>Même comportement que dans l’onglet Grype (voir <a href="#_indicateur_de_version">Indicateur de version</a>),
+appliqué à <code>osv-scanner</code>. Le badge est affiché en haut du panneau de
+configuration dès que la vérification de démarrage est terminée.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_prérequis_2">11.2. Prérequis</h3>
+<div class="paragraph">
+<p><code>osv-scanner</code> doit être installé et accessible dans le PATH
+(voir <a href="#_installer_osv_scanner_optionnel">Installer osv-scanner (optionnel)</a>).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="sec-onglet-osv-source">11.3. Sélection de la source à analyser</h3>
+<div class="paragraph">
+<p>Même bascule <strong>Fichier SBOM / Image de conteneur</strong> que dans l’onglet Grype
+(voir <a href="#sec-source-scan">Sélection de la source à analyser</a>). En mode <strong>Fichier SBOM</strong>, le champ est pré-rempli
+avec le dernier fichier généré ; le bouton <strong>Choisir</strong> propose :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>format et complétude du SBOM</strong> — format d’usage courant lisible par
-machine, couverture des dépendances (Annexe I §2 point 1), champs de
-données par composant (BSI TR-03183-2 : nom, version, fournisseur,
-identifiant unique PURL/CPE, empreinte, licence), éléments minimaux
-NTIA 2021 ;</p>
+<p><strong>Type filtré</strong> : fichiers <code>.json</code> et <code>.jsonld</code></p>
 </li>
 <li>
-<p><strong>gestion des vulnérabilités</strong> — inventaire des vulnérabilités connues et
-disponibilité des correctifs (Annexe I §2 points 1-2) ;</p>
-</li>
-<li>
-<p><strong>vulnérabilités activement exploitées</strong> — toute CVE au catalogue CISA KEV
-est signalée comme déclenchant l’obligation de notification à l’ENISA
-<strong>sous 24 h</strong> (art. 14).</p>
+<p><strong>Tous les fichiers</strong></p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>Les autres obligations du CRA (diffusion sécurisée des mises à jour,
-politique de divulgation coordonnée effective, conception sûre par défaut,
-tests réguliers, notifications réglementaires, déclaration UE de conformité)
-relèvent du fabricant et sont seulement listées. <strong>Ce rapport n’est pas une
-déclaration de conformité.</strong></p>
+<p>En mode <strong>Image de conteneur</strong>, le champ accepte une référence de <strong>registre</strong>
+(ex. <code>nginx:latest</code>) ou une <strong>archive</strong> locale (<code>docker save</code>, via le bouton
+dédié) — au format <code>.tar</code>, <code>.tar.gz</code> ou <code>.tgz</code>.</p>
 </div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Contrairement à Grype et Trivy, OSV-Scanner ne sait pas lire un
+répertoire au format OCI layout directement : seule l’archive est proposée
+ici. Il n’a pas non plus d’option de plateforme (<code>--platform</code>).
 </td>
 </tr>
 </tbody></table>
 </div>
-<div class="sect2">
-<h3 id="_renseigner_le_formulaire">11.1. Renseigner le formulaire</h3>
 <div class="paragraph">
-<p><strong>Fichier SBOM à évaluer</strong> : pré-rempli avec le premier SBOM généré
-(<code>.cdx.json</code> / <code>.spdx.json</code>, sinon <code>.json</code>). Le bouton <strong>Choisir</strong> ouvre un
-sélecteur de fichier.</p>
-</div>
-<div class="paragraph">
-<p><strong>Métadonnées produit (facultatif)</strong> : section repliable — Fabricant, Produit,
-Version du produit, Fin de support (<code>AAAA-MM-JJ</code>), Contact de signalement des
-vulnérabilités, URL de la politique de divulgation coordonnée. Le bouton
-<strong>Charger un cra.yaml</strong> importe ces valeurs depuis un fichier
-(<code>clé: valeur</code> par ligne). Les champs saisis ici priment sur le fichier ;
-les valeurs manquantes sont déduites de <code>metadata.component</code> du SBOM.</p>
-</div>
-<div class="paragraph">
-<p><strong>Analyser les vulnérabilités connues</strong> : coché par défaut. Lance un scanner
-(<strong>Grype</strong> par défaut, ou OSV-Scanner / Trivy / les trois) pour évaluer
-l’inventaire des vulnérabilités et la disponibilité des correctifs, avec
-enrichissement CISA KEV / EPSS. Décoché, le rapport se limite à l’analyse
-du SBOM et signale que la gestion des vulnérabilités n’a pas pu être
-attestée.</p>
+<p>L’option <strong>Par couche</strong> est disponible en mode image, comme pour Grype —
+voir <a href="#sec-scan-couches">Analyse par couche (source « Image de conteneur »)</a>.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_lancer_et_exporter">11.2. Lancer et exporter</h3>
+<h3 id="_configuration_optionnelle_toml">11.4. Configuration optionnelle (toml)</h3>
 <div class="paragraph">
-<p><strong>Évaluer</strong> : exécute l’analyse et affiche le résultat sous le formulaire :</p>
+<p>Chemin vers un fichier de configuration <code>osv-scanner.toml</code> permettant
+de définir des règles d’ignorance par ID de vulnérabilité. Ce paramètre
+est optionnel.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lancer_lanalyse">11.5. Lancer l’analyse</h3>
+<div class="paragraph">
+<p>Cliquez sur <strong>Analyser</strong>. En mode <strong>Fichier SBOM</strong>, OSV-Scanner s’exécute avec :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">osv-scanner --format json --sbom /chemin/vers/sbom.cdx.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>En mode <strong>Image de conteneur</strong>, la sous-commande change (<code>--sbom</code> ne sait pas
+scanner une image) :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">osv-scanner scan image --format json nginx:latest
+# ou, pour une archive locale :
+osv-scanner scan image --format json --archive /chemin/vers/image.tar</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Un code de retour 1 indique qu’au moins une vulnérabilité a été trouvée
+(c’est normal, pas une erreur) ; un code supérieur à 1 indique une erreur.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_résultats">11.6. Résultats</h3>
+<div class="sect3">
+<h4 id="_vue_vulnérabilités">11.6.1. Vue Vulnérabilités</h4>
+<div class="paragraph">
+<p>Même interface que l’onglet Grype : barre de recherche + tri + export CSV,
+filtres par sévérité, puis liste des vulnérabilités.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>  [ Rechercher...                        ] [⬇]
+  Filtre : [Critical (1)] [High (2)] [Medium (0)] [Low (0)]  [Tout voir]
+
+  ┌────────────┬────────────────────┬────────────────┬────────────────────────┐
+  │ SÉVÉRITÉ ↕ │ CVE/ID ↕           │ PAQUET ↕       │ VERSION CORRIGÉE ↕     │
+  ├────────────┼────────────────────┼────────────────┼────────────────────────┤
+  │ CRITICAL   │ CVE-2023-12345     │ requests 2.28  │ 2.31.0                 │
+  └────────────┴────────────────────┴────────────────┴────────────────────────┘</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>Recherche et tri</strong> : identiques à l’onglet Grype (voir <a href="#sec-vue-table">[sec-vue-table]</a>).</p>
+</div>
+<div class="paragraph">
+<p><strong>Fusion des doublons visuels</strong> : même comportement (badge ×N) que l’onglet
+Grype — voir <a href="#sec-vue-table">[sec-vue-table]</a>.</p>
+</div>
+<div class="paragraph">
+<p><strong>Export CSV</strong> : le bouton ⬇ exporte la vue filtrée (déjà fusionnée).
+Colonnes : Sévérité, CVE/ID, Paquet, Version installée, Version corrigée,
+Écosystème, Emplacements.</p>
+</div>
+<div class="paragraph">
+<p><strong>Export AsciiDoc + PDF</strong> : le bouton ⬥ exporte la même vue filtrée dans un
+rapport AsciiDoc (résumé par sévérité + tableau détaillé), avec conversion
+PDF automatique si <code>asciidoctor-pdf</code> est installé — voir la description
+complète dans l’onglet Grype (<a href="#sec-vue-table">[sec-vue-table]</a>).</p>
+</div>
+<div class="paragraph">
+<p><strong>Filtre par date</strong> : même barre que l’onglet Grype (voir <a href="#sec-vue-table">[sec-vue-table]</a>).
+Le champ <strong>Publication</strong> correspond à <code>published</code> du JSON OSV, le champ
+<strong>Modification</strong> à <code>modified</code>. L’option <strong>Propager</strong> copie le filtre vers
+les onglets Grype et Trivy.</p>
+</div>
+<div class="paragraph">
+<p>Colonnes :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>bandeau de verdict</strong> — Conforme / Partiel / Non conforme sur le périmètre
-vérifié, avec la phrase de synthèse ;</p>
+<p>Badge de sévérité coloré</p>
 </li>
 <li>
-<p><strong>quatre indicateurs</strong> — champs SBOM conformes, éléments NTIA, vulnérabilités
-sans correctif, CVE activement exploitées (KEV) ;</p>
+<p>Identifiant CVE (cliquable — copie dans le presse-papiers)</p>
 </li>
 <li>
-<p><strong>points bloquants</strong> — liste des motifs de non-conformité, le cas échéant ;</p>
+<p>Nom et version du paquet affecté</p>
 </li>
 <li>
-<p><strong>tableau des champs de données SBOM</strong> (BSI TR-03183-2) avec couverture et
-statut par champ ;</p>
-</li>
-<li>
-<p>rappel du format du SBOM, du nombre de composants et de relations de
-dépendance, et du décompte des vulnérabilités.</p>
+<p>Version corrigée (si disponible)</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p><strong>Exporter le rapport PDF</strong> : régénère le rapport complet en PDF (page de
-garde, résumé exécutif, identification du produit, analyse détaillée du
-SBOM, gestion des vulnérabilités, exigences relevant du fabricant,
-conclusion) et l’enregistre à l’emplacement choisi. La conversion PDF
-requiert <code>asciidoctor-pdf</code>.</p>
+<p>La sévérité est déterminée depuis le champ <code>database_specific.severity</code>
+ou depuis les scores CVSS présents dans le JSON OSV.</p>
 </div>
+</div>
+<div class="sect3">
+<h4 id="_vue_json_brut">11.6.2. Vue JSON brut</h4>
 <div class="paragraph">
-<p>Un rapport <strong>Non conforme</strong> n’est pas une erreur : il liste les points à
-corriger. Motifs bloquants : format non lisible par machine, champ
-obligatoire insuffisamment renseigné, vulnérabilité sans correctif
-disponible, CVE au catalogue CISA KEV.</p>
+<p>Affiche le JSON complet retourné par <code>osv-scanner</code>, utile pour inspecter
+les métadonnées détaillées de chaque vulnérabilité.</p>
+</div>
 </div>
 </div>
 </div>

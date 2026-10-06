@@ -3451,4 +3451,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get shortcutNavigate =>
       'Navigate: Tab / arrow keys; open a row: Enter or Space';
+
+  @override
+  String helpHitCount(int current, int total) {
+    final intl.NumberFormat currentNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String currentString = currentNumberFormat.format(current);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return 'Match $currentString of $totalString';
+  }
+
+  @override
+  String get helpHitNone => 'No match in this chapter';
+
+  @override
+  String get helpPrevHit => 'Previous match (Shift+F3)';
+
+  @override
+  String get helpNextHit => 'Next match (F3 / Enter)';
 }

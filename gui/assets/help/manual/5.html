@@ -1,61 +1,88 @@
 
-<h2 id="_onglet_résultats">6. Onglet Résultats</h2>
+<h2 id="_onglet_progression">6. Onglet Progression</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Résultats (N)</strong> affiche le nombre de fichiers générés dans son libellé.</p>
+<p>L’onglet <strong>Progression</strong> s’active automatiquement au démarrage de la génération.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ✔  2 fichier(s) SBOM généré(s) — 1 avertissement(s)
-  ┌─────────────────────────────────────────────────────┐
-  │ 📄 sbom.cdx.json                                    │
-  │    /home/user/projet/sbom.cdx.json     [📋] [↗]    │
-  │    42.3 KB                                          │
-  ├─────────────────────────────────────────────────────┤
-  │ 📄 sbom.spdx.json                                   │
-  │    /home/user/projet/sbom.spdx.json    [📋] [↗]    │
-  │    38.1 KB                                          │
-  └─────────────────────────────────────────────────────┘
+<pre>  12 / 23 paquets   52%                       bash-5.1.8-6.el9.x86_64
+  ████████████████████████████░░░░░░░░░░░░░░░
 
-  ⚠ Avertissements (1)
-  Warning: licence inconnue pour 'mylib-1.2.3'</pre>
+                                    [Copier] [Enregistrer]
+  $ sbom-generator --input /home/user/paquets.lst --output sbom …   ← cyan
+  Generating CycloneDX 1.6 SBOM…
+  Resolved bash-5.1.8-6.el9.x86_64
+  Warning: licence inconnue pour 'mylib'
+  SBOM written → sbom.cdx.json  (42.3 KB)
+
+  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  ✔  23 paquets  •  1 fichier(s) SBOM  •  1 avertissement(s)</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_bannière_de_résultat">6.1. Bannière de résultat</h3>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Fond vert</strong> : génération réussie. Le nombre de fichiers et d’avertissements
-est affiché.</p>
-</li>
-<li>
-<p><strong>Fond rouge</strong> : la génération a échoué. Le message d’erreur est affiché
-directement dans la bannière.</p>
-</li>
-</ul>
+<h3 id="_codes_couleur_du_terminal">6.1. Codes couleur du terminal</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Couleur</th>
+<th class="tableblock halign-left valign-top">Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cyan</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Commande shell lancée (première ligne, préfixée par <code>$</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Blanc (défaut)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Information générale</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Bleu</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Début d’une étape (<code>Generating</code>, <code>Resolving</code>, <code>Found</code>, <code>Analysés</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Avertissement (<code>Warning:</code>, <code>⚠</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Rouge</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Erreur fatale (<code>Error:</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Vert</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Fichier produit (<code>SBOM written</code>, <code>PDF written</code>)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Bleu clair</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Conversion PDF en cours</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Le texte du terminal est sélectionnable pour copier-coller des messages d’erreur.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_fichiers_générés">6.2. Fichiers générés</h3>
+<h3 id="_barre_de_progression">6.2. Barre de progression</h3>
 <div class="paragraph">
-<p>Chaque fichier est présenté dans une carte avec :</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>son nom (en gras, police monospace)</p>
-</li>
-<li>
-<p>son chemin complet</p>
-</li>
-<li>
-<p>sa taille</p>
-</li>
-</ul>
+<p>La barre de progression indique le nombre de paquets traités, le pourcentage
+et le nom du paquet en cours. Elle apparaît uniquement pendant la génération.</p>
 </div>
 <div class="paragraph">
-<p>Deux boutons sont disponibles à droite de chaque carte :</p>
+<p>Une fois la génération terminée, l’onglet <strong>Résultats</strong> s’active automatiquement
+en cas de succès.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_export_des_logs">6.3. Export des logs</h3>
+<div class="paragraph">
+<p>Une fois la génération terminée, deux boutons apparaissent en haut du terminal :</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
@@ -64,48 +91,38 @@ directement dans la bannière.</p>
 </colgroup>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">📋</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Copie le chemin complet dans le presse-papiers</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copier</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Copie l’intégralité des logs dans le presse-papiers</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">↗</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Ouvre le fichier avec l’application système par défaut (visionneuse JSON, éditeur…)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Enregistrer</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Ouvre un dialogue de sauvegarde pour écrire les logs dans un fichier <code>.log</code></p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <div class="sect2">
-<h3 id="_score_sbomqs">6.3. Score sbomqs</h3>
+<h3 id="_résumé_post_génération">6.4. Résumé post-génération</h3>
 <div class="paragraph">
-<p>Si l’option <strong>Score qualité sbomqs</strong> est cochée et que <code>sbomqs</code> est installé,
-un bloc indigo s’affiche après la liste des fichiers avec la sortie complète
-de <code>sbomqs score</code> :</p>
+<p>À la fin d’une génération réussie, une carte de résumé s’affiche en bas de
+l’onglet :</p>
 </div>
-<div class="listingblock">
-<div class="content">
-<pre>  ── Score sbomqs ──────────────────────────────────
-  sbomqs score sbom.cdx.json
-  Document Name  Format  Spec   Score   Avg
-  sbom.cdx.json  cdx     1.6    8.3/10  8.3</pre>
-</div>
+<div class="ulist">
+<ul>
+<li>
+<p>nombre de paquets analysés</p>
+</li>
+<li>
+<p>nombre de fichiers SBOM générés</p>
+</li>
+<li>
+<p>nombre d’avertissements (en orange si &gt; 0)</p>
+</li>
+</ul>
 </div>
 <div class="paragraph">
-<p>Le texte est sélectionnable pour copier-coller le score.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_avertissements">6.4. Avertissements</h3>
-<div class="paragraph">
-<p>Les avertissements sont affichés dans un bloc orange replié. Si leur nombre
-dépasse 5, un bouton <strong>Voir N de plus…</strong> permet de les afficher tous.
-Ces avertissements sont non bloquants : les fichiers SBOM ont bien été générés.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_erreur_fatale">6.5. Erreur fatale</h3>
-<div class="paragraph">
-<p>En cas d’échec (code de retour non nul), le message d’erreur apparaît dans
-un bloc rouge sélectionnable pour faciliter le copier-coller.</p>
+<p>Le contour de la carte est vert en cas de succès sans avertissement,
+orange sinon.</p>
 </div>
 </div>
 </div>

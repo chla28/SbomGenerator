@@ -1,133 +1,102 @@
 
-<h2 id="_sbom_licenses_tab">18. SBOM Licenses tab</h2>
+<h2 id="_sbom_comparison_tab">18. SBOM Comparison tab</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The <strong>SBOM Licenses</strong> tab displays the licenses contained in an existing SBOM
-file and lets you generate a compliance report (AsciiDoc, Markdown, HTML, CSV
-or JSON) at the bottom of the page. It orchestrates the
-<code>sbom-generator licenses</code> subcommand in the background.</p>
+<p>The <strong>SBOM Comparison</strong> tab highlights the differences between two SBOM files
+(for example before / after an update).</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ [📄 Choose a file…]  [📂 Generated files]   /path/to/sbom.cdx.json ─┐
-  └──────────────────────────────────────────────────────────────────────────────┘
+<pre>  ┌─ SBOM A ─────────────────────────────┐  ┌─ SBOM B ────────────────────────────┐
+  │ [ /path/to/before.cdx.json ] [📂]     │  │ [ /path/to/after.cdx.json ] [📂]     │
+  └───────────────────────────────────────┘  └──────────────────────────────────────┘
+                                                                    [Compare]
 
-  [12 package(s)] [5 license(s)] [2 strong copyleft] [1 unlicensed]
-  [🔍 Filter by license or package…]             [By license | Table]
-  ▸ Apache-2.0                                                     3
-  ▾ GPL-3.0-or-later  [strong copyleft]                            2
-        bash 5.3.9-3.fc44
-        …
-  ▸ No license detected  [unlicensed]                              1
-  ────────────────────────────────────────────────────────────────────
-  [Format ▾] [ Output file: licenses.adoc ] [ Name (optional) ] [⚖ Generate]
+  Added: 5  │  Removed: 3  │  Modified: 8  │  Unchanged: 230
 
-  ✔ Report generated → licenses.adoc</pre>
+  Filter : [✓ Added] [✓ Removed] [✓ Modified] [ Unchanged]
+  Search : [ openssl…                                ]
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ + │ curl           │ 8.5.0   │ —       │ MIT    │ —                    │
+  │ - │ openssl        │ 1.1.1k  │ —       │ OpenSSL│ —                    │
+  │ ~ │ bash           │ 5.0 → 5.2│ —      │ GPL-3.0│ —                    │
+  └─────────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sbom_licenses">18.1. SBOM licenses</h3>
+<h3 id="_loading_the_files">18.1. Loading the files</h3>
 <div class="paragraph">
-<p>As soon as a file is selected, its licenses are displayed:</p>
+<p>Select a file in each slot (SBOM A and SBOM B) through the 📂 button or by
+typing a path. The CycloneDX, SPDX 2.x and SPDX 3.0 JSON-LD formats are
+supported (same formats as the Tree tab); the two compared files do not need
+to be in the same format.</p>
+</div>
+<div class="paragraph">
+<p>Click <strong>Compare</strong> to start the comparison. The button is only active if both
+files are selected.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_counter_bar">18.2. Counter bar</h3>
+<div class="paragraph">
+<p>Displays the number of components in each category:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 20%;">
+<col style="width: 60%;">
+</colgroup>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">+  (green)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Added</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Present in B, absent from A</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">−  (red)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Removed</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Present in A, absent from B</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">~  (orange)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Modified</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Present in A and B, but with a different version or license</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">=  (grey)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Unchanged</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Identical in A and B</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_filters_and_search">18.3. Filters and search</h3>
+<div class="paragraph">
+<p>The filter chips let you show or hide each category. By default, <strong>Unchanged</strong>
+components are hidden to focus on the differences.</p>
+</div>
+<div class="paragraph">
+<p>The search field filters on the component name in real time, in combination
+with the category filters.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_differences_column">18.4. Differences column</h3>
+<div class="paragraph">
+<p>For <strong>Modified</strong> components:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>A row of chips summarizes the SBOM: number of packages, distinct licenses,
-packages under strong copyleft (red), weak copyleft (orange) and with no
-detected license (yellow).</p>
+<p>The <strong>version</strong> shows the old value struck through and the new value in green</p>
 </li>
 <li>
-<p>The <strong>By license</strong> view lists the licenses (with the number of packages); a
-click expands the matching packages. The <strong>Table</strong> view lists one package per
-row (package, version, license), sortable by clicking a header.</p>
-</li>
-<li>
-<p>The filter field keeps the licenses whose identifier contains the entered
-text, or the packages whose name matches (case-insensitive).</p>
+<p>The <strong>license</strong> shows the old value struck through and the new value in green</p>
 </li>
 </ul>
-</div>
-<div class="paragraph">
-<p>The grouping and the copyleft classification are those of the CLI: they are
-exactly those of the generated report.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_selecting_the_source_file">18.2. Selecting the source file</h3>
-<div class="paragraph">
-<p>Two ways to designate the file:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>📄 Choose a file…</strong>: opens a system file picker.</p>
-</li>
-<li>
-<p><strong>📂 Generated files</strong>: menu listing the SBOM files produced during the
-current session (same formats as the Tree tab: CycloneDX, SPDX 2.3,
-SPDX 3.0 JSON-LD).</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>The <strong>⚖ Generate</strong> button is only active once a file is selected and an output
-path is filled in.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_output_file_and_document_name_2">18.3. Output file and document name</h3>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Format</strong>: AsciiDoc (default), Markdown, HTML (standalone), CSV or JSON.
-The extension of the output file follows the format as long as it has not
-been modified by hand.</p>
-</li>
-<li>
-<p><strong>Output file</strong>: path of the produced report (default value:
-<code>licenses.adoc</code>).</p>
-</li>
-<li>
-<p><strong>Document name</strong> (optional): if filled in, replaces the document name in the
-report header; otherwise, the name of the source file is kept.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_launch_and_result_2">18.4. Launch and result</h3>
-<div class="paragraph">
-<p>The <strong>⚖ Generate</strong> button launches <code>sbom-generator licenses</code> on the selected
-file. The command output (log) is displayed under the fields, followed by a
-result banner:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>✔ Report generated → &lt;file&gt;</strong> (green) on success.</p>
-</li>
-<li>
-<p><strong>✘ Generation failed (code N)</strong> (red) on failure — check the displayed log
-for the error detail.</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>The report (AsciiDoc; the other formats reproduce the same content) groups
-the packages by exact license, with a figures summary at the top (analyzed
-packages, distinct licenses, packages under strong/weak copyleft license,
-packages with no detected license), a warning listing the detected copyleft
-identifiers (GPL/AGPL as strong; LGPL, MPL, EPL, CDDL, CPL, EUPL as weak), and
-one section per license listing the matching packages.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_constraints_2">18.5. Constraints</h3>
-<div class="paragraph">
-<p>The source format must be recognized (CycloneDX, SPDX 2.3 or SPDX 3.0). The
-copyleft classification is a detection heuristic based on the SPDX
-identifier, not a legal analysis.</p>
 </div>
 </div>
 </div>

@@ -31,10 +31,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(ListTile), findsOneWidget);
-      // "1. Introduction" apparaît deux fois : l'entrée de sommaire filtrée
+      // "2. Introduction" apparaît deux fois : l'entrée de sommaire filtrée
       // et le titre <h2> du contenu déjà affiché à droite (chapitre 0 par
       // défaut, inchangé par la recherche elle-même).
-      expect(find.textContaining('1. Introduction'), findsWidgets);
+      expect(find.textContaining('2. Introduction'), findsWidgets);
       expect(find.textContaining('ANSSI'), findsWidgets); // titre + extrait
 
       // Effacer la recherche restaure le sommaire complet.

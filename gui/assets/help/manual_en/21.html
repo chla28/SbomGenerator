@@ -1,255 +1,76 @@
 
-<h2 id="_troubleshooting">22. Troubleshooting</h2>
+<h2 id="_customizing_the_appearance">22. Customizing the appearance</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_sbom_generator_not_found">22.1. <code>sbom-generator</code> not found</h3>
+<h3 id="_color_theme_picker">22.1. Color theme picker</h3>
 <div class="paragraph">
-<p><strong>Symptom</strong>: the generation fails immediately with an error such as
-<code>sbom-generator: command not found</code>.</p>
+<p>Click the 🎨 icon in the title bar to open the color picker. Ten predefined
+themes are offered:</p>
 </div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Theme</th>
+<th class="tableblock halign-left valign-top">Main color</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Indigo (default)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dark indigo (#1A237E)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Blue</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dark blue (#1565C0)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Purple</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Deep purple (#4A148C)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Teal</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Dark blue-green (#004D40)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Green</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Forest green (#1B5E20)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Orange</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Burnt orange (#BF360C)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Red</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Blood red (#B71C1C)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Pink</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Deep pink (#880E4F)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Slate</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Slate grey (#37474F)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Brown</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Brown (#4E342E)</p></td>
+</tr>
+</tbody>
+</table>
 <div class="paragraph">
-<p><strong>Solution</strong>: check that the <code>sbom-generator</code> binary is reachable in the PATH:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which sbom-generator
-sbom-generator --version</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>If the binary is installed in a non-standard location, put it in a folder of
-the PATH or create a symbolic link:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">ln -s /path/to/sbom-generator /usr/local/bin/sbom-generator</code></pre>
-</div>
+<p>The selected theme is applied immediately and <strong>saved</strong> for the next session.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_syft_skopeo_cdxgen_not_found">22.2. <code>syft</code> / <code>skopeo</code> / <code>cdxgen</code> not found</h3>
+<h3 id="_light_dark_toggle">22.2. Light / dark toggle</h3>
 <div class="paragraph">
-<p><strong>Symptom</strong>: the generation fails with the message
-<code>syft not found or not working — required for --image.</code></p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: install the missing tool and check that it is in the PATH:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash"># Syft
-curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-  | sh -s -- -b /usr/local/bin
-syft version
-
-# Skopeo (Fedora/RHEL)
-sudo dnf install skopeo
-skopeo --version
-
-# cdxgen (npm, requires Node.js)
-npm install -g @cyclonedx/cdxgen
-cdxgen --version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_oci_analysis_failure">22.3. OCI analysis failure</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: <code>OCI analysis failed: …</code> in the log.</p>
-</div>
-<div class="paragraph">
-<p><strong>Possible causes and solutions:</strong></p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Unreachable registry image</strong>: check the network connection and the
-authentication (<code>docker login</code> or <code>skopeo login</code>).</p>
-</li>
-<li>
-<p><strong>Corrupted tar archive or unrecognized format</strong>: regenerate the archive
-with <code>docker save &lt;image&gt; -o /path/image.tar</code> (or compressed:
-<code>docker save &lt;image&gt; | gzip &gt; /path/image.tar.gz</code>).
-The <code>.tar</code>, <code>.tar.gz</code> and <code>.tgz</code> formats are supported.</p>
-</li>
-<li>
-<p><strong>Invalid OCI layout directory</strong>: check that <code>index.json</code> is present at the
-root of the directory.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_grype_not_found">22.4. <code>grype</code> not found</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: the Grype analysis fails with the message
-<code>grype not found. Install it: <a href="https://github.com/anchore/grype" class="bare">https://github.com/anchore/grype</a></code>.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: install grype (see <a href="#_installing_grype">Installing grype</a>) and check that it is in
-the PATH:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which grype
-grype version</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_osv_scanner_not_found">22.5. <code>osv-scanner</code> not found</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: the OSV-Scanner analysis fails with a message such as
-<code>osv-scanner: command not found</code> or the SBOM file is not found.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: check that <code>osv-scanner</code> is in the PATH of your graphical session
-(not only in the terminal):</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which osv-scanner
-osv-scanner --version</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>If <code>osv-scanner</code> is installed via <code>go install</code> in <code>~/go/bin</code>, this folder is
-often not in the graphical PATH. Add it in <code>~/.profile</code>:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">export PATH="$HOME/go/bin:$PATH"</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Then log in again or restart the GUI.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_trivy_not_found">22.6. <code>trivy</code> not found</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: the Trivy analysis fails with a message such as
-<code>trivy: command not found</code>.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: check that <code>trivy</code> is in the PATH:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">which trivy
-trivy --version</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Install it if needed (see <a href="#_installing_trivy_optional">Installing trivy (optional)</a>).</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_the_trivy_database_is_outdated">22.7. The Trivy database is outdated</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: Trivy displays a warning about the age of its database.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: leave <strong>--skip-db-update</strong> unchecked (default behavior) so that
-Trivy updates its database automatically at launch. In an offline
-environment, update manually:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">trivy image --download-db-only</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_no_vulnerability_detected_despite_a_loaded_sbom">22.8. No vulnerability detected despite a loaded SBOM</h3>
-<div class="paragraph">
-<p><strong>Possible causes:</strong></p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>The selected SBOM file is not a format recognized by grype.
-Grype natively supports CycloneDX JSON (<code>.cdx.json</code>) and SPDX JSON
-(<code>.spdx.json</code>). The SPDX 3.0 JSON-LD format may require a recent version of
-grype.</p>
-</li>
-<li>
-<p>The grype vulnerability database is outdated.
-Grype updates it automatically on first launch,
-but may need a manual update:</p>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">grype db update</code></pre>
-</div>
-</div>
-</li>
-<li>
-<p>The RHEL version selected in <strong>Distro</strong> does not match the packages of the
-SBOM. Try <strong>(none)</strong> to let grype detect it automatically.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_license_warnings">22.9. License warnings</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: <code>Warning: unknown license for 'package'</code> lines appear in the
-progress.</p>
-</div>
-<div class="paragraph">
-<p><strong>Explanation</strong>: <code>sbom-generator</code> could not determine the SPDX license of the
-package. The SBOM is still generated, with the value <code>NOASSERTION</code> for the
-license concerned.</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: use a <strong>license override</strong> file (<code>--license-map</code>) to manually
-define the license of unrecognized packages.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_the_sbomqs_score_does_not_appear">22.10. The sbomqs score does not appear</h3>
-<div class="paragraph">
-<p><strong>Possible causes:</strong></p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><code>sbomqs</code> is not installed or is not in the PATH.
-Check with <code>which sbomqs</code>. If missing, install it
-(see <a href="#_installing_sbomqs_optional">Installing sbomqs (optional)</a>).</p>
-</li>
-<li>
-<p>The <strong>sbomqs quality score</strong> option is not checked in the <strong>Options</strong> section.</p>
-</li>
-<li>
-<p>No JSON SBOM file was generated in the current session.
-sbomqs only runs on the <code>.cdx.json</code>, <code>.spdx.json</code> or <code>.jsonld</code> formats.
-Make sure at least one of these formats is selected.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_the_pdf_conversion_fails">22.11. The PDF conversion fails</h3>
-<div class="paragraph">
-<p><strong>Symptom</strong>: the message <code>asciidoctor-pdf not found</code> appears in the logs
-(SBOM generation) or in the confirmation message (AsciiDoc + PDF export of a
-Grype/OSV-Scanner/Trivy tab — the <code>.adoc</code> file is still produced).</p>
-</div>
-<div class="paragraph">
-<p><strong>Solution</strong>: install <code>asciidoctor-pdf</code> (see
-<a href="#_installing_asciidoctor_pdf_optional">Installing asciidoctor-pdf (optional)</a>).</p>
-</div>
-<div class="paragraph">
-<p>If <code>asciidoctor-pdf</code> is installed but not found, make sure the Ruby gems
-folder is in the PATH:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">gem environment gemdir
-# Example: /home/user/.local/share/gem/ruby/3.2.0
-export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"</code></pre>
-</div>
+<p>The 🌙 / ☀ button alternates between dark and light mode. The theme color
+stays the same in both modes — only the overall brightness changes. The
+preference is also saved.</p>
 </div>
 </div>
 </div>

@@ -4855,6 +4855,30 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace'**
   String get shortcutNavigate;
+
+  /// Navigation dans le chapitre : numéro de l'occurrence courante.
+  ///
+  /// In fr, this message translates to:
+  /// **'Occurrence {current} sur {total}'**
+  String helpHitCount(int current, int total);
+
+  /// Recherche : le chapitre affiché ne contient pas le terme.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune occurrence dans ce chapitre'**
+  String get helpHitNone;
+
+  /// Info-bulle : occurrence précédente dans le chapitre.
+  ///
+  /// In fr, this message translates to:
+  /// **'Occurrence précédente (Maj+F3)'**
+  String get helpPrevHit;
+
+  /// Info-bulle : occurrence suivante dans le chapitre.
+  ///
+  /// In fr, this message translates to:
+  /// **'Occurrence suivante (F3 / Entrée)'**
+  String get helpNextHit;
 }
 
 class _AppLocalizationsDelegate

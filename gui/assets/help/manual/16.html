@@ -1,94 +1,141 @@
 
-<h2 id="_onglet_fusion_sbom">17. Onglet Fusion SBOM</h2>
+<h2 id="_onglet_visionneuse_sbom">17. Onglet Visionneuse SBOM</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>Fusion SBOM</strong> combine plusieurs fichiers SBOM en un seul document,
-en dédupliquant les composants communs. Il orchestre la sous-commande
-<code>sbom-generator merge</code> en arrière-plan.</p>
+<p>L’onglet <strong>Visionneuse SBOM</strong> permet d’ouvrir et d’explorer n’importe quel
+fichier SBOM CycloneDX ou SPDX depuis le système de fichiers, indépendamment
+d’une génération en cours.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre>  ┌─ [➕ Ajouter des fichiers…]  [📂 Fichiers générés]   3 fichier(s) sélectionné(s) ─┐
-  │  📄 base.cdx.json         /chemin/vers/base.cdx.json                      [✕]  │
-  │  📄 extra-1.cdx.json      /chemin/vers/extra-1.cdx.json                   [✕]  │
-  │  📄 extra-2.cdx.json      /chemin/vers/extra-2.cdx.json                   [✕]  │
-  └──────────────────────────────────────────────────────────────────────────────┘
-
-  [ Fichier de sortie : merged.cdx.json ]  [ Nom du document (optionnel) ]  [🔀 Fusionner]
-
-  ✔ Fusion réussie → merged.cdx.json</pre>
+<pre>  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  [📂 Ouvrir un fichier SBOM…]                                           │
+  │  CycloneDX 1.6  •  Keycloak 26.0.0  •  453 composants                  │
+  │                                                                         │
+  │  [ Rechercher nom, version, licence… ]  [ Tous les types ▼ ]           │
+  │                                                                         │
+  │  Nom ▲          Version        Type    Licence           PURL           │
+  │  ─────────────────────────────────────────────────────────────────────  │
+  │  snakeyaml      2.0            java    Apache-2.0        pkg:maven/…    │
+  │  requests       2.31.0         pypi    Apache-2.0        pkg:pypi/…     │
+  │  bash           5.1.8-6.el9    rpm     GPL-3.0-or-later  pkg:rpm/…      │
+  │  ...                                                                    │
+  │                               ┌─ Détails ────────────────────────────┐  │
+  │                               │  Nom      snakeyaml                  │  │
+  │                               │  Version  2.0                        │  │
+  │                               │  Type     java                       │  │
+  │                               │  Licence  Apache-2.0                 │  │
+  │                               │  PURL     pkg:maven/org.yaml/…       │  │
+  │                               └──────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────────────┘</pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_sélection_des_fichiers_à_fusionner">17.1. Sélection des fichiers à fusionner</h3>
+<h3 id="_ouverture_dun_fichier">17.1. Ouverture d’un fichier</h3>
 <div class="paragraph">
-<p>Deux façons d’alimenter la liste :</p>
+<p>Cliquez sur <strong>📂 Ouvrir un fichier SBOM…</strong> pour parcourir le système de fichiers.
+Le sélecteur propose les extensions <code>.json</code>, <code>.jsonld</code>, <code>.cdx.json</code>, <code>.spdx.json</code>.</p>
+</div>
+<div class="paragraph">
+<p>Formats supportés :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>➕ Ajouter des fichiers…</strong> : ouvre un menu à deux entrées —
-<strong>.json / .jsonld</strong> (filtre le sélecteur sur ces extensions) ou
-<strong>Tous les fichiers</strong> (aucun filtre, pour les SBOM dont l’extension n’est pas
-<code>.json</code>, ex. <code>.cdx</code>, <code>.spdx</code>, <code>bom</code>, ou sans extension). Sélection multiple
-possible dans les deux cas. Le contenu doit rester du JSON CycloneDX ou
-SPDX 2.x quel que soit le nom du fichier.</p>
+<p><strong>CycloneDX 1.6</strong> — <code>components[]</code> avec champs <code>name</code>, <code>version</code>, <code>type</code>, <code>purl</code>,
+<code>licenses</code>, <code>description</code></p>
 </li>
 <li>
-<p><strong>📂 Fichiers générés</strong> : menu listant les fichiers SBOM produits pendant la
-session courante (mêmes formats que l’onglet Arborescence, hors SPDX 3.0
-— voir Contraintes ci-dessous).</p>
+<p><strong>SPDX 2.x</strong> — <code>packages[]</code> avec champs <code>name</code>, <code>versionInfo</code>, <code>licenseConcluded</code>,
+<code>summary</code>, <code>externalRefs[purl]</code></p>
+</li>
+<li>
+<p><strong>SPDX 3.0 JSON-LD</strong> — éléments <code>software:Package</code> du graphe <code>@graph</code>, avec
+champs <code>name</code>, <code>software:packageVersion</code>, <code>concludedLicense</code>/<code>declaredLicense</code>,
+<code>summary</code>, <code>externalIdentifier[purl]</code></p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>Chaque fichier de la liste peut être retiré individuellement via le bouton
-<strong>✕</strong>. Le bouton <strong>🔀 Fusionner</strong> n’est actif qu’à partir de deux fichiers
-sélectionnés et d’un chemin de sortie renseigné.</p>
+<p>La barre d’informations affiche le format détecté, le nom du document et le
+nombre total de composants chargés.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_fichier_de_sortie_et_nom_du_document">17.2. Fichier de sortie et nom du document</h3>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Fichier de sortie</strong> : chemin du document fusionné produit (valeur par
-défaut : <code>merged.cdx.json</code>).</p>
-</li>
-<li>
-<p><strong>Nom du document</strong> (optionnel) : s’il est renseigné, remplace le nom du
-document dans le fichier fusionné ; sinon, le nom du premier fichier
-source est conservé.</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_lancement_et_résultat">17.3. Lancement et résultat</h3>
+<h3 id="_navigation_par_couche">17.2. Navigation par couche</h3>
 <div class="paragraph">
-<p>Le bouton <strong>🔀 Fusionner</strong> lance <code>sbom-generator merge</code> avec les fichiers
-sélectionnés. Le déroulé de la commande (journal) s’affiche sous les
-champs, suivi d’une bannière de résultat :</p>
+<p>Pour un SBOM produit avec <code>--per-layer</code>, le bandeau de couches décrit dans
+<a href="#sec-nav-couches">Navigation par couche (<code>--per-layer</code>)</a> s’affiche sous l’en-tête : il permet de passer du SBOM
+global à chaque SBOM de couche sans repasser par le sélecteur de fichier.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_filtre_et_recherche">17.3. Filtre et recherche</h3>
+<div class="paragraph">
+<p>Le champ de recherche filtre les composants en temps réel sur :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>✔ Fusion réussie → &lt;fichier&gt;</strong> (vert) en cas de succès.</p>
+<p>le nom du paquet</p>
 </li>
 <li>
-<p><strong>✘ Échec de la fusion (code N)</strong> (rouge) en cas d’échec — consultez le
-journal affiché pour le détail de l’erreur.</p>
+<p>la version</p>
+</li>
+<li>
+<p>la licence</p>
+</li>
+<li>
+<p>le PURL</p>
+</li>
+<li>
+<p>la couche (SBOM produit avec <code>--per-layer</code>)</p>
 </li>
 </ul>
 </div>
+<div class="paragraph">
+<p>Le menu déroulant <strong>Tous les types</strong> filtre par type d’écosystème (<code>rpm</code>, <code>java</code>,
+<code>pypi</code>, <code>npm</code>, <code>deb</code>, <code>apk</code>…). Les deux filtres se combinent.</p>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_contraintes">17.4. Contraintes</h3>
+<h3 id="_tableau_des_composants">17.4. Tableau des composants</h3>
 <div class="paragraph">
-<p>Tous les fichiers sélectionnés doivent être dans le même format (celui du
-premier fichier de la liste) : CycloneDX ou SPDX 2.3. Le format de sortie
-suit celui du premier fichier. Le format SPDX 3.0 (JSON-LD) n’est pas pris
-en charge en entrée pour la fusion.</p>
+<p>Le tableau affiche les colonnes <strong>Nom</strong>, <strong>Version</strong>, <strong>Type</strong>, <strong>Licence</strong> et <strong>PURL</strong>,
+plus, pour un SBOM produit avec <code>--per-layer</code>, une colonne <strong>Couche</strong> (SBOM
+global : couche d’origine et couches qui ont modifié le composant) ou
+<strong>Changement</strong> (SBOM de couche : <code>ajouté</code>, <code>modifié (était &lt;version&gt;)</code>).
+Cliquez sur un en-tête de colonne pour trier par ordre croissant, cliquez à
+nouveau pour inverser l’ordre.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_panneau_de_détails">17.5. Panneau de détails</h3>
+<div class="paragraph">
+<p>Cliquez sur une ligne du tableau pour afficher un panneau de détails sur la
+droite, récapitulant tous les champs du composant sélectionné : nom, version,
+type, licence, description et PURL.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_persistance">17.6. Persistance</h3>
+<div class="paragraph">
+<p>Le fichier ouvert et les filtres actifs sont mémorisés lors de la navigation
+entre onglets. Le fichier n’est pas rechargé automatiquement si son contenu
+change sur disque.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tbody><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+La Visionneuse SBOM est un onglet autonome — il peut être utilisé avec
+n’importe quel fichier SBOM, pas uniquement ceux générés par sbom_generator.
+</td>
+</tr>
+</tbody></table>
 </div>
 </div>
 </div>

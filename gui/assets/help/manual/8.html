@@ -1,61 +1,49 @@
 
-<h2 id="_onglet_osv_scanner_analyse_de_vulnérabilités">9. Onglet OSV-Scanner — Analyse de vulnérabilités</h2>
+<h2 id="sec-taches">9. Onglet Tâches — File d’attente d’analyses</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>L’onglet <strong>OSV-Scanner</strong> utilise l’outil de Google pour rechercher les
-vulnérabilités à partir d’un fichier SBOM ou d’une image de conteneur. Son
-interface est identique à celle de l’onglet Grype.</p>
+<p>L’onglet <strong>Tâches</strong> met en file des analyses de vulnérabilités : elles s’exécutent
+<strong>une à une</strong> (les scanners sont gourmands et partagent leur base de vulnérabilités)
+et leurs résultats alimentent le <strong>Tableau de bord</strong> (cartes, comparaison,
+remédiation, tendance, rapport).</p>
 </div>
-<div class="listingblock">
-<div class="content">
-<pre>  ┌───────────────────────────────────────────────────────────────────┐
-  │  [ Fichier SBOM ] [ Image de conteneur ]                          │
-  │  Fichier SBOM : [ /projet/sbom.cdx.json         ] [Choisir ▾]   │
-  │  Config toml  : [                               ] [Choisir ▾]   │
-  │                                                      [Analyser]  │
-  ├───────────────────────────────────────────────────────────────────┤
-  │  ⚠ 3 vulnérabilité(s) : 1 Critical, 2 High                       │
-  ├───────────────────────┬───────────────────────────────────────────┤
-  │ [Vulnérabilités (3)]  │ [JSON brut]                               │
-  └───────────────────────┴───────────────────────────────────────────┘</pre>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Choisissez le <strong>SBOM à analyser</strong> : le premier SBOM JSON généré est proposé
+automatiquement, <strong>Parcourir…</strong> en choisit un autre.</p>
+</li>
+<li>
+<p>Cochez les scanners (Grype, OSV-Scanner, Trivy).</p>
+</li>
+<li>
+<p><strong>Ajouter à la file</strong> : une analyse par scanner coché apparaît.</p>
+</li>
+</ol>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_indicateur_de_version_2">9.1. Indicateur de version</h3>
 <div class="paragraph">
-<p>Même comportement que dans l’onglet Grype (voir <a href="#_indicateur_de_version">Indicateur de version</a>),
-appliqué à <code>osv-scanner</code>. Le badge est affiché en haut du panneau de
-configuration dès que la vérification de démarrage est terminée.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_prérequis_2">9.2. Prérequis</h3>
-<div class="paragraph">
-<p><code>osv-scanner</code> doit être installé et accessible dans le PATH
-(voir <a href="#_installer_osv_scanner_optionnel">Installer osv-scanner (optionnel)</a>).</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="sec-onglet-osv-source">9.3. Sélection de la source à analyser</h3>
-<div class="paragraph">
-<p>Même bascule <strong>Fichier SBOM / Image de conteneur</strong> que dans l’onglet Grype
-(voir <a href="#sec-source-scan">Sélection de la source à analyser</a>). En mode <strong>Fichier SBOM</strong>, le champ est pré-rempli
-avec le dernier fichier généré ; le bouton <strong>Choisir</strong> propose :</p>
+<p>Chaque ligne indique son état — <strong>En attente</strong>, <strong>En cours…</strong> (avec la durée),
+<strong>Terminée</strong> (nombre de vulnérabilités), <strong>Échec</strong> (message d’erreur : outil
+introuvable, sortie illisible…) ou <strong>Annulée</strong> — et propose :</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Type filtré</strong> : fichiers <code>.json</code> et <code>.jsonld</code></p>
+<p><strong>Annuler</strong> (⏹) : retire une analyse en attente, ou arrête le processus d’une
+analyse en cours ;</p>
 </li>
 <li>
-<p><strong>Tous les fichiers</strong></p>
+<p><strong>Relancer</strong> (↺) : remet en file une analyse en échec ou annulée ;</p>
+</li>
+<li>
+<p><strong>Retirer</strong> (✕) : supprime la ligne.</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>En mode <strong>Image de conteneur</strong>, le champ accepte une référence de <strong>registre</strong>
-(ex. <code>nginx:latest</code>) ou une <strong>archive</strong> locale (<code>docker save</code>, via le bouton
-dédié) — au format <code>.tar</code>, <code>.tar.gz</code> ou <code>.tgz</code>.</p>
+<p><strong>Tout annuler</strong> interrompt toutes les analyses en attente ou en cours ;
+<strong>Retirer les terminées</strong> nettoie la liste. Les enrichissements CISA KEV / EPSS /
+PoC suivent le réglage « enrichir en ligne » des onglets de scan.</p>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -64,126 +52,11 @@ dédié) — au format <code>.tar</code>, <code>.tar.gz</code> ou <code>.tgz</co
 <div class="title">Note</div>
 </td>
 <td class="content">
-Contrairement à Grype et Trivy, OSV-Scanner ne sait pas lire un
-répertoire au format OCI layout directement : seule l’archive est proposée
-ici. Il n’a pas non plus d’option de plateforme (<code>--platform</code>).
+Les résultats d’une analyse en file remplacent ceux du même scanner dans
+le tableau de bord ; les tableaux des onglets Grype / OSV-Scanner / Trivy ne les
+affichent pas (ils gardent leurs propres analyses).
 </td>
 </tr>
 </tbody></table>
-</div>
-<div class="paragraph">
-<p>L’option <strong>Par couche</strong> est disponible en mode image, comme pour Grype —
-voir <a href="#sec-scan-couches">Analyse par couche (source « Image de conteneur »)</a>.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_configuration_optionnelle_toml">9.4. Configuration optionnelle (toml)</h3>
-<div class="paragraph">
-<p>Chemin vers un fichier de configuration <code>osv-scanner.toml</code> permettant
-de définir des règles d’ignorance par ID de vulnérabilité. Ce paramètre
-est optionnel.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_lancer_lanalyse">9.5. Lancer l’analyse</h3>
-<div class="paragraph">
-<p>Cliquez sur <strong>Analyser</strong>. En mode <strong>Fichier SBOM</strong>, OSV-Scanner s’exécute avec :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">osv-scanner --format json --sbom /chemin/vers/sbom.cdx.json</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>En mode <strong>Image de conteneur</strong>, la sous-commande change (<code>--sbom</code> ne sait pas
-scanner une image) :</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-bash" data-lang="bash">osv-scanner scan image --format json nginx:latest
-# ou, pour une archive locale :
-osv-scanner scan image --format json --archive /chemin/vers/image.tar</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Un code de retour 1 indique qu’au moins une vulnérabilité a été trouvée
-(c’est normal, pas une erreur) ; un code supérieur à 1 indique une erreur.</p>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_résultats">9.6. Résultats</h3>
-<div class="sect3">
-<h4 id="_vue_vulnérabilités">9.6.1. Vue Vulnérabilités</h4>
-<div class="paragraph">
-<p>Même interface que l’onglet Grype : barre de recherche + tri + export CSV,
-filtres par sévérité, puis liste des vulnérabilités.</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>  [ Rechercher...                        ] [⬇]
-  Filtre : [Critical (1)] [High (2)] [Medium (0)] [Low (0)]  [Tout voir]
-
-  ┌────────────┬────────────────────┬────────────────┬────────────────────────┐
-  │ SÉVÉRITÉ ↕ │ CVE/ID ↕           │ PAQUET ↕       │ VERSION CORRIGÉE ↕     │
-  ├────────────┼────────────────────┼────────────────┼────────────────────────┤
-  │ CRITICAL   │ CVE-2023-12345     │ requests 2.28  │ 2.31.0                 │
-  └────────────┴────────────────────┴────────────────┴────────────────────────┘</pre>
-</div>
-</div>
-<div class="paragraph">
-<p><strong>Recherche et tri</strong> : identiques à l’onglet Grype (voir <a href="#sec-vue-table">[sec-vue-table]</a>).</p>
-</div>
-<div class="paragraph">
-<p><strong>Fusion des doublons visuels</strong> : même comportement (badge ×N) que l’onglet
-Grype — voir <a href="#sec-vue-table">[sec-vue-table]</a>.</p>
-</div>
-<div class="paragraph">
-<p><strong>Export CSV</strong> : le bouton ⬇ exporte la vue filtrée (déjà fusionnée).
-Colonnes : Sévérité, CVE/ID, Paquet, Version installée, Version corrigée,
-Écosystème, Emplacements.</p>
-</div>
-<div class="paragraph">
-<p><strong>Export AsciiDoc + PDF</strong> : le bouton ⬥ exporte la même vue filtrée dans un
-rapport AsciiDoc (résumé par sévérité + tableau détaillé), avec conversion
-PDF automatique si <code>asciidoctor-pdf</code> est installé — voir la description
-complète dans l’onglet Grype (<a href="#sec-vue-table">[sec-vue-table]</a>).</p>
-</div>
-<div class="paragraph">
-<p><strong>Filtre par date</strong> : même barre que l’onglet Grype (voir <a href="#sec-vue-table">[sec-vue-table]</a>).
-Le champ <strong>Publication</strong> correspond à <code>published</code> du JSON OSV, le champ
-<strong>Modification</strong> à <code>modified</code>. L’option <strong>Propager</strong> copie le filtre vers
-les onglets Grype et Trivy.</p>
-</div>
-<div class="paragraph">
-<p>Colonnes :</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Badge de sévérité coloré</p>
-</li>
-<li>
-<p>Identifiant CVE (cliquable — copie dans le presse-papiers)</p>
-</li>
-<li>
-<p>Nom et version du paquet affecté</p>
-</li>
-<li>
-<p>Version corrigée (si disponible)</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>La sévérité est déterminée depuis le champ <code>database_specific.severity</code>
-ou depuis les scores CVSS présents dans le JSON OSV.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_vue_json_brut">9.6.2. Vue JSON brut</h4>
-<div class="paragraph">
-<p>Affiche le JSON complet retourné par <code>osv-scanner</code>, utile pour inspecter
-les métadonnées détaillées de chaque vulnérabilité.</p>
-</div>
-</div>
 </div>
 </div>

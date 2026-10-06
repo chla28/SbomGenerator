@@ -10,6 +10,46 @@
 
 🇫🇷 *Français* · 🇬🇧 link:user.en.adoc[English]
 
+== Démarrage rapide
+
+[[sec-quickstart]]
+Ce chapitre est le parcours de première utilisation : en cinq minutes, de
+l'ouverture de l'application à un tableau de bord de vulnérabilités. Le détail
+de chaque écran est dans les chapitres suivants.
+
+. *Vérifier les prérequis.* L'application pilote des outils externes : le CLI
+`sbom-generator` (fourni avec l'application), puis, selon ce que vous voulez
+faire, `syft`/`skopeo` (images de conteneur), `grype`, `osv-scanner`, `trivy`
+(analyse de vulnérabilités), `sbomqs` (qualité), `asciidoctor-pdf` (rapports PDF).
+Les onglets concernés indiquent clairement l'outil manquant. Voir
+<<_prérequis_installation>>.
+. *Générer un premier SBOM.* Dans le panneau de gauche, section *Entrée*,
+choisissez (ou glissez-déposez) un fichier de paquets, un lockfile
+(`package-lock.json`, `pubspec.lock`…) ou un dossier ; dans *Sortie*, donnez un
+nom de base et cochez au moins un format (CycloneDX pour commencer). Cliquez sur
+*▶ Générer le SBOM* (ou *Ctrl+Entrée*). L'onglet *Progression* montre
+l'avancement ; l'onglet *Résultats* liste les fichiers produits.
+. *Analyser les vulnérabilités.* Ouvrez l'onglet *Grype*, *OSV-Scanner* ou
+*Trivy* : le SBOM qui vient d'être généré est déjà sélectionné. Cliquez sur
+*Analyser*. Pour lancer les trois scanners d'un coup, utilisez l'onglet
+*Tâches* : mettez les analyses en file, elles s'exécutent une à une et peuvent
+être annulées ou relancées.
+. *Lire le tableau de bord.* L'onglet *Tableau de bord* réunit les résultats : cartes
+par scanner, comparaison inter-scanners, *remédiation* (quelle mise à jour
+corrige le plus de risque), et — si vous avez déjà analysé la cible — la
+*tendance* depuis une session précédente.
+. *Décider.* Dans la fiche d'une CVE, *Déclarer via VEX…* marque une CVE comme
+non affectée (avec justification) : elle disparaît du tableau de bord et
+s'exporte en OpenVEX ou CycloneDX VEX.
+. *Partager.* *Enregistrer la session…* conserve les résultats dans un fichier ;
+*Export AsciiDoc + PDF* produit un rapport.
+
+TIP: Tout est aussi disponible au clavier : *Ctrl+Entrée* lance la génération,
+*Échap* l'arrête, *Ctrl+1…9* change d'onglet, *F1* ouvre ce manuel et *Ctrl+/*
+affiche la liste des raccourcis (voir <<sec-raccourcis>>). Dans le manuel, le
+champ de recherche surligne les occurrences dans le chapitre ; *F3* /
+*Maj+F3* passent à l'occurrence suivante / précédente.
+
 == Introduction
 
 === Qu'est-ce qu'un SBOM ?
@@ -288,9 +328,10 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : quatorze onglets — Progression (avec export
+*Panneau droit — Résultats* : quinze onglets — Progression (avec export
 des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
-(synthèse CVE multi-scanners), Grype, OSV-Scanner et Trivy (analyses CVE),
+(synthèse CVE multi-scanners, remédiation, sessions, VEX), Tâches (file d'attente
+d'analyses), Grype, OSV-Scanner et Trivy (analyses CVE),
 Conformité CRA (rapport de conformité Cyber Resilience Act), Qualité SBOM
 (sbomqs + sbom-scorecard), Arborescence SBOM (exploration des
 composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
@@ -305,7 +346,10 @@ ne pas confondre avec les icônes ❓ plus petites présentes sur chaque champ/
 section, qui affichent une infobulle courte au survol plutôt que d'ouvrir
 le manuel complet. Le champ de recherche en tête de sommaire filtre les
 chapitres par titre *et* par contenu au fur et à mesure de la frappe ; un
-extrait du passage trouvé s'affiche sous le titre du chapitre concerné.
+extrait du passage trouvé s'affiche sous le titre du chapitre concerné. Dans le
+chapitre affiché, les occurrences sont *surlignées* et une barre indique « Occurrence
+n sur N » avec les boutons ▲ ▼ (ou *F3* / *Maj+F3*, ou *Entrée* dans le champ de
+recherche). Le bouton *⌨* affiche les raccourcis clavier (<<sec-raccourcis>>).
 
 Le bouton *🌙 / ☀* dans la barre de titre bascule entre mode sombre et
 mode clair. Le bouton *🎨* ouvre le sélecteur de couleur de thème.
@@ -924,6 +968,36 @@ le presse-papiers.
 NOTE: L'onglet Aperçu ne remplace pas un outil dédié pour explorer de gros
 fichiers JSON. Pour les fichiers très volumineux, utilisez le bouton ↗
 (onglet Résultats) pour ouvrir le fichier dans votre application système.
+
+[[sec-taches]]
+== Onglet Tâches — File d'attente d'analyses
+
+L'onglet *Tâches* met en file des analyses de vulnérabilités : elles s'exécutent
+*une à une* (les scanners sont gourmands et partagent leur base de vulnérabilités)
+et leurs résultats alimentent le *Tableau de bord* (cartes, comparaison,
+remédiation, tendance, rapport).
+
+. Choisissez le *SBOM à analyser* : le premier SBOM JSON généré est proposé
+automatiquement, *Parcourir…* en choisit un autre.
+. Cochez les scanners (Grype, OSV-Scanner, Trivy).
+. *Ajouter à la file* : une analyse par scanner coché apparaît.
+
+Chaque ligne indique son état — *En attente*, *En cours…* (avec la durée),
+*Terminée* (nombre de vulnérabilités), *Échec* (message d'erreur : outil
+introuvable, sortie illisible…) ou *Annulée* — et propose :
+
+* *Annuler* (⏹) : retire une analyse en attente, ou arrête le processus d'une
+analyse en cours ;
+* *Relancer* (↺) : remet en file une analyse en échec ou annulée ;
+* *Retirer* (✕) : supprime la ligne.
+
+*Tout annuler* interrompt toutes les analyses en attente ou en cours ;
+*Retirer les terminées* nettoie la liste. Les enrichissements CISA KEV / EPSS /
+PoC suivent le réglage « enrichir en ligne » des onglets de scan.
+
+NOTE: Les résultats d'une analyse en file remplacent ceux du même scanner dans
+le tableau de bord ; les tableaux des onglets Grype / OSV-Scanner / Trivy ne les
+affichent pas (ils gardent leurs propres analyses).
 
 == Onglet Grype — Analyse de vulnérabilités
 
@@ -2035,6 +2109,57 @@ nombre de CVE uniques (tous scanners confondus), dont critiques et
 AsciiDoc + PDF une section *Couches de l'image* et la même colonne.
 
 [[sec-pourquoi-ecarts-scanners]]
+=== Remédiation
+
+La section *Remédiation* répond à « que dois-je mettre à jour ? ». Les CVE de
+tous les scanners sont regroupées par paquet installé ; pour chaque paquet, la
+*version cible* est la plus petite qui corrige toutes les CVE corrigeables
+(ex. `log4j-core 2.14.1 → 2.17.1 — 5 CVE corrigées`). Les paquets sont classés par
+*gain de risque* : sévérité (critique 10, haute 5, moyenne 2, faible 1), +20 si la
+CVE est exploitée activement (CISA KEV), + 10 × EPSS. Un paquet dont aucune CVE n'a
+de correctif est signalé « aucun correctif connu » ; les CVE sans correctif d'un
+paquet corrigeable sont indiquées comme restantes. Dépliez une ligne pour voir
+ses CVE ; les boutons *Copier* et *CSV* exportent le plan.
+
+NOTE: La version cible est une heuristique (comparaison numérique des versions,
+suffixes de distribution ignorés) : vérifiez-la avec votre gestionnaire de paquets.
+
+=== Sessions, historique et tendance
+
+En tête du tableau de bord :
+
+* *Enregistrer la session…* écrit les résultats de scan (listes des scanners,
+signaux KEV/EPSS, cibles) dans un fichier JSON ; *Ouvrir une session…* le
+recharge dans le tableau de bord. Les analyses par couche ne sont pas conservées.
+* *Historique* : chaque analyse est conservée automatiquement (une entrée par cible
+et par jour, 50 au maximum) dans `~/.local/share/sbom-generator-gui/history`. On peut
+*Ouvrir* une ancienne analyse, la *Comparer* avec les résultats courants, *Supprimer*
+une entrée ou *Vider l'historique*.
+* *Tendance* : une fois une session de référence choisie (*Comparer*), une carte
+indique les CVE *nouvelles*, *disparues* (corrigées ou plus détectées) et
+*inchangées* depuis cette date, le total avant → après et la liste des nouvelles CVE.
+*Retirer la comparaison* la masque.
+
+=== Déclarations VEX
+
+Un document *VEX* (_Vulnerability Exploitability eXchange_) dit qu'une CVE ne vous
+affecte pas, ou est corrigée. Dans la fiche d'une CVE (clic sur une ligne),
+*Déclarer via VEX…* ouvre un dialogue : *état* (non affectée, affectée, corrigée, à
+l'étude), *justification* (obligatoire pour « non affectée » : composant absent,
+code vulnérable absent, jamais exécuté, non contrôlable par un attaquant,
+atténuations déjà en place), *explication* libre et *portée* (un paquet précis ou
+tous). La barre *VEX* du tableau de bord :
+
+* masque les CVE couvertes (« non affectée » / « corrigée ») tant que la case
+*Masquer les CVE couvertes par un VEX* est cochée — les chiffres, la comparaison, la
+remédiation et le rapport suivent ;
+* *Importer un VEX…* lit un document OpenVEX ou CycloneDX VEX ;
+* *Exporter* écrit les déclarations en OpenVEX ou CycloneDX VEX (utilisable avec
+`sbom-generator scan --vex`) ;
+* *Gérer* liste et supprime les déclarations.
+
+Les déclarations sont mémorisées entre les sessions de l'application.
+
 === Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE
 
 Il est normal — et attendu — qu'une bonne partie des lignes du tableau
@@ -2597,6 +2722,29 @@ paquets concernés.
 Le format source doit être reconnu (CycloneDX, SPDX 2.3 ou SPDX 3.0). La
 classification copyleft est une heuristique de repérage par identifiant
 SPDX, pas une analyse juridique.
+
+[[sec-raccourcis]]
+== Raccourcis clavier
+
+Le bouton *⌨* de la barre de titre (ou *Ctrl+/*) affiche cette liste.
+
+[cols="2,3", options="header"]
+|===
+|Raccourci |Action
+
+|*Ctrl+Entrée* |Lancer la génération (même validation que le bouton)
+|*Échap* |Arrêter l'exécution en cours
+|*Ctrl+1* … *Ctrl+9* |Aller à l'onglet 1 à 9
+|*Ctrl+Page suivante* / *Ctrl+Page précédente* |Onglet suivant / précédent (en boucle)
+|*F1* |Ouvrir ce manuel
+|*Ctrl+/* |Afficher la liste des raccourcis
+|*F3* / *Maj+F3* |Dans le manuel : occurrence suivante / précédente de la recherche
+|===
+
+Dans les tableaux, *Tab* et les flèches parcourent les lignes ; *Entrée* ou
+*Espace* ouvre la fiche d'une ligne. En thème sombre, les zones à fond clair
+(bandeaux, lignes « vue par un seul scanner », lignes de comparaison) gardent un
+texte sombre lisible.
 
 == Personnalisation de l'apparence
 

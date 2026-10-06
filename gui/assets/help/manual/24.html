@@ -1,0 +1,255 @@
+
+<h2 id="_problèmes_courants">25. Problèmes courants</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_sbom_generator_introuvable">25.1. <code>sbom-generator</code> introuvable</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : la génération échoue immédiatement avec une erreur du type
+<code>sbom-generator: commande introuvable</code>.</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : vérifiez que le binaire <code>sbom-generator</code> est accessible dans le PATH :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">which sbom-generator
+sbom-generator --version</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Si le binaire est installé à un emplacement non standard, placez-le dans
+un dossier du PATH ou créez un lien symbolique :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">ln -s /chemin/vers/sbom-generator /usr/local/bin/sbom-generator</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_syft_skopeo_cdxgen_introuvable">25.2. <code>syft</code> / <code>skopeo</code> / <code>cdxgen</code> introuvable</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : la génération échoue avec le message
+<code>syft introuvable ou non fonctionnel — requis pour --image.</code></p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : installez l’outil manquant et vérifiez qu’il est dans le PATH :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash"># Syft
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+  | sh -s -- -b /usr/local/bin
+syft version
+
+# Skopeo (Fedora/RHEL)
+sudo dnf install skopeo
+skopeo --version
+
+# cdxgen (npm, requiert Node.js)
+npm install -g @cyclonedx/cdxgen
+cdxgen --version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_échec_de_lanalyse_oci">25.3. Échec de l’analyse OCI</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : <code>Échec de l’analyse OCI : …</code> dans le journal.</p>
+</div>
+<div class="paragraph">
+<p><strong>Causes possibles et solutions :</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Image de registre inaccessible</strong> : vérifiez la connexion réseau et
+l’authentification (<code>docker login</code> ou <code>skopeo login</code>).</p>
+</li>
+<li>
+<p><strong>Archive tar corrompue ou format non reconnu</strong> : regénérez l’archive
+avec <code>docker save &lt;image&gt; -o /path/image.tar</code> (ou compressée :
+<code>docker save &lt;image&gt; | gzip &gt; /path/image.tar.gz</code>).
+Les formats <code>.tar</code>, <code>.tar.gz</code> et <code>.tgz</code> sont supportés.</p>
+</li>
+<li>
+<p><strong>Répertoire OCI layout invalide</strong> : vérifiez que <code>index.json</code> est présent
+à la racine du répertoire.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_grype_introuvable">25.4. <code>grype</code> introuvable</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : l’analyse Grype échoue avec le message
+<code>grype introuvable. Installez-le : <a href="https://github.com/anchore/grype" class="bare">https://github.com/anchore/grype</a></code>.</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : installez grype (voir <a href="#_installer_grype">Installer grype</a>) et vérifiez qu’il
+est dans le PATH :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">which grype
+grype version</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_osv_scanner_introuvable">25.5. <code>osv-scanner</code> introuvable</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : l’analyse OSV-Scanner échoue avec un message du type
+<code>osv-scanner: commande introuvable</code> ou le fichier SBOM n’est pas trouvé.</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : vérifiez que <code>osv-scanner</code> est dans le PATH de votre session
+graphique (pas seulement dans le terminal) :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">which osv-scanner
+osv-scanner --version</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Si <code>osv-scanner</code> est installé via <code>go install</code> dans <code>~/go/bin</code>, ce dossier
+n’est souvent pas dans le PATH graphique. Ajoutez-le dans <code>~/.profile</code> :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">export PATH="$HOME/go/bin:$PATH"</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Puis reconnectez-vous ou relancez le GUI.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_trivy_introuvable">25.6. <code>trivy</code> introuvable</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : l’analyse Trivy échoue avec un message du type
+<code>trivy: commande introuvable</code>.</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : vérifiez que <code>trivy</code> est dans le PATH :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">which trivy
+trivy --version</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Installez-le si nécessaire (voir <a href="#_installer_trivy_optionnel">Installer trivy (optionnel)</a>).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_la_base_de_données_trivy_est_obsolète">25.7. La base de données Trivy est obsolète</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : Trivy affiche un avertissement sur l’âge de sa base de données.</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : laissez <strong>--skip-db-update</strong> décoché (comportement par défaut)
+pour que Trivy mette à jour sa base automatiquement au lancement.
+En environnement hors-ligne, mettez à jour manuellement :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">trivy image --download-db-only</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_aucune_vulnérabilité_détectée_malgré_un_sbom_chargé">25.8. Aucune vulnérabilité détectée malgré un SBOM chargé</h3>
+<div class="paragraph">
+<p><strong>Causes possibles :</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Le fichier SBOM sélectionné n’est pas un format reconnu par grype.
+Grype supporte nativement CycloneDX JSON (<code>.cdx.json</code>) et SPDX JSON
+(<code>.spdx.json</code>). Le format SPDX 3.0 JSON-LD peut nécessiter une version
+récente de grype.</p>
+</li>
+<li>
+<p>La base de données de vulnérabilités grype est obsolète.
+Grype la met à jour automatiquement au premier lancement,
+mais peut avoir besoin d’une mise à jour manuelle :</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">grype db update</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>La version RHEL sélectionnée dans <strong>Distro</strong> ne correspond pas aux paquets
+du SBOM. Essayez <strong>(aucune)</strong> pour laisser grype détecter automatiquement.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_avertissements_de_licence">25.9. Avertissements de licence</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : des lignes <code>Warning: licence inconnue pour 'paquet'</code> apparaissent
+dans la progression.</p>
+</div>
+<div class="paragraph">
+<p><strong>Explication</strong> : <code>sbom-generator</code> n’a pas pu déterminer la licence SPDX du
+paquet. Le SBOM est généré quand même avec la valeur <code>NOASSERTION</code> pour
+la licence concernée.</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : utilisez un fichier <strong>override de licences</strong> (<code>--license-map</code>)
+pour définir manuellement la licence des paquets non reconnus.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_le_score_sbomqs_napparaît_pas">25.10. Le score sbomqs n’apparaît pas</h3>
+<div class="paragraph">
+<p><strong>Causes possibles :</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>sbomqs</code> n’est pas installé ou n’est pas dans le PATH.
+Vérifiez avec <code>which sbomqs</code>. Si absent, installez-le
+(voir <a href="#_installer_sbomqs_optionnel">Installer sbomqs (optionnel)</a>).</p>
+</li>
+<li>
+<p>L’option <strong>Score qualité sbomqs</strong> n’est pas cochée dans la section <strong>Options</strong>.</p>
+</li>
+<li>
+<p>Aucun fichier JSON SBOM n’a été généré dans la session courante.
+sbomqs ne s’exécute que sur les formats <code>.cdx.json</code>, <code>.spdx.json</code> ou <code>.jsonld</code>.
+Assurez-vous qu’au moins un de ces formats est sélectionné.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_la_conversion_pdf_échoue">25.11. La conversion PDF échoue</h3>
+<div class="paragraph">
+<p><strong>Symptôme</strong> : le message <code>asciidoctor-pdf introuvable</code> apparaît dans les logs
+(génération SBOM) ou dans le message de confirmation (export AsciiDoc + PDF
+d’un onglet Grype/OSV-Scanner/Trivy — le fichier <code>.adoc</code> est alors tout de
+même produit).</p>
+</div>
+<div class="paragraph">
+<p><strong>Solution</strong> : installez <code>asciidoctor-pdf</code> (voir <a href="#_installer_asciidoctor_pdf_optionnel">Installer asciidoctor-pdf (optionnel)</a>).</p>
+</div>
+<div class="paragraph">
+<p>Si <code>asciidoctor-pdf</code> est installé mais introuvable, assurez-vous que le
+dossier des gems Ruby est dans le PATH :</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">gem environment gemdir
+# Exemple : /home/user/.local/share/gem/ruby/3.2.0
+export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"</code></pre>
+</div>
+</div>
+</div>
+</div>
