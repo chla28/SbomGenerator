@@ -182,6 +182,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cliCommandExecuted => 'Command run by the tab';
 
   @override
+  String get cliOsvGunzipNote =>
+      'osv-scanner only accepts an uncompressed tar: the application first decompresses the .tar.gz / .tgz archive to a temporary file (equivalent: gunzip -c archive.tar.gz > image.tar), passes it to osv-scanner, then deletes it.';
+
+  @override
   String get cliCommandExecutedLayered =>
       'Commands run by the tab (per-layer analysis)';
 

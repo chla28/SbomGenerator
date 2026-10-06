@@ -572,6 +572,9 @@ class _OsvPanelState extends State<OsvPanel>
           : CliCommandSection(
               context.l10n.cliCommandExecuted,
               shellCommand('osv-scanner', args(target, useImage)),
+              note: useImage && RegExp(r'\.(tar\.gz|tgz)$').hasMatch(target)
+                  ? context.l10n.cliOsvGunzipNote
+                  : null,
             ),
       CliCommandSection(
         context.l10n.cliCommandEquivalent,

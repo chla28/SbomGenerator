@@ -49,6 +49,7 @@
   "cliCommandDialogTitle": "Command line",
   "cliCommandCopied": "Command copied",
   "cliCommandExecuted": "Command run by the tab",
+  "cliOsvGunzipNote": "osv-scanner only accepts an uncompressed tar: the application first decompresses the .tar.gz / .tgz archive to a temporary file (equivalent: gunzip -c archive.tar.gz > image.tar), passes it to osv-scanner, then deletes it.",
   "cliCommandExecutedLayered": "Commands run by the tab (per-layer analysis)",
   "cliCommandEquivalent": "sbom-generator scan equivalent",
   "cliCommandLayerDirNote": "The per-layer SBOM set is generated in a temporary directory (here {dir}).",

@@ -184,6 +184,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get cliCommandExecuted => 'Commande exécutée par l\'onglet';
 
   @override
+  String get cliOsvGunzipNote =>
+      'osv-scanner n\'accepte qu\'un tar non compressé : l\'application décompresse d\'abord l\'archive .tar.gz / .tgz vers un fichier temporaire (équivalent : gunzip -c archive.tar.gz > image.tar), le passe à osv-scanner puis le supprime.';
+
+  @override
   String get cliCommandExecutedLayered =>
       'Commandes exécutées par l\'onglet (analyse par couche)';
 

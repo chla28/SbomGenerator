@@ -392,6 +392,12 @@ abstract class AppLocalizations {
   /// **'Commande exécutée par l\'onglet'**
   String get cliCommandExecuted;
 
+  /// Note de l'aperçu CLI Commande d'OSV-Scanner pour une archive d'image compressée
+  ///
+  /// In fr, this message translates to:
+  /// **'osv-scanner n\'accepte qu\'un tar non compressé : l\'application décompresse d\'abord l\'archive .tar.gz / .tgz vers un fichier temporaire (équivalent : gunzip -c archive.tar.gz > image.tar), le passe à osv-scanner puis le supprime.'**
+  String get cliOsvGunzipNote;
+
   /// Titre : séquence de commandes de l'analyse par couche.
   ///
   /// In fr, this message translates to:

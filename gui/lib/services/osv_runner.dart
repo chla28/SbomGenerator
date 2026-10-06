@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../l10n/l10n.dart';
 
 sealed class OsvEvent {}
@@ -33,16 +36,33 @@ class OsvRunner {
     String? configFile,
   }) {
     final controller = StreamController<OsvEvent>();
-    final args = buildArgs(
-      target: target,
-      useImage: useImage,
-      configFile: configFile,
-    );
 
     final jsonBuf = StringBuffer();
     final stderrBuf = StringBuffer();
+    Directory? tmpDir;
+    void cleanup() {
+      final d = tmpDir;
+      tmpDir = null;
+      if (d != null) {
+        try {
+          d.deleteSync(recursive: true);
+        } catch (_) {}
+      }
+    }
 
-    Process.start('osv-scanner', args)
+    // `osv-scanner scan image --archive` refuse un tar compressé (« invalid
+    // tar header ») alors que grype et trivy l'acceptent : on lui passe une
+    // copie décompressée, supprimée à la fin.
+    _prepareTarget(target, useImage)
+        .then((prepared) {
+          tmpDir = prepared.tmpDir;
+          final args = buildArgs(
+            target: prepared.target,
+            useImage: useImage,
+            configFile: configFile,
+          );
+          return Process.start('osv-scanner', args);
+        })
         .then((process) {
           _process = process;
           unawaited(process.stdin.close());
@@ -61,6 +81,7 @@ class OsvRunner {
 
           process.exitCode.then((code) {
             _process = null;
+            cleanup();
             if (controller.isClosed) return;
 
             if (jsonBuf.isNotEmpty) {
@@ -79,6 +100,7 @@ class OsvRunner {
         })
         .catchError((Object e) {
           _process = null;
+          cleanup();
           if (!controller.isClosed) {
             final msg = e.toString().contains('No such file')
                 ? appL10n().svcOsvMissing
@@ -89,6 +111,55 @@ class OsvRunner {
         });
 
     return controller.stream;
+  }
+
+  /// `true` si [path] est un fichier gzip (octets magiques `1f 8b`), quelle
+  /// que soit son extension (`.tar.gz`, `.tgz`…).
+  static bool isGzipFile(String path) {
+    try {
+      final f = File(path);
+      if (!f.existsSync()) return false;
+      final raf = f.openSync();
+      try {
+        final head = raf.readSync(2);
+        return head.length == 2 && head[0] == 0x1f && head[1] == 0x8b;
+      } finally {
+        raf.closeSync();
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Cible effectivement passée à osv-scanner : pour une archive d'image
+  /// locale compressée (gzip), une copie décompressée dans un dossier
+  /// temporaire (à supprimer par l'appelant) ; sinon la cible inchangée.
+  @visibleForTesting
+  static Future<({String target, Directory? tmpDir})> prepareTarget(
+    String target,
+    bool useImage,
+  ) => _prepareTarget(target, useImage);
+
+  static Future<({String target, Directory? tmpDir})> _prepareTarget(
+    String target,
+    bool useImage,
+  ) async {
+    if (!useImage ||
+        FileSystemEntity.typeSync(target) != FileSystemEntityType.file ||
+        !isGzipFile(target)) {
+      return (target: target, tmpDir: null);
+    }
+    final dir = await Directory.systemTemp.createTemp('osv_archive_');
+    try {
+      final out = File('${dir.path}/image.tar');
+      final sink = out.openWrite();
+      await sink.addStream(File(target).openRead().transform(gzip.decoder));
+      await sink.close();
+      return (target: out.path, tmpDir: dir);
+    } catch (_) {
+      dir.deleteSync(recursive: true);
+      rethrow;
+    }
   }
 
   /// Arguments d'`osv-scanner` pour ces options — partagés par [run] et par
