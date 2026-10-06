@@ -31,7 +31,7 @@ class SpdxGenerator {
     /// annotation de chaque paquet.
     LayerAnnotations? layers,
   }) {
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = _spdxTimestamp();
     final docUuid = layers?.documentUuid ?? generateUuidV4();
     final docNamespace = 'https://sbom.local/spdx/$docUuid';
 
@@ -83,7 +83,8 @@ class SpdxGenerator {
   // uniquement le préfixe du SPDXID en `SPDXRef-OperatingSystem-` suffit.
   // Suit la convention observée dans la sortie SPDX native de trivy
   // (`SPDXRef-OperatingSystem-<hash>`).
-  String _osSpdxId(OsInfo os) => 'SPDXRef-OperatingSystem-${_safeId(os.id)}';
+  String _osSpdxId(OsInfo os) =>
+      'SPDXRef-OperatingSystem-${_safeId(os.id).replaceAll('_', '-')}';
 
   /// Paquet `primaryPackagePurpose: "OPERATING-SYSTEM"` — voir [OsInfo].
   Map<String, dynamic> _osToSpdx(OsInfo os) {
@@ -196,7 +197,7 @@ class SpdxGenerator {
         {
           'annotationType': 'OTHER',
           'annotator': 'Tool: sbom_generator-1.6.6',
-          'annotationDate': DateTime.now().toUtc().toIso8601String(),
+          'annotationDate': _spdxTimestamp(),
           'comment': comment,
         }
       ];
@@ -245,3 +246,10 @@ class SpdxGenerator {
         .writeAsString(JsonEncoder.withIndent('  ').convert(sbom));
   }
 }
+
+/// Horodatage SPDX : `AAAA-MM-JJThh:mm:ssZ` (sans fraction de seconde, comme
+/// l'exige le schéma SPDX).
+String _spdxTimestamp() => DateTime.now()
+    .toUtc()
+    .toIso8601String()
+    .replaceFirst(RegExp(r'\.\d+Z$'), 'Z');

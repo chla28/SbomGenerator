@@ -32,7 +32,10 @@ class Spdx3Generator {
     /// document, couche d'origine / changement en annotation des paquets.
     LayerAnnotations? layers,
   }) {
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceFirst(RegExp(r'\.\d+Z$'), 'Z');
     final base =
         'https://sbom.local/spdx3/${layers?.documentUuid ?? generateUuidV4()}';
 

@@ -158,7 +158,10 @@ class SbomMerger {
       'SPDXID': 'SPDXRef-DOCUMENT',
       'spdxVersion': (base['spdxVersion'] as String?) ?? 'SPDX-2.3',
       'creationInfo': {
-        'created': DateTime.now().toUtc().toIso8601String(),
+        'created': DateTime.now()
+            .toUtc()
+            .toIso8601String()
+            .replaceFirst(RegExp(r'\.\d+Z$'), 'Z'),
         'creators': ['Tool: sbom_generator-1.6.6'],
         'licenseListVersion': baseCreationInfo?['licenseListVersion'] ?? '3.21',
       },

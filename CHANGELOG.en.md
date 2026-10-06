@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **VEX**: `scan --vex <file>` (OpenVEX or CycloneDX VEX) drops "not affected" / "fixed" CVEs; `scan --vex-out` (`--vex-format openvex|cyclonedx`) writes the VEX of the remaining CVEs; new `vex` subcommand to create or extend a VEX document. `cra --vex` applies the same filter to the inventory.
+- **`scan --baseline <report.json>`**: shows only the *new* CVEs compared with an earlier `scan --format json`; **`--fail-on critical|high|medium|low`**: exit code 1 only from that threshold.
+- **`scan --ignore <file>`** (and `cra --ignore`): ignored CVEs with a justification and an expiry date; an expired rule is no longer applied and is reported.
+- **`scan --cache`** (`--cache-ttl`, `--cache-dir`): reuses a scanner's result for the same SBOM content and scanner version.
+- **`scan --format json`**: machine-readable scan results.
+- **`diff`**: licenses, hashes, supplier and originating layer compared ("Modified (same version)" section); layer comparison of two `--per-layer` SBOMs.
+- **Machine output**: `--log-format json` (NDJSON: `output`, `progress`, `log`) for generation; `validate --format json`.
+- **`validate`**: validation against the official JSON schemas of CycloneDX 1.4–1.7, SPDX 2.3 and SPDX 3.0 (embedded, offline); `--no-schema` to skip it. For SPDX 3.0 deviations remain warnings.
+- Maintenance tool `tool/embed_schemas.dart` (regenerates `lib/schemas_data.dart`).
+
+### Fixed
+- **SPDX 2.3**: the output did not satisfy the official schema — `SPDXID` without `_` (replaced by `-`) and timestamps without fractional seconds (`YYYY-MM-DDThh:mm:ssZ`); same timestamps for SPDX 3.0 and SPDX merge.
+
 ## [1.6.6] - 2026-10-06
 
 ### Fixed

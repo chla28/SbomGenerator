@@ -37,6 +37,9 @@ import 'package:sbom_generator/vuln_enrichment.dart';
 import 'package:sbom_generator/cra_report.dart';
 import 'package:sbom_generator/i18n.dart';
 import 'package:sbom_generator/tool_runner.dart';
+import 'package:sbom_generator/schema_validator.dart';
+import 'package:sbom_generator/vex.dart';
+import 'package:sbom_generator/scan_policy.dart';
 
 const _version = '1.6.6';
 
@@ -53,7 +56,14 @@ const _validFormats = {
 const _validScanners = {'grype', 'osv', 'trivy', 'all'};
 const _validOciTools = {'syft', 'trivy', 'skopeo', 'cdxgen'};
 const _validDateFields = {'published', 'modified', 'latest'};
-const _validScanFormats = {'text', 'sarif', 'markdown', 'asciidoc', 'pdf'};
+const _validScanFormats = {
+  'text',
+  'json',
+  'sarif',
+  'markdown',
+  'asciidoc',
+  'pdf'
+};
 // Formats produisant un rapport de synthèse inter-scanners (fichier).
 const _reportScanFormats = {'markdown', 'asciidoc', 'pdf'};
 const _validCycloneDxVersions = CycloneDxGenerator.supportedSpecVersions;
@@ -64,6 +74,12 @@ Future<void> main(List<String> rawArguments) async {
   // Sous-commande `scan` : analyse CVE avec filtre date
   if (arguments.isNotEmpty && arguments.first == 'scan') {
     await _runScan(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `vex` : crée / complète un document VEX
+  if (arguments.isNotEmpty && arguments.first == 'vex') {
+    await _runVex(arguments.sublist(1));
     return;
   }
 
@@ -103,6 +119,53 @@ Future<void> main(List<String> rawArguments) async {
     return;
   }
 
+  if (_wantsJsonLog(arguments)) {
+    _jsonLog = true;
+    await runZoned(() => _runGenerate(arguments),
+        zoneSpecification: ZoneSpecification(print: (self, parent, zone, line) {
+      final out = _jsonLogLine(line);
+      if (out != null) parent.print(zone, out);
+    }));
+    return;
+  }
+  await _runGenerate(arguments);
+}
+
+/// `true` quand `--log-format json` (ou `=json`) figure dans [args].
+bool _wantsJsonLog(List<String> args) {
+  for (var i = 0; i < args.length; i++) {
+    if (args[i] == '--log-format=json') return true;
+    if (args[i] == '--log-format' &&
+        i + 1 < args.length &&
+        args[i + 1] == 'json') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Mode `--log-format json` : stdout ne porte que des événements JSON, un par
+/// ligne (NDJSON) — `output`, `progress`, `log`.
+bool _jsonLog = false;
+
+final _writtenRe = RegExp(r'^SBOM written → (.+?)  \(([\d.]+) KB\)$');
+
+/// Convertit une ligne imprimée en événement JSON ; `null` pour l'ignorer.
+String? _jsonLogLine(String line) {
+  if (line.startsWith('{"event":')) return line;
+  final m = _writtenRe.firstMatch(line);
+  if (m != null) {
+    return jsonEncode({
+      'event': 'output',
+      'path': m.group(1),
+      'kb': double.parse(m.group(2)!),
+    });
+  }
+  if (line.trim().isEmpty) return null;
+  return jsonEncode({'event': 'log', 'message': line});
+}
+
+Future<void> _runGenerate(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption(
       'input',
@@ -363,6 +426,25 @@ Future<void> main(List<String> rawArguments) async {
       negatable: false,
       help:
           tr('Affiche le détail de la progression.', 'Print progress details.'),
+    )
+    ..addOption(
+      'log-format',
+      allowed: ['text', 'json'],
+      defaultsTo: 'text',
+      help: tr(
+        'Format de la sortie standard.\n'
+            '  text  texte lisible, barre de progression (défaut)\n'
+            '  json  un événement JSON par ligne (NDJSON) :\n'
+            '        {"event":"output","path":…,"kb":…},\n'
+            '        {"event":"progress","current":…,"total":…,"label":…},\n'
+            '        {"event":"log","message":…}. Les erreurs restent sur stderr.',
+        'Standard output format.\n'
+            '  text  human-readable text, progress bar (default)\n'
+            '  json  one JSON event per line (NDJSON):\n'
+            '        {"event":"output","path":…,"kb":…},\n'
+            '        {"event":"progress","current":…,"total":…,"label":…},\n'
+            '        {"event":"log","message":…}. Errors stay on stderr.',
+      ),
     )
     ..addOption(
       'concurrency',
@@ -1123,7 +1205,7 @@ Future<void> main(List<String> rawArguments) async {
     }),
   );
 
-  if (mainTotal > 0) stdout.writeln();
+  if (mainTotal > 0 && !_jsonLog) stdout.writeln();
 
   final packages = <Package>[];
   final failedRefs = <String>[];
@@ -1870,6 +1952,15 @@ bool _isSupportedPackageFile(String path) {
 void _err(String msg) => stderr.writeln('Error: $msg');
 
 void _printProgress(int current, int total, String label) {
+  if (_jsonLog) {
+    print(jsonEncode({
+      'event': 'progress',
+      'current': current,
+      'total': total,
+      'label': label,
+    }));
+    return;
+  }
   const barWidth = 32;
 
   final ratio = total == 0 ? 1.0 : current / total;
@@ -2155,12 +2246,16 @@ Future<void> _runScan(List<String> arguments) async {
         help: tr(
             'Format de sortie.\n'
                 '  text      Texte coloré sur stdout (défaut)\n'
+                '  json      Résultats en JSON (stdout si -o omis) ; sert de\n'
+                '            référence pour --baseline\n'
                 '  sarif     SARIF 2.1.0 (intégration GitHub Code Scanning)\n'
                 '  markdown  Rapport de synthèse inter-scanners (Markdown)\n'
                 '  asciidoc  Rapport de synthèse inter-scanners (AsciiDoc)\n'
                 '  pdf       Idem asciidoc + conversion via asciidoctor-pdf',
             'Output format.\n'
                 '  text      Coloured text on stdout (default)\n'
+                '  json      Results as JSON (stdout if -o omitted); used as\n'
+                '            the reference for --baseline\n'
                 '  sarif     SARIF 2.1.0 (GitHub Code Scanning integration)\n'
                 '  markdown  Cross-scanner summary report (Markdown)\n'
                 '  asciidoc  Cross-scanner summary report (AsciiDoc)\n'
@@ -2169,9 +2264,9 @@ Future<void> _runScan(List<String> arguments) async {
         abbr: 'o',
         help: tr(
             'Fichier de sortie. Requis pour --format markdown/asciidoc/pdf ;\n'
-                'pour --format sarif, écrit sur stdout si omis.',
+                'pour --format sarif/json, écrit sur stdout si omis.',
             'Output file. Required for --format markdown/asciidoc/pdf;\n'
-                'for --format sarif, written to stdout if omitted.'))
+                'for --format sarif/json, written to stdout if omitted.'))
     ..addOption('color',
         allowed: ['auto', 'always', 'never'],
         defaultsTo: 'auto',
@@ -2228,6 +2323,74 @@ Future<void> _runScan(List<String> arguments) async {
             'Console display order.\n'
                 '  severity  worst severity first (default)\n'
                 '  risk      KEV, then EPSS descending, then severity'))
+    ..addOption('vex',
+        help: tr(
+            'Document VEX (OpenVEX ou CycloneDX VEX) : les CVE déclarées\n'
+                '"not_affected" ou "fixed" pour le paquet concerné sont\n'
+                'écartées des résultats (et comptées).',
+            'VEX document (OpenVEX or CycloneDX VEX): CVEs declared\n'
+                '"not_affected" or "fixed" for the package concerned are\n'
+                'removed from the results (and counted).'))
+    ..addOption('vex-out',
+        help: tr(
+            'Écrit un document VEX : les CVE restantes en "affected" (avec\n'
+                'la version corrigée), plus les déclarations "not_affected"\n'
+                'reprises de --vex.',
+            'Writes a VEX document: remaining CVEs as "affected" (with the\n'
+                'fixed version), plus the "not_affected" statements carried\n'
+                'over from --vex.'))
+    ..addOption('vex-format',
+        allowed: ['openvex', 'cyclonedx'],
+        defaultsTo: 'openvex',
+        help: tr('Format de --vex-out.', 'Format of --vex-out.'))
+    ..addOption('vex-author',
+        defaultsTo: 'sbom-generator',
+        help: tr(
+            'Auteur inscrit dans --vex-out.', 'Author recorded in --vex-out.'))
+    ..addOption('ignore',
+        help: tr(
+            'Fichier de CVE ignorées, une règle par ligne :\n'
+                '  CVE-2024-1234; package=openssl; expires=2026-12-31; reason=…\n'
+                '(seul l\'identifiant est obligatoire ; une règle expirée\n'
+                'n\'est plus appliquée et est signalée).',
+            'File of ignored CVEs, one rule per line:\n'
+                '  CVE-2024-1234; package=openssl; expires=2026-12-31; reason=…\n'
+                '(only the identifier is mandatory; an expired rule is no\n'
+                'longer applied and is reported).'))
+    ..addOption('baseline',
+        help: tr(
+            'Rapport de référence produit par `scan --format json` : les\n'
+                'CVE déjà présentes (même identifiant, même paquet) sont\n'
+                'écartées ; seules les NOUVELLES restent.',
+            'Baseline report produced by `scan --format json`: CVEs already\n'
+                'present (same identifier, same package) are dropped; only\n'
+                'NEW ones remain.'))
+    ..addOption('fail-on',
+        allowed: severityLevels,
+        help: tr(
+            'Code retour 1 seulement si une CVE restante a au moins cette\n'
+                'sévérité (critical, high, medium, low). Par défaut : toute\n'
+                'CVE restante fait échouer.',
+            'Exit code 1 only if a remaining CVE has at least this severity\n'
+                '(critical, high, medium, low). Default: any remaining CVE fails.'))
+    ..addFlag('cache',
+        negatable: false,
+        help: tr(
+            'Réutilise le résultat d\'un scanner déjà obtenu pour le même\n'
+                'contenu de SBOM (même composants), la même version du scanner,\n'
+                'dans la limite de --cache-ttl. Évite de relancer le scanner.',
+            'Reuses a scanner result already obtained for the same SBOM\n'
+                'content (same components) and scanner version, within\n'
+                '--cache-ttl. Avoids rerunning the scanner.'))
+    ..addOption('cache-ttl',
+        defaultsTo: '6',
+        help: tr(
+            'Durée de validité du cache, en heures (la base de\n'
+                'vulnérabilités évolue).',
+            'Cache lifetime in hours (the vulnerability database changes).'))
+    ..addOption('cache-dir',
+        help: tr('Répertoire du cache (défaut : ~/.cache/sbom-generator/scan).',
+            'Cache directory (default: ~/.cache/sbom-generator/scan).'))
     ..addFlag('help',
         abbr: 'h',
         negatable: false,
@@ -2385,7 +2548,64 @@ Future<void> _runScan(List<String> arguments) async {
 
   final scanners = scanner == 'all' ? ['grype', 'osv', 'trivy'] : [scanner];
 
-  final quiet = format == 'sarif' || isReport;
+  final quiet = format == 'sarif' || format == 'json' || isReport;
+
+  // ── Politique : VEX, CVE ignorées, référence, seuil, cache ──────────────
+  void policyError(String fr, String en) {
+    stderr.writeln(tr('scan: $fr', 'scan: $en'));
+    exit(1);
+  }
+
+  final vexPath = args['vex'] as String?;
+  final vexDoc = vexPath != null ? _loadVexOrExit('scan', vexPath) : null;
+  final ignorePath = args['ignore'] as String?;
+  final ignoreList =
+      ignorePath != null ? _loadIgnoreOrExit('scan', ignorePath) : null;
+  Baseline? baseline;
+  final baselinePath = args['baseline'] as String?;
+  if (baselinePath != null) {
+    try {
+      baseline = Baseline.load(baselinePath);
+    } on FileSystemException {
+      policyError('fichier --baseline introuvable : $baselinePath',
+          '--baseline file not found: $baselinePath');
+    } on FormatException catch (e) {
+      policyError('--baseline : ${e.message}', '--baseline: ${e.message}');
+    }
+  }
+  final failOn = args['fail-on'] as String?;
+  final cacheTtlHours = int.tryParse(args['cache-ttl'] as String);
+  if (cacheTtlHours == null || cacheTtlHours < 0) {
+    policyError('--cache-ttl attend un nombre d\'heures entier ≥ 0.',
+        '--cache-ttl expects a whole number of hours ≥ 0.');
+  }
+  final scanCache = (args['cache'] as bool)
+      ? ScanCache(
+          args['cache-dir'] != null
+              ? Directory(args['cache-dir'] as String)
+              : ScanCache.defaultDir(),
+          Duration(hours: cacheTtlHours!))
+      : null;
+  final scannerVersions = <String, String>{};
+  Future<List<Map<String, dynamic>>?> runScannerCached(
+      String s, String sbomPath) async {
+    if (scanCache == null) return _runScanner(s, sbomPath, quiet: quiet);
+    final ver = scannerVersions[s] ??= await _scannerVersion(s) ?? '';
+    final digest = ScanCache.sbomDigest(sbomPath);
+    final hit =
+        ver.isEmpty ? null : scanCache.read(digest, s, ver, DateTime.now());
+    if (hit != null) {
+      stderr.writeln(tr(
+          'scan: résultat ${_scannerTitle(s)} lu dans le cache (--cache).',
+          'scan: ${_scannerTitle(s)} result read from the cache (--cache).'));
+      return hit;
+    }
+    final fresh = await _runScanner(s, sbomPath, quiet: quiet);
+    if (fresh != null && ver.isNotEmpty) {
+      scanCache.write(digest, s, ver, fresh, DateTime.now());
+    }
+    return fresh;
+  }
 
   // --image : SBOM (et SBOM de couche) générés dans un répertoire temporaire,
   // supprimé avant chaque sortie.
@@ -2480,7 +2700,7 @@ Future<void> _runScan(List<String> arguments) async {
       }
       for (final l in layerSet.layers) {
         if (l.path == null) continue;
-        final found = await _runScanner(s, l.path!, quiet: true);
+        final found = await runScannerCached(s, l.path!);
         if (found == null) continue;
         for (final v in found) {
           v['layer'] = l.index;
@@ -2488,7 +2708,7 @@ Future<void> _runScan(List<String> arguments) async {
         (vulns ??= []).addAll(found);
       }
     } else {
-      vulns = await _runScanner(s, sbomFile, quiet: quiet);
+      vulns = await runScannerCached(s, sbomFile);
       if (vulns != null && layerSet != null) {
         final unknown = attributeLayers(vulns, layerSet);
         if (unknown > 0 && !quiet) {
@@ -2506,6 +2726,36 @@ Future<void> _runScan(List<String> arguments) async {
     }
     resultsByScanner[s] =
         _filterByDate(vulns, dateField, after, before, includeUndated);
+  }
+
+  // Politique : VEX, CVE ignorées, référence (avant l'enrichissement, pour ne
+  // pas interroger le réseau pour des CVE écartées).
+  final now = DateTime.now();
+  final policy = _applyScanPolicy(resultsByScanner,
+      vex: vexDoc, ignore: ignoreList, baseline: baseline, now: now);
+  final ignoredCount = policy.ignored;
+  final vexCount = policy.vex;
+  final baselineCount = policy.baseline;
+  final vexCarried = policy.vexCarried;
+  if (policy.total > 0) {
+    final note = <String>[
+      if (vexCount > 0)
+        tr('$vexCount écartée(s) par VEX', '$vexCount dropped by VEX'),
+      if (ignoredCount > 0)
+        tr('$ignoredCount ignorée(s) (--ignore)',
+            '$ignoredCount ignored (--ignore)'),
+      if (baselineCount > 0)
+        tr('$baselineCount déjà connue(s) (--baseline)',
+            '$baselineCount already known (--baseline)'),
+    ];
+    if (note.isNotEmpty) {
+      final msg = tr('scan : ${note.join(', ')}.', 'scan: ${note.join(', ')}.');
+      if (quiet) {
+        stderr.writeln(msg);
+      } else {
+        stdout.writeln(msg);
+      }
+    }
   }
 
   // Enrichissement CVE (exploitabilité / exploitation active) — une passe pour
@@ -2536,6 +2786,62 @@ Future<void> _runScan(List<String> arguments) async {
   }
   if (!quiet && layerSet != null) {
     _printLayerSummary(resultsByScanner, layerSet, layerScan);
+  }
+
+  final vexOutPath = args['vex-out'] as String?;
+  if (vexOutPath != null) {
+    final purls = _purlIndex(sbomFile);
+    final seen = <String>{};
+    final statements = <VexStatement>[...vexCarried.values];
+    for (final s in scanners) {
+      for (final v in resultsByScanner[s] ?? const <Map<String, dynamic>>[]) {
+        final id = '${v['id']}';
+        final pkg = '${v['package']}';
+        if (!seen.add('$id|$pkg')) continue;
+        final fixed = [
+          for (final f in (v['fixedVersions'] as List? ?? const [])) '$f'
+        ];
+        statements.add(VexStatement(
+          vulnId: id,
+          products: [purls[pkg] ?? 'pkg:generic/$pkg'],
+          status: 'affected',
+          actionStatement: fixed.isEmpty
+              ? null
+              : tr('Mettre à jour vers ${fixed.join(' ou ')}.',
+                  'Upgrade to ${fixed.join(' or ')}.'),
+        ));
+      }
+    }
+    final author = args['vex-author'] as String;
+    final doc = args['vex-format'] == 'cyclonedx'
+        ? buildCycloneDxVex(
+            statements: statements, author: author, toolVersion: _version)
+        : buildOpenVex(
+            statements: statements, author: author, toolVersion: _version);
+    await File(vexOutPath).writeAsString('${encodeVex(doc)}\n');
+    stderr.writeln(tr(
+        'VEX écrit → $vexOutPath (${statements.length} déclaration(s))',
+        'VEX written → $vexOutPath (${statements.length} statement(s))'));
+  }
+
+  if (format == 'json') {
+    final doc = _buildScanJson(
+      target: imageRef ?? packageRef ?? sbomFile,
+      resultsByScanner: resultsByScanner,
+      exploitById: exploitById,
+      ignored: ignoredCount,
+      vex: vexCount,
+      baselineKnown: baselineCount,
+    );
+    final text = const JsonEncoder.withIndent('  ')
+        .convert(jsonDecode(jsonEncode(doc, toEncodable: (o) => '$o')));
+    if (outputPath != null) {
+      await File(outputPath).writeAsString('$text\n');
+      stderr.writeln(
+          tr('JSON écrit → $outputPath', 'JSON written → $outputPath'));
+    } else {
+      print(text);
+    }
   }
 
   if (format == 'sarif') {
@@ -2582,7 +2888,196 @@ Future<void> _runScan(List<String> arguments) async {
     await quit(0);
   }
 
+  if (failOn != null) {
+    final min = severityRank(failOn);
+    final failing = resultsByScanner.values
+        .expand((l) => l)
+        .where((v) => severityRank('${v['severity']}') >= min)
+        .length;
+    await quit(failing > 0 ? 1 : 0);
+  }
   await quit(totalShown > 0 ? 1 : 0);
+}
+
+/// Résultat de [_applyScanPolicy] : nombre de CVE écartées par cause, et
+/// déclarations « non affecté » reprises du VEX d'entrée.
+class _PolicyOutcome {
+  int ignored = 0, vex = 0, baseline = 0;
+  final vexCarried = <String, VexStatement>{};
+  int get total => ignored + vex + baseline;
+}
+
+/// Écarte des résultats de scan (modifiés en place) les CVE ignorées
+/// (`--ignore`), déclarées non affectées/corrigées par VEX (`--vex`) ou déjà
+/// présentes dans la référence (`--baseline`).
+_PolicyOutcome _applyScanPolicy(
+  Map<String, List<Map<String, dynamic>>> resultsByScanner, {
+  VexDocument? vex,
+  IgnoreList? ignore,
+  Baseline? baseline,
+  required DateTime now,
+}) {
+  final out = _PolicyOutcome();
+  if (vex == null && ignore == null && baseline == null) return out;
+  for (final s in resultsByScanner.keys.toList()) {
+    final kept = <Map<String, dynamic>>[];
+    for (final v in resultsByScanner[s]!) {
+      final id = '${v['id']}';
+      final pkg = '${v['package']}';
+      if (ignore?.match(id, pkg, now) != null) {
+        out.ignored++;
+        continue;
+      }
+      if (vex != null) {
+        final (n, ver) = splitPackage(pkg);
+        final st = vex.find(id, n, ver);
+        if (st != null && st.suppresses) {
+          out.vex++;
+          out.vexCarried['${st.vulnId}|$pkg'] = VexStatement(
+              vulnId: id,
+              products: st.products.isEmpty ? [pkg] : st.products,
+              status: st.status,
+              justification: st.justification,
+              impactStatement: st.impactStatement);
+          continue;
+        }
+      }
+      if (baseline != null && baseline.contains(id, pkg)) {
+        out.baseline++;
+        continue;
+      }
+      kept.add(v);
+    }
+    resultsByScanner[s] = kept;
+  }
+  return out;
+}
+
+/// Charge un document VEX ; erreur d'usage (code 1) si illisible.
+VexDocument _loadVexOrExit(String cmd, String path) {
+  try {
+    return VexDocument.parse(
+        jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>);
+  } on FileSystemException {
+    stderr.writeln(tr('$cmd: fichier VEX introuvable : $path',
+        '$cmd: VEX file not found: $path'));
+  } on FormatException catch (e) {
+    stderr.writeln('$cmd: --vex $path: ${e.message}');
+  } catch (e) {
+    stderr.writeln(tr('$cmd: --vex $path : JSON illisible ($e)',
+        '$cmd: --vex $path: unreadable JSON ($e)'));
+  }
+  exit(1);
+}
+
+/// Charge un fichier `--ignore` (avertissements et règles expirées sur
+/// stderr) ; erreur d'usage (code 1) si introuvable.
+IgnoreList _loadIgnoreOrExit(String cmd, String path) {
+  final IgnoreList list;
+  try {
+    list = IgnoreList.load(path);
+  } on FileSystemException {
+    stderr.writeln(tr('$cmd: fichier --ignore introuvable : $path',
+        '$cmd: --ignore file not found: $path'));
+    exit(1);
+  }
+  for (final w in list.warnings) {
+    stderr.writeln('$cmd: --ignore : $w');
+  }
+  for (final e in list.expired(DateTime.now())) {
+    stderr.writeln(tr(
+        '$cmd: règle ignorée EXPIRÉE (ligne ${e.line}) : ${e.id}'
+            '${e.package != null ? ' (${e.package})' : ''} — non appliquée.',
+        '$cmd: ignore rule EXPIRED (line ${e.line}): ${e.id}'
+            '${e.package != null ? ' (${e.package})' : ''} — not applied.'));
+  }
+  return list;
+}
+
+/// Index `nom@version` → PURL des composants d'un SBOM (CycloneDX, SPDX 2,
+/// SPDX 3), pour que les déclarations VEX visent des PURL.
+Map<String, String> _purlIndex(String sbomFile) {
+  final out = <String, String>{};
+  try {
+    final j = jsonDecode(File(sbomFile).readAsStringSync()) as Map;
+    void walk(List? comps) {
+      for (final c in comps ?? const []) {
+        if (c is! Map) continue;
+        final name = '${c['name'] ?? ''}';
+        final ver =
+            '${c['version'] ?? c['versionInfo'] ?? c['software:packageVersion'] ?? ''}';
+        String? purl = c['purl'] as String?;
+        for (final r in (c['externalRefs'] as List? ?? const [])) {
+          if (r is Map && r['referenceType'] == 'purl') {
+            purl ??= r['referenceLocator'] as String?;
+          }
+        }
+        for (final r in (c['externalIdentifier'] as List? ?? const [])) {
+          if (r is Map &&
+              (r['externalIdentifierType'] == 'purl' ||
+                  r['externalIdentifierType'] == 'packageUrl')) {
+            purl ??= r['identifier'] as String?;
+          }
+        }
+        if (name.isNotEmpty && purl != null) out['$name@$ver'] = purl;
+        walk(c['components'] as List?);
+      }
+    }
+
+    walk(j['components'] as List?);
+    walk(j['packages'] as List?);
+    walk([
+      for (final n in (j['@graph'] as List? ?? const []))
+        if (n is Map && '${n['type']}'.endsWith('Package')) n
+    ]);
+  } catch (_) {}
+  return out;
+}
+
+/// Résultats d'un scan au format JSON (aussi utilisé comme `--baseline`).
+Map<String, dynamic> _buildScanJson({
+  required String target,
+  required Map<String, List<Map<String, dynamic>>> resultsByScanner,
+  required Map<String, ExploitInfo> exploitById,
+  required int ignored,
+  required int vex,
+  required int baselineKnown,
+}) {
+  final bySeverity = <String, int>{};
+  final findings = <Map<String, dynamic>>[];
+  for (final e in resultsByScanner.entries) {
+    for (final v in e.value) {
+      final sev = '${v['severity']}';
+      bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
+      final ex = v['exploit'] as ExploitInfo? ?? exploitById['${v['id']}'];
+      findings.add({
+        'scanner': e.key,
+        for (final f in v.entries)
+          if (f.key != 'exploit') f.key: f.value,
+        if (ex != null && ex != ExploitInfo.empty)
+          'exploit': {
+            'inKev': ex.inKev,
+            if (ex.epssScore != null) 'epss': ex.epssScore,
+            'pocKnown': ex.pocKnown,
+          },
+      });
+    }
+  }
+  return {
+    'schema': 'sbom-generator/scan/v1',
+    'generatedAt': DateTime.now().toUtc().toIso8601String(),
+    'tool': 'sbom-generator $_version',
+    'target': target,
+    'scanners': resultsByScanner.keys.toList(),
+    'summary': {
+      'total': findings.length,
+      'bySeverity': bySeverity,
+      'vexSuppressed': vex,
+      'ignored': ignored,
+      'baselineKnown': baselineKnown,
+    },
+    'findings': findings,
+  };
 }
 
 String _scannerTitle(String s) =>
@@ -3531,6 +4026,157 @@ List<Package> _applySupplierFallback(List<Package> packages, String supplier) {
   ];
 }
 
+// ── Sous-commande vex ─────────────────────────────────────────────────────────
+
+Future<void> _runVex(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addMultiOption('cve',
+        abbr: 'c',
+        help: tr('Identifiant(s) de vulnérabilité (CVE-…, GHSA-…). Répétable.',
+            'Vulnerability identifier(s) (CVE-…, GHSA-…). Repeatable.'))
+    ..addMultiOption('product',
+        abbr: 'p',
+        help: tr(
+            'Produit(s) concerné(s) : PURL, `nom` ou `nom@version`.\n'
+                'Répétable ; omis = tous les produits.',
+            'Product(s) concerned: PURL, `name` or `name@version`.\n'
+                'Repeatable; omitted = all products.'))
+    ..addOption('status',
+        abbr: 's',
+        allowed: vexStatuses.toList(),
+        mandatory: true,
+        help: tr('État de la vulnérabilité pour ces produits.',
+            'Vulnerability status for these products.'))
+    ..addOption('justification',
+        allowed: openVexJustifications.toList(),
+        help: tr('Obligatoire pour not_affected (vocabulaire OpenVEX).',
+            'Required for not_affected (OpenVEX vocabulary).'))
+    ..addOption('impact-statement',
+        help: tr('Explication libre (pourquoi non affecté).',
+            'Free-text explanation (why not affected).'))
+    ..addOption('action-statement',
+        help: tr('Action recommandée (pour affected).',
+            'Recommended action (for affected).'))
+    ..addOption('author',
+        defaultsTo: 'sbom-generator',
+        help: tr('Auteur du document.', 'Document author.'))
+    ..addOption('append',
+        help: tr(
+            'Document VEX existant (OpenVEX ou CycloneDX) auquel ajouter les\n'
+                'déclarations ; le résultat est réécrit dans -o.',
+            'Existing VEX document (OpenVEX or CycloneDX) to add the\n'
+                'statements to; the result is rewritten to -o.'))
+    ..addOption('format',
+        abbr: 'f',
+        allowed: ['openvex', 'cyclonedx'],
+        help: tr(
+            'Format du document produit (défaut : openvex, ou celui de\n--append).',
+            'Output document format (default: openvex, or that of --append).'))
+    ..addOption('output',
+        abbr: 'o',
+        help: tr('Fichier de sortie (stdout si omis).',
+            'Output file (stdout if omitted).'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.', 'Help.'));
+
+  void usage() => stdout.writeln(tr('''
+sbom_generator vex – Crée ou complète un document VEX (OpenVEX / CycloneDX).
+
+Usage:
+  sbom-generator vex --cve CVE-2024-1234 --product pkg:npm/foo@1.0.0 \\
+    --status not_affected --justification vulnerable_code_not_in_execute_path \\
+    --impact-statement "Fonction non appelée" -o vex.json
+
+${parser.usage}
+
+Le document produit s'utilise avec `scan --vex vex.json`.
+''', '''
+sbom_generator vex – Creates or extends a VEX document (OpenVEX / CycloneDX).
+
+Usage:
+  sbom-generator vex --cve CVE-2024-1234 --product pkg:npm/foo@1.0.0 \\
+    --status not_affected --justification vulnerable_code_not_in_execute_path \\
+    --impact-statement "Function never called" -o vex.json
+
+${parser.usage}
+
+The resulting document is used with `scan --vex vex.json`.
+'''));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('vex: ${_argError(e.message)}');
+    usage();
+    exit(1);
+  }
+  if (args['help'] as bool) {
+    usage();
+    exit(0);
+  }
+  final cves = args['cve'] as List<String>;
+  if (cves.isEmpty) {
+    stderr.writeln(tr('vex: au moins un --cve est requis.',
+        'vex: at least one --cve is required.'));
+    exit(1);
+  }
+  final status = args['status'] as String;
+  final justification = args['justification'] as String?;
+  if (status == 'not_affected' &&
+      justification == null &&
+      args['impact-statement'] == null) {
+    stderr.writeln(tr(
+        'vex: not_affected exige --justification (ou --impact-statement).',
+        'vex: not_affected requires --justification (or --impact-statement).'));
+    exit(1);
+  }
+
+  final statements = <VexStatement>[];
+  String? appendedFormat;
+  final appendPath = args['append'] as String?;
+  if (appendPath != null) {
+    try {
+      final j = jsonDecode(File(appendPath).readAsStringSync())
+          as Map<String, dynamic>;
+      statements.addAll(VexDocument.parse(j).statements);
+      appendedFormat = j['bomFormat'] == 'CycloneDX' ? 'cyclonedx' : 'openvex';
+    } on FileSystemException {
+      stderr.writeln(tr('vex: fichier introuvable : $appendPath',
+          'vex: file not found: $appendPath'));
+      exit(1);
+    } on FormatException catch (e) {
+      stderr.writeln('vex: --append : ${e.message}');
+      exit(1);
+    }
+  }
+  for (final id in cves) {
+    statements.add(VexStatement(
+      vulnId: id,
+      products: args['product'] as List<String>,
+      status: status,
+      justification: justification,
+      impactStatement: args['impact-statement'] as String?,
+      actionStatement: args['action-statement'] as String?,
+    ));
+  }
+  final format = (args['format'] as String?) ?? appendedFormat ?? 'openvex';
+  final author = args['author'] as String;
+  final doc = format == 'cyclonedx'
+      ? buildCycloneDxVex(
+          statements: statements, author: author, toolVersion: _version)
+      : buildOpenVex(
+          statements: statements, author: author, toolVersion: _version);
+  final text = '${encodeVex(doc)}\n';
+  final out = args['output'] as String?;
+  if (out == null) {
+    stdout.write(text);
+  } else {
+    await File(out).writeAsString(text);
+    stderr.writeln(tr('VEX écrit → $out (${statements.length} déclaration(s))',
+        'VEX written → $out (${statements.length} statement(s))'));
+  }
+}
+
 // ── Sous-commande convert ─────────────────────────────────────────────────────
 
 Future<void> _runConvert(List<String> arguments) async {
@@ -3924,6 +4570,18 @@ Future<void> _runCra(List<String> arguments) async {
         defaultsTo: 'grype',
         help: tr('Scanner(s) : grype (défaut), osv, trivy, all.',
             'Scanner(s): grype (default), osv, trivy, all.'))
+    ..addOption('vex',
+        help: tr(
+            'Document VEX (OpenVEX / CycloneDX) : les CVE "not_affected" ou\n'
+                '"fixed" sont écartées de l\'inventaire des vulnérabilités.',
+            'VEX document (OpenVEX / CycloneDX): "not_affected" or "fixed"\n'
+                'CVEs are removed from the vulnerability inventory.'))
+    ..addOption('ignore',
+        help: tr(
+            'Fichier de CVE ignorées (voir `scan --help`) : règles\n'
+                'justifiées et datées, écartées de l\'inventaire.',
+            'File of ignored CVEs (see `scan --help`): justified, dated\n'
+                'rules removed from the inventory.'))
     ..addFlag('enrich',
         defaultsTo: true,
         help: tr(
@@ -4042,6 +4700,20 @@ Future<void> _runCra(List<String> arguments) async {
               'a vulnerability inventory (use --no-scan to accept this).'));
       scanResults = null;
     } else {
+      final vexPath = args['vex'] as String?;
+      final ignorePath = args['ignore'] as String?;
+      final policy = _applyScanPolicy(
+        scanResults,
+        vex: vexPath != null ? _loadVexOrExit('cra', vexPath) : null,
+        ignore:
+            ignorePath != null ? _loadIgnoreOrExit('cra', ignorePath) : null,
+        now: DateTime.now(),
+      );
+      if (policy.total > 0) {
+        stderr.writeln(tr(
+            'cra : ${policy.vex} CVE écartée(s) par VEX, ${policy.ignored} ignorée(s).',
+            'cra: ${policy.vex} CVE(s) dropped by VEX, ${policy.ignored} ignored.'));
+      }
       exploitById = await _enrichFindings(
         scanResults,
         enrich: args['enrich'] as bool,
@@ -4198,6 +4870,27 @@ Future<void> _runValidate(List<String> arguments) async {
                 'génèrent aussi des erreurs.',
             'In strict mode, recommended (but not mandatory) fields '
                 'also raise errors.'))
+    ..addFlag('schema',
+        defaultsTo: true,
+        help: tr(
+            'Valide aussi le document par rapport au schéma JSON officiel\n'
+                '(CycloneDX 1.4–1.7, SPDX 2.3, SPDX 3.0), embarqué dans le\n'
+                'programme. --no-schema : contrôles structurels seuls.\n'
+                'Pour SPDX 3.0 les écarts de schéma sont des avertissements\n'
+                '(des erreurs avec --strict).',
+            'Also validates the document against the official JSON schema\n'
+                '(CycloneDX 1.4–1.7, SPDX 2.3, SPDX 3.0), embedded in the\n'
+                'program. --no-schema: structural checks only.\n'
+                'For SPDX 3.0 schema deviations are warnings (errors with\n'
+                '--strict).'))
+    ..addOption('format',
+        abbr: 'f',
+        allowed: ['text', 'json'],
+        defaultsTo: 'text',
+        help: tr(
+            'Format du rapport : text (défaut) ou json (stdout, lisible par\n'
+                'une machine).',
+            'Report format: text (default) or json (stdout, machine-readable).'))
     ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.', 'Help.'));
 
   ArgResults args;
@@ -4222,12 +4915,24 @@ Future<void> _runValidate(List<String> arguments) async {
   }
 
   final strict = args['strict'] as bool;
+  final useSchema = args['schema'] as bool;
+  final asJson = args['format'] == 'json';
   int totalErrors = 0;
+  final report = <Map<String, dynamic>>[];
+
+  void say(String line) {
+    if (!asJson) print(line);
+  }
 
   for (final path in files) {
+    final entry = <String, dynamic>{'path': path};
+    report.add(entry);
     if (!await File(path).exists()) {
-      print(tr('$path : ERREUR — fichier introuvable',
+      say(tr('$path : ERREUR — fichier introuvable',
           '$path : ERROR — file not found'));
+      entry
+        ..['valid'] = false
+        ..['errors'] = [tr('fichier introuvable', 'file not found')];
       totalErrors++;
       continue;
     }
@@ -4236,13 +4941,17 @@ Future<void> _runValidate(List<String> arguments) async {
     try {
       json = await SbomReader.loadJson(path);
     } catch (e) {
-      print(tr('$path : ERREUR — JSON invalide : $e',
+      say(tr('$path : ERREUR — JSON invalide : $e',
           '$path : ERROR — invalid JSON: $e'));
+      entry
+        ..['valid'] = false
+        ..['errors'] = [tr('JSON invalide : $e', 'invalid JSON: $e')];
       totalErrors++;
       continue;
     }
 
     final errors = _validateSbom(json, strict: strict);
+    final warnings = <String>[];
     final format = SbomReader.detectFormat(json);
     final label = switch (format) {
       SbomFormat.cyclonedx => 'CycloneDX ${json['specVersion'] ?? ''}',
@@ -4251,18 +4960,62 @@ Future<void> _runValidate(List<String> arguments) async {
       SbomFormat.unknown => tr('format inconnu', 'unknown format'),
     };
 
+    String? schemaKey;
+    if (useSchema) {
+      schemaKey = SchemaValidator.schemaKeyFor(json);
+      final schemaErrors =
+          schemaKey == null ? null : SchemaValidator.validate(json);
+      if (schemaErrors != null && schemaErrors.isNotEmpty) {
+        final prefix = tr('[schéma] ', '[schema] ');
+        if (format == SbomFormat.spdx3) {
+          // Le validateur ne localise pas les écarts du schéma SPDX 3.0
+          // (oneOf / unevaluatedProperties) : un message unique et explicite.
+          final msg =
+              '$prefix${tr('le document ne satisfait pas le schéma JSON officiel SPDX 3.0 (écarts connus du générateur : noms `software:` au lieu de `software_`, externalIdentifier, toolVersion…).', 'the document does not satisfy the official SPDX 3.0 JSON schema (known generator deviations: `software:` names instead of `software_`, externalIdentifier, toolVersion…).')}';
+          if (strict) {
+            errors.add(msg);
+          } else {
+            warnings.add(msg);
+          }
+        } else {
+          errors.addAll(schemaErrors.map((e) => '$prefix$e'));
+        }
+      } else if (schemaKey == null && format != SbomFormat.unknown) {
+        warnings.add(tr(
+            'aucun schéma embarqué pour cette version : contrôle de schéma ignoré',
+            'no embedded schema for this version: schema check skipped'));
+      }
+    }
+
+    entry
+      ..['format'] = label
+      ..['schema'] = schemaKey
+      ..['valid'] = errors.isEmpty
+      ..['errors'] = errors
+      ..['warnings'] = warnings;
+
     if (errors.isEmpty) {
-      print('$path : OK ($label)');
+      say('$path : OK ($label)');
     } else {
-      print(tr('$path : $label — ${errors.length} erreur(s) :',
+      say(tr('$path : $label — ${errors.length} erreur(s) :',
           '$path : $label — ${errors.length} error(s):'));
       for (final e in errors) {
-        print('  ✗ $e');
+        say('  ✗ $e');
       }
       totalErrors += errors.length;
     }
+    for (final w in warnings) {
+      say('  ⚠ $w');
+    }
   }
 
+  if (asJson) {
+    print(const JsonEncoder.withIndent('  ').convert({
+      'valid': totalErrors == 0,
+      'errorCount': totalErrors,
+      'files': report,
+    }));
+  }
   exit(totalErrors == 0 ? 0 : 1);
 }
 

@@ -149,6 +149,7 @@ sbom_generator scan --sbom <file> [options]
 sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <file> [options]
+sbom_generator vex --cve <id> --status <state> [--product <purl>] [-o <vex.json>]
 ....
 
 === Options
@@ -202,6 +203,13 @@ scanned recursively (see <<Input file format>>)
 |`-o`
 |`sbom.json`
 |Output SBOM file (base path if multi-format)
+
+|`--log-format <text\|json>`
+|—
+|`text`
+|Standard output format: `json` emits one JSON event per line (NDJSON) —
+`output` (`path`, `kb`), `progress` (`current`, `total`, `label`), `log` (`message`);
+errors stay on stderr
 
 |`--format <fmt>`
 |`-f`
@@ -1043,6 +1051,22 @@ Checks the structural conformity of one or more SBOM files:
 
 Exit codes: `0` = all valid, `1` = at least one invalid or missing file.
 
+Besides the structural checks, `validate` checks each document against the
+*official JSON schema* of its version — CycloneDX 1.4 to 1.7, SPDX 2.3, SPDX 3.0 —
+embedded in the program (no network access). Schema errors are prefixed
+`[schema]` and give the offending JSON path. `--no-schema` turns this check off.
+For SPDX 3.0 schema deviations remain *warnings* (errors with `--strict`): the
+SPDX 3.0 generator is not yet fully conformant (`software:` names instead of
+`software_`, `externalIdentifier`, `toolVersion`).
+
+[source,bash]
+----
+# Machine-readable report
+./sbom_generator validate --format json sbom.cdx.json
+# → {"valid":true,"errorCount":0,"files":[{"path":…,"format":"CycloneDX 1.6",
+#    "schema":"cyclonedx-1.6","valid":true,"errors":[],"warnings":[]}]}
+----
+
 === Comparing two SBOMs (`diff`)
 
 [source,bash]
@@ -1059,6 +1083,14 @@ Exit codes: `0` = all valid, `1` = at least one invalid or missing file.
 
 Accepted formats (detected independently for each file): CycloneDX,
 SPDX 2.3, SPDX 3.0 (JSON-LD).
+
+The diff goes beyond added, removed and version-updated components: it also
+reports components of the *same version* whose *license*, *hashes*, *supplier* or
+*originating layer* changed ("Modified (same version)" section; `modified` in
+JSON) and, for a version update, license, supplier and layer changes (hashes
+necessarily change with the version and are not compared). Between two global
+SBOMs produced with `--per-layer`, a "Layers" section lists the added and removed
+layers (by digest) and those whose added/modified/removed component counts differ.
 
 === Merging SBOMs (`merge`)
 
@@ -1271,11 +1303,73 @@ colour (useful behind a pipe — `build-dist.sh` enables it when the build
 terminal allows it), `--color never` only emits the `[CRITICAL]` /
 `[HIGH]` prefixes.
 
-Exit codes (`--format text` / `sarif`): `0` = no CVE in the requested range
-(all scanners combined), `1` = at least one CVE found, or scanner error.
+Exit codes (`--format text` / `json` / `sarif`): `0` = no CVE in the requested range
+(all scanners combined), `1` = at least one CVE found (or, with `--fail-on`, at least one CVE at the threshold), or scanner error.
 The report formats (`markdown` / `asciidoc` / `pdf`) return
 `0` as soon as a report is written; `1` only if `--output` is missing or if
 no scanner produced any result.
+
+[[sec-scan-policy]]
+=== Scan policy: VEX, ignored CVEs, baseline, threshold, cache
+
+These options filter the `scan` results (and, for `--vex` and `--ignore`, those of
+`cra`) *before* the KEV/EPSS enrichment; dropped CVEs are counted and reported.
+
+*VEX (`--vex`, `--vex-out`, `vex` subcommand).* A VEX (_Vulnerability Exploitability
+eXchange_) document states that a CVE is "not affected" or "fixed" for a product.
+`--vex file.json` accepts OpenVEX and CycloneDX VEX; `not_affected` / `fixed` CVEs
+of the targeted package (PURL, `name` or `name@version`; no product = all) are
+dropped. `--vex-out file.json` writes a VEX (`--vex-format openvex|cyclonedx`): the
+remaining CVEs as `affected` (with the fixed version) and the `not_affected`
+statements carried over from `--vex`.
+
+[source,bash]
+----
+# Declare that a CVE does not affect a component
+./sbom_generator vex --cve CVE-2021-44228 --product pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1 \
+  --status not_affected --justification vulnerable_code_not_in_execute_path \
+  --impact-statement "JndiLookup removed from the archive" -o vex.json
+
+# Extend an existing VEX (and convert it to CycloneDX)
+./sbom_generator vex --cve CVE-2024-1 --status affected --append vex.json -f cyclonedx -o vex.cdx.json
+
+# Scan taking the VEX into account, and write the VEX of the remaining CVEs
+./sbom_generator scan --sbom sbom.cdx.json --vex vex.json --vex-out remaining.openvex.json
+----
+
+*Ignored CVEs (`--ignore`).* One file, one rule per line (`#` = comment):
+
+[source,text]
+----
+CVE-2024-1234; package=openssl; expires=2026-12-31; reason=Function never called
+CVE-2024-5678; expires=2026-06-30; reason=Fix planned for June
+----
+
+Only the identifier is mandatory; `package` restricts the rule to one package.
+`expires` (inclusive) bounds the rule: an expired rule is *no longer applied* and
+is reported on stderr. A rule without `reason` raises a warning.
+
+*Baseline and threshold (`--baseline`, `--fail-on`).* `scan --format json -o base.json`
+records the current state; `--baseline base.json` then shows only the *new* CVEs
+(same identifier and same package name = already known). `--fail-on
+critical|high|medium|low` fails (exit 1) only if a remaining CVE reaches that
+threshold — without it any remaining CVE fails.
+
+[source,bash]
+----
+./sbom_generator scan --sbom sbom.cdx.json --format json -o base.json          # baseline
+./sbom_generator scan --sbom sbom.cdx.json --baseline base.json --fail-on high  # in CI
+----
+
+*Cache (`--cache`).* Reuses a scanner's raw result for the same SBOM *content*
+(sorted component list: timestamp and UUID do not matter) and the same scanner
+version, within `--cache-ttl` (6 h by default, since the vulnerability database
+changes). Directory: `--cache-dir`, else `~/.cache/sbom-generator/scan`. Only the
+scanner result is cached; the SBOM of an image or package is generated again.
+
+*JSON output.* `scan --format json` writes `{schema, summary, findings[]}` (stdout
+if `-o` is omitted) — each finding carries its scanner, severity, fixed versions
+and, when available, its KEV/EPSS/PoC signals.
 
 [[sec-scan-package]]
 === Package or archive scanned directly (`scan --package`)

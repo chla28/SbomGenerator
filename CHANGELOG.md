@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **VEX** : `scan --vex <fichier>` (OpenVEX ou CycloneDX VEX) écarte les CVE « non affectées » / « corrigées » ; `scan --vex-out` (`--vex-format openvex|cyclonedx`) écrit le VEX des CVE restantes ; nouvelle sous-commande `vex` pour créer ou compléter un document VEX. `cra --vex` applique le même filtre à l'inventaire.
+- **`scan --baseline <rapport.json>`** : n'affiche que les CVE *nouvelles* par rapport à un `scan --format json` antérieur ; **`--fail-on critical|high|medium|low`** : code retour 1 seulement à partir de ce seuil.
+- **`scan --ignore <fichier>`** (et `cra --ignore`) : CVE ignorées avec justification et date d'expiration ; une règle expirée n'est plus appliquée et est signalée.
+- **`scan --cache`** (`--cache-ttl`, `--cache-dir`) : réutilise le résultat d'un scanner pour un même contenu de SBOM et une même version de scanner.
+- **`scan --format json`** : résultats de scan lisibles par une machine.
+- **`diff`** : licences, empreintes, fournisseur et couche d'origine comparés (section « Modifiés (même version) ») ; comparaison des couches de deux SBOM `--per-layer`.
+- **Sorties machine** : `--log-format json` (NDJSON : `output`, `progress`, `log`) pour la génération ; `validate --format json`.
+- **`validate`** : validation par rapport aux schémas JSON officiels CycloneDX 1.4–1.7, SPDX 2.3 et SPDX 3.0 (embarqués, hors-ligne) ; `--no-schema` pour s'en passer. Pour SPDX 3.0 les écarts restent des avertissements.
+- Outil de maintenance `tool/embed_schemas.dart` (regénère `lib/schemas_data.dart`).
+
+### Fixed
+- **SPDX 2.3** : les sorties ne respectaient pas le schéma officiel — `SPDXID` sans `_` (remplacé par `-`) et horodatages sans fraction de seconde (`AAAA-MM-JJThh:mm:ssZ`) ; mêmes horodatages pour SPDX 3.0 et la fusion SPDX.
+
 ## [1.6.6] - 2026-10-06
 
 ### Fixed

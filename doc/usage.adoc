@@ -149,6 +149,7 @@ sbom_generator scan --sbom <fichier> [options]
 sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <fichier> [options]
+sbom_generator vex --cve <id> --status <état> [--product <purl>] [-o <vex.json>]
 ....
 
 === Options
@@ -202,6 +203,13 @@ scanné récursivement (voir <<Format du fichier d'entrée>>)
 |`-o`
 |`sbom.json`
 |Fichier SBOM de sortie (chemin de base si multi-format)
+
+|`--log-format <text\|json>`
+|—
+|`text`
+|Format de la sortie standard : `json` émet un événement JSON par ligne (NDJSON) —
+`output` (`path`, `kb`), `progress` (`current`, `total`, `label`), `log` (`message`) ;
+les erreurs restent sur stderr
 
 |`--format <fmt>`
 |`-f`
@@ -1046,6 +1054,23 @@ Vérifie la conformité structurelle d'un ou plusieurs fichiers SBOM :
 
 Codes de retour : `0` = tous valides, `1` = au moins un fichier invalide ou introuvable.
 
+Outre les contrôles structurels, `validate` valide chaque document par rapport au
+*schéma JSON officiel* de sa version — CycloneDX 1.4 à 1.7, SPDX 2.3, SPDX 3.0 —
+embarqué dans le programme (aucun accès réseau). Les erreurs de schéma sont
+préfixées `[schéma]` et donnent le chemin JSON fautif. `--no-schema` désactive ce
+contrôle. Pour SPDX 3.0, les écarts de schéma restent des *avertissements* (des
+erreurs avec `--strict`) : le générateur SPDX 3.0 n'est pas encore entièrement
+conforme (noms `software:` au lieu de `software_`, `externalIdentifier`,
+`toolVersion`).
+
+[source,bash]
+----
+# Rapport lisible par une machine
+./sbom_generator validate --format json sbom.cdx.json
+# → {"valid":true,"errorCount":0,"files":[{"path":…,"format":"CycloneDX 1.6",
+#    "schema":"cyclonedx-1.6","valid":true,"errors":[],"warnings":[]}]}
+----
+
 === Comparaison de deux SBOMs (`diff`)
 
 [source,bash]
@@ -1062,6 +1087,16 @@ Codes de retour : `0` = tous valides, `1` = au moins un fichier invalide ou intr
 
 Formats acceptés (détectés indépendamment pour chaque fichier) : CycloneDX,
 SPDX 2.3, SPDX 3.0 (JSON-LD).
+
+Le diff ne se limite pas à l'ajout, la suppression et la mise à jour de version :
+il signale aussi les composants *de même version* dont la *licence*, les
+*empreintes*, le *fournisseur* ou la *couche d'origine* ont changé (section
+« Modifiés (même version) » ; `modified` en JSON), et, pour une mise à jour de
+version, les changements de licence, de fournisseur et de couche (les empreintes
+changent forcément avec la version et ne sont pas comparées). Entre deux SBOM
+globaux produits avec `--per-layer`, une section « Couches » indique les couches
+ajoutées, supprimées (par empreinte) et celles dont le nombre de composants
+ajoutés/modifiés/supprimés diffère.
 
 === Fusion de SBOMs (`merge`)
 
@@ -1276,11 +1311,75 @@ couleur (utile derrière un pipe — `build-dist.sh` l'active quand le terminal
 du build le permet), `--color never` n'émet que les préfixes `[CRITICAL]` /
 `[HIGH]`.
 
-Codes de retour (`--format text` / `sarif`) : `0` = aucune CVE dans la plage
-demandée (tous scanners confondus), `1` = au moins une CVE trouvée, ou erreur
-de scanner. Les formats rapport (`markdown` / `asciidoc` / `pdf`) renvoient
+Codes de retour (`--format text` / `json` / `sarif`) : `0` = aucune CVE dans la plage
+demandée (tous scanners confondus), `1` = au moins une CVE trouvée (ou, avec
+`--fail-on`, au moins une CVE au seuil), ou erreur de scanner. Les formats rapport (`markdown` / `asciidoc` / `pdf`) renvoient
 `0` dès qu'un rapport est écrit ; `1` seulement si `--output` manque ou si
 aucun scanner n'a produit de résultat.
+
+[[sec-scan-policy]]
+=== Politique de scan : VEX, CVE ignorées, référence, seuil, cache
+
+Ces options filtrent les résultats de `scan` (et, pour `--vex` et `--ignore`, de
+`cra`) *avant* l'enrichissement KEV/EPSS ; les CVE écartées sont comptées et
+signalées.
+
+*VEX (`--vex`, `--vex-out`, sous-commande `vex`).* Un document VEX (_Vulnerability
+Exploitability eXchange_) déclare qu'une CVE est « non affectée » ou « corrigée »
+pour un produit. `--vex fichier.json` accepte OpenVEX et CycloneDX VEX ; les CVE
+`not_affected` / `fixed` du paquet visé (PURL, `nom` ou `nom@version` ; sans
+produit = tous) sont écartées. `--vex-out fichier.json` écrit un VEX (`--vex-format
+openvex|cyclonedx`) : les CVE restantes en `affected` (avec la version corrigée)
+et les déclarations `not_affected` reprises de `--vex`.
+
+[source,bash]
+----
+# Déclarer qu'une CVE n'affecte pas un composant
+./sbom_generator vex --cve CVE-2021-44228 --product pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1 \
+  --status not_affected --justification vulnerable_code_not_in_execute_path \
+  --impact-statement "JndiLookup retiré de l'archive" -o vex.json
+
+# Compléter un VEX existant (et le convertir en CycloneDX)
+./sbom_generator vex --cve CVE-2024-1 --status affected --append vex.json -f cyclonedx -o vex.cdx.json
+
+# Scanner en tenant compte du VEX, et produire le VEX des CVE restantes
+./sbom_generator scan --sbom sbom.cdx.json --vex vex.json --vex-out restant.openvex.json
+----
+
+*CVE ignorées (`--ignore`).* Un fichier, une règle par ligne (`#` = commentaire) :
+
+[source,text]
+----
+CVE-2024-1234; package=openssl; expires=2026-12-31; reason=Fonction non appelée
+CVE-2024-5678; expires=2026-06-30; reason=Correctif prévu en juin
+----
+
+Seul l'identifiant est obligatoire ; `package` limite la règle à un paquet.
+`expires` (inclus) borne la règle : une règle expirée n'est *plus appliquée* et est
+signalée sur stderr. Une règle sans `reason` déclenche un avertissement.
+
+*Référence et seuil (`--baseline`, `--fail-on`).* `scan --format json -o base.json`
+enregistre l'état courant ; `--baseline base.json` n'affiche ensuite que les
+*nouvelles* CVE (même identifiant et même nom de paquet = déjà connue).
+`--fail-on critical|high|medium|low` ne fait échouer (code 1) que si une CVE
+restante atteint ce seuil — sans l'option, toute CVE restante fait échouer.
+
+[source,bash]
+----
+./sbom_generator scan --sbom sbom.cdx.json --format json -o base.json          # référence
+./sbom_generator scan --sbom sbom.cdx.json --baseline base.json --fail-on high  # en CI
+----
+
+*Cache (`--cache`).* Réutilise le résultat brut d'un scanner pour le même *contenu*
+de SBOM (liste triée des composants : horodatage et UUID n'interviennent pas) et la
+même version du scanner, dans la limite de `--cache-ttl` (6 h par défaut, la base
+de vulnérabilités évoluant). Répertoire : `--cache-dir`, sinon
+`~/.cache/sbom-generator/scan`. Seul le résultat du scanner est mis en cache ; la
+génération du SBOM d'une image ou d'un paquet est refaite.
+
+*Sortie JSON.* `scan --format json` écrit `{schema, summary, findings[]}` (stdout si
+`-o` est omis) — chaque résultat porte son scanner, sa sévérité, ses versions
+corrigées et, si disponible, ses signaux KEV/EPSS/PoC.
 
 [[sec-scan-package]]
 === Paquet ou archive scanné directement (`scan --package`)

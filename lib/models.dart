@@ -2,6 +2,10 @@ import 'dart:math';
 
 String _safeId(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '-');
 
+/// Identifiant SPDX 2.x : le schéma n'autorise que `[a-zA-Z0-9.-]` après
+/// `SPDXRef-` (pas de `_`).
+String _spdxSafe(String s) => s.replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '-');
+
 String _normalizePyName(String name) =>
     name.toLowerCase().replaceAll(RegExp(r'[-_.]+'), '-');
 
@@ -177,7 +181,7 @@ class RpmPackage extends Package {
 
   @override
   String get spdxId =>
-      'SPDXRef-${_safeId(name)}-${_safeId(version)}-${_safeId(release)}';
+      'SPDXRef-${_spdxSafe(name)}-${_spdxSafe(version)}-${_spdxSafe(release)}';
 
   @override
   RpmPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
@@ -316,7 +320,7 @@ class WheelPackage extends Package {
       'cargo' => 'SPDXRef-cargo',
       _ => 'SPDXRef-src',
     };
-    return '$prefix-${_safeId(name)}-${_safeId(version)}';
+    return '$prefix-${_spdxSafe(name)}-${_spdxSafe(version)}';
   }
 
   @override
@@ -400,7 +404,7 @@ class DebPackage extends Package {
       'pkg-deb-${_safeId(name)}-${_safeId(version)}-${_safeId(arch)}';
 
   @override
-  String get spdxId => 'SPDXRef-deb-${_safeId(name)}-${_safeId(version)}';
+  String get spdxId => 'SPDXRef-deb-${_spdxSafe(name)}-${_spdxSafe(version)}';
 
   @override
   DebPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
@@ -510,7 +514,7 @@ class OciPackage extends Package {
 
   @override
   String get spdxId =>
-      'SPDXRef-oci-${_safeId(name)}-${_safeId(version)}';
+      'SPDXRef-oci-${_spdxSafe(name)}-${_spdxSafe(version)}';
 
   @override
   OciPackage copyWith({String? license, String? vendor, String? sourceRef}) =>
