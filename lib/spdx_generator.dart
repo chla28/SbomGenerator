@@ -55,7 +55,7 @@ class SpdxGenerator {
       'creationInfo': {
         'created': now,
         'creators': [
-          'Tool: sbom_generator-1.7.0',
+          'Tool: sbom_generator-1.8.0',
           for (final e in sdkTools.entries)
             'Tool: ${e.key}${e.value.isEmpty ? '' : '-${e.value}'}',
         ],
@@ -196,7 +196,7 @@ class SpdxGenerator {
       spdxPkg['annotations'] = [
         {
           'annotationType': 'OTHER',
-          'annotator': 'Tool: sbom_generator-1.7.0',
+          'annotator': 'Tool: sbom_generator-1.8.0',
           'annotationDate': _spdxTimestamp(),
           'comment': comment,
         }

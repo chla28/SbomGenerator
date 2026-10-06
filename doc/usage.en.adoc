@@ -1662,7 +1662,7 @@ forwards its own language to the CLI it launches (via `SBOM_LANG`).
 |Generation date/time (UTC ISO 8601)
 
 |Tool
-|`sbom_generator 1.7.0`
+|`sbom_generator 1.8.0`
 
 |Author
 |Fixed to `sbom_generator` (not configurable)

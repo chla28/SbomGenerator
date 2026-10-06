@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-06
+
 ### Added
 - **GUI, dashboard**: *Remediation* section (updates to apply per package, minimal target version, ranked by risk reduction: severity, KEV, EPSS) with CSV export; scan *sessions* (save / open a file, automatic *history* per target and per day, *trend* between two sessions: new / gone / unchanged CVEs); *VEX* bar.
 - **GUI, Tasks tab**: queue of scans (Grype, OSV-Scanner, Trivy) run one at a time, cancellable and retryable; results feed the dashboard.

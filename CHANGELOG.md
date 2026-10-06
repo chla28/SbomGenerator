@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-06
+
 ### Added
 - **GUI, tableau de bord** : section *Remédiation* (mises à jour à effectuer par paquet, version cible minimale, classées par gain de risque : sévérité, KEV, EPSS) avec export CSV ; *sessions* de scan (enregistrer / ouvrir un fichier, *historique* automatique par cible et par jour, *tendance* entre deux sessions : CVE nouvelles / disparues / inchangées) ; barre *VEX*.
 - **GUI, onglet Tâches** : file d'attente d'analyses (Grype, OSV-Scanner, Trivy) exécutées une à une, annulables et relançables ; les résultats alimentent le tableau de bord.
