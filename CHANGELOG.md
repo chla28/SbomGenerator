@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-08
+
 ### Fixed
 - **GUI, Remédiation** : déplier un paquet portant des milliers de CVE (ex. `linux-libc-dev`) figeait l'interface (un widget sélectionnable par CVE, ≈ 5 s pour 3 000 CVE) ; la liste est désormais un seul texte plafonné à 200 CVE, avec un résumé du reste (≈ 0,1 s).
 

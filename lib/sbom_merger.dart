@@ -162,7 +162,7 @@ class SbomMerger {
             .toUtc()
             .toIso8601String()
             .replaceFirst(RegExp(r'\.\d+Z$'), 'Z'),
-        'creators': ['Tool: sbom_generator-1.9.0'],
+        'creators': ['Tool: sbom_generator-1.9.1'],
         'licenseListVersion': baseCreationInfo?['licenseListVersion'] ?? '3.21',
       },
       'name': documentName ?? (base['name'] as String? ?? 'Merged SBOM'),

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-08
+
 ### Fixed
 - **GUI, Remediation**: expanding a package with thousands of CVEs (e.g. `linux-libc-dev`) froze the interface (one selectable widget per CVE, ≈ 5 s for 3,000 CVEs); the list is now a single text capped at 200 CVEs, with a summary of the rest (≈ 0.1 s).
 
