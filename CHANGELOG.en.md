@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-## [1.9.2] - 2026-10-08
+## [1.10.1] - 2026-10-08
 
 ### Fixed
 - **Wrong `flutter` CVEs ("Flutter must be > 3.3.3"…)**: the `flutter` component of a `pubspec.lock` has no version (pub records `0.0.0`) and scanners attributed *all* the SDK's CVEs to it. The installed Flutter version is now detected automatically (`FLUTTER_ROOT`, `--flutter-root` or `flutter` on the `PATH`); a warning is emitted if it cannot be found; `--sdk-version flutter=…` still takes precedence. GUI: new *SDK versions* field (options).
