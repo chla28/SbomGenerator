@@ -40,6 +40,7 @@ import 'package:sbom_generator/tool_runner.dart';
 import 'package:sbom_generator/schema_validator.dart';
 import 'package:sbom_generator/vex.dart';
 import 'package:sbom_generator/scan_policy.dart';
+import 'package:sbom_generator/report_input.dart';
 
 const _version = '1.8.0';
 
@@ -74,6 +75,12 @@ Future<void> main(List<String> rawArguments) async {
   // Sous-commande `scan` : analyse CVE avec filtre date
   if (arguments.isNotEmpty && arguments.first == 'scan') {
     await _runScan(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `report` : rapport de vulnérabilités depuis un fichier
+  if (arguments.isNotEmpty && arguments.first == 'report') {
+    await _runReport(arguments.sublist(1));
     return;
   }
 
@@ -2373,6 +2380,22 @@ Future<void> _runScan(List<String> arguments) async {
                 'CVE restante fait échouer.',
             'Exit code 1 only if a remaining CVE has at least this severity\n'
                 '(critical, high, medium, low). Default: any remaining CVE fails.'))
+    ..addOption('report-severity',
+        allowed: ScanReportGenerator.thresholds,
+        defaultsTo: 'all',
+        help: tr(
+            'Rapports (markdown/asciidoc/pdf) : ne garder que les CVE dont la\n'
+                'pire sévérité atteint ce seuil (critical, high, medium), plus\n'
+                'celles du catalogue CISA KEV. Défaut : all.',
+            'Reports (markdown/asciidoc/pdf): keep only the CVEs whose worst\n'
+                'severity reaches this threshold (critical, high, medium), plus\n'
+                'those in the CISA KEV catalog. Default: all.'))
+    ..addOption('compare-with',
+        help: tr(
+            'Rapports : section « Tendance » par rapport à un `scan --format\n'
+                'json` antérieur (ou une session de la GUI).',
+            'Reports: "Trend" section against an earlier `scan --format json`\n'
+                '(or a GUI session).'))
     ..addFlag('cache',
         negatable: false,
         help: tr(
@@ -2824,11 +2847,43 @@ Future<void> _runScan(List<String> arguments) async {
         'VEX written → $vexOutPath (${statements.length} statement(s))'));
   }
 
+  // Entrée commune du JSON et des rapports (un seul générateur de rapport :
+  // `report` et la GUI relisent le même contenu).
+  final needInput = format == 'json' || isReport;
+  ReportInput? liveInput;
+  if (needInput) {
+    liveInput = ReportInput(
+      results: {
+        for (final k in reportScanners) k: resultsByScanner[k],
+      },
+      exploit: exploitById,
+      toolVersions: {
+        'sbom-generator': _version,
+        for (final k in scanners)
+          if (resultsByScanner.containsKey(k))
+            _scannerTitle(k):
+                await _scannerVersion(k) ?? tr('inconnue', 'unknown'),
+      },
+      layers: layerSet?.layers ?? const [],
+      layerScanMode: layerSet != null ? layerScan : null,
+      targets: [
+        if (imageRef != null)
+          'image $imageRef'
+        else if (packageRef != null)
+          tr('paquet $packageRef', 'package $packageRef')
+        else
+          sbomFile,
+      ],
+      vex: vexDoc?.statements ?? const [],
+      vexSuppressed: policy.hits,
+      generatedAt: DateTime.now(),
+    );
+  }
+
   if (format == 'json') {
     final doc = _buildScanJson(
+      input: liveInput!,
       target: imageRef ?? packageRef ?? sbomFile,
-      resultsByScanner: resultsByScanner,
-      exploitById: exploitById,
       ignored: ignoredCount,
       vex: vexCount,
       baselineKnown: baselineCount,
@@ -2864,23 +2919,16 @@ Future<void> _runScan(List<String> arguments) async {
           'scan: no scanner produced any result — report not generated.'));
       await quit(1);
     }
-    final gen = ScanReportGenerator(
-      sbomPath: imageRef != null
-          ? tr('image $imageRef', 'image $imageRef')
-          : (packageRef != null
-              ? tr('paquet $packageRef', 'package $packageRef')
-              : sbomFile),
-      layers: layerSet?.layers ?? const [],
-      layerScanMode: layerSet != null ? layerScan : null,
-      resultsByScanner: resultsByScanner,
-      exploitById: exploitById,
-      toolVersions: {
-        'sbom-generator': _version,
-        for (final s in scanners)
-          if (resultsByScanner.containsKey(s))
-            {'grype': 'Grype', 'osv': 'OSV-Scanner', 'trivy': 'Trivy'}[s]!:
-                await _scannerVersion(s) ?? tr('inconnue', 'unknown'),
-      },
+    final compareWith = args['compare-with'] as String?;
+    ReportInput? compareInput;
+    if (compareWith != null) {
+      compareInput = _loadReportInputOrExit('scan', compareWith);
+    }
+    final gen = ScanReportGenerator.fromInput(
+      liveInput!,
+      threshold: args['report-severity'] as String,
+      compareWith: compareInput,
+      sbomPath: liveInput.targets.first,
     );
     _printSeverityAlerts(gen, colorMode, exploitById);
     await _writeScanReport(format, outputPath!, gen);
@@ -2904,6 +2952,7 @@ Future<void> _runScan(List<String> arguments) async {
 class _PolicyOutcome {
   int ignored = 0, vex = 0, baseline = 0;
   final vexCarried = <String, VexStatement>{};
+  final hits = <VexHit>[];
   int get total => ignored + vex + baseline;
 }
 
@@ -2933,6 +2982,9 @@ _PolicyOutcome _applyScanPolicy(
         final st = vex.find(id, n, ver);
         if (st != null && st.suppresses) {
           out.vex++;
+          if (out.vexCarried['${st.vulnId}|$pkg'] == null) {
+            out.hits.add(VexHit(id, pkg, st));
+          }
           out.vexCarried['${st.vulnId}|$pkg'] = VexStatement(
               vulnId: id,
               products: st.products.isEmpty ? [pkg] : st.products,
@@ -3034,32 +3086,26 @@ Map<String, String> _purlIndex(String sbomFile) {
   return out;
 }
 
-/// Résultats d'un scan au format JSON (aussi utilisé comme `--baseline`).
+/// Résultats d'un scan au format JSON : sert de `--baseline`, de
+/// `--compare-with` et d'entrée à la sous-commande `report` (qui relit aussi
+/// les sessions de la GUI).
 Map<String, dynamic> _buildScanJson({
+  required ReportInput input,
   required String target,
-  required Map<String, List<Map<String, dynamic>>> resultsByScanner,
-  required Map<String, ExploitInfo> exploitById,
   required int ignored,
   required int vex,
   required int baselineKnown,
 }) {
   final bySeverity = <String, int>{};
   final findings = <Map<String, dynamic>>[];
-  for (final e in resultsByScanner.entries) {
-    for (final v in e.value) {
+  for (final e in input.results.entries) {
+    for (final v in e.value ?? const <Map<String, dynamic>>[]) {
       final sev = '${v['severity']}';
       bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
-      final ex = v['exploit'] as ExploitInfo? ?? exploitById['${v['id']}'];
       findings.add({
         'scanner': e.key,
         for (final f in v.entries)
           if (f.key != 'exploit') f.key: f.value,
-        if (ex != null && ex != ExploitInfo.empty)
-          'exploit': {
-            'inKev': ex.inKev,
-            if (ex.epssScore != null) 'epss': ex.epssScore,
-            'pocKnown': ex.pocKnown,
-          },
       });
     }
   }
@@ -3068,7 +3114,10 @@ Map<String, dynamic> _buildScanJson({
     'generatedAt': DateTime.now().toUtc().toIso8601String(),
     'tool': 'sbom-generator $_version',
     'target': target,
-    'scanners': resultsByScanner.keys.toList(),
+    'scanners': [
+      for (final e in input.results.entries)
+        if (e.value != null) e.key,
+    ],
     'summary': {
       'total': findings.length,
       'bySeverity': bySeverity,
@@ -3076,8 +3125,37 @@ Map<String, dynamic> _buildScanJson({
       'ignored': ignored,
       'baselineKnown': baselineKnown,
     },
+    'toolVersions': input.toolVersions,
+    'exploit': {
+      for (final e in input.exploit.entries)
+        if (e.value.hasAnySignal) e.key: exploitToJson(e.value),
+    },
+    if (input.layers.isNotEmpty) ...{
+      'layers': [for (final l in input.layers) layerToJson(l)],
+      'layerScanMode': input.layerScanMode,
+    },
+    if (input.vex.isNotEmpty) 'vex': [for (final x in input.vex) vexToJson(x)],
+    if (input.vexSuppressed.isNotEmpty)
+      'vexSuppressed': [for (final h in input.vexSuppressed) hitToJson(h)],
     'findings': findings,
   };
+}
+
+/// Lit un fichier `scan --format json` ou une session de la GUI ; erreur
+/// d'usage (code 1) sinon.
+ReportInput _loadReportInputOrExit(String cmd, String path) {
+  try {
+    return ReportInput.decode(File(path).readAsStringSync());
+  } on FileSystemException {
+    stderr.writeln(
+        tr('$cmd: fichier introuvable : $path', '$cmd: file not found: $path'));
+  } on FormatException catch (e) {
+    stderr.writeln('$cmd: $path : ${e.message}');
+  } catch (e) {
+    stderr.writeln(tr('$cmd: $path : lecture impossible ($e)',
+        '$cmd: $path: unreadable ($e)'));
+  }
+  exit(1);
 }
 
 String _scannerTitle(String s) =>
@@ -3305,6 +3383,8 @@ Future<List<Map<String, dynamic>>?> _runGrype(String sbomFile,
         'id': vuln['id'] ?? '',
         'severity': vuln['severity'] ?? 'Unknown',
         'package': '${artifact['name'] ?? ''}@${artifact['version'] ?? ''}',
+        // Type de paquet (rpm, deb, java-archive…) : colonne annexe du détail.
+        if ('${artifact['type'] ?? ''}'.isNotEmpty) 'extra': artifact['type'],
         'published': vuln['publishedDate'],
         'modified': vuln['lastModifiedDate'],
         // `fix.state` de Grype : `fixed` / `not-fixed` / `wont-fix` / `unknown`.
@@ -3388,6 +3468,10 @@ Future<List<Map<String, dynamic>>?> _runOsv(String sbomFile,
             'id': cve.isNotEmpty ? cve : v['id'] ?? '',
             'severity': dbSev.isNotEmpty ? dbSev : 'Unknown',
             'package': '$name@$version',
+            // Écosystème (Debian, npm, Maven…) : colonne annexe du détail.
+            if ('${res['source']?['type'] ?? pkgInfo['ecosystem'] ?? ''}'
+                .isNotEmpty)
+              'extra': pkgInfo['ecosystem'] ?? res['source']?['type'],
             'published': v['published'],
             'modified': v['modified'],
             'fixedVersions': fixed.toList(),
@@ -3436,6 +3520,8 @@ Future<List<Map<String, dynamic>>?> _runTrivy(String sbomFile,
           'id': v['VulnerabilityID'] ?? '',
           'severity': v['Severity'] ?? 'Unknown',
           'package': '${v['PkgName'] ?? ''}@${v['InstalledVersion'] ?? ''}',
+          // Titre de la CVE (description courte) : détail du rapport.
+          if ('${v['Title'] ?? ''}'.isNotEmpty) 'extra': v['Title'],
           'published': v['PublishedDate'],
           'modified': v['LastModifiedDate'],
           'fixedVersions': fixedRaw.isEmpty
@@ -4024,6 +4110,121 @@ List<Package> _applySupplierFallback(List<Package> packages, String supplier) {
     for (final pkg in packages)
       pkg.vendor.trim().isEmpty ? pkg.copyWith(vendor: supplier) : pkg,
   ];
+}
+
+// ── Sous-commande report ──────────────────────────────────────────────────────
+
+Future<void> _runReport(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('input',
+        abbr: 'i',
+        mandatory: true,
+        help: tr(
+            'Résultats de scan : fichier `scan --format json` ou session de\n'
+                'la GUI (« Enregistrer la session… »).',
+            'Scan results: a `scan --format json` file or a GUI session\n'
+                '("Save session…").'))
+    ..addOption('output',
+        abbr: 'o',
+        mandatory: true,
+        help: tr('Fichier du rapport (.pdf, .adoc ou .md selon --format).',
+            'Report file (.pdf, .adoc or .md depending on --format).'))
+    ..addOption('format',
+        abbr: 'f',
+        allowed: ['pdf', 'asciidoc', 'markdown'],
+        defaultsTo: 'pdf',
+        help: tr('Format du rapport.', 'Report format.'))
+    ..addOption('severity',
+        abbr: 's',
+        allowed: ScanReportGenerator.thresholds,
+        defaultsTo: 'all',
+        help: tr(
+            'Ne garder que les CVE dont la pire sévérité atteint ce seuil\n'
+                '(critical, high, medium), plus celles du catalogue CISA KEV.',
+            'Keep only the CVEs whose worst severity reaches this threshold\n'
+                '(critical, high, medium), plus those in the CISA KEV catalog.'))
+    ..addOption('compare-with',
+        help: tr(
+            'Section « Tendance » par rapport à un autre fichier de résultats.',
+            '"Trend" section against another results file.'))
+    ..addOption('vex',
+        help: tr(
+            'Document VEX supplémentaire (OpenVEX / CycloneDX) : les CVE\n'
+                '« non affectées » / « corrigées » sont écartées du rapport.',
+            'Additional VEX document (OpenVEX / CycloneDX): "not affected" /\n'
+                '"fixed" CVEs are dropped from the report.'))
+    ..addFlag('no-vex',
+        negatable: false,
+        help: tr('Ignorer les déclarations VEX embarquées dans le fichier.',
+            'Ignore the VEX statements embedded in the file.'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.', 'Help.'));
+
+  void usage() => stdout.writeln(tr('''
+sbom_generator report – Rapport de vulnérabilités (synthèse inter-scanners,
+remédiation, tendance, VEX, détail des CVE) à partir de résultats déjà obtenus,
+sans relancer les scanners. C'est le même rapport que `scan --format pdf` et que
+l'export du tableau de bord de la GUI.
+
+Usage:
+  sbom-generator report -i resultats.json -o rapport.pdf
+  sbom-generator report -i session.json -s high --compare-with ancien.json -o rapport.pdf
+
+${parser.usage}
+''', '''
+sbom_generator report – Vulnerability report (cross-scanner summary, remediation,
+trend, VEX, CVE details) from results already obtained, without rerunning the
+scanners. It is the same report as `scan --format pdf` and the GUI dashboard
+export.
+
+Usage:
+  sbom-generator report -i results.json -o report.pdf
+  sbom-generator report -i session.json -s high --compare-with old.json -o report.pdf
+
+${parser.usage}
+'''));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('report: ${_argError(e.message)}');
+    usage();
+    exit(1);
+  }
+  if (args['help'] as bool) {
+    usage();
+    exit(0);
+  }
+
+  var input = _loadReportInputOrExit('report', args['input'] as String);
+  final extraVex = args['vex'] as String?;
+  final noVex = args['no-vex'] as bool;
+  if (extraVex != null || noVex) {
+    input = ReportInput(
+      results: input.results,
+      exploit: input.exploit,
+      toolVersions: input.toolVersions,
+      layers: input.layers,
+      layerScanMode: input.layerScanMode,
+      targets: input.targets,
+      vex: [
+        if (!noVex) ...input.vex,
+        if (extraVex != null) ..._loadVexOrExit('report', extraVex).statements,
+      ],
+      vexSuppressed: noVex ? const [] : input.vexSuppressed,
+      generatedAt: input.generatedAt,
+    );
+  }
+  final cmp = args['compare-with'] as String?;
+  final gen = ScanReportGenerator.fromInput(
+    input,
+    threshold: args['severity'] as String,
+    compareWith: cmp == null ? null : _loadReportInputOrExit('report', cmp),
+    extraTools: {'sbom-generator': _version},
+    generatedAt: DateTime.now(),
+  );
+  await _writeScanReport(
+      args['format'] as String, args['output'] as String, gen);
 }
 
 // ── Sous-commande vex ─────────────────────────────────────────────────────────

@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Unified vulnerability report**: new `report` subcommand (`-i results.json|session.json -o report.pdf`, `--severity`, `--compare-with`, `--vex`, `--no-vex`) and `scan --format pdf|asciidoc|markdown` produce *the same report* (a single generator, also used by the GUI dashboard export). New sections: *Remediation*, *Trend*, *VEX*, *CVE details* (one card per CVE), severity bar; severity threshold `--report-severity critical|high|medium|all` (KEV CVEs always kept). `scan --format json` now embeds the exploitability, tool versions, layers and VEX; `report` also reads GUI sessions.
+- **GUI, dashboard export**: the report is produced by the CLI (`sbom-generator report`), hence identical to the CLI's; it includes remediation, trend (comparison chosen in the history) and VEX. Sessions now save per-layer analyses and VEX statements.
+
 ## [1.8.0] - 2026-10-06
 
 ### Added

@@ -150,6 +150,7 @@ sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <file> [options]
 sbom_generator vex --cve <id> --status <state> [--product <purl>] [-o <vex.json>]
+sbom_generator report -i <results.json|session.json> -o <report.pdf> [-s high] [--compare-with <other.json>]
 ....
 
 === Options
@@ -1370,6 +1371,43 @@ scanner result is cached; the SBOM of an image or package is generated again.
 *JSON output.* `scan --format json` writes `{schema, summary, findings[]}` (stdout
 if `-o` is omitted) — each finding carries its scanner, severity, fixed versions
 and, when available, its KEV/EPSS/PoC signals.
+
+[[sec-report]]
+=== Vulnerability report (`report`)
+
+`scan --format pdf|asciidoc|markdown` and the `report` subcommand produce *the same
+report*, from a single generator — also used by the GUI Dashboard's "AsciiDoc + PDF"
+export. Sections: executive summary (verdict, targets, threshold, VEX), tools, breakdown
+per scanner (with a severity bar), image layers, cross-scanner comparison, exploitability
+(KEV, EPSS, PoC), *remediation* (minimal update per package, ranked by risk reduction),
+*trend* (when a reference is supplied), *VEX* and *CVE details* (one card per CVE:
+package, scanners, dates, description, exploitation signals, links).
+
+[source,bash]
+----
+# Straight from a scan (reruns the scanners)
+./sbom_generator scan --sbom sbom.cdx.json --scanner all \
+  --format pdf -o report.pdf --report-severity high --compare-with old.json
+
+# Without rerunning the scanners: from a scan --format json, or a GUI session
+./sbom_generator scan --sbom sbom.cdx.json --scanner all --format json -o results.json
+./sbom_generator report -i results.json -o report.pdf
+./sbom_generator report -i session.json -s high --compare-with results.json -o report.pdf
+----
+
+* `--severity` / `--report-severity` (`critical`, `high`, `medium`, `all`): a CVE is kept —
+with all its rows, every scanner — if its *worst* severity reaches the threshold, or if it
+is in the CISA KEV catalog (whatever its severity). The summary says "N of M unique CVEs".
+* `--compare-with`: another results file (`scan --format json` or GUI session); the
+*Trend* section lists new and gone CVEs and the number unchanged (key: CVE + package
+name, the version does not count).
+* `--vex` applies a VEX document on top of any embedded one; `--no-vex` ignores the
+statements embedded in the input file.
+* `-f pdf` also writes the AsciiDoc next to it (`report.adoc`) and keeps it if
+`asciidoctor-pdf` is missing.
+
+The `report` input is either `scan --format json` (which now embeds the exploitability,
+tool versions, layers and VEX) or a GUI session (see the GUI guide, "Sessions").
 
 [[sec-scan-package]]
 === Package or archive scanned directly (`scan --package`)

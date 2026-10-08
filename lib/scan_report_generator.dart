@@ -1,8 +1,80 @@
+import 'dart:convert';
 import 'dart:io';
 
-import 'layer_scan.dart';
-import 'vuln_enrichment.dart';
 import 'i18n.dart';
+import 'layer_scan.dart';
+import 'remediation.dart';
+import 'report_input.dart';
+import 'vex.dart';
+import 'vuln_enrichment.dart';
+
+/// Évolution entre un rapport de référence et le rapport courant, par couple
+/// (CVE normalisée, nom de paquet).
+class ReportTrend {
+  final DateTime? baselineDate;
+
+  /// Clé `CVE|paquet` → sévérité la plus haute.
+  final Map<String, String> added;
+  final Map<String, String> removed;
+  final int unchanged;
+  final int beforeTotal;
+  final int afterTotal;
+
+  const ReportTrend({
+    this.baselineDate,
+    required this.added,
+    required this.removed,
+    required this.unchanged,
+    required this.beforeTotal,
+    required this.afterTotal,
+  });
+
+  static final _distro = RegExp(r'^[A-Z]+-(CVE-\d{4}-\d+)$');
+
+  static Map<String, String> _keys(
+      Map<String, List<Map<String, dynamic>>?> results) {
+    final out = <String, String>{};
+    for (final vulns in results.values) {
+      for (final v in vulns ?? const <Map<String, dynamic>>[]) {
+        var id = '${v['id'] ?? ''}';
+        id = _distro.firstMatch(id)?.group(1) ?? id;
+        if (id.isEmpty) continue;
+        final pkg = '${v['package'] ?? ''}';
+        final at = pkg.lastIndexOf('@');
+        final name = (at > 0 ? pkg.substring(0, at) : pkg).toLowerCase();
+        final sev = '${v['severity'] ?? ''}'.toLowerCase();
+        final key = '$id|$name';
+        final cur = out[key];
+        if (cur == null || severityRank(sev) > severityRank(cur)) {
+          out[key] = sev;
+        }
+      }
+    }
+    return out;
+  }
+
+  factory ReportTrend.compute(
+    Map<String, List<Map<String, dynamic>>?> before,
+    Map<String, List<Map<String, dynamic>>?> after, {
+    DateTime? baselineDate,
+  }) {
+    final b = _keys(before), a = _keys(after);
+    return ReportTrend(
+      baselineDate: baselineDate,
+      added: {
+        for (final e in a.entries)
+          if (!b.containsKey(e.key)) e.key: e.value,
+      },
+      removed: {
+        for (final e in b.entries)
+          if (!a.containsKey(e.key)) e.key: e.value,
+      },
+      unchanged: a.keys.where(b.containsKey).length,
+      beforeTotal: b.length,
+      afterTotal: a.length,
+    );
+  }
+}
 
 /// Builds a cross-scanner vulnerability *synthesis* report (Markdown /
 /// AsciiDoc) from the normalised results of `sbom_generator scan`.
@@ -34,6 +106,24 @@ class ScanReportGenerator {
   /// Méthode de `--per-layer` : `attribute` ou `each` (voir `layer_scan.dart`).
   final String? layerScanMode;
 
+  /// Cibles analysées (libellés) ; vide = [sbomPath] seul.
+  final List<String> targets;
+
+  /// Seuil du rapport : `all`, `critical`, `high` ou `medium`. Les CVE
+  /// retenues sont celles dont la pire sévérité (tous scanners) atteint le
+  /// seuil, ou qui sont au catalogue CISA KEV ; voir [fromInput].
+  final String threshold;
+
+  /// Nombre de CVE uniques avant application du seuil (`null` = pas de seuil).
+  final int? uniqueBeforeThreshold;
+
+  /// Déclarations VEX (section dédiée) et CVE qu'elles ont écartées.
+  final List<VexStatement> vexStatements;
+  final List<VexHit> vexSuppressed;
+
+  /// Évolution depuis un rapport de référence (`null` = pas de comparaison).
+  final ReportTrend? trend;
+
   ScanReportGenerator({
     required this.sbomPath,
     required this.resultsByScanner,
@@ -42,7 +132,120 @@ class ScanReportGenerator {
     this.exploitById = const {},
     this.layers = const [],
     this.layerScanMode,
+    this.targets = const [],
+    this.threshold = 'all',
+    this.uniqueBeforeThreshold,
+    this.vexStatements = const [],
+    this.vexSuppressed = const [],
+    this.trend,
   }) : generatedAt = generatedAt ?? DateTime.now();
+
+  /// Seuils acceptés par [fromInput].
+  static const thresholds = ['all', 'critical', 'high', 'medium'];
+
+  static int _thresholdMax(String t) => switch (t) {
+        'critical' => 0,
+        'high' => 1,
+        'medium' => 2,
+        _ => 99,
+      };
+
+  /// Construit le rapport à partir d'un fichier lu par [ReportInput] : applique
+  /// le VEX embarqué (sauf [applyVex] faux), calcule la tendance par rapport à
+  /// [compareWith], puis le seuil de sévérité [threshold].
+  factory ScanReportGenerator.fromInput(
+    ReportInput input, {
+    String threshold = 'all',
+    ReportInput? compareWith,
+    bool applyVex = true,
+    String? sbomPath,
+    Map<String, String?> extraTools = const {},
+    DateTime? generatedAt,
+  }) {
+    final vex = applyVex ? input.vex : const <VexStatement>[];
+    final hits = <VexHit>[];
+    Map<String, List<Map<String, dynamic>>?> applyVexTo(
+        Map<String, List<Map<String, dynamic>>?> r,
+        {bool record = false}) {
+      if (vex.isEmpty) return r;
+      final doc = _VexIndex(vex);
+      final seen = <String>{};
+      return {
+        for (final e in r.entries)
+          e.key: e.value == null
+              ? null
+              : [
+                  for (final v in e.value!)
+                    if (!_suppressed(doc, v, record ? hits : null, seen)) v,
+                ],
+      };
+    }
+
+    final afterVex = applyVexTo(input.results, record: true);
+    final trend = compareWith == null
+        ? null
+        : ReportTrend.compute(applyVexTo(compareWith.results), afterVex,
+            baselineDate: compareWith.generatedAt);
+
+    // Seuil de sévérité : par CVE (toutes ses lignes) — voir la doc de classe.
+    var results = afterVex;
+    int? before;
+    if (threshold != 'all') {
+      final worst = <String, String>{};
+      final ids = <String>{};
+      for (final vulns in afterVex.values) {
+        for (final v in vulns ?? const <Map<String, dynamic>>[]) {
+          final id = _normalizeId('${v['id'] ?? ''}');
+          if (id.isEmpty) continue;
+          ids.add(id);
+          final sev = '${v['severity'] ?? ''}';
+          final cur = worst[id];
+          if (cur == null || _sevOrd(sev) < _sevOrd(cur)) worst[id] = sev;
+        }
+      }
+      before = ids.length;
+      final max = _thresholdMax(threshold);
+      bool keep(Map<String, dynamic> v) {
+        final id = _normalizeId('${v['id'] ?? ''}');
+        return _sevOrd(worst[id] ?? '${v['severity'] ?? ''}') <= max ||
+            (input.exploit[id]?.inKev ?? false);
+      }
+
+      results = {
+        for (final e in afterVex.entries)
+          e.key: e.value == null ? null : [...e.value!.where(keep)],
+      };
+    }
+
+    return ScanReportGenerator(
+      sbomPath: sbomPath ?? (input.targets.isEmpty ? '' : input.targets.first),
+      resultsByScanner: results,
+      generatedAt: generatedAt ?? input.generatedAt,
+      toolVersions: {...input.toolVersions, ...extraTools},
+      exploitById: input.exploit,
+      layers: input.layers,
+      layerScanMode: input.layerScanMode,
+      targets: input.targets,
+      threshold: threshold,
+      uniqueBeforeThreshold: before,
+      vexStatements: vex,
+      vexSuppressed: [...input.vexSuppressed, ...hits],
+      trend: trend,
+    );
+  }
+
+  static bool _suppressed(_VexIndex vex, Map<String, dynamic> v,
+      List<VexHit>? hits, Set<String> seen) {
+    final id = '${v['id'] ?? ''}';
+    final pkg = '${v['package'] ?? ''}';
+    final (name, ver) = splitPackage(pkg);
+    final st = vex.find(_normalizeId(id), name, ver);
+    if (st == null || !st.suppresses) return false;
+    if (hits != null && seen.add('${_normalizeId(id)}|$pkg')) {
+      hits.add(VexHit(_normalizeId(id), pkg, st));
+    }
+    return true;
+  }
 
   bool get _hasLayers => layers.isNotEmpty;
 
@@ -602,11 +805,95 @@ class ScanReportGenerator {
       b.writeln();
     }
 
+    _mdExtras(b);
     b.writeln('---');
     b.writeln();
     b.writeln(
         tr('_Généré par sbom-generator._', '_Generated by sbom-generator._'));
     return b.toString();
+  }
+
+  /// Remédiation, tendance, VEX et détail des CVE au format Markdown.
+  void _mdExtras(StringBuffer b) {
+    final items = _remediation.where((i) => i.targetVersion != null).toList();
+    if (items.isNotEmpty) {
+      b.writeln(tr('## Remédiation', '## Remediation'));
+      b.writeln();
+      b.writeln(tr(
+          '| Paquet | Mise à jour | CVE corrigées | dont KEV | Restantes | Gain |',
+          '| Package | Update | CVEs fixed | of which KEV | Remaining | Gain |'));
+      b.writeln('|---|---|---|---|---|---|');
+      for (final i in items.take(_remediationRows)) {
+        b.writeln(
+            '| `${_mdEsc(i.packageName)}` | ${_mdEsc(i.installedVersion)} → '
+            '**${_mdEsc(i.targetVersion!)}** | ${i.fixed.length} | ${i.kevFixed} '
+            '| ${i.unfixed.length} | ${_gain(i.gain)} |');
+      }
+      b.writeln();
+    }
+    final t = trend;
+    if (t != null) {
+      b.writeln(tr('## Tendance', '## Trend'));
+      b.writeln();
+      b.writeln(tr(
+          '- **Nouvelles :** ${t.added.length}\n- **Disparues :** ${t.removed.length}\n- **Inchangées :** ${t.unchanged}\n- **Total :** ${t.beforeTotal} → ${t.afterTotal}',
+          '- **New:** ${t.added.length}\n- **Gone:** ${t.removed.length}\n- **Unchanged:** ${t.unchanged}\n- **Total:** ${t.beforeTotal} → ${t.afterTotal}'));
+      b.writeln();
+      for (final e in t.added.entries.take(50)) {
+        b.writeln(
+            '- ${tr('nouvelle', 'new')} : ${_fmtTrendKey(e.key)} (${frSeverity(e.value)})');
+      }
+      if (t.added.isNotEmpty) b.writeln();
+    }
+    if (vexStatements.isNotEmpty) {
+      b.writeln('## VEX');
+      b.writeln();
+      b.writeln(tr('| CVE | Produits | État | Justification |',
+          '| CVE | Products | Status | Justification |'));
+      b.writeln('|---|---|---|---|');
+      for (final s in vexStatements) {
+        b.writeln('| ${_mdEsc(s.vulnId)} | '
+            '${s.products.isEmpty ? tr('tous', 'all') : _mdEsc(s.products.join(', '))} | '
+            '${_vexStatusLabel(s.status)} | '
+            '${_mdEsc([
+          if (s.justification != null) s.justification!,
+          if (s.impactStatement != null) s.impactStatement!
+        ].join(' — '))} |');
+      }
+      b.writeln();
+      b.writeln(tr('${vexSuppressed.length} CVE écartée(s) du rapport.',
+          '${vexSuppressed.length} CVE(s) dropped from the report.'));
+      b.writeln();
+    }
+    final rows = _crossRows();
+    if (rows.isNotEmpty) {
+      b.writeln(tr('## Détail des CVE', '## CVE details'));
+      b.writeln();
+      for (final r in rows) {
+        final fs = _findingsOf(r.id);
+        b.writeln('### ${r.id}');
+        b.writeln();
+        final withPkg = fs.where((f) => '${f['package'] ?? ''}'.isNotEmpty);
+        if (withPkg.isNotEmpty) {
+          final (name, ver) = splitPackage('${withPkg.first['package']}');
+          final fixed = [
+            for (final x
+                in (withPkg.first['fixedVersions'] as List? ?? const []))
+              '$x'
+          ];
+          b.writeln('- **${tr('Paquet', 'Package')} :** `$name $ver'
+              '${fixed.isEmpty ? '' : ' → ${fixed.join(', ')}'}`');
+        }
+        b.writeln('- **${tr('Signalé par', 'Reported by')} :** ${[
+          for (final f in fs)
+            '${f['scanner']} (${frSeverity('${f['severity'] ?? ''}')})'
+        ].join(', ')}');
+        final e = _exploitFor(r.id);
+        if (e.inKev) b.writeln('- **CISA KEV :** ${tr('oui', 'yes')}');
+        if (e.epssScore != null) b.writeln('- **EPSS :** ${_fmtEpss(e)}');
+        b.writeln();
+      }
+    }
   }
 
   // ── AsciiDoc ─────────────────────────────────────────────────────────────
@@ -629,13 +916,40 @@ class ScanReportGenerator {
 
     b.writeln(tr('== Résumé exécutif', '== Executive summary'));
     b.writeln();
-    b.writeln(
-        '${tr('*SBOM analysé*', '*Analysed SBOM*')} : `${_adocEsc(sbomName)}` +');
+    if (targets.length > 1) {
+      b.writeln('${tr('*Cibles analysées*', '*Analysed targets*')} : '
+          '${targets.map((x) => '`${_adocEsc(x)}`').join(', ')} +');
+    } else {
+      var shown = targets.length == 1 ? targets.single : sbomName;
+      if (!shown.contains(' ')) shown = shown.split(RegExp(r'[/\\]')).last;
+      b.writeln('${tr('*Cible analysée*', '*Analysed target*')} : '
+          '`${_adocEsc(shown)}` +');
+    }
     b.writeln(
         '${tr('*Scanners exécutés*', '*Scanners run*')} : ${run.length} / 3'
         '${run.isEmpty ? '' : ' (${run.map((s) => _scannerLabels[s]).join(', ')})'}'
         ' — *$_uniqueCveCount* ${tr('CVE uniques', 'unique CVEs')}');
     b.writeln();
+    if (threshold != 'all') {
+      b.writeln(tr(
+          'NOTE: rapport limité aux CVE de sévérité *$_thresholdLabel* '
+              '(ou présentes au catalogue CISA KEV) : $_uniqueCveCount '
+              '${uniqueBeforeThreshold == null ? '' : 'sur $uniqueBeforeThreshold '}'
+              'CVE uniques.',
+          'NOTE: report limited to CVEs of *$_thresholdLabel* severity '
+              '(or listed in the CISA KEV catalog): $_uniqueCveCount '
+              '${uniqueBeforeThreshold == null ? '' : 'of $uniqueBeforeThreshold '}'
+              'unique CVEs.'));
+      b.writeln();
+    }
+    if (vexSuppressed.isNotEmpty) {
+      b.writeln(tr(
+          'NOTE: ${vexSuppressed.length} CVE écartée(s) par une déclaration '
+              'VEX (voir la section « VEX »).',
+          'NOTE: ${vexSuppressed.length} CVE(s) dropped by a VEX statement '
+              '(see the "VEX" section).'));
+      b.writeln();
+    }
     final crit = _crossSevCount('critical');
     final high = _crossSevCount('high');
     b.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
@@ -679,6 +993,11 @@ class ScanReportGenerator {
             tr('Aucune vulnérabilité détectée.', 'No vulnerability detected.'));
       } else {
         final counts = _severityCounts(vulns);
+        final svg = buildSeverityBarSvg(counts);
+        if (svg != null) {
+          b.writeln(svgImageMacro(svg));
+          b.writeln();
+        }
         b.writeln('[cols="<2,<1",options="header"]');
         b.writeln('|===');
         b.writeln(tr('| Sévérité | Nombre', '| Severity | Count'));
@@ -720,7 +1039,7 @@ class ScanReportGenerator {
       b.writeln();
     }
 
-    if (run.length >= 2) {
+    if (run.isNotEmpty) {
       b.writeln(
           tr('== Comparaison inter-scanners', '== Cross-scanner comparison'));
       b.writeln();
@@ -748,31 +1067,33 @@ class ScanReportGenerator {
         b.writeln('|===');
       }
       b.writeln();
-      b.writeln('[NOTE]');
-      b.writeln('====');
-      b.writeln(tr(
-          'Des comptages très différents entre scanners sur les paquets '
-              'système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. '
-              'OSV-Scanner en mode « scan de SBOM » peut ne trouver aucune CVE sur '
-              'ces paquets (son API n\'indexe les avis distro que sous une forme de '
-              'purl absente du SBOM standard). Grype et Trivy n\'ont par ailleurs '
-              'pas la même exhaustivité sur ces mêmes paquets : Grype reprend '
-              'l\'intégralité du Debian Security Tracker (avis « won\'t fix » '
-              'inclus) là où Trivy ne remonte qu\'un sous-ensemble. Voir la '
-              'documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et '
-              'Trivy ne trouvent pas les mêmes CVE ».',
-          'Very different counts between scanners on system packages '
-              '(Debian/Alpine/RPM) do not necessarily indicate an error. '
-              'OSV-Scanner in "SBOM scan" mode may find no CVE on these '
-              'packages (its API only indexes distro advisories under a purl '
-              'form absent from the standard SBOM). Grype and Trivy are also '
-              'not equally exhaustive on these same packages: Grype takes '
-              'the whole Debian Security Tracker ("won\'t fix" advisories '
-              'included) where Trivy only reports a subset. See the '
-              'user documentation, section "Why Grype, OSV-Scanner and '
-              'Trivy do not find the same CVEs".'));
-      b.writeln('====');
-      b.writeln();
+      if (run.length >= 2) {
+        b.writeln('[NOTE]');
+        b.writeln('====');
+        b.writeln(tr(
+            'Des comptages très différents entre scanners sur les paquets '
+                'système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. '
+                'OSV-Scanner en mode « scan de SBOM » peut ne trouver aucune CVE sur '
+                'ces paquets (son API n\'indexe les avis distro que sous une forme de '
+                'purl absente du SBOM standard). Grype et Trivy n\'ont par ailleurs '
+                'pas la même exhaustivité sur ces mêmes paquets : Grype reprend '
+                'l\'intégralité du Debian Security Tracker (avis « won\'t fix » '
+                'inclus) là où Trivy ne remonte qu\'un sous-ensemble. Voir la '
+                'documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et '
+                'Trivy ne trouvent pas les mêmes CVE ».',
+            'Very different counts between scanners on system packages '
+                '(Debian/Alpine/RPM) do not necessarily indicate an error. '
+                'OSV-Scanner in "SBOM scan" mode may find no CVE on these '
+                'packages (its API only indexes distro advisories under a purl '
+                'form absent from the standard SBOM). Grype and Trivy are also '
+                'not equally exhaustive on these same packages: Grype takes '
+                'the whole Debian Security Tracker ("won\'t fix" advisories '
+                'included) where Trivy only reports a subset. See the '
+                'user documentation, section "Why Grype, OSV-Scanner and '
+                'Trivy do not find the same CVEs".'));
+        b.writeln('====');
+        b.writeln();
+      }
 
       final notes = cveNotes();
       if (notes.isNotEmpty) {
@@ -885,9 +1206,296 @@ class ScanReportGenerator {
       b.writeln();
     }
 
+    _adocRemediation(b);
+    _adocTrend(b);
+    _adocVex(b);
+    _adocDetail(b);
+
     b.writeln(
         tr('_Généré par sbom-generator._', '_Generated by sbom-generator._'));
     return b.toString();
+  }
+
+  // ── Sections communes AsciiDoc / Markdown ────────────────────────────────
+
+  String get _thresholdLabel => switch (threshold) {
+        'critical' => 'Critical',
+        'high' => '≥ High',
+        'medium' => '≥ Medium',
+        _ => 'All',
+      };
+
+  static String _gain(double g) => g.toStringAsFixed(g >= 100 ? 0 : 1);
+
+  /// Plan de remédiation : par paquet, mise à jour la plus économique.
+  List<RemediationItem> get _remediation {
+    final inputs = <RemediationInput>[];
+    for (final s in _scannersRun) {
+      for (final v in resultsByScanner[s]!) {
+        final (name, ver) = splitPackage('${v['package'] ?? ''}');
+        final fixed = [
+          for (final f in (v['fixedVersions'] as List? ?? const [])) '$f'
+        ];
+        inputs.add((
+          scanner: _scannerLabels[s]!,
+          id: '${v['id'] ?? ''}',
+          severity: '${v['severity'] ?? ''}',
+          packageName: name,
+          installedVersion: ver,
+          fixedVersion:
+              fixed.isEmpty ? '${v['fixState'] ?? ''}' : fixed.join(', '),
+        ));
+      }
+    }
+    return buildRemediation(inputs, exploitById: exploitById);
+  }
+
+  static const _remediationRows = 30;
+
+  void _adocRemediation(StringBuffer b) {
+    final items = _remediation.where((i) => i.targetVersion != null).toList();
+    if (items.isEmpty) return;
+    b.writeln(tr('== Remédiation', '== Remediation'));
+    b.writeln();
+    b.writeln(tr(
+        'Par paquet, la mise à jour minimale qui corrige toutes les CVE '
+            'corrigeables, classée par *gain de risque* (sévérité, exploitation '
+            'active KEV, probabilité EPSS).',
+        'Per package, the minimal update that fixes every fixable CVE, ranked '
+            'by *risk reduction* (severity, active exploitation KEV, EPSS '
+            'probability).'));
+    b.writeln();
+    b.writeln('[cols="4,3,1,1,1,1",options="header"]');
+    b.writeln('|===');
+    b.writeln(tr(
+        '| Paquet | Mise à jour | CVE corrigées | dont KEV | Restantes | Gain',
+        '| Package | Update | CVEs fixed | of which KEV | Remaining | Gain'));
+    for (final i in items.take(_remediationRows)) {
+      b.writeln('| `${_adocEsc(i.packageName)}` '
+          '| ${_adocEsc(i.installedVersion)} → *${_adocEsc(i.targetVersion!)}* '
+          '| ${i.fixed.length} | ${i.kevFixed > 0 ? '*${i.kevFixed}*' : '0'} '
+          '| ${i.unfixed.length} | ${_gain(i.gain)}');
+    }
+    b.writeln('|===');
+    b.writeln();
+    if (items.length > _remediationRows) {
+      b.writeln(tr(
+          'NOTE: ${items.length - _remediationRows} autre(s) paquet(s) à mettre à jour ne sont pas listés (gain plus faible).',
+          'NOTE: ${items.length - _remediationRows} other package(s) to update are not listed (lower gain).'));
+      b.writeln();
+    }
+    final noFix = _remediation.where((i) => i.targetVersion == null).length;
+    if (noFix > 0) {
+      b.writeln(tr('NOTE: $noFix paquet(s) n\'ont aucun correctif connu.',
+          'NOTE: $noFix package(s) have no known fix.'));
+      b.writeln();
+    }
+    b.writeln(tr(
+        '_La version cible est une heuristique (comparaison numérique des versions) : à vérifier avec le gestionnaire de paquets._',
+        '_The target version is a heuristic (numeric version comparison): check it with the package manager._'));
+    b.writeln();
+  }
+
+  static String _fmtTrendKey(String key) {
+    final i = key.indexOf('|');
+    return i < 0 ? key : '${key.substring(0, i)} (`${key.substring(i + 1)}`)';
+  }
+
+  void _adocTrend(StringBuffer b) {
+    final t = trend;
+    if (t == null) return;
+    b.writeln(tr('== Tendance', '== Trend'));
+    b.writeln();
+    final since = t.baselineDate == null ? '' : _fmtDate(t.baselineDate);
+    b.writeln(tr(
+        'Évolution depuis le rapport de référence${since.isEmpty ? '' : ' du $since'}.',
+        'Change since the reference report${since.isEmpty ? '' : ' of $since'}.'));
+    b.writeln();
+    b.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
+    b.writeln('|===');
+    b.writeln(tr('h| Nouvelles h| Disparues h| Inchangées h| Total',
+        'h| New h| Gone h| Unchanged h| Total'));
+    b.writeln(
+        '| [.${t.added.isEmpty ? 'h1-num' : 'h1-num-alert'}]*${t.added.length}* '
+        '| [.h1-num]*${t.removed.length}* | [.h1-num]*${t.unchanged}* '
+        '| [.h1-num]*${t.beforeTotal} → ${t.afterTotal}*');
+    b.writeln('|===');
+    b.writeln();
+    void list(String title, Map<String, String> m) {
+      if (m.isEmpty) return;
+      final rows = m.entries.toList()
+        ..sort((a, c) {
+          final o = _sevOrd(a.value).compareTo(_sevOrd(c.value));
+          return o != 0 ? o : a.key.compareTo(c.key);
+        });
+      b.writeln('=== $title');
+      b.writeln();
+      b.writeln('[cols="2,6",options="header"]');
+      b.writeln('|===');
+      b.writeln(tr('| Sévérité | CVE (paquet)', '| Severity | CVE (package)'));
+      for (final e in rows.take(50)) {
+        b.writeln('| ${_sevBadge(e.value)} | ${_adocEsc(_fmtTrendKey(e.key))}');
+      }
+      b.writeln('|===');
+      if (rows.length > 50) {
+        b.writeln();
+        b.writeln(tr('NOTE: ${rows.length - 50} autre(s) non listée(s).',
+            'NOTE: ${rows.length - 50} more not listed.'));
+      }
+      b.writeln();
+    }
+
+    list(tr('Nouvelles CVE', 'New CVEs'), t.added);
+    list(
+        tr('CVE disparues (corrigées ou plus détectées)',
+            'Gone CVEs (fixed or no longer detected)'),
+        t.removed);
+  }
+
+  String _vexStatusLabel(String s) => switch (s) {
+        'not_affected' => tr('non affectée', 'not affected'),
+        'affected' => tr('affectée', 'affected'),
+        'fixed' => tr('corrigée', 'fixed'),
+        _ => tr('à l\'étude', 'under investigation'),
+      };
+
+  void _adocVex(StringBuffer b) {
+    if (vexStatements.isEmpty) return;
+    b.writeln('== VEX');
+    b.writeln();
+    b.writeln(tr(
+        '${vexStatements.length} déclaration(s) VEX appliquée(s) : '
+            '${vexSuppressed.length} CVE écartée(s) du rapport.',
+        '${vexStatements.length} VEX statement(s) applied: '
+            '${vexSuppressed.length} CVE(s) dropped from the report.'));
+    b.writeln();
+    b.writeln('[cols="3,4,2,5",options="header"]');
+    b.writeln('|===');
+    b.writeln(tr('| CVE | Produits | État | Justification / explication',
+        '| CVE | Products | Status | Justification / explanation'));
+    for (final s in vexStatements) {
+      final why = [
+        if (s.justification != null) s.justification!,
+        if (s.impactStatement != null) s.impactStatement!,
+      ].join(' — ');
+      b.writeln('| ${_adocEsc(s.vulnId)} '
+          '| ${s.products.isEmpty ? tr('tous', 'all') : _adocEsc(s.products.join(', '))} '
+          '| ${_vexStatusLabel(s.status)} | ${_adocEsc(why.isEmpty ? '—' : why)}');
+    }
+    b.writeln('|===');
+    b.writeln();
+    if (vexSuppressed.isNotEmpty) {
+      b.writeln('=== ${tr('CVE écartées', 'Dropped CVEs')}');
+      b.writeln();
+      for (final h in vexSuppressed) {
+        b.writeln('* *${_adocEsc(h.id)}* (`${_adocEsc(h.package)}`) — '
+            '${_vexStatusLabel(h.statement.status)}');
+      }
+      b.writeln();
+    }
+  }
+
+  /// Versions, dates et signaux d'une CVE, agrégés sur tous les scanners.
+  List<Map<String, dynamic>> _findingsOf(String id) => [
+        for (final s in _scannersRun)
+          for (final v in resultsByScanner[s]!)
+            if (_normalizeId('${v['id'] ?? ''}') == id)
+              {...v, 'scanner': _scannerLabels[s]!},
+      ];
+
+  static String _day(Object? iso) {
+    final d = DateTime.tryParse('$iso');
+    return d == null ? '—' : _fmtDate(d);
+  }
+
+  void _adocDetail(StringBuffer b) {
+    final rows = _crossRows();
+    if (rows.isEmpty) return;
+    b.writeln(tr('== Détail des CVE', '== CVE details'));
+    b.writeln();
+    b.writeln(threshold == 'all'
+        ? tr('Fiche de chacune des ${rows.length} CVE du rapport.',
+            'Detail of each of the ${rows.length} CVEs in the report.')
+        : tr(
+            'Fiche des ${rows.length} CVE retenues (sévérité $_thresholdLabel ou CISA KEV).',
+            'Detail of the ${rows.length} retained CVEs ($_thresholdLabel severity or CISA KEV).'));
+    b.writeln();
+    for (final r in rows) {
+      final fs = _findingsOf(r.id);
+      b.writeln('=== ${_adocEsc(r.id)}');
+      b.writeln();
+      b.writeln('[cols="<1h,<3a"]');
+      b.writeln('|===');
+      final withPkg = fs.where((f) => '${f['package'] ?? ''}'.isNotEmpty);
+      if (withPkg.isNotEmpty) {
+        final f = withPkg.first;
+        final (name, ver) = splitPackage('${f['package']}');
+        final fixed = [
+          for (final x in (f['fixedVersions'] as List? ?? const [])) '$x'
+        ];
+        b.writeln('| ${tr('Paquet', 'Package')} | `${_adocEsc('$name $ver'
+            '${fixed.isEmpty ? '' : ' → ${fixed.join(', ')}'}')}`');
+      }
+      b.writeln('| ${tr('Signalé par', 'Reported by')} | ${_adocEsc([
+        for (final f in fs)
+          '${f['scanner']} (${frSeverity('${f['severity'] ?? ''}')})'
+      ].join(', '))}');
+      final dates = [
+        for (final f in fs)
+          if (f['published'] != null || f['modified'] != null)
+            tr('${f['scanner']} : publiée ${_day(f['published'])}, modifiée ${_day(f['modified'])}',
+                '${f['scanner']}: published ${_day(f['published'])}, modified ${_day(f['modified'])}'),
+      ];
+      if (dates.isNotEmpty) {
+        b.writeln(
+            '| ${tr('Dates', 'Dates')} | ${_adocEsc(dates.join(' +\n'))}');
+      }
+      var desc = '';
+      for (final f in fs) {
+        final x = '${f['extra'] ?? ''}';
+        if (x.contains(' ') && x.length > 12 && x.length > desc.length)
+          desc = x;
+      }
+      if (desc.isNotEmpty) {
+        b.writeln('| Description | ${_adocEsc(desc)}');
+      }
+      final e = _exploitFor(r.id);
+      if (e.inKev) {
+        b.writeln('| CISA KEV | ${tr('Oui — ajoutée le ${_fmtDate(e.kevDateAdded)}'
+            '${e.kevDueDate == null ? '' : ', échéance ${_fmtDate(e.kevDueDate)}'}'
+            '${e.kevRansomware ? ', utilisée par des rançongiciels' : ''}', 'Yes — added on ${_fmtDate(e.kevDateAdded)}'
+            '${e.kevDueDate == null ? '' : ', due ${_fmtDate(e.kevDueDate)}'}'
+            '${e.kevRansomware ? ', used by ransomware' : ''}')}');
+      }
+      if (e.epssScore != null) b.writeln('| EPSS | ${_fmtEpss(e)}');
+      if (e.cvssExploitabilityScore != null ||
+          e.exploitMaturity != null ||
+          e.cvssBaseScore != null) {
+        b.writeln('| CVSS | ${_adocEsc([
+          if (e.cvssBaseScore != null)
+            'base ${e.cvssBaseScore!.toStringAsFixed(1)}',
+          if (e.cvssExploitabilityScore != null || e.exploitMaturity != null)
+            _fmtExploitability(e),
+        ].join(' · '))}${e.cvssVector == null ? '' : ' +\n`${_adocEsc(e.cvssVector!)}`'}');
+      }
+      if (e.pocKnown) {
+        b.writeln('| ${tr('PoC public', 'Public PoC')} | ${_fmtPoc(e)}'
+            '${e.pocUrls.isEmpty ? '' : ' +\n${e.pocUrls.map(_adocEsc).join(' +\n')}'}');
+      }
+      final enc = Uri.encodeComponent(r.id);
+      final links = [
+        if (r.id.toUpperCase().startsWith('CVE-')) ...[
+          'https://nvd.nist.gov/vuln/detail/$enc',
+          'https://www.cve.org/CVERecord?id=$enc',
+        ],
+        if (r.id.toUpperCase().startsWith('GHSA-'))
+          'https://github.com/advisories/$enc',
+        'https://osv.dev/vulnerability/$enc',
+      ];
+      b.writeln('| ${tr('Références', 'References')} | ${links.join(' +\n')}');
+      b.writeln('|===');
+      b.writeln();
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -1194,4 +1802,68 @@ Future<ProcessResult> renderAsciiDocToPdf(
   await theme.writeAsString(_kPdfThemeYaml);
   return Process.run('asciidoctor-pdf',
       [adocPath, '-o', pdfPath, '-a', 'pdf-theme=${theme.path}']);
+}
+
+/// Index de déclarations VEX (la plus récente d'abord) pour [ScanReportGenerator].
+class _VexIndex {
+  final List<VexStatement> _statements;
+  _VexIndex(List<VexStatement> s) : _statements = s.reversed.toList();
+
+  VexStatement? find(String vulnId, String name, String version) {
+    final id = vulnId.toUpperCase();
+    for (final s in _statements) {
+      if (s.vulnId.toUpperCase() == id && s.appliesTo(name, version)) return s;
+    }
+    return null;
+  }
+}
+
+/// Barre de répartition par sévérité (SVG) : segments proportionnels
+/// Critical/High/Medium/Low/Autre, mêmes couleurs que le thème PDF.
+/// asciidoctor-pdf n'honore pas les fonds de cellule : la barre est une image.
+String? buildSeverityBarSvg(
+  Map<String, int> countsBySeverity, {
+  int width = 640,
+  int height = 22,
+}) {
+  int c(String key) => countsBySeverity.entries
+      .where((e) => e.key.toLowerCase() == key)
+      .fold(0, (sum, e) => sum + e.value);
+  final total = countsBySeverity.values.fold(0, (sum, v) => sum + v);
+  if (total == 0) return null;
+  final critical = c('critical');
+  final high = c('high');
+  final medium = c('medium');
+  final low = c('low');
+  final other = total - critical - high - medium - low;
+  final segments = <(int, String)>[
+    (critical, 'B3261E'),
+    (high, 'C4531A'),
+    (medium, 'B9770E'),
+    (low, '2E7D32'),
+    (other > 0 ? other : 0, '5B6B7A'),
+  ].where((s) => s.$1 > 0).toList();
+  final radius = height / 2;
+  final buf = StringBuffer()
+    ..writeln('<svg xmlns="http://www.w3.org/2000/svg" '
+        'width="$width" height="$height">')
+    ..writeln('<clipPath id="r"><rect x="0" y="0" '
+        'width="$width" height="$height" rx="$radius" ry="$radius"/></clipPath>')
+    ..writeln('<g clip-path="url(#r)">');
+  var x = 0.0;
+  for (final (count, color) in segments) {
+    final w = width * count / total;
+    buf.writeln('<rect x="${x.toStringAsFixed(1)}" y="0" '
+        'width="${w.toStringAsFixed(1)}" height="$height" fill="#$color"/>');
+    x += w;
+  }
+  buf.writeln('</g></svg>');
+  return buf.toString();
+}
+
+/// Encode un SVG en macro image AsciiDoc (data URI, sans fichier temporaire).
+String svgImageMacro(String svg, {String? alt}) {
+  alt ??= tr('Répartition par sévérité', 'Severity breakdown');
+  final b64 = base64Encode(utf8.encode(svg));
+  return 'image::data:image/svg+xml;base64,$b64[$alt,pdfwidth=100%]';
 }

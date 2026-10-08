@@ -42,7 +42,10 @@ void main() {
       // Même vulnérabilité → 1 seule CVE unique, 1 seule ligne inter-scanners.
       expect(gen.toMarkdown(), contains('| CVE uniques (tous scanners) | 1 |'));
       final adoc = gen.toAsciiDoc();
-      expect('CVE-2026-13221'.allMatches(adoc).length, 1);
+      expect('| CVE-2026-13221 '.allMatches(adoc).length, 1,
+          reason: 'une seule ligne de la matrice');
+      expect('=== CVE-2026-13221'.allMatches(adoc).length, 1,
+          reason: 'une seule fiche de détail');
       expect(adoc, isNot(contains('DEBIAN-CVE-2026-13221')));
     });
 
@@ -314,7 +317,9 @@ void main() {
 
       test('priorisation par risque : KEV en tête, sans-signal écartée', () {
         final md = gen.toMarkdown();
-        final section = md.substring(md.indexOf('### Priorisation par risque'));
+        final from = md.indexOf('### Priorisation par risque');
+        final next = md.indexOf('\n## ', from);
+        final section = md.substring(from, next < 0 ? md.length : next);
         expect(section.indexOf('CVE-2021-44228'),
             lessThan(section.indexOf('CVE-2021-45046')));
         expect(section, contains('3.9, mat. High'));
