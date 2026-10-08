@@ -3328,4 +3328,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return '… and $countString more CVE(s) (see the CSV export or the comparison above)';
   }
+
+  @override
+  String get cfgSdkVersions => 'SDK versions';
+
+  @override
+  String get cfgSdkVersionsHelp =>
+      'Real version of the Dart/Flutter SDKs of a pubspec.lock (--sdk-version).\nFormat: flutter=3.47.5 dart=3.13.4 (separated by spaces or commas).\nEmpty: the installed Flutter version is detected automatically;\nwithout a version, scanners report ALL SDK CVEs.';
+
+  @override
+  String get cfgSdkVersionsHint => 'flutter=3.47.5';
 }

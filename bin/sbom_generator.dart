@@ -809,6 +809,25 @@ Future<void> _runGenerate(List<String> arguments) async {
         'Pub cache for licenses: $pubCacheDir'));
   }
 
+  // Version du SDK Flutter : sans elle, le composant `flutter` d'un
+  // pubspec.lock n'a pas de version et les scanners lui attribuent toutes les
+  // CVE du SDK (faux positifs). Détectée au premier pubspec rencontré, sauf
+  // si --sdk-version flutter=… est fourni.
+  var flutterDetectDone = false;
+  void ensureFlutterVersion() {
+    if (flutterDetectDone) return;
+    flutterDetectDone = true;
+    if (sdkVersions.containsKey('flutter')) return;
+    final v = detectFlutterVersion(flutterRoot: flutterRootDir);
+    if (v == null) return;
+    sdkVersions['flutter'] = v;
+    stderr.writeln(tr(
+        'Version du SDK Flutter détectée : $v (installation locale) ; '
+            'pour une autre version : --sdk-version flutter=<version>.',
+        'Flutter SDK version detected: $v (local installation); '
+            'for another version: --sdk-version flutter=<version>.'));
+  }
+
   final minQualityScore = args['min-quality-score'] as String?;
   final signSbom = args['sign'] as bool;
   if (verbose && licenseOverrides.isNotEmpty) {
@@ -967,16 +986,29 @@ Future<void> _runGenerate(List<String> arguments) async {
     } else if (_isPomXml(ref)) {
       preloadedPackages.addAll(mavenParser.parsePomXml(ref));
     } else if (_isPubspecLock(ref)) {
+      ensureFlutterVersion();
       preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref,
           sdkVersions: sdkVersions,
           pubCache: pubCacheDir,
           flutterRoot: flutterRootDir));
     } else if (_isPubspecYaml(ref)) {
+      ensureFlutterVersion();
       preloadedPackages.addAll(
           pubspecParser.parsePubspecYaml(ref, sdkVersions: sdkVersions));
     } else {
       filteredRefs.add(ref);
     }
+  }
+  if (preloadedPackages.any((p) =>
+      p.packageType == 'pub' && p.name == 'flutter' && p.version.isEmpty)) {
+    stderr.writeln(
+        'Warning: ${tr('version du SDK Flutter inconnue : les scanners signaleront TOUTES les '
+            'CVE du SDK, quelle que soit leur plage de versions. Fournir '
+            '--sdk-version flutter=<version> (ou installer Flutter / définir '
+            'FLUTTER_ROOT pour la détection automatique).', 'Flutter SDK version unknown: scanners will report ALL SDK CVEs '
+            'whatever their affected version range. Provide '
+            '--sdk-version flutter=<version> (or install Flutter / set '
+            'FLUTTER_ROOT for automatic detection).')}');
   }
   final mainRefs = filteredRefs;
 

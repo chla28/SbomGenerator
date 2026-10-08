@@ -1,8 +1,55 @@
+import 'dart:convert';
 import 'dart:io';
 import 'archive_helpers.dart' show identifyArchiveLicense;
 import 'hash_utils.dart' show packageHash;
 import 'models.dart';
 import 'i18n.dart';
+
+/// Version du SDK Flutter installé, sans lancer `flutter` : lue dans
+/// `<racine>/bin/cache/flutter.version.json` (`frameworkVersion`) ou, pour les
+/// anciennes installations, dans le fichier `<racine>/version`. La racine est
+/// [flutterRoot], sinon `FLUTTER_ROOT`, sinon déduite de l'exécutable
+/// `flutter` du `PATH`. `null` si introuvable.
+///
+/// Sans version réelle, le composant `flutter` d'un `pubspec.lock`
+/// (`version: 0.0.0`) est émis sans version et les scanners lui attribuent
+/// *toutes* les CVE du SDK, quelle que soit leur plage de versions affectées.
+String? detectFlutterVersion(
+    {String? flutterRoot, String? path, Map<String, String>? env}) {
+  final e = env ?? Platform.environment;
+  final roots = <String>[
+    if (flutterRoot != null && flutterRoot.isNotEmpty) flutterRoot,
+    if ((e['FLUTTER_ROOT'] ?? '').isNotEmpty) e['FLUTTER_ROOT']!,
+  ];
+  for (final dir
+      in (path ?? e['PATH'] ?? '').split(Platform.isWindows ? ';' : ':')) {
+    if (dir.isEmpty) continue;
+    final exe = File('$dir/flutter');
+    if (exe.existsSync()) {
+      try {
+        roots.add(File(exe.resolveSymbolicLinksSync()).parent.parent.path);
+      } catch (_) {}
+    }
+  }
+  for (final root in roots) {
+    try {
+      final json = File('$root/bin/cache/flutter.version.json');
+      if (json.existsSync()) {
+        final v = (jsonDecode(json.readAsStringSync())
+            as Map)['frameworkVersion'] as String?;
+        if (v != null && v.trim().isNotEmpty) return v.trim();
+      }
+    } catch (_) {}
+    try {
+      final plain = File('$root/version');
+      if (plain.existsSync()) {
+        final v = plain.readAsLinesSync().firstOrNull?.trim();
+        if (v != null && RegExp(r'^\d+\.\d+').hasMatch(v)) return v;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
 
 /// Parses Dart/Flutter dependency files: `pubspec.lock` and `pubspec.yaml`
 /// (pure Dart, no `yaml` package dependency).

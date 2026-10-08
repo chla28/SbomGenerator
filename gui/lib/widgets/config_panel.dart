@@ -32,6 +32,7 @@ class ConfigPanelState extends State<ConfigPanel> {
   late TextEditingController _inputCtrl;
   late TextEditingController _outputCtrl;
   late TextEditingController _nameCtrl;
+  late TextEditingController _sdkCtrl;
   late TextEditingController _rpmDirCtrl;
   late TextEditingController _licenseMapCtrl;
   late TextEditingController _pdfCtrl;
@@ -47,6 +48,7 @@ class ConfigPanelState extends State<ConfigPanel> {
     _inputCtrl = TextEditingController(text: c.inputFile);
     _outputCtrl = TextEditingController(text: c.outputBase);
     _nameCtrl = TextEditingController(text: c.documentName);
+    _sdkCtrl = TextEditingController(text: c.sdkVersions);
     _rpmDirCtrl = TextEditingController(text: c.rpmDir);
     _licenseMapCtrl = TextEditingController(text: c.licenseMapFile);
     _pdfCtrl = TextEditingController(text: c.pdfOutputPath);
@@ -60,6 +62,7 @@ class ConfigPanelState extends State<ConfigPanel> {
       _inputCtrl,
       _outputCtrl,
       _nameCtrl,
+      _sdkCtrl,
       _rpmDirCtrl,
       _licenseMapCtrl,
       _pdfCtrl,
@@ -78,6 +81,7 @@ class ConfigPanelState extends State<ConfigPanel> {
     c.documentName = loaded.documentName;
     c.rpmDir = loaded.rpmDir;
     c.licenseMapFile = loaded.licenseMapFile;
+    c.sdkVersions = loaded.sdkVersions;
     c.concurrency = loaded.concurrency;
     c.verbose = loaded.verbose;
     c.generatePdf = loaded.generatePdf;
@@ -94,6 +98,7 @@ class ConfigPanelState extends State<ConfigPanel> {
     _nameCtrl.text = c.documentName;
     _rpmDirCtrl.text = c.rpmDir;
     _licenseMapCtrl.text = c.licenseMapFile;
+    _sdkCtrl.text = c.sdkVersions;
     _pdfCtrl.text = c.pdfOutputPath;
     _imageCtrl.text = c.imageRef;
     _binaryCtrl.text = c.binaryPath;
@@ -119,6 +124,7 @@ class ConfigPanelState extends State<ConfigPanel> {
     c.documentName = _nameCtrl.text.trim();
     c.rpmDir = _rpmDirCtrl.text.trim();
     c.licenseMapFile = _licenseMapCtrl.text.trim();
+    c.sdkVersions = _sdkCtrl.text.trim();
     c.pdfOutputPath = _pdfCtrl.text.trim();
     c.imageRef = _imageCtrl.text.trim();
     c.binaryPath = _binaryCtrl.text.trim();
@@ -645,6 +651,23 @@ class ConfigPanelState extends State<ConfigPanel> {
                         onPick: () => _pickFile(
                           _licenseMapCtrl,
                           title: l.cfgLicenseMapTitle,
+                        ),
+                        onChanged: (_) => _sync(),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        key: const Key('sdk-versions'),
+                        controller: _sdkCtrl,
+                        decoration: InputDecoration(
+                          label: HelpLabel(
+                            l.cfgSdkVersions,
+                            l.cfgSdkVersionsHelp,
+                          ),
+                          hintText: l.cfgSdkVersionsHint,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.flutter_dash),
                         ),
                         onChanged: (_) => _sync(),
                       ),

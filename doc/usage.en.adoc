@@ -260,6 +260,11 @@ they come out without a version); (2) each SDK is added to the SBOM *toolchain*
 `creationInfo.creators` (SPDX 2.3), `Tool` elements (SPDX 3.0). This is how
 the `dart` version appears in the SBOM, `dart` having no package in the
 lockfile.
+*Without this option, the installed Flutter version is detected* (`$FLUTTER_ROOT`,
+`--flutter-root` or the `flutter` executable of the `PATH`, via
+`bin/cache/flutter.version.json`) and reported on stderr. If it cannot be found, a
+warning says so: a version-less `flutter` component makes scanners report *all* the
+SDK's CVEs (false positives such as "Flutter must be > 3.3.3").
 
 |`--pub-cache <dir>`
 |—

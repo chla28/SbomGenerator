@@ -86,6 +86,11 @@ class SbomConfig {
   String documentName;
   String rpmDir;
   String licenseMapFile;
+
+  /// Versions réelles des SDK Dart/Flutter (`--sdk-version`), au format
+  /// `flutter=3.47.5 dart=3.13.4` (espaces ou virgules). Vide : détection
+  /// automatique de Flutter par le CLI.
+  String sdkVersions;
   int concurrency;
   bool verbose;
   bool generatePdf;
@@ -131,6 +136,7 @@ class SbomConfig {
     this.documentName = '',
     this.rpmDir = '',
     this.licenseMapFile = '',
+    this.sdkVersions = '',
     this.concurrency = 4,
     this.verbose = false,
     this.generatePdf = false,
@@ -152,6 +158,7 @@ class SbomConfig {
     'documentName': documentName,
     'rpmDir': rpmDir,
     'licenseMapFile': licenseMapFile,
+    'sdkVersions': sdkVersions,
     'concurrency': concurrency,
     'verbose': verbose,
     'generatePdf': generatePdf,
@@ -172,6 +179,7 @@ class SbomConfig {
     documentName: j['documentName'] as String? ?? '',
     rpmDir: j['rpmDir'] as String? ?? '',
     licenseMapFile: j['licenseMapFile'] as String? ?? '',
+    sdkVersions: j['sdkVersions'] as String? ?? '',
     concurrency: j['concurrency'] as int? ?? 4,
     verbose: j['verbose'] as bool? ?? false,
     generatePdf: j['generatePdf'] as bool? ?? false,
@@ -228,6 +236,9 @@ class SbomConfig {
     }
     if (licenseMapFile.isNotEmpty) {
       args.addAll(['--license-map', licenseMapFile]);
+    }
+    for (final entry in sdkVersions.split(RegExp(r'[\s,]+'))) {
+      if (entry.contains('=')) args.addAll(['--sdk-version', entry]);
     }
     if (formats.contains('cyclonedx') && cycloneDxVersion != '1.6') {
       args.addAll(['--cyclonedx-version', cycloneDxVersion]);

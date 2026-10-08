@@ -2,6 +2,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sbom_generator_gui/models/sbom_config.dart';
 
 void main() {
+  group('SbomConfig — --sdk-version', () {
+    test(
+      'une entrée flutter=… par option, séparateurs espaces ou virgules',
+      () {
+        final c = SbomConfig(sdkVersions: 'flutter=3.47.5, dart=3.13.4  x');
+        final a = c.toArgs();
+        expect(a, containsAllInOrder(['--sdk-version', 'flutter=3.47.5']));
+        expect(a, containsAllInOrder(['--sdk-version', 'dart=3.13.4']));
+        expect(
+          a.where((e) => e == '--sdk-version'),
+          hasLength(2),
+          reason: '« x » sans = est ignoré',
+        );
+      },
+    );
+
+    test('vide : aucune option ; aller-retour JSON', () {
+      expect(SbomConfig().toArgs(), isNot(contains('--sdk-version')));
+      final back = SbomConfig.fromJson(
+        SbomConfig(sdkVersions: 'flutter=3.47.5').toJson(),
+      );
+      expect(back.sdkVersions, 'flutter=3.47.5');
+    });
+  });
+
   group('SbomConfig.toArgs — --binary', () {
     test('émet --binary quand binaryPath est renseigné', () {
       final c = SbomConfig(binaryPath: '/usr/local/bin/mon-app');

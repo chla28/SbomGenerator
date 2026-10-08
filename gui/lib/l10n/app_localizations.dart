@@ -4741,6 +4741,24 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'… et {count} autre(s) CVE (voir l\'export CSV ou le détail ci-dessus)'**
   String remedMoreCves(int count);
+
+  /// Libellé du champ des versions de SDK Dart/Flutter (--sdk-version).
+  ///
+  /// In fr, this message translates to:
+  /// **'Versions de SDK'**
+  String get cfgSdkVersions;
+
+  /// Aide du champ des versions de SDK.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vraie version des SDK Dart/Flutter d\'un pubspec.lock (--sdk-version).\nFormat : flutter=3.47.5 dart=3.13.4 (séparés par des espaces ou virgules).\nVide : la version de Flutter installé est détectée automatiquement ;\nsans version, les scanners signalent TOUTES les CVE du SDK.'**
+  String get cfgSdkVersionsHelp;
+
+  /// Exemple affiché dans le champ des versions de SDK.
+  ///
+  /// In fr, this message translates to:
+  /// **'flutter=3.47.5'**
+  String get cfgSdkVersionsHint;
 }
 
 class _AppLocalizationsDelegate

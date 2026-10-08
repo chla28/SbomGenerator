@@ -787,5 +787,8 @@
   "helpNextHit": "Next match (F3 / Enter)",
   "dashExportCliFailed": "Report export failed (code {code}): {error}",
   "dashExportCliMissing": "Cannot run sbom-generator ({path}): the report is produced by the CLI.",
-  "remedMoreCves": "… and {count} more CVE(s) (see the CSV export or the comparison above)"
+  "remedMoreCves": "… and {count} more CVE(s) (see the CSV export or the comparison above)",
+  "cfgSdkVersions": "SDK versions",
+  "cfgSdkVersionsHelp": "Real version of the Dart/Flutter SDKs of a pubspec.lock (--sdk-version).\nFormat: flutter=3.47.5 dart=3.13.4 (separated by spaces or commas).\nEmpty: the installed Flutter version is detected automatically;\nwithout a version, scanners report ALL SDK CVEs.",
+  "cfgSdkVersionsHint": "flutter=3.47.5"
 }
