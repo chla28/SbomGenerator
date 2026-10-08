@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-08
+
+### Added
+- **GUI, `--sbom` argument**: `sbom-generator-gui --sbom <path>` (or `--sbom=<path>`) opens directly on the Grype tab with the SBOM prefilled (used by the MainGUI launcher to show a project's CVEs). The scan is not started automatically.
+
 ## [1.9.1] - 2026-10-08
 
 ### Fixed

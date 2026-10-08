@@ -66,7 +66,7 @@ class Spdx3Generator {
       'spdxId': toolId,
       'creationInfo': ciId,
       'name': 'sbom_generator',
-      'toolVersion': '1.9.1',
+      'toolVersion': '1.10.0',
     });
 
     sdkTools.forEach((name, version) {

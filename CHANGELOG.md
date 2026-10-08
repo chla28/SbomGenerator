@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-08
+
+### Added
+- **GUI, argument `--sbom`** : `sbom-generator-gui --sbom <chemin>` (ou `--sbom=<chemin>`) s'ouvre directement sur l'onglet Grype avec le SBOM prérempli (utilisé par le lanceur MainGUI pour afficher les CVE d'un projet). Le scan n'est pas lancé automatiquement.
+
 ## [1.9.1] - 2026-10-08
 
 ### Fixed
