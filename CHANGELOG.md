@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-08
+
 ### Added
 - **Rapport de vulnérabilités unifié** : nouvelle sous-commande `report` (`-i résultats.json|session.json -o rapport.pdf`, `--severity`, `--compare-with`, `--vex`, `--no-vex`) et `scan --format pdf|asciidoc|markdown` produisent *le même rapport* (un seul générateur, aussi utilisé par l'export du tableau de bord de la GUI). Nouvelles sections : *Remédiation*, *Tendance*, *VEX*, *Détail des CVE* (une fiche par CVE), barre de sévérité ; seuil de sévérité `--report-severity critical|high|medium|all` (CVE KEV toujours conservées). `scan --format json` embarque désormais l'exploitabilité, les versions d'outils, les couches et le VEX ; `report` lit aussi les sessions de la GUI.
 - **GUI, export du tableau de bord** : le rapport est produit par le CLI (`sbom-generator report`), donc identique à celui du CLI ; il inclut remédiation, tendance (comparaison choisie dans l'historique) et VEX. Les sessions enregistrent désormais les analyses par couche et les déclarations VEX.
