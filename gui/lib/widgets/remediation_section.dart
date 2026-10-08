@@ -184,6 +184,9 @@ class _RemediationSectionState extends State<RemediationSection> {
 }
 
 class _RemediationTile extends StatelessWidget {
+  /// CVE listées au dépliage d'un paquet (le reste est résumé).
+  static const _maxListed = 200;
+
   final RemediationItem item;
   const _RemediationTile({required this.item});
 
@@ -201,6 +204,7 @@ class _RemediationTile extends StatelessWidget {
       if (item.unfixed.isNotEmpty) l.remedRemaining(item.unfixed.length),
       if (item.fixed.isNotEmpty) l.remedGain(_gain(item.gain)),
     ];
+    final all = [...item.fixed, ...item.unfixed];
     return ExpansionTile(
       key: ValueKey('remed-${item.packageName}-${item.installedVersion}'),
       tilePadding: EdgeInsets.zero,
@@ -216,38 +220,44 @@ class _RemediationTile extends StatelessWidget {
       ),
       subtitle: Text(details.join(' · '), style: theme.textTheme.bodySmall),
       children: [
-        for (final c in [...item.fixed, ...item.unfixed])
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 36, bottom: 2),
-              child: SelectableText.rich(
+        // Un seul widget de texte (et non un par CVE) : un paquet du noyau peut
+        // porter des milliers de CVE, et un widget sélectionnable par ligne
+        // figeait l'interface au dépliage.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 36, bottom: 6),
+            child: SelectionArea(
+              child: Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(
-                      text: '${c.severity.toUpperCase()}  ',
-                      style: TextStyle(
-                        color: severityFg(c.severity),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                    TextSpan(text: c.id, style: const TextStyle(fontSize: 12)),
-                    if (c.inKev)
-                      const TextSpan(
-                        text: '  KEV',
+                    for (final c in all.take(_maxListed)) ...[
+                      TextSpan(
+                        text: '${c.severity.toUpperCase()}  ',
                         style: TextStyle(
+                          color: severityFg(c.severity),
                           fontWeight: FontWeight.bold,
                           fontSize: 11,
                         ),
                       ),
-                    if (!c.hasFix)
-                      TextSpan(text: '  ✗', style: theme.textTheme.bodySmall),
+                      TextSpan(
+                        text:
+                            '${c.id}${c.inKev ? '  KEV' : ''}'
+                            '${c.hasFix ? '' : '  ✗'}\n',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                    if (all.length > _maxListed)
+                      TextSpan(
+                        text: l.remedMoreCves(all.length - _maxListed),
+                        style: theme.textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),
             ),
           ),
+        ),
       ],
     );
   }

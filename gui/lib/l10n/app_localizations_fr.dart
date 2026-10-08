@@ -3319,4 +3319,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String dashExportCliMissing(String path) {
     return 'Impossible de lancer sbom-generator ($path) : le rapport est produit par le CLI.';
   }
+
+  @override
+  String remedMoreCves(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '… et $countString autre(s) CVE (voir l\'export CSV ou le détail ci-dessus)';
+  }
 }

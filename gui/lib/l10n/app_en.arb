@@ -786,5 +786,6 @@
   "helpPrevHit": "Previous match (Shift+F3)",
   "helpNextHit": "Next match (F3 / Enter)",
   "dashExportCliFailed": "Report export failed (code {code}): {error}",
-  "dashExportCliMissing": "Cannot run sbom-generator ({path}): the report is produced by the CLI."
+  "dashExportCliMissing": "Cannot run sbom-generator ({path}): the report is produced by the CLI.",
+  "remedMoreCves": "… and {count} more CVE(s) (see the CSV export or the comparison above)"
 }

@@ -506,4 +506,44 @@ void remediationTests() {
     await tester.pumpAndSettle();
     expect(find.textContaining('CVE-1', findRichText: true), findsWidgets);
   });
+
+  testWidgets('Remédiation : un paquet à milliers de CVE se déplie sans figer '
+      '(un seul texte, liste plafonnée)', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final vulns = [
+      for (var i = 0; i < 3000; i++)
+        GrypeVuln(
+          id: 'CVE-2024-$i',
+          severity: 'High',
+          packageName: 'linux-libc-dev',
+          installedVersion: '6.1.0',
+          fixedVersion: '6.1.${i % 50 + 1}',
+          packageType: 'deb',
+        ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardPanel(
+            grypeVulns: vulns,
+            osvVulns: null,
+            trivyVulns: null,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final sw = Stopwatch()..start();
+    await tester.tap(find.textContaining('linux-libc-dev 6.1.0'));
+    await tester.pumpAndSettle();
+    // Avant correctif : un widget sélectionnable par CVE (≈ 5 s ici).
+    expect(find.byType(EditableText), findsNothing);
+    expect(
+      find.textContaining('autre(s) CVE', findRichText: true),
+      findsOneWidget,
+    );
+    expect(sw.elapsedMilliseconds, lessThan(3000));
+  });
 }

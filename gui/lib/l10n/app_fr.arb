@@ -4199,5 +4199,15 @@
         "type": "String"
       }
     }
+  },
+  "remedMoreCves": "… et {count} autre(s) CVE (voir l'export CSV ou le détail ci-dessus)",
+  "@remedMoreCves": {
+    "description": "Fin de la liste dépliée d'un paquet : CVE non listées.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
   }
 }

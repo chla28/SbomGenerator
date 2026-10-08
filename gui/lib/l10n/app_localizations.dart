@@ -4735,6 +4735,12 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Impossible de lancer sbom-generator ({path}) : le rapport est produit par le CLI.'**
   String dashExportCliMissing(String path);
+
+  /// Fin de la liste dépliée d'un paquet : CVE non listées.
+  ///
+  /// In fr, this message translates to:
+  /// **'… et {count} autre(s) CVE (voir l\'export CSV ou le détail ci-dessus)'**
+  String remedMoreCves(int count);
 }
 
 class _AppLocalizationsDelegate
