@@ -813,19 +813,29 @@ Future<void> _runGenerate(List<String> arguments) async {
   // pubspec.lock n'a pas de version et les scanners lui attribuent toutes les
   // CVE du SDK (faux positifs). Détectée au premier pubspec rencontré, sauf
   // si --sdk-version flutter=… est fourni.
-  var flutterDetectDone = false;
-  void ensureFlutterVersion() {
-    if (flutterDetectDone) return;
-    flutterDetectDone = true;
-    if (sdkVersions.containsKey('flutter')) return;
-    final v = detectFlutterVersion(flutterRoot: flutterRootDir);
-    if (v == null) return;
-    sdkVersions['flutter'] = v;
-    stderr.writeln(tr(
-        'Version du SDK Flutter détectée : $v (installation locale) ; '
-            'pour une autre version : --sdk-version flutter=<version>.',
-        'Flutter SDK version detected: $v (local installation); '
-            'for another version: --sdk-version flutter=<version>.'));
+  // `--sdk-version flutter=…` explicite : jamais écrasé. Sinon détection par
+  // projet (FVM : `.fvmrc` / `.fvm/flutter_sdk`), puis Flutter installé.
+  final flutterGiven = sdkVersions.containsKey('flutter');
+  final flutterByDir = <String, String?>{};
+  Map<String, String> sdkVersionsFor(String ref) {
+    if (flutterGiven) return sdkVersions;
+    final dir = File(ref).absolute.parent.path;
+    final v = flutterByDir.putIfAbsent(dir, () {
+      final d =
+          detectFlutterVersion(flutterRoot: flutterRootDir, projectDir: dir);
+      if (d != null) {
+        stderr.writeln(tr(
+            'Version du SDK Flutter détectée pour $ref : $d ; '
+                'pour une autre version : --sdk-version flutter=<version>.',
+            'Flutter SDK version detected for $ref: $d; '
+                'for another version: --sdk-version flutter=<version>.'));
+      }
+      return d;
+    });
+    if (v == null) return sdkVersions;
+    // Métadonnées de l'outil (toolchain du SBOM) : première version vue.
+    sdkVersions.putIfAbsent('flutter', () => v);
+    return {...sdkVersions, 'flutter': v};
   }
 
   final minQualityScore = args['min-quality-score'] as String?;
@@ -986,15 +996,13 @@ Future<void> _runGenerate(List<String> arguments) async {
     } else if (_isPomXml(ref)) {
       preloadedPackages.addAll(mavenParser.parsePomXml(ref));
     } else if (_isPubspecLock(ref)) {
-      ensureFlutterVersion();
       preloadedPackages.addAll(pubspecParser.parsePubspecLock(ref,
-          sdkVersions: sdkVersions,
+          sdkVersions: sdkVersionsFor(ref),
           pubCache: pubCacheDir,
           flutterRoot: flutterRootDir));
     } else if (_isPubspecYaml(ref)) {
-      ensureFlutterVersion();
-      preloadedPackages.addAll(
-          pubspecParser.parsePubspecYaml(ref, sdkVersions: sdkVersions));
+      preloadedPackages.addAll(pubspecParser.parsePubspecYaml(ref,
+          sdkVersions: sdkVersionsFor(ref)));
     } else {
       filteredRefs.add(ref);
     }

@@ -15,8 +15,16 @@ import 'i18n.dart';
 /// (`version: 0.0.0`) est émis sans version et les scanners lui attribuent
 /// *toutes* les CVE du SDK, quelle que soit leur plage de versions affectées.
 String? detectFlutterVersion(
-    {String? flutterRoot, String? path, Map<String, String>? env}) {
+    {String? flutterRoot,
+    String? path,
+    Map<String, String>? env,
+    String? projectDir}) {
   final e = env ?? Platform.environment;
+  // Projet épinglé avec FVM : sa version prime sur le Flutter global.
+  if (projectDir != null) {
+    final pinned = _fvmPinnedVersion(projectDir, e);
+    if (pinned != null) return pinned;
+  }
   final roots = <String>[
     if (flutterRoot != null && flutterRoot.isNotEmpty) flutterRoot,
     if ((e['FLUTTER_ROOT'] ?? '').isNotEmpty) e['FLUTTER_ROOT']!,
@@ -47,6 +55,58 @@ String? detectFlutterVersion(
         if (v != null && RegExp(r'^\d+\.\d+').hasMatch(v)) return v;
       }
     } catch (_) {}
+  }
+  return null;
+}
+
+final _versionRe = RegExp(r'^\d+\.\d+\.\d+');
+
+/// Version de Flutter épinglée par FVM pour le projet de [dir] (ou l'un de ses
+/// parents, jusqu'à 4 niveaux) : `.fvm/flutter_sdk` (lien vers le SDK, dont on
+/// lit la version), `.fvmrc` (`{"flutter": "3.41.2"}`) ou l'ancien
+/// `.fvm/fvm_config.json` (`flutterSdkVersion`). Un canal (`stable`, `beta`…)
+/// n'est pas une version : on lit alors le SDK du cache FVM s'il existe.
+String? _fvmPinnedVersion(String dir, Map<String, String> env) {
+  var d = Directory(dir).absolute;
+  for (var i = 0; i < 4; i++) {
+    try {
+      final link = Link('${d.path}/.fvm/flutter_sdk');
+      if (link.existsSync() ||
+          Directory('${d.path}/.fvm/flutter_sdk').existsSync()) {
+        final root = link.existsSync()
+            ? link.resolveSymbolicLinksSync()
+            : '${d.path}/.fvm/flutter_sdk';
+        final v =
+            detectFlutterVersion(flutterRoot: root, path: '', env: const {});
+        if (v != null) return v;
+      }
+      String? pin;
+      final rc = File('${d.path}/.fvmrc');
+      if (rc.existsSync()) {
+        pin = (jsonDecode(rc.readAsStringSync()) as Map)['flutter'] as String?;
+      }
+      final legacy = File('${d.path}/.fvm/fvm_config.json');
+      if (pin == null && legacy.existsSync()) {
+        pin = (jsonDecode(legacy.readAsStringSync())
+            as Map)['flutterSdkVersion'] as String?;
+      }
+      if (pin != null) {
+        pin = pin.trim();
+        if (_versionRe.hasMatch(pin)) return pin.split('@').first;
+        // Canal : version du SDK dans le cache FVM.
+        final cache = env['FVM_CACHE_PATH'] ??
+            env['FVM_HOME'] ??
+            (env['HOME'] != null ? '${env['HOME']}/fvm' : null);
+        if (cache != null) {
+          final v = detectFlutterVersion(
+              flutterRoot: '$cache/versions/$pin', path: '', env: const {});
+          if (v != null) return v;
+        }
+      }
+    } catch (_) {}
+    final parent = d.parent;
+    if (parent.path == d.path) break;
+    d = parent;
   }
   return null;
 }

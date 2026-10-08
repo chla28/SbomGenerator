@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Détection de la version de Flutter par projet** : un projet épinglé avec FVM (`.fvmrc`, `.fvm/flutter_sdk`, ancien `.fvm/fvm_config.json`, dans le dossier du `pubspec.lock` ou ses parents) utilise sa version épinglée ; sinon, le Flutter installé. `--sdk-version flutter=…` reste prioritaire.
+
 ## [1.10.1] - 2026-10-08
 
 ### Fixed
