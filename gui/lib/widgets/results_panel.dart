@@ -51,6 +51,9 @@ class ResultsPanel extends StatefulWidget {
   /// Historique automatique des analyses ; `null` = pas de sauvegarde.
   final SessionStore? historyStore;
 
+  /// SBOM prérempli dans l'onglet Grype, qui s'affiche au démarrage.
+  final String? initialGrypeSbom;
+
   const ResultsPanel({
     super.key,
     required this.logLines,
@@ -66,6 +69,7 @@ class ResultsPanel extends StatefulWidget {
     this.progressLabel = '',
     this.sbomqsOutput,
     this.historyStore,
+    this.initialGrypeSbom,
   });
 
   @override
@@ -245,7 +249,11 @@ class ResultsPanelState extends State<ResultsPanel>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 15, vsync: this);
+    _tabs = TabController(
+      length: 15,
+      vsync: this,
+      initialIndex: widget.initialGrypeSbom == null ? 0 : _grypeTabIndex,
+    );
     _vex.addListener(() {
       if (mounted) setState(() {});
     });
@@ -289,6 +297,9 @@ class ResultsPanelState extends State<ResultsPanel>
       _autoSelectPreview();
     }
   }
+
+  /// Position de l'onglet Grype.
+  static const _grypeTabIndex = 4;
 
   /// Nombre d'onglets.
   int get tabCount => _tabs.length;
@@ -643,6 +654,7 @@ class ResultsPanelState extends State<ResultsPanel>
                 // Tab 4 : Grype
                 GrypePanel(
                   outputFiles: widget.outputFiles,
+                  initialFile: widget.initialGrypeSbom,
                   onVulnsChanged: (v) {
                     setState(() => _grypeVulns = v);
                     _scheduleSave();

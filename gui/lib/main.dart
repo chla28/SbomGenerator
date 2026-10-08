@@ -8,7 +8,18 @@ import 'models/app_themes.dart';
 import 'models/sbom_config.dart';
 import 'services/settings_service.dart';
 
-void main() async {
+/// Chemin du SBOM passé par `--sbom <chemin>` (ou `--sbom=<chemin>`) : la GUI
+/// s'ouvre alors sur l'onglet Grype avec ce fichier prérempli.
+String? parseSbomArg(List<String> args) {
+  for (var i = 0; i < args.length; i++) {
+    final a = args[i];
+    if (a == '--sbom' && i + 1 < args.length) return args[i + 1];
+    if (a.startsWith('--sbom=')) return a.substring('--sbom='.length);
+  }
+  return null;
+}
+
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final savedConfig = await SettingsService.loadConfig();
   final themeMode = await SettingsService.loadTheme();
@@ -20,6 +31,7 @@ void main() async {
       initialTheme: themeMode,
       initialThemeIndex: themeIndex,
       initialLanguage: language,
+      initialSbom: parseSbomArg(args),
     ),
   );
 }
@@ -30,12 +42,16 @@ class SbomGeneratorApp extends StatefulWidget {
   final int initialThemeIndex;
   final AppLanguage initialLanguage;
 
+  /// SBOM à analyser avec Grype dès l'ouverture (`--sbom`).
+  final String? initialSbom;
+
   const SbomGeneratorApp({
     super.key,
     this.initialConfig,
     this.initialTheme = ThemeMode.system,
     this.initialThemeIndex = 0,
     this.initialLanguage = AppLanguage.system,
+    this.initialSbom,
   });
 
   @override
@@ -113,6 +129,7 @@ class _SbomGeneratorAppState extends State<SbomGeneratorApp> {
       ),
       home: HomeScreen(
         initialConfig: widget.initialConfig,
+        initialSbom: widget.initialSbom,
         themeMode: _themeMode,
         onThemeToggle: _toggleTheme,
         themeIndex: _themeIndex,

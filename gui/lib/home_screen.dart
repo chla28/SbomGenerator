@@ -17,6 +17,9 @@ import 'widgets/results_panel.dart';
 
 class HomeScreen extends StatefulWidget {
   final SbomConfig? initialConfig;
+
+  /// SBOM prérempli dans l'onglet Grype (argument `--sbom`).
+  final String? initialSbom;
   final ThemeMode themeMode;
   final VoidCallback onThemeToggle;
   final int themeIndex;
@@ -29,6 +32,7 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.initialConfig,
+    this.initialSbom,
     required this.themeMode,
     required this.onThemeToggle,
     required this.themeIndex,
@@ -381,6 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: ResultsPanel(
               key: _resultsKey,
+              initialGrypeSbom: widget.initialSbom,
               logLines: _logLines,
               outputFiles: _outputFiles,
               warnings: _warnings,

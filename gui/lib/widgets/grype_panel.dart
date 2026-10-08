@@ -115,6 +115,9 @@ class GrypeVuln implements VulnRow {
 
 class GrypePanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
+
+  /// SBOM prérempli à l'ouverture (prioritaire sur [outputFiles]).
+  final String? initialFile;
   final void Function(List<GrypeVuln>)? onVulnsChanged;
   final void Function(Map<String, ExploitInfo>)? onExploitChanged;
 
@@ -131,6 +134,7 @@ class GrypePanel extends StatefulWidget {
   const GrypePanel({
     super.key,
     required this.outputFiles,
+    this.initialFile,
     this.onVulnsChanged,
     this.onExploitChanged,
     this.onScanTargetChanged,
@@ -211,6 +215,8 @@ class _GrypePanelState extends State<GrypePanel>
   void initState() {
     super.initState();
     _resultTabs = TabController(length: 3, vsync: this);
+    final initial = widget.initialFile;
+    if (initial != null && initial.isNotEmpty) _fileCtrl.text = initial;
     _updateAutoFile();
     SettingsService.loadScanEnrichOnline().then((v) {
       if (mounted) setState(() => _enrichOnline = v);
