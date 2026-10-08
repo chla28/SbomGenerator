@@ -10,12 +10,14 @@ import 'cve_detail.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
 import 'pdf_report.dart';
+import '../models/scan_session.dart';
+import '../services/report_export.dart';
 import 'remediation_section.dart';
 import 'on_pale.dart';
 import 'session_bar.dart';
 import '../models/remediation.dart';
 import 'trivy_panel.dart';
-import 'vuln_shared.dart' show adocEscape, SortHeader, VulnRow;
+import 'vuln_shared.dart' show SortHeader, VulnRow;
 import '../l10n/l10n.dart';
 
 // ─── Tableau de bord de synthèse ─────────────────────────────────────────────
@@ -88,22 +90,56 @@ class _DashboardPanelState extends State<DashboardPanel> {
     });
   }
 
+  /// Exporte le rapport : le CLI (`sbom-generator report`) le produit à partir
+  /// des résultats courants — c'est le même rapport que `scan --format pdf`.
   Future<void> _export(BuildContext context) async {
     final l = context.l10n;
-    final adoc = await _buildDashboardReport(
-      grype: widget.grypeVulns,
-      osv: widget.osvVulns,
-      trivy: widget.trivyVulns,
-      threshold: _threshold,
-      exploitById: widget.exploitById,
-      scanTargets: widget.scanTargets,
-      layerScans: widget.layerScans,
-      crossSortCol: _effectiveCrossSort,
-      crossSortAsc: _effectiveCrossAsc,
-      l: l,
+    final sessions = widget.sessions;
+    final session =
+        sessions?.current() ??
+        ScanSession(
+          savedAt: DateTime.now(),
+          guiVersion: kGuiVersion,
+          targets: widget.scanTargets,
+          grype: widget.grypeVulns,
+          osv: widget.osvVulns,
+          trivy: widget.trivyVulns,
+          exploit: widget.exploitById,
+          layerScans: widget.layerScans,
+        );
+    final path = await FilePicker.saveFile(
+      dialogTitle: l.dashExportTitle,
+      fileName: _threshold == ReportSeverityThreshold.all
+          ? l.dashExportFileAll
+          : l.dashExportFileThreshold(_threshold.name),
+      type: FileType.custom,
+      allowedExtensions: ['adoc'],
     );
+    if (path == null || !context.mounted) return;
+    final pdfPath = path.endsWith('.adoc')
+        ? '${path.substring(0, path.length - 5)}.pdf'
+        : '$path.pdf';
+    String message;
+    try {
+      final r = await exportReport(
+        session: session,
+        baseline: sessions?.baseline,
+        severity: _threshold.name,
+        pdfPath: pdfPath,
+        applyVex: sessions?.applyVex ?? true,
+      );
+      message = r.exitCode != 0 || !r.adocWritten
+          ? l.dashExportCliFailed(r.exitCode, r.stderr)
+          : r.pdfWritten
+          ? l.dashExported(r.adocPath, r.pdfPath)
+          : l.dashExportedNoPdf(r.adocPath);
+    } on ProcessException {
+      message = l.dashExportCliMissing(SettingsService.cliBinary);
+    }
     if (!context.mounted) return;
-    await _exportDashboard(context, adoc: adoc, threshold: _threshold);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 6)),
+    );
   }
 
   // Tri du tableau « Comparaison inter-scanners ». `null` = tri par défaut :
@@ -324,47 +360,6 @@ enum ReportSeverityThreshold {
       this == all || _crossSevOrd(severity) <= _maxOrd;
 }
 
-/// Vulnérabilités reprises dans le rapport pour [threshold]. Une CVE (id
-/// normalisé) est retenue — avec toutes ses lignes, tous scanners — si sa
-/// pire sévérité, tous scanners confondus, atteint le seuil, ou si elle est
-/// au catalogue CISA KEV (exploitation active, quelle que soit la
-/// sévérité). Filtrer par CVE plutôt que ligne à ligne garde la comparaison
-/// inter-scanners fidèle : une CVE High pour Grype et Medium pour Trivy
-/// reste marquée comme vue par les deux.
-({List<GrypeVuln>? grype, List<OsvVuln>? osv, List<TrivyVuln>? trivy})
-filterForReport(
-  List<GrypeVuln>? grype,
-  List<OsvVuln>? osv,
-  List<TrivyVuln>? trivy,
-  ReportSeverityThreshold threshold,
-  Map<String, ExploitInfo> exploitById,
-) {
-  if (threshold == ReportSeverityThreshold.all) {
-    return (grype: grype, osv: osv, trivy: trivy);
-  }
-  final worst = <String, String>{};
-  for (final l in <List<VulnRow>?>[grype, osv, trivy]) {
-    for (final v in l ?? const <VulnRow>[]) {
-      final id = _normalizeVulnId(v.id);
-      final prev = worst[id];
-      if (prev == null || _crossSevOrd(v.severity) < _crossSevOrd(prev)) {
-        worst[id] = v.severity;
-      }
-    }
-  }
-  bool keep(VulnRow v) {
-    final id = _normalizeVulnId(v.id);
-    return threshold.accepts(worst[id] ?? v.severity) ||
-        (exploitById[id]?.inKev ?? false);
-  }
-
-  return (
-    grype: grype?.where(keep).toList(),
-    osv: osv?.where(keep).toList(),
-    trivy: trivy?.where(keep).toList(),
-  );
-}
-
 // ─── Synthèse par couche (analyse par couche des onglets de scan) ──────────
 
 /// Couches de l'image et CVE (id normalisé) de chaque couche, tous scanners
@@ -556,402 +551,6 @@ List<_CrossRowData> _sortCrossRows(
     final v = c != 0 ? c : a.id.compareTo(b.id); // départage déterministe
     return asc ? v : -v;
   });
-}
-
-/// Verdict d'une page de garde de rapport : (rôle de thème, phrase).
-(String, String) _verdict(int critical, int high, int kev, AppLocalizations t) {
-  if (kev > 0) {
-    return ('verdict-urgent', t.repVerdictKev(kev));
-  }
-  if (critical > 0) {
-    return ('verdict-urgent', t.repVerdictCritical(critical));
-  }
-  if (high > 0) {
-    return ('verdict-watch', t.repVerdictHigh(high));
-  }
-  return ('verdict-ok', t.repVerdictOk);
-}
-
-// ─── Export AsciiDoc + PDF ────────────────────────────────────────────────
-//
-// Contrairement à VulnTableView (grype/osv/trivy_panel.dart), le tableau de
-// bord n'a pas de liste ligne-par-ligne unique à exporter : le rapport
-// reproduit donc l'ensemble de ce qui est affiché à l'écran — résumé
-// global, répartition par sévérité pour chaque scanner, puis comparaison
-// inter-scanners complète.
-/// Contenu AsciiDoc du rapport du tableau de bord, à partir des listes déjà
-/// filtrées par le seuil de sévérité.
-Future<String> _dashboardReportAdoc({
-  required int scansRun,
-  required int uniqueIds,
-  required List<GrypeVuln>? grype,
-  required List<OsvVuln>? osv,
-  required List<TrivyVuln>? trivy,
-  required List<_CrossRowData> crossRows,
-  Map<String, ExploitInfo> exploitById = const {},
-  _CrossSort crossSortCol = _CrossSort.severity,
-  bool crossSortAsc = true,
-  List<String> scanTargets = const [],
-  _LayerSynthesis? layers,
-  ReportSeverityThreshold threshold = ReportSeverityThreshold.all,
-
-  /// Nombre de CVE uniques avant filtrage par [threshold].
-  int? totalIds,
-
-  /// Langue du rapport (français par défaut).
-  AppLocalizations? l,
-}) async {
-  final t = l ?? lookupAppLocalizations(fallbackLocale);
-  ExploitInfo exSum(String id) => exploitById[id] ?? ExploitInfo.empty;
-  int sevCount(String s) =>
-      crossRows.where((r) => r.severity.toLowerCase() == s).length;
-  final crit = sevCount('critical');
-  final high = sevCount('high');
-  final kev = crossRows.where((r) => exSum(r.id).inKev).length;
-  final epssHi = crossRows
-      .where((r) => (exSum(r.id).epssScore ?? 0) >= 0.10)
-      .length;
-
-  final buf = StringBuffer();
-  buf.writeln(t.repTitle);
-  buf.writeln('SBOM Generator $kGuiVersion');
-  buf.writeln(':doctype: article');
-  buf.writeln(':title-page:');
-  buf.writeln(':toc:');
-  buf.writeln(t.repTocTitle);
-  buf.writeln(':toclevels: 2');
-  buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now(), l: t)}');
-  buf.writeln(':icons: font');
-  buf.writeln();
-
-  buf.writeln(t.repExecSummary);
-  buf.writeln();
-  if (scanTargets.length == 1) {
-    buf.writeln(t.repTarget(adocEscape(scanTargets.single)));
-  } else if (scanTargets.length > 1) {
-    buf.writeln(
-      t.repTargets(scanTargets.map((x) => '`${adocEscape(x)}`').join(', ')),
-    );
-  }
-  buf.writeln(
-    t.repScannersRun(
-      scansRun,
-      scansRun == 0
-          ? ''
-          : ' (${[if (grype != null) 'Grype', if (osv != null) 'OSV-Scanner', if (trivy != null) 'Trivy'].join(', ')})',
-      uniqueIds,
-    ),
-  );
-  buf.writeln();
-  if (threshold != ReportSeverityThreshold.all) {
-    buf.writeln(
-      t.repThresholdNote(
-        threshold.label,
-        uniqueIds,
-        totalIds != null ? t.repThresholdOf(totalIds) : '',
-      ),
-    );
-    buf.writeln();
-  }
-  buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
-  buf.writeln('|===');
-  buf.writeln(t.repStatsHeader);
-  buf.writeln(
-    '| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
-    '| [.h1-num]*$high* '
-    '| [.${kev > 0 ? 'h1-num-alert' : 'h1-num'}]*$kev* '
-    '| [.h1-num]*$epssHi*',
-  );
-  buf.writeln('|===');
-  buf.writeln();
-  final (verdictRole, verdictText) = _verdict(crit, high, kev, t);
-  buf.writeln('[.$verdictRole]*$verdictText*');
-  buf.writeln();
-
-  // Versions détectées au moment de l'export (pas au moment du scan) —
-  // toujours à jour même si l'outil a été mis à jour depuis.
-  buf.writeln(t.repTools);
-  buf.writeln();
-  buf.writeln('[cols="<3,<1",options="header"]');
-  buf.writeln('|===');
-  buf.writeln(t.repToolHeader);
-  buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion, l: t));
-  if (grype != null) {
-    buf.writeln(pdfToolVersionRow('Grype', await grypeVersion(), l: t));
-  }
-  if (osv != null) {
-    buf.writeln(
-      pdfToolVersionRow('OSV-Scanner', await osvScannerVersion(), l: t),
-    );
-  }
-  if (trivy != null) {
-    buf.writeln(pdfToolVersionRow('Trivy', await trivyVersion(), l: t));
-  }
-  buf.writeln('|===');
-  buf.writeln();
-
-  buf.writeln(t.repBreakdown);
-  buf.writeln();
-  for (final scanner in [
-    ('Grype', grype),
-    ('OSV-Scanner', osv),
-    ('Trivy', trivy),
-  ]) {
-    final (name, vulns) = scanner;
-    buf.writeln('=== $name');
-    buf.writeln();
-    if (vulns == null) {
-      buf.writeln(t.repNotRun);
-    } else if (vulns.isEmpty) {
-      buf.writeln(t.repNoVuln);
-    } else {
-      final counts = DashboardPanel._countByKey(vulns.map((v) => v.severity));
-      final svg = buildSeverityBarSvg(counts);
-      if (svg != null) {
-        buf.writeln(svgImageMacro(svg, l: t));
-        buf.writeln();
-      }
-      buf.writeln('[cols="<2,<1",options="header"]');
-      buf.writeln('|===');
-      buf.writeln(t.repSevCountHeader);
-      for (final s in ['critical', 'high', 'medium', 'low']) {
-        if ((counts[s] ?? 0) > 0) {
-          buf.writeln('| ${pdfSeverityBadge(s, l: t)} | ${counts[s]}');
-        }
-      }
-      final other = counts.entries
-          .where(
-            (e) => !const {'critical', 'high', 'medium', 'low'}.contains(e.key),
-          )
-          .fold(0, (s, e) => s + e.value);
-      if (other > 0) {
-        buf.writeln('| ${pdfSeverityBadge('autre', l: t)} | $other');
-      }
-      buf.writeln('| *Total* | *${vulns.length}*');
-      buf.writeln('|===');
-    }
-    buf.writeln();
-  }
-
-  if (layers != null) {
-    buf.writeln(t.repLayersTitle);
-    buf.writeln();
-    buf.writeln(
-      t.repMethod(
-        layers.modes.entries.map((e) => '${e.key} — ${e.value}').join(' ; '),
-      ),
-    );
-    buf.writeln();
-    buf.writeln('[cols="2,3,7,2,3,3",options="header"]');
-    buf.writeln('|===');
-    buf.writeln(t.repLayersHeader);
-    for (final l in layers.layers) {
-      final by = l.createdBy ?? '—';
-      buf.writeln(
-        '| ${l.index} | `${l.shortDigest}` '
-        '| ${adocEscape(by.length > 160 ? '${by.substring(0, 159)}…' : by)} '
-        '| ${layers.count(l.index)} | ${layers.count(l.index, 'critical')} '
-        '| ${layers.count(l.index, 'high')}',
-      );
-    }
-    buf.writeln('|===');
-    buf.writeln();
-  }
-
-  buf.writeln(t.repCompareTitle);
-  buf.writeln();
-  final withExploit = exploitById.isNotEmpty;
-  final withLayers = layers != null;
-  String layerCell(String id) =>
-      withLayers ? ' | ${layers.layersLabel(id)}' : '';
-  final layerCol = withLayers ? ',2' : '';
-  final layerHead = withLayers ? t.repLayersColumn : '';
-  ExploitInfo ex(String id) => exploitById[id] ?? ExploitInfo.empty;
-  // Même ordre qu'à l'écran (colonne de tri active du tableau de bord).
-  final rows = _sortCrossRows(
-    crossRows,
-    crossSortCol,
-    crossSortAsc,
-    exploitById,
-  );
-  if (crossRows.isEmpty) {
-    buf.writeln(t.repNoCve);
-  } else {
-    if (withExploit) {
-      buf.writeln('[cols="2,5,1,1,1,1,1$layerCol",options="header"]');
-      buf.writeln('|===');
-      buf.writeln(t.repCompareHeaderExploit(layerHead));
-      for (final row in rows) {
-        final e = ex(row.id);
-        buf.writeln(
-          '| ${pdfSeverityBadge(row.severity, l: t)} '
-          '| ${adocEscape(row.id)} '
-          '| ${e.inKev ? '✓' : '—'} '
-          '| ${e.epssScore == null ? '—' : e.epssScore!.toStringAsFixed(2)} '
-          '| ${row.inGrype ? '✓' : '—'} '
-          '| ${row.inOsv ? '✓' : '—'} '
-          '| ${row.inTrivy ? '✓' : '—'}${layerCell(row.id)}',
-        );
-      }
-      buf.writeln('|===');
-    } else {
-      buf.writeln('[cols="2,5,1,1,1$layerCol",options="header"]');
-      buf.writeln('|===');
-      buf.writeln(t.repCompareHeader(layerHead));
-      for (final row in rows) {
-        buf.writeln(
-          '| ${pdfSeverityBadge(row.severity, l: t)} '
-          '| ${adocEscape(row.id)} '
-          '| ${row.inGrype ? '✓' : '—'} '
-          '| ${row.inOsv ? '✓' : '—'} '
-          '| ${row.inTrivy ? '✓' : '—'}${layerCell(row.id)}',
-        );
-      }
-      buf.writeln('|===');
-    }
-  }
-  buf.writeln();
-
-  if (scansRun >= 2) {
-    buf.writeln('[NOTE]');
-    buf.writeln('====');
-    buf.writeln(t.repScannerNote);
-    buf.writeln('====');
-    buf.writeln();
-  }
-
-  // ── Détail des CVE ──
-  // `rows` est déjà filtré par le seuil du rapport (filterForReport : pire
-  // sévérité atteignant le seuil, ou CISA KEV) : le détail les reprend toutes
-  // plutôt que d'appliquer un second filtre indépendant du menu.
-  final detailed = rows;
-  if (detailed.isNotEmpty) {
-    buf.writeln(t.repDetailTitle);
-    buf.writeln();
-    buf.writeln(
-      threshold == ReportSeverityThreshold.all
-          ? t.repDetailAll(detailed.length)
-          : t.repDetailKept(detailed.length, threshold.label),
-    );
-    buf.writeln();
-    for (final r in detailed) {
-      final d = _crossCveDetail(r.id, grype, osv, trivy, exploitById);
-      buf.writeln('=== ${adocEscape(r.id)}');
-      buf.writeln();
-      buf.writeln('[cols="<1h,<3a"]');
-      buf.writeln('|===');
-      buf.write(d.toAdocRows(adocEscape, l: t));
-      buf.writeln('|===');
-      buf.writeln();
-    }
-  }
-
-  return buf.toString();
-}
-
-/// Rapport AsciiDoc du tableau de bord pour [threshold] : filtre les
-/// vulnérabilités ([filterForReport]) puis produit tout le rapport sur ce
-/// sous-ensemble.
-Future<String> _buildDashboardReport({
-  required List<GrypeVuln>? grype,
-  required List<OsvVuln>? osv,
-  required List<TrivyVuln>? trivy,
-  required ReportSeverityThreshold threshold,
-  Map<String, ExploitInfo> exploitById = const {},
-  List<String> scanTargets = const [],
-  Map<String, LayerScanResult> layerScans = const {},
-  _CrossSort crossSortCol = _CrossSort.severity,
-  bool crossSortAsc = true,
-  AppLocalizations? l,
-}) {
-  final f = filterForReport(grype, osv, trivy, threshold, exploitById);
-  Set<String> ids(List<List<VulnRow>?> lists) => {
-    for (final l in lists) ...?l?.map((v) => _normalizeVulnId(v.id)),
-  };
-  return _dashboardReportAdoc(
-    scansRun: [f.grype, f.osv, f.trivy].where((l) => l != null).length,
-    uniqueIds: ids([f.grype, f.osv, f.trivy]).length,
-    grype: f.grype,
-    osv: f.osv,
-    trivy: f.trivy,
-    crossRows: _crossScannerRows(f.grype, f.osv, f.trivy),
-    exploitById: exploitById,
-    crossSortCol: crossSortCol,
-    crossSortAsc: crossSortAsc,
-    scanTargets: scanTargets,
-    layers: _layerSynthesis(f.grype, f.osv, f.trivy, layerScans, l: l),
-    threshold: threshold,
-    totalIds: ids([grype, osv, trivy]).length,
-    l: l,
-  );
-}
-
-/// Rapport AsciiDoc du tableau de bord (tri par défaut) — pour les tests.
-@visibleForTesting
-Future<String> dashboardReportAdoc({
-  required List<GrypeVuln>? grype,
-  required List<OsvVuln>? osv,
-  required List<TrivyVuln>? trivy,
-  ReportSeverityThreshold threshold = ReportSeverityThreshold.all,
-  Map<String, ExploitInfo> exploitById = const {},
-  Map<String, LayerScanResult> layerScans = const {},
-  AppLocalizations? l,
-}) => _buildDashboardReport(
-  grype: grype,
-  osv: osv,
-  trivy: trivy,
-  threshold: threshold,
-  exploitById: exploitById,
-  layerScans: layerScans,
-  l: l,
-);
-
-/// Écrit [adoc] dans le fichier choisi par l'utilisateur puis le convertit
-/// en PDF.
-Future<void> _exportDashboard(
-  BuildContext context, {
-  required String adoc,
-  required ReportSeverityThreshold threshold,
-}) async {
-  final l = context.l10n;
-  final path = await FilePicker.saveFile(
-    dialogTitle: l.dashExportTitle,
-    fileName: threshold == ReportSeverityThreshold.all
-        ? l.dashExportFileAll
-        : l.dashExportFileThreshold(threshold.name),
-    type: FileType.custom,
-    allowedExtensions: ['adoc'],
-  );
-  if (path == null || !context.mounted) return;
-  await File(path).writeAsString(adoc);
-  if (!context.mounted) return;
-
-  final pdfPath = path.endsWith('.adoc')
-      ? '${path.substring(0, path.length - 5)}.pdf'
-      : '$path.pdf';
-
-  try {
-    final result = await runAsciidoctorPdf(path, pdfPath);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.exitCode == 0
-              ? l.dashExported(path, pdfPath)
-              : l.dashExportedPdfFailed(path, result.exitCode),
-        ),
-        duration: const Duration(seconds: 5),
-      ),
-    );
-  } catch (_) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l.dashExportedNoPdf(path)),
-        duration: const Duration(seconds: 5),
-      ),
-    );
-  }
 }
 
 // ─── Synthèse globale ─────────────────────────────────────────────────────────

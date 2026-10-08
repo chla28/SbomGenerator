@@ -24,12 +24,17 @@ class SessionActions {
   /// Historique automatique ; `null` = désactivé (tests).
   final SessionStore? store;
 
+  /// Les déclarations VEX s'appliquent-elles au rapport exporté ? (reflète la
+  /// case « Masquer les CVE couvertes par un VEX »).
+  final bool applyVex;
+
   const SessionActions({
     required this.current,
     required this.onLoad,
     required this.baseline,
     required this.onBaseline,
     this.store,
+    this.applyVex = true,
   });
 }
 

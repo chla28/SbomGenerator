@@ -1877,6 +1877,15 @@ thème sombre).
 l'occurrence courante) ; utilisé par `HelpViewerScreen` (compteur, ▲▼, F3).
 |===
 
+*Rapport du tableau de bord* : la GUI ne génère plus l'AsciiDoc elle-même. `services/report_export.dart`
+(`reportArgs`, `exportReport`) écrit la session courante (`ScanSession.encode`, avec `layerScans` et
+`vex`) et la session de référence dans un dossier temporaire puis lance
+`sbom-generator report --input … --severity … [--compare-with …] [--no-vex]` ; le CLI
+(`ScanReportGenerator.fromInput`, `ReportInput` dans `lib/report_input.dart`) lit ce format. Le
+format de session est donc un *contrat* avec le CLI (clés `layerScans.<scanner>.{mode,layers,byKey}`,
+`vex[]`, `exploit{}`) : un test de `scan_session_test.dart` verrouille la clé de couche
+(`vulnLayerKey`) et `test/unit/report_unification_test.dart` du CLI lit une session au format GUI.
+
 *Raccourcis clavier* : `HomeScreen._shortcutBindings` (`CallbackShortcuts` autour d'un
 `Focus(autofocus: true)`) ; `ConfigPanelState.triggerRun`, `ResultsPanelState.selectTab` /
 `moveTab` sont publics pour cela (clés globales `_configKey` / `_resultsKey`).

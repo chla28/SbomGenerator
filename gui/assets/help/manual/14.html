@@ -210,7 +210,8 @@ suffixes de distribution ignorés) : vérifiez-la avec votre gestionnaire de paq
 <li>
 <p><strong>Enregistrer la session…</strong> écrit les résultats de scan (listes des scanners,
 signaux KEV/EPSS, cibles) dans un fichier JSON ; <strong>Ouvrir une session…</strong> le
-recharge dans le tableau de bord. Les analyses par couche ne sont pas conservées.</p>
+recharge dans le tableau de bord (analyses par couche comprises). Les déclarations VEX
+sont enregistrées dans le fichier et appliquées par <code>sbom-generator report</code>.</p>
 </li>
 <li>
 <p><strong>Historique</strong> : chaque analyse est conservée automatiquement (une entrée par cible
@@ -404,79 +405,53 @@ maximale avec cet outil, scanner l’image directement.</p>
 <div class="sect2">
 <h3 id="sec-dashboard-export">15.9. Export AsciiDoc + PDF</h3>
 <div class="paragraph">
-<p>Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte un
-rapport reprenant l’intégralité de la vue affichée :</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>le résumé global (scanners exécutés, CVE uniques) ;</p>
-</li>
-<li>
-<p>la section <strong>Outils</strong> : version de sbom_generator_gui et version de chaque
-scanner exécuté (détectées via <code>&lt;outil&gt; --version</code> au moment de l’export,
-donc toujours à jour même si l’outil a été mis à jour depuis le dernier
-scan — « indisponible » si l’outil n’est plus dans le <code>PATH</code>) ;</p>
-</li>
-<li>
-<p>pour chaque scanner : sa répartition par sévérité avec barre colorée (ou
-« Non exécuté » / « Aucune vulnérabilité détectée » selon le cas) ;</p>
-</li>
-<li>
-<p>le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
-présence par outil, et colonnes KEV / EPSS si l’enrichissement a tourné),
-dans le <strong>même ordre que celui affiché à l’écran</strong>, avec les CVE préfixés
-distro déjà normalisés (voir <a href="#sec-pourquoi-ecarts-scanners">Remédiation</a>) ;</p>
-</li>
-<li>
-<p>une section <strong>« Détail des CVE »</strong> : un bloc par CVE retenue par le seuil
-de sévérité du rapport (toutes avec « All » ; les CVE au catalogue CISA
-KEV sont toujours incluses) — avec paquet, versions, sévérité et dates par scanner, et toute
-l’information d’exploitabilité (KEV, EPSS, CVSS, PoC, liens). Reprend le
-contenu du panneau de détail dépliable à l’écran.</p>
-</li>
-</ul>
+<p>Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte le rapport du
+tableau de bord. Il est produit par le <strong>CLI</strong> (<code>sbom-generator report</code>) à partir des
+résultats affichés : c’est exactement le rapport de <code>sbom-generator scan --format pdf</code>
+(voir le guide du CLI, « Rapport de vulnérabilités »), le CLI et la GUI n’ont qu’un seul
+générateur. Le CLI doit donc être installé (il l’est avec l’application).</p>
 </div>
 <div class="paragraph">
-<p>Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n’y a ici qu’une seule
-vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
-la colonne de tri active du tableau inter-scanners est respectée.</p>
+<p>Contenu : résumé exécutif (verdict, cibles, niveau de sévérité, VEX), <strong>Outils</strong>,
+répartition par scanner avec barre de sévérité, <strong>Couches de l’image</strong> (si analyse par
+couche), comparaison inter-scanners, exploitabilité (KEV, EPSS, PoC),
+<strong>Remédiation</strong> (mises à jour minimales par paquet, classées par gain de risque),
+<strong>Tendance</strong> (si une comparaison a été choisie dans l’historique), <strong>VEX</strong> (déclarations et
+CVE écartées) et <strong>Détail des CVE</strong> (une fiche par CVE : paquet, versions, scanners, dates,
+description, signaux d’exploitation, liens).</p>
 </div>
 <div class="paragraph">
 <p><strong>Niveau de sévérité du rapport</strong> : le menu à gauche du bouton d’export
-(<strong>Critical</strong>, <strong>≥ High</strong>, <strong>≥ Medium</strong>, <strong>All</strong> — <strong>All</strong> par défaut) limite tout
-le rapport aux CVE de ce niveau ou plus : résumé exécutif, répartition par
-scanner, couches de l’image, comparaison inter-scanners et détail. Le choix
-est mémorisé d’une session à l’autre ; l’affichage à l’écran n’est pas
-filtré.</p>
+(<strong>Critical</strong>, <strong>≥ High</strong>, <strong>≥ Medium</strong>, <strong>All</strong> — <strong>All</strong> par défaut) limite tout le rapport aux CVE
+de ce niveau ou plus. Le choix est mémorisé d’une session à l’autre ; l’affichage à
+l’écran n’est pas filtré.</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>Une CVE est retenue d’après sa <strong>pire</strong> sévérité, tous scanners confondus :
-une CVE High pour Grype et Medium pour Trivy apparaît dans un rapport
-« ≥ High » avec les deux scanners, pour que la comparaison reste juste.</p>
+<p>Une CVE est retenue d’après sa <strong>pire</strong> sévérité, tous scanners confondus : une CVE High
+pour Grype et Medium pour Trivy apparaît dans un rapport « ≥ High » avec les deux scanners.</p>
 </li>
 <li>
-<p>Les CVE au catalogue <strong>CISA KEV</strong> (exploitées activement) sont toujours
-incluses, quelle que soit leur sévérité.</p>
+<p>Les CVE au catalogue <strong>CISA KEV</strong> sont toujours incluses, quelle que soit leur sévérité.</p>
 </li>
 <li>
-<p>Le rapport filtré le signale en tête (niveau choisi, nombre de CVE
-retenues sur le total) et le nom de fichier proposé porte le niveau
-(<code>rapport-vulnerabilites-high.adoc</code>).</p>
+<p>Le rapport filtré le signale en tête (niveau, « N sur M CVE uniques ») et le nom de
+fichier proposé porte le niveau (<code>rapport-vulnerabilites-high.adoc</code>).</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>Le bouton reste désactivé tant qu’aucun scanner n’a été exécuté. Une fois le
-fichier <code>.adoc</code> écrit (emplacement choisi via une boîte de dialogue), la
-conversion en PDF via <code>asciidoctor-pdf</code> est tentée automatiquement ; si
-l’outil n’est pas installé, le fichier <code>.adoc</code> reste produit et un message
-l’indique — même comportement que l’export des onglets de scan (voir
-<a href="#sec-vue-table">[sec-vue-table]</a>). Le PDF reprend les couleurs du Tableau de bord (badges
-de sévérité, barre de répartition, en-têtes bleus) — voir <a href="#sec-vue-table">[sec-vue-table]</a>
-pour le détail du thème.</p>
+<p><strong>VEX et tendance</strong> : le rapport applique les déclarations VEX tant que la case <strong>Masquer les
+CVE couvertes par un VEX</strong> est cochée, et inclut la section <strong>Tendance</strong> quand une session de
+référence est active (bouton <strong>Comparer</strong> de l’historique).</p>
+</div>
+<div class="paragraph">
+<p>Le bouton reste désactivé tant qu’aucun scanner n’a été exécuté. Une fois le fichier <code>.adoc</code>
+écrit (emplacement choisi via une boîte de dialogue), la conversion en PDF via
+<code>asciidoctor-pdf</code> est tentée par le CLI ; si l’outil n’est pas installé, le fichier <code>.adoc</code>
+reste produit et un message l’indique. Le même rapport peut être régénéré en ligne de
+commande depuis une session enregistrée : <code>sbom-generator report -i session.json -o rapport.pdf</code>.</p>
 </div>
 <div class="admonitionblock note">
 <table>

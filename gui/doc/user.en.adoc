@@ -2083,8 +2083,8 @@ suffixes ignored): check it with your package manager.
 At the top of the dashboard:
 
 * *Save session…* writes the scan results (scanner lists, KEV/EPSS signals, targets)
-to a JSON file; *Open session…* reloads it into the dashboard. Per-layer analyses
-are not kept.
+to a JSON file; *Open session…* reloads it into the dashboard (per-layer analyses
+included). VEX statements are saved in the file and applied by `sbom-generator report`.
 * *History*: every analysis is kept automatically (one entry per target and per day,
 50 at most) in `~/.local/share/sbom-generator-gui/history`. You can *Open* an old
 analysis, *Compare* it with the current results, *Delete* an entry or *Clear
@@ -2216,53 +2216,38 @@ Two limits remain:
 [[sec-dashboard-export]]
 === AsciiDoc + PDF export
 
-The ⬥ button (PDF icon, in the global synthesis card) exports a report
-reproducing the whole displayed view:
+The ⬥ button (PDF icon, in the global summary card) exports the dashboard report. It is
+produced by the *CLI* (`sbom-generator report`) from the displayed results: it is exactly the
+report of `sbom-generator scan --format pdf` (see the CLI guide, "Vulnerability report"); the
+CLI and the GUI share a single generator. The CLI must therefore be installed (it is, with the
+application).
 
-* the global summary (scanners run, unique CVEs);
-* the *Tools* section: version of sbom_generator_gui and version of each
-  scanner run (detected through `<tool> --version` at export time, hence
-  always up to date even if the tool was updated since the last scan —
-  “unavailable” if the tool is no longer in the `PATH`);
-* for each scanner: its severity distribution with a colored bar (or “Not
-  run” / “No vulnerability detected” as appropriate);
-* the complete cross-scanner comparison table (severity, CVE/ID, presence per
-  tool, and KEV / EPSS columns if the enrichment ran), in the *same order as
-  displayed on screen*, with the distro-prefixed CVEs already normalized (see
-  <<sec-pourquoi-ecarts-scanners>>);
-* a *“CVE details”* section: one block per CVE retained by the report's
-  severity threshold (all with “All”; CISA KEV catalog CVEs are always
-  included) — with package, versions, severity and dates per scanner, and all
-  the exploitability information (KEV, EPSS, CVSS, PoC, links). It reproduces
-  the content of the expandable detail panel on screen.
+Content: executive summary (verdict, targets, severity level, VEX), *Tools*, breakdown per
+scanner with a severity bar, *Image layers* (when a per-layer analysis was run), cross-scanner
+comparison, exploitability (KEV, EPSS, PoC), *Remediation* (minimal updates per package,
+ranked by risk reduction), *Trend* (if a comparison was chosen in the history), *VEX*
+(statements and dropped CVEs) and *CVE details* (one card per CVE: package, versions,
+scanners, dates, description, exploitation signals, links).
 
-Unlike the Grype/OSV-Scanner/Trivy tabs, there is only one synthesis view
-here — no individually filtered rows to export, but the active sort column of
-the cross-scanner table is respected.
+*Report severity level*: the menu to the left of the export button (*Critical*, *≥ High*,
+*≥ Medium*, *All* — *All* by default) limits the whole report to CVEs of that level or above.
+The choice is remembered between sessions; the on-screen display is not filtered.
 
-*Report severity level*: the menu to the left of the export button
-(*Critical*, *≥ High*, *≥ Medium*, *All* — *All* by default) limits the whole
-report to the CVEs of that level or above: executive summary, distribution per
-scanner, image layers, cross-scanner comparison and detail. The choice is
-remembered from one session to another; the on-screen display is not
-filtered.
+* A CVE is kept according to its *worst* severity, every scanner: a CVE that is High for
+  Grype and Medium for Trivy appears in a "≥ High" report with both scanners.
+* CVEs in the *CISA KEV* catalog are always included, whatever their severity.
+* The filtered report says so at the top (level, "N of M unique CVEs") and the suggested file
+  name carries the level (`vulnerability-report-high.adoc`).
 
-* A CVE is retained according to its *worst* severity, all scanners combined:
-  a CVE that is High for Grype and Medium for Trivy appears in a “≥ High”
-  report with both scanners, so that the comparison stays fair.
-* The *CISA KEV* catalog CVEs (actively exploited) are always included,
-  whatever their severity.
-* The filtered report states it at the top (chosen level, number of retained
-  CVEs out of the total) and the proposed file name carries the level
-  (`vulnerability-report-high.adoc`).
+*VEX and trend*: the report applies the VEX statements while *Hide CVEs covered by a VEX* is
+ticked, and includes the *Trend* section when a reference session is active (the *Compare*
+button of the history).
 
-The button stays disabled as long as no scanner has been run. Once the `.adoc`
-file is written (location chosen through a dialog box), the conversion to PDF
-through `asciidoctor-pdf` is attempted automatically; if the tool is not
-installed, the `.adoc` file is still produced and a message says so — same
-behavior as the export of the scan tabs (see <<sec-vue-table>>). The PDF
-reuses the Dashboard colors (severity badges, distribution bar, blue headers)
-— see <<sec-vue-table>> for the theme detail.
+The button stays disabled until a scanner has run. Once the `.adoc` file is written (location
+chosen through a dialog), the CLI tries the PDF conversion with `asciidoctor-pdf`; if the tool
+is not installed the `.adoc` file is still produced and a message says so. The same report can
+be regenerated on the command line from a saved session:
+`sbom-generator report -i session.json -o report.pdf`.
 
 NOTE: The Dashboard is updated automatically every time an analysis is run in
 a scanner tab. No additional action is required.

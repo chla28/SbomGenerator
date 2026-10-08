@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import '../services/scan_enrichment.dart';
+import 'layer_scan.dart';
+import 'vex.dart';
 import '../widgets/grype_panel.dart';
 import '../widgets/osv_panel.dart';
 import '../widgets/trivy_panel.dart';
@@ -20,6 +22,13 @@ class ScanSession {
   final List<TrivyVuln>? trivy;
   final Map<String, ExploitInfo> exploit;
 
+  /// Analyses par couche des onglets de scan (clé : « Grype », « OSV-Scanner »,
+  /// « Trivy »).
+  final Map<String, LayerScanResult> layerScans;
+
+  /// Déclarations VEX de l'utilisateur (appliquées par le rapport).
+  final List<VexStatement> vex;
+
   const ScanSession({
     required this.savedAt,
     required this.guiVersion,
@@ -28,6 +37,8 @@ class ScanSession {
     this.osv,
     this.trivy,
     this.exploit = const {},
+    this.layerScans = const {},
+    this.vex = const [],
   });
 
   bool get isEmpty => grype == null && osv == null && trivy == null;
@@ -68,6 +79,11 @@ class ScanSession {
     if (osv != null) 'osv': [for (final v in osv!) _osvJson(v)],
     if (trivy != null) 'trivy': [for (final v in trivy!) _trivyJson(v)],
     'exploit': {for (final e in exploit.entries) e.key: _exploitJson(e.value)},
+    if (layerScans.isNotEmpty)
+      'layerScans': {
+        for (final e in layerScans.entries) e.key: _layerScanJson(e.value),
+      },
+    if (vex.isNotEmpty) 'vex': [for (final s in vex) _vexJson(s)],
   };
 
   String encode() => const JsonEncoder.withIndent(' ').convert(toJson());
@@ -97,6 +113,15 @@ class ScanSession {
         for (final e in ((json['exploit'] as Map?) ?? const {}).entries)
           '${e.key}': _exploitFrom((e.value as Map).cast<String, dynamic>()),
       },
+      layerScans: {
+        for (final e in ((json['layerScans'] as Map?) ?? const {}).entries)
+          '${e.key}': _layerScanFrom((e.value as Map).cast<String, dynamic>()),
+      },
+      vex: [
+        for (final s in (json['vex'] as List? ?? const []))
+          if (s is Map && vexStatuses.contains('${s['status']}'))
+            _vexFrom(s.cast<String, dynamic>()),
+      ],
     );
   }
 
@@ -170,6 +195,59 @@ class SessionTrend {
 }
 
 // ── (dé)sérialisation des modèles de vulnérabilité ──────────────────────────
+
+// Couches : même forme que celle lue par `sbom-generator report`
+// (`lib/report_input.dart` du CLI) — clés `mode`, `layers`, `byKey`.
+Map<String, dynamic> _layerScanJson(LayerScanResult r) => {
+  'mode': r.mode.name,
+  'unattributed': r.unattributed,
+  'layers': [
+    for (final l in r.layers)
+      {
+        'index': l.index,
+        'digest': l.digest,
+        if (l.createdBy != null) 'createdBy': l.createdBy,
+      },
+  ],
+  'byKey': {
+    for (final e in r.layersByKey.entries) e.key: (e.value.toList()..sort()),
+  },
+};
+
+LayerScanResult _layerScanFrom(Map<String, dynamic> j) => LayerScanResult(
+  mode: j['mode'] == 'each' ? LayerScanMode.each : LayerScanMode.attribute,
+  unattributed: (j['unattributed'] as int?) ?? 0,
+  layers: [
+    for (final l in (j['layers'] as List? ?? const []))
+      LayerInfo(
+        index: ((l as Map)['index'] as num).toInt(),
+        digest: '${l['digest']}',
+        createdBy: l['createdBy'] as String?,
+      ),
+  ],
+  layersByKey: {
+    for (final e in ((j['byKey'] as Map?) ?? const {}).entries)
+      '${e.key}': {for (final i in (e.value as List)) (i as num).toInt()},
+  },
+);
+
+Map<String, dynamic> _vexJson(VexStatement s) => {
+  'vulnId': s.vulnId,
+  'products': s.products,
+  'status': s.status,
+  if (s.justification != null) 'justification': s.justification,
+  if (s.impactStatement != null) 'impact': s.impactStatement,
+  if (s.actionStatement != null) 'action': s.actionStatement,
+};
+
+VexStatement _vexFrom(Map<String, dynamic> j) => VexStatement(
+  vulnId: '${j['vulnId']}',
+  products: [for (final p in (j['products'] as List? ?? const [])) '$p'],
+  status: '${j['status']}',
+  justification: j['justification'] as String?,
+  impactStatement: j['impact'] as String?,
+  actionStatement: j['action'] as String?,
+);
 
 String? _date(DateTime? d) => d?.toUtc().toIso8601String();
 DateTime? _parse(Object? s) => s is String ? DateTime.tryParse(s) : null;

@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sbom_generator_gui/models/layer_scan.dart';
 import 'package:sbom_generator_gui/models/scan_session.dart';
+import 'package:sbom_generator_gui/models/vex.dart';
 import 'package:sbom_generator_gui/services/scan_enrichment.dart';
 import 'package:sbom_generator_gui/services/session_store.dart';
 import 'package:sbom_generator_gui/widgets/grype_panel.dart';
@@ -76,6 +78,61 @@ void main() {
         expect(back.targets, ['SBOM a.cdx.json']);
       },
     );
+
+    test('couches et VEX : aller-retour JSON, clé lue par le CLI', () {
+      final key = vulnLayerKey('CVE-1', 'p', '1.0');
+      final s0 = ScanSession(
+        savedAt: DateTime.utc(2026, 1, 1),
+        guiVersion: '1.8.0',
+        grype: [_g('CVE-1', 'High')],
+        layerScans: {
+          'Grype': LayerScanResult(
+            mode: LayerScanMode.each,
+            layers: const [
+              LayerInfo(index: 1, digest: 'sha256:aa', createdBy: 'RUN x'),
+              LayerInfo(index: 2, digest: 'sha256:bb'),
+            ],
+            layersByKey: {
+              key: {2, 1},
+            },
+            unattributed: 3,
+          ),
+        },
+        vex: const [
+          VexStatement(
+            vulnId: 'CVE-1',
+            products: ['p@1.0'],
+            status: 'not_affected',
+            justification: 'component_not_present',
+            impactStatement: 'absent',
+          ),
+        ],
+      );
+      final json = s0.toJson();
+      // Contrat avec `sbom-generator report` (lib/report_input.dart du CLI).
+      expect(json['layerScans']['Grype']['byKey']['CVE-1\u0000p\u00001.0'], [
+        1,
+        2,
+      ]);
+      expect(json['layerScans']['Grype']['mode'], 'each');
+      expect(json['vex'][0]['impact'], 'absent');
+
+      final back = ScanSession.decode(s0.encode());
+      final ls = back.layerScans['Grype']!;
+      expect(ls.mode, LayerScanMode.each);
+      expect(ls.layers.map((l) => l.index), [1, 2]);
+      expect(ls.layers.first.createdBy, 'RUN x');
+      expect(ls.layersOf('CVE-1', 'p', '1.0'), [1, 2]);
+      expect(ls.unattributed, 3);
+      expect(back.vex.single.justification, 'component_not_present');
+      expect(back.vex.single.products, ['p@1.0']);
+    });
+
+    test('session sans couches ni VEX : clés absentes', () {
+      final j = _session(DateTime.utc(2026, 1, 1), grype: []).toJson();
+      expect(j.containsKey('layerScans'), isFalse);
+      expect(j.containsKey('vex'), isFalse);
+    });
 
     test('format inconnu ou JSON invalide : FormatException', () {
       expect(

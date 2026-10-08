@@ -2978,12 +2978,6 @@ abstract class AppLocalizations {
   /// **'AUTRE'**
   String get pdfSeverityOther;
 
-  /// Rapport du tableau de bord (AsciiDoc) : titre du document.
-  ///
-  /// In fr, this message translates to:
-  /// **'= Rapport de vulnérabilités: Synthèse inter-scanners'**
-  String get repTitle;
-
   /// Rapport : titre du sommaire.
   ///
   /// In fr, this message translates to:
@@ -3002,60 +2996,6 @@ abstract class AppLocalizations {
   /// **'*Cible analysée* : {target} +'**
   String repTarget(String target);
 
-  /// Rapport : plusieurs cibles analysées.
-  ///
-  /// In fr, this message translates to:
-  /// **'*Cibles analysées* : {targets} +'**
-  String repTargets(String targets);
-
-  /// Rapport : nombre de scanners exécutés et de CVE uniques.
-  ///
-  /// In fr, this message translates to:
-  /// **'*Scanners exécutés* : {run} / 3{names} — *{unique}* CVE uniques'**
-  String repScannersRun(int run, String names, int unique);
-
-  /// Rapport : note sur le filtre de sévérité.
-  ///
-  /// In fr, this message translates to:
-  /// **'NOTE: Filtre de sévérité : *{label}* — {kept} CVE retenue(s){ofTotal}, d\'après la pire sévérité rapportée par les scanners. Les CVE au catalogue CISA KEV sont incluses quelle que soit leur sévérité. Tout le rapport (compteurs, répartition, couches, comparaison, détail) porte sur ce sous-ensemble.'**
-  String repThresholdNote(String label, int kept, String ofTotal);
-
-  /// Rapport : suite de la note de filtre (total avant filtrage).
-  ///
-  /// In fr, this message translates to:
-  /// **' sur {total}'**
-  String repThresholdOf(int total);
-
-  /// Rapport : en-têtes du bandeau de chiffres clés.
-  ///
-  /// In fr, this message translates to:
-  /// **'h| Critiques h| Élevées h| CISA KEV h| EPSS ≥ 10 %'**
-  String get repStatsHeader;
-
-  /// Rapport : verdict en présence de CVE KEV.
-  ///
-  /// In fr, this message translates to:
-  /// **'Action immédiate requise. {kev, plural, one{{kev} CVE du catalogue CISA KEV est exploitée} other{{kev} CVE du catalogue CISA KEV sont exploitées}} activement dans la nature — appliquer les correctifs sans délai.'**
-  String repVerdictKev(int kev);
-
-  /// Rapport : verdict en présence de CVE critiques.
-  ///
-  /// In fr, this message translates to:
-  /// **'Action prioritaire. {count, plural, one{{count} vulnérabilité critique à corriger} other{{count} vulnérabilités critiques à corriger}} en priorité.'**
-  String repVerdictCritical(int count);
-
-  /// Rapport : verdict en présence de CVE élevées.
-  ///
-  /// In fr, this message translates to:
-  /// **'À traiter. {count, plural, one{{count} vulnérabilité de sévérité élevée identifiée} other{{count} vulnérabilités de sévérité élevée identifiées}}.'**
-  String repVerdictHigh(int count);
-
-  /// Rapport : verdict sans CVE critique ni élevée.
-  ///
-  /// In fr, this message translates to:
-  /// **'Aucune vulnérabilité critique ni élevée détectée par les scanners exécutés.'**
-  String get repVerdictOk;
-
   /// Rapport : section des outils.
   ///
   /// In fr, this message translates to:
@@ -3068,24 +3008,6 @@ abstract class AppLocalizations {
   /// **'| Outil | Version'**
   String get repToolHeader;
 
-  /// Rapport : section de la répartition par scanner.
-  ///
-  /// In fr, this message translates to:
-  /// **'== Répartition par scanner'**
-  String get repBreakdown;
-
-  /// Rapport : scanner non exécuté.
-  ///
-  /// In fr, this message translates to:
-  /// **'_Non exécuté._'**
-  String get repNotRun;
-
-  /// Rapport : aucun résultat pour un scanner.
-  ///
-  /// In fr, this message translates to:
-  /// **'Aucune vulnérabilité détectée.'**
-  String get repNoVuln;
-
   /// Rapport : en-tête du tableau sévérité / nombre.
   ///
   /// In fr, this message translates to:
@@ -3097,72 +3019,6 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'== Couches de l\'image'**
   String get repLayersTitle;
-
-  /// Rapport : méthode d'analyse par couche.
-  ///
-  /// In fr, this message translates to:
-  /// **'Méthode : {methods}.'**
-  String repMethod(String methods);
-
-  /// Rapport : en-tête du tableau des couches.
-  ///
-  /// In fr, this message translates to:
-  /// **'| Couche | Digest | Instruction | CVE | Critiques | Élevées'**
-  String get repLayersHeader;
-
-  /// Rapport : section de comparaison.
-  ///
-  /// In fr, this message translates to:
-  /// **'== Comparaison inter-scanners'**
-  String get repCompareTitle;
-
-  /// Rapport : colonne des couches.
-  ///
-  /// In fr, this message translates to:
-  /// **' | Couche(s)'**
-  String get repLayersColumn;
-
-  /// Rapport : comparaison vide.
-  ///
-  /// In fr, this message translates to:
-  /// **'_Aucune CVE détectée par les scanners exécutés._'**
-  String get repNoCve;
-
-  /// Rapport : en-tête de la comparaison avec exploitabilité.
-  ///
-  /// In fr, this message translates to:
-  /// **'| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV | Trivy{layerHead}'**
-  String repCompareHeaderExploit(String layerHead);
-
-  /// Rapport : en-tête de la comparaison.
-  ///
-  /// In fr, this message translates to:
-  /// **'| Sévérité | CVE / ID | Grype | OSV | Trivy{layerHead}'**
-  String repCompareHeader(String layerHead);
-
-  /// Rapport : encadré expliquant les écarts entre scanners.
-  ///
-  /// In fr, this message translates to:
-  /// **'Des comptages très différents entre scanners sur les paquets système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. OSV-Scanner peut ne trouver aucune CVE sur ces paquets lorsqu\'il est lancé en mode « scan de SBOM » : son API n\'indexe les avis Debian que sous une forme de purl précise, absente du SBOM standard produit par syft — scanner l\'image directement (`osv-scanner scan image`) donne une couverture fiable. Grype et Trivy n\'ont par ailleurs pas la même exhaustivité sur ces mêmes paquets : Grype reprend l\'intégralité du Debian Security Tracker (avis « won\'t fix » inclus) là où Trivy ne remonte qu\'un sous-ensemble plus restreint. Aucun des deux scanners n\'a tort — leurs chiffres bruts ne sont simplement pas directement comparables sur ce type de paquet. Détails et méthode de vérification dans la documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».'**
-  String get repScannerNote;
-
-  /// Rapport : section de détail des CVE.
-  ///
-  /// In fr, this message translates to:
-  /// **'== Détail des CVE'**
-  String get repDetailTitle;
-
-  /// Rapport : nombre de CVE détaillées (tout le jeu).
-  ///
-  /// In fr, this message translates to:
-  /// **'{count} CVE.'**
-  String repDetailAll(int count);
-
-  /// Rapport : nombre de CVE détaillées avec seuil.
-  ///
-  /// In fr, this message translates to:
-  /// **'{count} CVE retenue(s) : sévérité {label} ou au catalogue CISA KEV.'**
-  String repDetailKept(int count, String label);
 
   /// Titre du dialogue d'export du tableau de bord.
   ///
@@ -3187,12 +3043,6 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Tableau de bord exporté → {path} et {pdf}'**
   String dashExported(String path, String pdf);
-
-  /// Message : conversion PDF échouée.
-  ///
-  /// In fr, this message translates to:
-  /// **'Tableau de bord exporté → {path} (échec conversion PDF, code {code})'**
-  String dashExportedPdfFailed(String path, int code);
 
   /// Message : asciidoctor-pdf absent.
   ///
@@ -4574,12 +4424,6 @@ abstract class AppLocalizations {
   /// **'Sortie de {tool} illisible : {error}'**
   String tasksParseFailed(String tool, String error);
 
-  /// Titre de la section VEX de la fiche CVE et de la barre du tableau de bord.
-  ///
-  /// In fr, this message translates to:
-  /// **'VEX (non affecté / corrigé)'**
-  String get vexTitle;
-
   /// Bouton de la fiche CVE : créer une déclaration VEX.
   ///
   /// In fr, this message translates to:
@@ -4879,6 +4723,18 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Occurrence suivante (F3 / Entrée)'**
   String get helpNextHit;
+
+  /// Message : le CLI `sbom-generator report` a échoué.
+  ///
+  /// In fr, this message translates to:
+  /// **'Échec de l\'export du rapport (code {code}) : {error}'**
+  String dashExportCliFailed(int code, String error);
+
+  /// Message : CLI introuvable pour l'export du rapport.
+  ///
+  /// In fr, this message translates to:
+  /// **'Impossible de lancer sbom-generator ({path}) : le rapport est produit par le CLI.'**
+  String dashExportCliMissing(String path);
 }
 
 class _AppLocalizationsDelegate

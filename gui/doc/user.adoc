@@ -2130,7 +2130,8 @@ En tête du tableau de bord :
 
 * *Enregistrer la session…* écrit les résultats de scan (listes des scanners,
 signaux KEV/EPSS, cibles) dans un fichier JSON ; *Ouvrir une session…* le
-recharge dans le tableau de bord. Les analyses par couche ne sont pas conservées.
+recharge dans le tableau de bord (analyses par couche comprises). Les déclarations VEX
+sont enregistrées dans le fichier et appliquées par `sbom-generator report`.
 * *Historique* : chaque analyse est conservée automatiquement (une entrée par cible
 et par jour, 50 au maximum) dans `~/.local/share/sbom-generator-gui/history`. On peut
 *Ouvrir* une ancienne analyse, la *Comparer* avec les résultats courants, *Supprimer*
@@ -2271,54 +2272,40 @@ Deux limites subsistent :
 [[sec-dashboard-export]]
 === Export AsciiDoc + PDF
 
-Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte un
-rapport reprenant l'intégralité de la vue affichée :
+Le bouton ⬥ (icône PDF, dans la carte de synthèse globale) exporte le rapport du
+tableau de bord. Il est produit par le *CLI* (`sbom-generator report`) à partir des
+résultats affichés : c'est exactement le rapport de `sbom-generator scan --format pdf`
+(voir le guide du CLI, « Rapport de vulnérabilités »), le CLI et la GUI n'ont qu'un seul
+générateur. Le CLI doit donc être installé (il l'est avec l'application).
 
-* le résumé global (scanners exécutés, CVE uniques) ;
-* la section *Outils* : version de sbom_generator_gui et version de chaque
-  scanner exécuté (détectées via `<outil> --version` au moment de l'export,
-  donc toujours à jour même si l'outil a été mis à jour depuis le dernier
-  scan — « indisponible » si l'outil n'est plus dans le `PATH`) ;
-* pour chaque scanner : sa répartition par sévérité avec barre colorée (ou
-  « Non exécuté » / « Aucune vulnérabilité détectée » selon le cas) ;
-* le tableau complet de comparaison inter-scanners (sévérité, CVE/ID,
-  présence par outil, et colonnes KEV / EPSS si l'enrichissement a tourné),
-  dans le *même ordre que celui affiché à l'écran*, avec les CVE préfixés
-  distro déjà normalisés (voir <<sec-pourquoi-ecarts-scanners>>) ;
-* une section *« Détail des CVE »* : un bloc par CVE retenue par le seuil
-  de sévérité du rapport (toutes avec « All » ; les CVE au catalogue CISA
-  KEV sont toujours incluses) — avec paquet, versions, sévérité et dates par scanner, et toute
-  l'information d'exploitabilité (KEV, EPSS, CVSS, PoC, liens). Reprend le
-  contenu du panneau de détail dépliable à l'écran.
-
-Contrairement aux onglets Grype/OSV-Scanner/Trivy, il n'y a ici qu'une seule
-vue de synthèse — pas de lignes filtrées individuellement à exporter, mais
-la colonne de tri active du tableau inter-scanners est respectée.
+Contenu : résumé exécutif (verdict, cibles, niveau de sévérité, VEX), *Outils*,
+répartition par scanner avec barre de sévérité, *Couches de l'image* (si analyse par
+couche), comparaison inter-scanners, exploitabilité (KEV, EPSS, PoC),
+*Remédiation* (mises à jour minimales par paquet, classées par gain de risque),
+*Tendance* (si une comparaison a été choisie dans l'historique), *VEX* (déclarations et
+CVE écartées) et *Détail des CVE* (une fiche par CVE : paquet, versions, scanners, dates,
+description, signaux d'exploitation, liens).
 
 *Niveau de sévérité du rapport* : le menu à gauche du bouton d'export
-(*Critical*, *≥ High*, *≥ Medium*, *All* — *All* par défaut) limite tout
-le rapport aux CVE de ce niveau ou plus : résumé exécutif, répartition par
-scanner, couches de l'image, comparaison inter-scanners et détail. Le choix
-est mémorisé d'une session à l'autre ; l'affichage à l'écran n'est pas
-filtré.
+(*Critical*, *≥ High*, *≥ Medium*, *All* — *All* par défaut) limite tout le rapport aux CVE
+de ce niveau ou plus. Le choix est mémorisé d'une session à l'autre ; l'affichage à
+l'écran n'est pas filtré.
 
-* Une CVE est retenue d'après sa *pire* sévérité, tous scanners confondus :
-  une CVE High pour Grype et Medium pour Trivy apparaît dans un rapport
-  « ≥ High » avec les deux scanners, pour que la comparaison reste juste.
-* Les CVE au catalogue *CISA KEV* (exploitées activement) sont toujours
-  incluses, quelle que soit leur sévérité.
-* Le rapport filtré le signale en tête (niveau choisi, nombre de CVE
-  retenues sur le total) et le nom de fichier proposé porte le niveau
-  (`rapport-vulnerabilites-high.adoc`).
+* Une CVE est retenue d'après sa *pire* sévérité, tous scanners confondus : une CVE High
+  pour Grype et Medium pour Trivy apparaît dans un rapport « ≥ High » avec les deux scanners.
+* Les CVE au catalogue *CISA KEV* sont toujours incluses, quelle que soit leur sévérité.
+* Le rapport filtré le signale en tête (niveau, « N sur M CVE uniques ») et le nom de
+  fichier proposé porte le niveau (`rapport-vulnerabilites-high.adoc`).
 
-Le bouton reste désactivé tant qu'aucun scanner n'a été exécuté. Une fois le
-fichier `.adoc` écrit (emplacement choisi via une boîte de dialogue), la
-conversion en PDF via `asciidoctor-pdf` est tentée automatiquement ; si
-l'outil n'est pas installé, le fichier `.adoc` reste produit et un message
-l'indique — même comportement que l'export des onglets de scan (voir
-<<sec-vue-table>>). Le PDF reprend les couleurs du Tableau de bord (badges
-de sévérité, barre de répartition, en-têtes bleus) — voir <<sec-vue-table>>
-pour le détail du thème.
+*VEX et tendance* : le rapport applique les déclarations VEX tant que la case *Masquer les
+CVE couvertes par un VEX* est cochée, et inclut la section *Tendance* quand une session de
+référence est active (bouton *Comparer* de l'historique).
+
+Le bouton reste désactivé tant qu'aucun scanner n'a été exécuté. Une fois le fichier `.adoc`
+écrit (emplacement choisi via une boîte de dialogue), la conversion en PDF via
+`asciidoctor-pdf` est tentée par le CLI ; si l'outil n'est pas installé, le fichier `.adoc`
+reste produit et un message l'indique. Le même rapport peut être régénéré en ligne de
+commande depuis une session enregistrée : `sbom-generator report -i session.json -o rapport.pdf`.
 
 NOTE: Le Tableau de bord se met à jour automatiquement chaque fois qu'une analyse
 est lancée dans un onglet scanner. Aucune action supplémentaire n'est requise.

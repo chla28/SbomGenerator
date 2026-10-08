@@ -2108,9 +2108,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pdfSeverityOther => 'AUTRE';
 
   @override
-  String get repTitle => '= Rapport de vulnérabilités: Synthèse inter-scanners';
-
-  @override
   String get repTocTitle => ':toc-title: Sommaire';
 
   @override
@@ -2122,169 +2119,16 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String repTargets(String targets) {
-    return '*Cibles analysées* : $targets +';
-  }
-
-  @override
-  String repScannersRun(int run, String names, int unique) {
-    final intl.NumberFormat runNumberFormat = intl.NumberFormat.decimalPattern(
-      localeName,
-    );
-    final String runString = runNumberFormat.format(run);
-    final intl.NumberFormat uniqueNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String uniqueString = uniqueNumberFormat.format(unique);
-
-    return '*Scanners exécutés* : $runString / 3$names — *$uniqueString* CVE uniques';
-  }
-
-  @override
-  String repThresholdNote(String label, int kept, String ofTotal) {
-    final intl.NumberFormat keptNumberFormat = intl.NumberFormat.decimalPattern(
-      localeName,
-    );
-    final String keptString = keptNumberFormat.format(kept);
-
-    return 'NOTE: Filtre de sévérité : *$label* — $keptString CVE retenue(s)$ofTotal, d\'après la pire sévérité rapportée par les scanners. Les CVE au catalogue CISA KEV sont incluses quelle que soit leur sévérité. Tout le rapport (compteurs, répartition, couches, comparaison, détail) porte sur ce sous-ensemble.';
-  }
-
-  @override
-  String repThresholdOf(int total) {
-    final intl.NumberFormat totalNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String totalString = totalNumberFormat.format(total);
-
-    return ' sur $totalString';
-  }
-
-  @override
-  String get repStatsHeader =>
-      'h| Critiques h| Élevées h| CISA KEV h| EPSS ≥ 10 %';
-
-  @override
-  String repVerdictKev(int kev) {
-    final intl.NumberFormat kevNumberFormat = intl.NumberFormat.decimalPattern(
-      localeName,
-    );
-    final String kevString = kevNumberFormat.format(kev);
-
-    String _temp0 = intl.Intl.pluralLogic(
-      kev,
-      locale: localeName,
-      other: '$kevString CVE du catalogue CISA KEV sont exploitées',
-      one: '$kevString CVE du catalogue CISA KEV est exploitée',
-    );
-    return 'Action immédiate requise. $_temp0 activement dans la nature — appliquer les correctifs sans délai.';
-  }
-
-  @override
-  String repVerdictCritical(int count) {
-    final intl.NumberFormat countNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countString = countNumberFormat.format(count);
-
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$countString vulnérabilités critiques à corriger',
-      one: '$countString vulnérabilité critique à corriger',
-    );
-    return 'Action prioritaire. $_temp0 en priorité.';
-  }
-
-  @override
-  String repVerdictHigh(int count) {
-    final intl.NumberFormat countNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countString = countNumberFormat.format(count);
-
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$countString vulnérabilités de sévérité élevée identifiées',
-      one: '$countString vulnérabilité de sévérité élevée identifiée',
-    );
-    return 'À traiter. $_temp0.';
-  }
-
-  @override
-  String get repVerdictOk =>
-      'Aucune vulnérabilité critique ni élevée détectée par les scanners exécutés.';
-
-  @override
   String get repTools => '== Outils';
 
   @override
   String get repToolHeader => '| Outil | Version';
 
   @override
-  String get repBreakdown => '== Répartition par scanner';
-
-  @override
-  String get repNotRun => '_Non exécuté._';
-
-  @override
-  String get repNoVuln => 'Aucune vulnérabilité détectée.';
-
-  @override
   String get repSevCountHeader => '| Sévérité | Nombre';
 
   @override
   String get repLayersTitle => '== Couches de l\'image';
-
-  @override
-  String repMethod(String methods) {
-    return 'Méthode : $methods.';
-  }
-
-  @override
-  String get repLayersHeader =>
-      '| Couche | Digest | Instruction | CVE | Critiques | Élevées';
-
-  @override
-  String get repCompareTitle => '== Comparaison inter-scanners';
-
-  @override
-  String get repLayersColumn => ' | Couche(s)';
-
-  @override
-  String get repNoCve => '_Aucune CVE détectée par les scanners exécutés._';
-
-  @override
-  String repCompareHeaderExploit(String layerHead) {
-    return '| Sévérité | CVE / ID | KEV | EPSS | Grype | OSV | Trivy$layerHead';
-  }
-
-  @override
-  String repCompareHeader(String layerHead) {
-    return '| Sévérité | CVE / ID | Grype | OSV | Trivy$layerHead';
-  }
-
-  @override
-  String get repScannerNote =>
-      'Des comptages très différents entre scanners sur les paquets système (Debian/Alpine/RPM) ne signalent pas forcément une erreur. OSV-Scanner peut ne trouver aucune CVE sur ces paquets lorsqu\'il est lancé en mode « scan de SBOM » : son API n\'indexe les avis Debian que sous une forme de purl précise, absente du SBOM standard produit par syft — scanner l\'image directement (`osv-scanner scan image`) donne une couverture fiable. Grype et Trivy n\'ont par ailleurs pas la même exhaustivité sur ces mêmes paquets : Grype reprend l\'intégralité du Debian Security Tracker (avis « won\'t fix » inclus) là où Trivy ne remonte qu\'un sous-ensemble plus restreint. Aucun des deux scanners n\'a tort — leurs chiffres bruts ne sont simplement pas directement comparables sur ce type de paquet. Détails et méthode de vérification dans la documentation utilisateur, section « Pourquoi Grype, OSV-Scanner et Trivy ne trouvent pas les mêmes CVE ».';
-
-  @override
-  String get repDetailTitle => '== Détail des CVE';
-
-  @override
-  String repDetailAll(int count) {
-    final intl.NumberFormat countNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countString = countNumberFormat.format(count);
-
-    return '$countString CVE.';
-  }
-
-  @override
-  String repDetailKept(int count, String label) {
-    final intl.NumberFormat countNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
-    final String countString = countNumberFormat.format(count);
-
-    return '$countString CVE retenue(s) : sévérité $label ou au catalogue CISA KEV.';
-  }
 
   @override
   String get dashExportTitle => 'Exporter le tableau de bord (AsciiDoc + PDF)';
@@ -2300,16 +2144,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String dashExported(String path, String pdf) {
     return 'Tableau de bord exporté → $path et $pdf';
-  }
-
-  @override
-  String dashExportedPdfFailed(String path, int code) {
-    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
-      localeName,
-    );
-    final String codeString = codeNumberFormat.format(code);
-
-    return 'Tableau de bord exporté → $path (échec conversion PDF, code $codeString)';
   }
 
   @override
@@ -3278,9 +3112,6 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get vexTitle => 'VEX (non affecté / corrigé)';
-
-  @override
   String get vexDeclare => 'Déclarer via VEX…';
 
   @override
@@ -3473,4 +3304,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get helpNextHit => 'Occurrence suivante (F3 / Entrée)';
+
+  @override
+  String dashExportCliFailed(int code, String error) {
+    final intl.NumberFormat codeNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String codeString = codeNumberFormat.format(code);
+
+    return 'Échec de l\'export du rapport (code $codeString) : $error';
+  }
+
+  @override
+  String dashExportCliMissing(String path) {
+    return 'Impossible de lancer sbom-generator ($path) : le rapport est produit par le CLI.';
+  }
 }

@@ -165,6 +165,8 @@ class ResultsPanelState extends State<ResultsPanel>
     osv: _osvVulns,
     trivy: _trivyVulns,
     exploit: _mergedExploit,
+    layerScans: Map.of(_layerScans),
+    vex: _vex.statements,
   );
 
   /// Sauvegarde dans l'historique 2 s après la dernière modification des
@@ -213,7 +215,9 @@ class ResultsPanelState extends State<ResultsPanel>
     _grypeExploit = s.exploit;
     _osvExploit = const {};
     _trivyExploit = const {};
-    _layerScans.clear();
+    _layerScans
+      ..clear()
+      ..addAll(s.layerScans);
     _loadedTargets = s.targets;
   });
 
@@ -626,6 +630,7 @@ class ResultsPanelState extends State<ResultsPanel>
                     baseline: _baseline,
                     onBaseline: (b) => setState(() => _baseline = b),
                     store: widget.historyStore,
+                    applyVex: _hideVex,
                   ),
                 ),
 

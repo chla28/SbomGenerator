@@ -1867,6 +1867,15 @@ dark theme).
 by `HelpViewerScreen` (counter, ▲▼, F3).
 |===
 
+*Dashboard report*: the GUI no longer generates the AsciiDoc itself. `services/report_export.dart`
+(`reportArgs`, `exportReport`) writes the current session (`ScanSession.encode`, with `layerScans`
+and `vex`) and the reference session to a temporary folder, then runs
+`sbom-generator report --input … --severity … [--compare-with …] [--no-vex]`; the CLI
+(`ScanReportGenerator.fromInput`, `ReportInput` in `lib/report_input.dart`) reads that format. The
+session format is therefore a *contract* with the CLI (keys `layerScans.<scanner>.{mode,layers,byKey}`,
+`vex[]`, `exploit{}`): a `scan_session_test.dart` test locks the layer key (`vulnLayerKey`) and the
+CLI's `test/unit/report_unification_test.dart` reads a GUI-format session.
+
 *Keyboard shortcuts*: `HomeScreen._shortcutBindings` (`CallbackShortcuts` around a
 `Focus(autofocus: true)`); `ConfigPanelState.triggerRun`, `ResultsPanelState.selectTab` /
 `moveTab` are public for this (global keys `_configKey` / `_resultsKey`).
