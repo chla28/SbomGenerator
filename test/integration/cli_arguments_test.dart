@@ -22,6 +22,9 @@ void main() {
       ('convert', '--input'),
       ('licenses', '--input'),
       ('merge', '--output'),
+      ('report', '--input'),
+      ('vex', '--status'),
+      ('watch', '--state-dir'),
     ]) {
       test('$cmd sans $option : erreur d\'usage, code 1, pas d\'exception',
           () async {

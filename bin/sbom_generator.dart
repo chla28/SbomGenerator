@@ -4277,6 +4277,7 @@ ${parser.usage}
     usage();
     exit(1);
   }
+  if (!(args['help'] as bool)) _requireMandatory(parser, args, 'report', usage);
   if (args['help'] as bool) {
     usage();
     exit(0);
@@ -4399,6 +4400,7 @@ The resulting document is used with `scan --vex vex.json`.
     usage();
     exit(1);
   }
+  if (!(args['help'] as bool)) _requireMandatory(parser, args, 'vex', usage);
   if (args['help'] as bool) {
     usage();
     exit(0);
@@ -5554,6 +5556,7 @@ Exit codes (single pass):
     usage();
     exit(1);
   }
+  if (!(args['help'] as bool)) _requireMandatory(parser, args, 'watch', usage);
   if (args['help'] as bool) {
     usage();
     exit(0);
