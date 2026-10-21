@@ -2408,10 +2408,10 @@ Future<void> _runScan(List<String> arguments) async {
                 '  risk      KEV, then EPSS descending, then severity'))
     ..addOption('vex',
         help: tr(
-            'Document VEX (OpenVEX ou CycloneDX VEX) : les CVE déclarées\n'
+            'Document VEX (OpenVEX, CSAF ou CycloneDX VEX) : les CVE déclarées\n'
                 '"not_affected" ou "fixed" pour le paquet concerné sont\n'
                 'écartées des résultats (et comptées).',
-            'VEX document (OpenVEX or CycloneDX VEX): CVEs declared\n'
+            'VEX document (OpenVEX, CSAF or CycloneDX VEX): CVEs declared\n'
                 '"not_affected" or "fixed" for the package concerned are\n'
                 'removed from the results (and counted).'))
     ..addOption('vex-out',
@@ -2423,7 +2423,7 @@ Future<void> _runScan(List<String> arguments) async {
                 'fixed version), plus the "not_affected" statements carried\n'
                 'over from --vex.'))
     ..addOption('vex-format',
-        allowed: ['openvex', 'cyclonedx'],
+        allowed: ['openvex', 'cyclonedx', 'csaf'],
         defaultsTo: 'openvex',
         help: tr('Format de --vex-out.', 'Format of --vex-out.'))
     ..addOption('vex-author',
@@ -2912,11 +2912,14 @@ Future<void> _runScan(List<String> arguments) async {
       }
     }
     final author = args['vex-author'] as String;
-    final doc = args['vex-format'] == 'cyclonedx'
-        ? buildCycloneDxVex(
-            statements: statements, author: author, toolVersion: _version)
-        : buildOpenVex(
-            statements: statements, author: author, toolVersion: _version);
+    final doc = switch (args['vex-format']) {
+      'cyclonedx' => buildCycloneDxVex(
+          statements: statements, author: author, toolVersion: _version),
+      'csaf' => buildCsafVex(
+          statements: statements, author: author, toolVersion: _version),
+      _ => buildOpenVex(
+          statements: statements, author: author, toolVersion: _version),
+    };
     await File(vexOutPath).writeAsString('${encodeVex(doc)}\n');
     stderr.writeln(tr(
         'VEX écrit → $vexOutPath (${statements.length} déclaration(s))',
@@ -4225,9 +4228,9 @@ Future<void> _runReport(List<String> arguments) async {
             '"Trend" section against another results file.'))
     ..addOption('vex',
         help: tr(
-            'Document VEX supplémentaire (OpenVEX / CycloneDX) : les CVE\n'
+            'Document VEX supplémentaire (OpenVEX / CSAF / CycloneDX) : les CVE\n'
                 '« non affectées » / « corrigées » sont écartées du rapport.',
-            'Additional VEX document (OpenVEX / CycloneDX): "not affected" /\n'
+            'Additional VEX document (OpenVEX / CSAF / CycloneDX): "not affected" /\n'
                 '"fixed" CVEs are dropped from the report.'))
     ..addFlag('no-vex',
         negatable: false,
@@ -4339,16 +4342,18 @@ Future<void> _runVex(List<String> arguments) async {
         help: tr('Auteur du document.', 'Document author.'))
     ..addOption('append',
         help: tr(
-            'Document VEX existant (OpenVEX ou CycloneDX) auquel ajouter les\n'
+            'Document VEX existant (OpenVEX, CycloneDX ou CSAF) auquel ajouter les\n'
                 'déclarations ; le résultat est réécrit dans -o.',
-            'Existing VEX document (OpenVEX or CycloneDX) to add the\n'
+            'Existing VEX document (OpenVEX, CycloneDX or CSAF) to add the\n'
                 'statements to; the result is rewritten to -o.'))
     ..addOption('format',
         abbr: 'f',
-        allowed: ['openvex', 'cyclonedx'],
+        allowed: ['openvex', 'cyclonedx', 'csaf'],
         help: tr(
-            'Format du document produit (défaut : openvex, ou celui de\n--append).',
-            'Output document format (default: openvex, or that of --append).'))
+            'Format du document produit : openvex (défaut), cyclonedx ou csaf\n'
+                '(CSAF 2.0 VEX), ou celui de --append.',
+            'Output document format: openvex (default), cyclonedx or csaf\n'
+                '(CSAF 2.0 VEX), or that of --append.'))
     ..addOption('output',
         abbr: 'o',
         help: tr('Fichier de sortie (stdout si omis).',
@@ -4356,7 +4361,7 @@ Future<void> _runVex(List<String> arguments) async {
     ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.', 'Help.'));
 
   void usage() => stdout.writeln(tr('''
-sbom_generator vex – Crée ou complète un document VEX (OpenVEX / CycloneDX).
+sbom_generator vex – Crée ou complète un document VEX (OpenVEX / CycloneDX / CSAF).
 
 Usage:
   sbom-generator vex --cve CVE-2024-1234 --product pkg:npm/foo@1.0.0 \\
@@ -4367,7 +4372,7 @@ ${parser.usage}
 
 Le document produit s'utilise avec `scan --vex vex.json`.
 ''', '''
-sbom_generator vex – Creates or extends a VEX document (OpenVEX / CycloneDX).
+sbom_generator vex – Creates or extends a VEX document (OpenVEX / CycloneDX / CSAF).
 
 Usage:
   sbom-generator vex --cve CVE-2024-1234 --product pkg:npm/foo@1.0.0 \\
@@ -4416,7 +4421,11 @@ The resulting document is used with `scan --vex vex.json`.
       final j = jsonDecode(File(appendPath).readAsStringSync())
           as Map<String, dynamic>;
       statements.addAll(VexDocument.parse(j).statements);
-      appendedFormat = j['bomFormat'] == 'CycloneDX' ? 'cyclonedx' : 'openvex';
+      appendedFormat = j['bomFormat'] == 'CycloneDX'
+          ? 'cyclonedx'
+          : isCsafVex(j)
+              ? 'csaf'
+              : 'openvex';
     } on FileSystemException {
       stderr.writeln(tr('vex: fichier introuvable : $appendPath',
           'vex: file not found: $appendPath'));
@@ -4438,11 +4447,14 @@ The resulting document is used with `scan --vex vex.json`.
   }
   final format = (args['format'] as String?) ?? appendedFormat ?? 'openvex';
   final author = args['author'] as String;
-  final doc = format == 'cyclonedx'
-      ? buildCycloneDxVex(
-          statements: statements, author: author, toolVersion: _version)
-      : buildOpenVex(
-          statements: statements, author: author, toolVersion: _version);
+  final doc = switch (format) {
+    'cyclonedx' => buildCycloneDxVex(
+        statements: statements, author: author, toolVersion: _version),
+    'csaf' => buildCsafVex(
+        statements: statements, author: author, toolVersion: _version),
+    _ => buildOpenVex(
+        statements: statements, author: author, toolVersion: _version),
+  };
   final text = '${encodeVex(doc)}\n';
   final out = args['output'] as String?;
   if (out == null) {
@@ -4851,7 +4863,7 @@ Future<void> _runCra(List<String> arguments) async {
         help: tr(
             'Document VEX (OpenVEX / CycloneDX) : les CVE "not_affected" ou\n'
                 '"fixed" sont écartées de l\'inventaire des vulnérabilités.',
-            'VEX document (OpenVEX / CycloneDX): "not_affected" or "fixed"\n'
+            'VEX document (OpenVEX / CSAF / CycloneDX): "not_affected" or "fixed"\n'
                 'CVEs are removed from the vulnerability inventory.'))
     ..addOption('ignore',
         help: tr(
@@ -5443,7 +5455,8 @@ Future<void> _runVerify(List<String> arguments) async {
   final parser = ArgParser()
     ..addOption('bundle',
         abbr: 'b',
-        help: tr('Bundle de signature (défaut : <sbom>.bundle, écrit par --sign).',
+        help: tr(
+            'Bundle de signature (défaut : <sbom>.bundle, écrit par --sign).',
             'Signature bundle (default: <sbom>.bundle, written by --sign).'))
     ..addOption('key',
         abbr: 'k',

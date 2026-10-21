@@ -1347,10 +1347,10 @@ signalées.
 
 *VEX (`--vex`, `--vex-out`, sous-commande `vex`).* Un document VEX (_Vulnerability
 Exploitability eXchange_) déclare qu'une CVE est « non affectée » ou « corrigée »
-pour un produit. `--vex fichier.json` accepte OpenVEX et CycloneDX VEX ; les CVE
+pour un produit. `--vex fichier.json` accepte OpenVEX, CSAF 2.0 VEX et CycloneDX VEX ; les CVE
 `not_affected` / `fixed` du paquet visé (PURL, `nom` ou `nom@version` ; sans
 produit = tous) sont écartées. `--vex-out fichier.json` écrit un VEX (`--vex-format
-openvex|cyclonedx`) : les CVE restantes en `affected` (avec la version corrigée)
+openvex|cyclonedx|csaf`) : les CVE restantes en `affected` (avec la version corrigée)
 et les déclarations `not_affected` reprises de `--vex`.
 
 [source,bash]
@@ -1360,7 +1360,7 @@ et les déclarations `not_affected` reprises de `--vex`.
   --status not_affected --justification vulnerable_code_not_in_execute_path \
   --impact-statement "JndiLookup retiré de l'archive" -o vex.json
 
-# Compléter un VEX existant (et le convertir en CycloneDX)
+# Compléter un VEX existant (et le convertir en CycloneDX ; -f csaf pour CSAF 2.0)
 ./sbom_generator vex --cve CVE-2024-1 --status affected --append vex.json -f cyclonedx -o vex.cdx.json
 
 # Scanner en tenant compte du VEX, et produire le VEX des CVE restantes

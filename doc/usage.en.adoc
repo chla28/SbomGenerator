@@ -1339,9 +1339,9 @@ These options filter the `scan` results (and, for `--vex` and `--ignore`, those 
 
 *VEX (`--vex`, `--vex-out`, `vex` subcommand).* A VEX (_Vulnerability Exploitability
 eXchange_) document states that a CVE is "not affected" or "fixed" for a product.
-`--vex file.json` accepts OpenVEX and CycloneDX VEX; `not_affected` / `fixed` CVEs
+`--vex file.json` accepts OpenVEX, CSAF 2.0 VEX and CycloneDX VEX; `not_affected` / `fixed` CVEs
 of the targeted package (PURL, `name` or `name@version`; no product = all) are
-dropped. `--vex-out file.json` writes a VEX (`--vex-format openvex|cyclonedx`): the
+dropped. `--vex-out file.json` writes a VEX (`--vex-format openvex|cyclonedx|csaf`): the
 remaining CVEs as `affected` (with the fixed version) and the `not_affected`
 statements carried over from `--vex`.
 

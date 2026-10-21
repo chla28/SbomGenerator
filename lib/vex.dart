@@ -97,22 +97,25 @@ bool _productMatches(String product, String name, String version) {
       (pVersion.isEmpty || pVersion == version);
 }
 
-/// Document VEX (OpenVEX ou CycloneDX VEX), réduit à ses déclarations.
+/// Document VEX (OpenVEX, CycloneDX VEX ou CSAF 2.0 VEX), réduit à ses
+/// déclarations.
 class VexDocument {
   final List<VexStatement> statements;
   const VexDocument(this.statements);
 
-  /// Lit un document OpenVEX (`@context` openvex.dev) ou CycloneDX (tableau
-  /// `vulnerabilities`). Lève [FormatException] pour tout autre contenu.
+  /// Lit un document OpenVEX (`@context` openvex.dev), CycloneDX (tableau
+  /// `vulnerabilities`) ou CSAF 2.0 (`document.category` = `csaf_vex`).
+  /// Lève [FormatException] pour tout autre contenu.
   factory VexDocument.parse(Map<String, dynamic> json) {
     final ctx = '${json['@context'] ?? ''}';
     if (ctx.contains('openvex')) return VexDocument(_parseOpenVex(json));
+    if (isCsafVex(json)) return VexDocument(_parseCsaf(json));
     if (json['bomFormat'] == 'CycloneDX' && json['vulnerabilities'] is List) {
       return VexDocument(_parseCdx(json));
     }
     throw FormatException(tr(
-        'document VEX non reconnu (attendu : OpenVEX ou CycloneDX avec "vulnerabilities")',
-        'unrecognised VEX document (expected: OpenVEX or CycloneDX with "vulnerabilities")'));
+        'document VEX non reconnu (attendu : OpenVEX, CSAF VEX ou CycloneDX avec "vulnerabilities")',
+        'unrecognised VEX document (expected: OpenVEX, CSAF VEX or CycloneDX with "vulnerabilities")'));
   }
 
   static List<VexStatement> _parseOpenVex(Map<String, dynamic> json) {
@@ -177,6 +180,74 @@ class VexDocument {
     return out;
   }
 
+  /// CSAF 2.0, profil VEX : les produits sont désignés par `product_id`, que
+  /// l'arbre `product_tree` associe à un PURL (sinon au nom du produit).
+  static List<VexStatement> _parseCsaf(Map<String, dynamic> json) {
+    final products = _csafProducts(json['product_tree']);
+    String name(Object? id) => products['$id'] ?? '$id';
+    // Le produit joker écrit par [buildCsafVex] vaut « tous les produits ».
+    List<String> resolve(Object? ids) => [
+          for (final id in (ids as List? ?? const [])) name(id),
+        ].where((p) => p != _csafAllProducts).toList();
+
+    const statusMap = {
+      'known_not_affected': 'not_affected',
+      'fixed': 'fixed',
+      'first_fixed': 'fixed',
+      'known_affected': 'affected',
+      'under_investigation': 'under_investigation',
+    };
+    final out = <VexStatement>[];
+    for (final raw in (json['vulnerabilities'] as List? ?? const [])) {
+      if (raw is! Map) continue;
+      final ids = (raw['ids'] as List? ?? const []);
+      final id =
+          '${raw['cve'] ?? (ids.isNotEmpty && ids.first is Map ? (ids.first as Map)['text'] : '') ?? ''}';
+      final status = raw['product_status'];
+      if (id.isEmpty || status is! Map) continue;
+
+      // Éléments rattachés à des produits (flags, threats, remediations) :
+      // retenus pour une déclaration si leurs produits recoupent les siens.
+      bool concerns(Object? entry, List<String> own) {
+        final theirs = resolve((entry as Map)['product_ids']);
+        return theirs.isEmpty || own.isEmpty || theirs.any(own.contains);
+      }
+
+      for (final e in statusMap.entries) {
+        final listed = status[e.key];
+        if (listed is! List || listed.isEmpty) continue;
+        final own = resolve(listed);
+        String? justification;
+        for (final f in (raw['flags'] as List? ?? const [])) {
+          if (f is Map &&
+              openVexJustifications.contains(f['label']) &&
+              concerns(f, own)) {
+            justification = '${f['label']}';
+            break;
+          }
+        }
+        String? detail(String key, bool Function(Map) keep) {
+          for (final t in (raw[key] as List? ?? const [])) {
+            if (t is Map && keep(t) && concerns(t, own)) {
+              return t['details'] as String?;
+            }
+          }
+          return null;
+        }
+
+        out.add(VexStatement(
+          vulnId: id,
+          products: own,
+          status: e.value,
+          justification: justification,
+          impactStatement: detail('threats', (t) => t['category'] == 'impact'),
+          actionStatement: detail('remediations', (_) => true),
+        ));
+      }
+    }
+    return out;
+  }
+
   /// Première déclaration qui vise [vulnId] pour le paquet `name@version`.
   VexStatement? find(String vulnId, String name, String version) {
     final id = vulnId.toUpperCase();
@@ -185,6 +256,54 @@ class VexDocument {
     }
     return null;
   }
+}
+
+/// Vrai pour un document CSAF 2.0 du profil VEX.
+bool isCsafVex(Map<String, dynamic> json) {
+  final doc = json['document'];
+  return doc is Map && doc['category'] == 'csaf_vex';
+}
+
+/// Nom du produit joker de [buildCsafVex] (CSAF ne sait pas dire « tous »).
+const _csafAllProducts = '*';
+
+/// `product_id` -> identifiant lisible (PURL de préférence, puis nom) pour tous
+/// les produits de l'arbre CSAF, y compris ceux des `relationships`.
+Map<String, String> _csafProducts(Object? tree) {
+  final out = <String, String>{};
+  if (tree is! Map) return out;
+
+  void product(Object? p) {
+    if (p is! Map) return;
+    final id = p['product_id'];
+    if (id == null) return;
+    final helper = p['product_identification_helper'];
+    final purl = helper is Map ? helper['purl'] : null;
+    out['$id'] = '${purl ?? p['name'] ?? id}';
+  }
+
+  void branches(Object? list) {
+    for (final b in (list as List? ?? const [])) {
+      if (b is! Map) continue;
+      product(b['product']);
+      branches(b['branches']);
+    }
+  }
+
+  for (final p in (tree['full_product_names'] as List? ?? const [])) {
+    product(p);
+  }
+  branches(tree['branches']);
+
+  // « composant installé sur plate-forme » : le produit visé est le composant.
+  for (final r in (tree['relationships'] as List? ?? const [])) {
+    if (r is! Map) continue;
+    final combined = r['full_product_name'];
+    final id = combined is Map ? combined['product_id'] : null;
+    final ref = out['${r['product_reference']}'];
+    if (id != null && ref != null) out['$id'] = ref;
+  }
+  return out;
 }
 
 /// Sépare `nom@version` (le dernier `@`, pour les paquets npm à portée).
@@ -289,6 +408,115 @@ Map<String, dynamic> buildCycloneDxVex({
               ],
           },
     ],
+  };
+}
+
+/// Document CSAF 2.0, profil VEX. Un produit sans PURL est désigné par son
+/// seul nom ; « tous les produits » devient le produit joker `*`.
+Map<String, dynamic> buildCsafVex({
+  required List<VexStatement> statements,
+  required String author,
+  required String toolVersion,
+}) {
+  final now = _now();
+  final ids = <String, String>{}; // identifiant lisible -> product_id
+  String productId(String ref) => ids.putIfAbsent(
+      ref, () => 'CSAFPID-${(ids.length + 1).toString().padLeft(4, '0')}');
+
+  List<String> idsOf(VexStatement s) => [
+        for (final p
+            in s.products.isEmpty ? const [_csafAllProducts] : s.products)
+          productId(p),
+      ];
+
+  final vulnerabilities = <Map<String, dynamic>>[];
+  final byVuln = <String, List<VexStatement>>{};
+  for (final s in statements) {
+    (byVuln[s.vulnId] ??= []).add(s);
+  }
+  for (final e in byVuln.entries) {
+    final status = <String, List<String>>{};
+    final flags = <Map<String, dynamic>>[];
+    final threats = <Map<String, dynamic>>[];
+    final remediations = <Map<String, dynamic>>[];
+    for (final s in e.value) {
+      final pids = idsOf(s);
+      final key = switch (s.status) {
+        'not_affected' => 'known_not_affected',
+        'fixed' => 'fixed',
+        'affected' => 'known_affected',
+        _ => 'under_investigation',
+      };
+      (status[key] ??= []).addAll(pids);
+      if (s.status == 'not_affected' && s.justification != null) {
+        flags.add({'label': s.justification, 'product_ids': pids});
+      }
+      if (s.impactStatement != null) {
+        threats.add({
+          'category': 'impact',
+          'details': s.impactStatement,
+          'product_ids': pids,
+        });
+      }
+      if (s.actionStatement != null) {
+        remediations.add({
+          'category': 'mitigation',
+          'details': s.actionStatement,
+          'product_ids': pids,
+        });
+      }
+    }
+    final isCve = RegExp(r'^CVE-\d{4}-\d{4,}$').hasMatch(e.key);
+    vulnerabilities.add({
+      if (isCve)
+        'cve': e.key
+      else
+        'ids': [
+          {'system_name': 'vulnerability', 'text': e.key},
+        ],
+      'product_status': status,
+      if (flags.isNotEmpty) 'flags': flags,
+      if (threats.isNotEmpty) 'threats': threats,
+      if (remediations.isNotEmpty) 'remediations': remediations,
+    });
+  }
+
+  return {
+    'document': {
+      'category': 'csaf_vex',
+      'csaf_version': '2.0',
+      'title': 'VEX — $author',
+      'publisher': {
+        'category': 'other',
+        'name': author,
+        'namespace': 'https://sbom.local',
+      },
+      'tracking': {
+        'id': 'sbom-generator-${generateUuidV4()}',
+        'status': 'final',
+        'version': '1',
+        'initial_release_date': now,
+        'current_release_date': now,
+        'revision_history': [
+          {'date': now, 'number': '1', 'summary': 'Initial version'},
+        ],
+        'generator': {
+          'engine': {'name': 'sbom_generator', 'version': toolVersion},
+        },
+      },
+    },
+    'product_tree': {
+      'full_product_names': [
+        for (final e in ids.entries)
+          {
+            'product_id': e.value,
+            'name': e.key,
+            if (e.key.startsWith('pkg:'))
+              'product_identification_helper': {'purl': e.key},
+          },
+      ],
+    },
+    'vulnerabilities': vulnerabilities,
   };
 }
 

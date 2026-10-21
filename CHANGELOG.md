@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **VEX CSAF 2.0** : `--vex` (scan, report, cra) lit les documents CSAF du profil `csaf_vex` (produits résolus en PURL via `product_tree`, justifications `flags`, `threats`, `remediations`) ; `vex -f csaf` et `scan --vex-format csaf` en écrivent (conformes au schéma CSAF 2.0).
 - **`verify`** : vérifie la signature cosign d'un SBOM (`cosign verify-blob`, bundle écrit par `--sign`), à clé ou sans clé (identité + émetteur OIDC), sortie `--format json`, code 2 si la signature est invalide.
 - **Nouveaux lockfiles** : `pnpm-lock.yaml` (v5/v6/v9), `Cargo.lock` (crates externes, SHA-256), `composer.lock` (`packages` et `packages-dev`, licence, auteur) et `Gemfile.lock` (SHA-256 de la section `CHECKSUMS`, plateforme retirée de la version). Reconnus par `--input` (fichier, liste ou dossier récursif) et dans les archives ; PURL `pkg:cargo`, `pkg:composer`, `pkg:gem`.
 
