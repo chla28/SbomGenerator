@@ -4256,9 +4256,9 @@ main()
 
 [source,bash]
 ----
-dart test                            # all the tests (574 in total)
+dart test                            # all the tests (577 in total)
 dart test test/unit/                 # unit tests only (491)
-dart test test/integration/          # integration tests (83, 8 of which are skipped
+dart test test/integration/          # integration tests (86, 8 of which are skipped
                                       # automatically depending on the environment)
 ----
 
@@ -4465,7 +4465,7 @@ hash, `%{SHA256HEADER}` → `headerSha256` — requires `rpm`
 not found, `--oci-tool` ≠ syft, `--binary` + `--image`
 
 |`test/integration/cli_arguments_test.dart`
-|17
+|20
 |mandatory options, strict scan dates, translated `args` messages, `--sign` without cosign, `verify` (fake `cosign`), "Analysed" denominator
 
 |`test/integration/cli_machine_output_test.dart`

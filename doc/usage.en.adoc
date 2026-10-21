@@ -2067,8 +2067,8 @@ sbom_generator/
 │   ├── usage.adoc                 # Usage guide (FR)
 │   └── usage.en.adoc              # This document
 ├── test/
-│   ├── unit/                      # Unit tests
-│   └── integration/               # Integration tests
+│   ├── unit/                      # Unit tests (491 tests)
+│   └── integration/               # Integration tests (86 tests, 8 skipped depending on the environment)
 ├── scripts/                       # Build, installation, uninstallation
 ├── example/3PP/                   # Third-party archive examples
 └── pubspec.yaml                   # Dart dependencies (args, crypto, json_schema)

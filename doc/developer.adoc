@@ -4265,9 +4265,9 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (574 au total)
+dart test                            # tous les tests (577 au total)
 dart test test/unit/                 # tests unitaires seuls (491)
-dart test test/integration/          # tests d'intégration (83, dont 8 sautés
+dart test test/integration/          # tests d'intégration (86, dont 8 sautés
                                       # automatiquement selon l'environnement)
 ----
 
@@ -4472,7 +4472,7 @@ repli `--supplier`
 introuvable, `--oci-tool` ≠ syft, `--binary` + `--image`
 
 |`test/integration/cli_arguments_test.dart`
-|17
+|20
 |options obligatoires, dates de scan strictes, messages d'`args` traduits, `--sign` sans cosign, `verify` (faux `cosign`), dénominateur « Analysés »
 
 |`test/integration/cli_machine_output_test.dart`
