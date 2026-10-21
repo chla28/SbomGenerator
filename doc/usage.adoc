@@ -150,6 +150,8 @@ sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <fichier> [options]
 sbom_generator vex --cve <id> --status <état> [--product <purl>] [-o <vex.json>]
+sbom_generator watch <sbom|dossier>… --state-dir <dossier> [--interval 6h] [options]
+sbom_generator verify <sbom> (--key <pub> | --certificate-identity <id> --certificate-oidc-issuer <url>)
 sbom_generator report -i <résultats.json|session.json> -o <rapport.pdf> [-s high] [--compare-with <autre.json>]
 ....
 
@@ -1569,6 +1571,31 @@ Scanning).
 
 `--only-kev` et `--epss-min` restreignent la sortie (tous formats) ;
 `--sort risk` réordonne l'affichage console.
+
+=== Surveillance des nouvelles CVE (`watch`)
+
+`watch` rescanne des SBOM archivés et signale les CVE apparues depuis le passage
+précédent (la base du scanner évolue même quand le SBOM ne change pas). Chaque SBOM
+est scanné (`scan --format json`) puis comparé à l'état mémorisé dans `--state-dir` ;
+le premier passage enregistre l'état initial sans rien signaler.
+
+[source,bash]
+----
+# un passage (cron, CI) : code 3 s'il y a de nouvelles CVE
+./sbom_generator watch sbom/ --state-dir .watch --scanner grype
+
+# en boucle, avec une alerte par SBOM concerné
+./sbom_generator watch sbom/ -d .watch --interval 6h \
+  --notify-cmd 'mail -s "Nouvelles CVE : $SBOMGEN_WATCH_SBOM" secu@exemple.org < "$SBOMGEN_WATCH_REPORT"'
+----
+
+Un dossier est parcouru récursivement (`*.cdx.json`, `*.spdx.json`, `*.spdx3.jsonld`).
+`--scan-arg=--no-enrich` (répétable) transmet des options à `scan`. La commande
+`--notify-cmd` reçoit `SBOMGEN_WATCH_SBOM`, `SBOMGEN_WATCH_NEW` (nombre) et
+`SBOMGEN_WATCH_REPORT` (JSON des nouveaux constats) ; si elle échoue, l'état n'est
+pas mis à jour et l'alerte est retentée au passage suivant. `--format json` écrit
+un événement par SBOM. Codes de retour (un passage) : `0` rien de nouveau, `3` nouvelles CVE,
+`1` erreur.
 
 === Rapport de conformité Cyber Resilience Act (`cra`)
 

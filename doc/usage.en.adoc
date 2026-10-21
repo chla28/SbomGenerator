@@ -150,6 +150,8 @@ sbom_generator scan --image <image> [--per-layer] [options]
 sbom_generator scan --package <rpm|deb|tgz|zip|jar…> [--depth N] [options]
 sbom_generator cra --sbom <file> [options]
 sbom_generator vex --cve <id> --status <state> [--product <purl>] [-o <vex.json>]
+sbom_generator watch <sbom|directory>... --state-dir <directory> [--interval 6h] [options]
+sbom_generator verify <sbom> (--key <pub> | --certificate-identity <id> --certificate-oidc-issuer <url>)
 sbom_generator report -i <results.json|session.json> -o <report.pdf> [-s high] [--compare-with <other.json>]
 ....
 
@@ -1557,6 +1559,30 @@ Scanning prioritisation).
 
 `--only-kev` and `--epss-min` restrict the output (all formats);
 `--sort risk` reorders the console display.
+
+=== New CVE monitoring (`watch`)
+
+`watch` rescans archived SBOMs and reports the CVEs that appeared since the previous
+pass (the scanner database moves even when the SBOM does not). Each SBOM is scanned
+(`scan --format json`) and compared with the state kept in `--state-dir`; the first
+pass records the initial state and reports nothing.
+
+[source,bash]
+----
+# single pass (cron, CI): exit code 3 when there are new CVEs
+./sbom_generator watch sbom/ --state-dir .watch --scanner grype
+
+# in a loop, with one alert per affected SBOM
+./sbom_generator watch sbom/ -d .watch --interval 6h \
+  --notify-cmd 'mail -s "New CVEs: $SBOMGEN_WATCH_SBOM" secu@example.org < "$SBOMGEN_WATCH_REPORT"'
+----
+
+A directory is searched recursively (`*.cdx.json`, `*.spdx.json`, `*.spdx3.jsonld`).
+`--scan-arg=--no-enrich` (repeatable) passes options to `scan`. The `--notify-cmd`
+command receives `SBOMGEN_WATCH_SBOM`, `SBOMGEN_WATCH_NEW` (count) and
+`SBOMGEN_WATCH_REPORT` (JSON of the new findings); if it fails the state is not
+updated and the alert is retried on the next pass. `--format json` writes one event
+per SBOM. Exit codes (single pass): `0` nothing new, `3` new CVEs, `1` error.
 
 === Cyber Resilience Act compliance report (`cra`)
 

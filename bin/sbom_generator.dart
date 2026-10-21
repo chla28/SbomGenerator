@@ -13,6 +13,7 @@ import 'package:sbom_generator/jar_parser.dart';
 import 'package:sbom_generator/cyclonedx_generator.dart';
 import 'package:sbom_generator/spdx_generator.dart';
 import 'package:sbom_generator/signature.dart';
+import 'package:sbom_generator/watch.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:sbom_generator/spdx3_view.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
@@ -117,6 +118,12 @@ Future<void> main(List<String> rawArguments) async {
   // Sous-commande `validate` : valide la structure d'un fichier SBOM
   if (arguments.isNotEmpty && arguments.first == 'validate') {
     await _runValidate(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `watch` : rescanne des SBOM et signale les nouvelles CVE
+  if (arguments.isNotEmpty && arguments.first == 'watch') {
+    await _runWatch(arguments.sublist(1));
     return;
   }
 
@@ -5448,6 +5455,262 @@ void _validateSpdx3(Map<String, dynamic> json, List<String> errors,
       errors.add(tr('[strict] @graph[$i] : spdxId manquant',
           '[strict] @graph[$i]: spdxId missing'));
     }
+  }
+}
+
+/// Commande qui relance ce programme (exécutable compilé, ou `dart script`).
+List<String> _selfCommand() {
+  final exe = Platform.resolvedExecutable;
+  final script = Platform.script.toFilePath();
+  return script == exe ? [exe] : [exe, script];
+}
+
+Future<void> _runWatch(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('state-dir',
+        abbr: 'd',
+        mandatory: true,
+        help: tr(
+            'Dossier où mémoriser le dernier scan de chaque SBOM (créé si\n'
+                'absent). Le premier passage établit l\'état initial.',
+            'Directory holding the last scan of each SBOM (created if\n'
+                'missing). The first pass records the initial state.'))
+    ..addOption('scanner',
+        abbr: 's',
+        defaultsTo: 'grype',
+        allowed: _validScanners.toList(),
+        help: tr('Scanner de vulnérabilités.', 'Vulnerability scanner.'))
+    ..addOption('interval',
+        abbr: 'i',
+        help: tr(
+            'Rescanne en boucle à cet intervalle (90s, 30m, 6h, 1d).\n'
+                'Omis : un seul passage (adapté à cron / CI).',
+            'Rescan in a loop at this interval (90s, 30m, 6h, 1d).\n'
+                'Omitted: a single pass (suited to cron / CI).'))
+    ..addOption('notify-cmd',
+        help: tr(
+            'Commande shell lancée pour chaque SBOM ayant de nouvelles CVE.\n'
+                'Variables : SBOMGEN_WATCH_SBOM, SBOMGEN_WATCH_NEW (nombre),\n'
+                'SBOMGEN_WATCH_REPORT (JSON des nouveaux constats). Si elle\n'
+                'échoue, l\'état n\'est pas mis à jour : nouvelle tentative au\n'
+                'passage suivant.',
+            'Shell command run for each SBOM with new CVEs.\n'
+                'Variables: SBOMGEN_WATCH_SBOM, SBOMGEN_WATCH_NEW (count),\n'
+                'SBOMGEN_WATCH_REPORT (JSON of the new findings). If it\n'
+                'fails the state is not updated: retried on the next pass.'))
+    ..addMultiOption('scan-arg',
+        help: tr(
+            'Option transmise telle quelle à `scan` (répétable), p. ex.\n'
+                '--scan-arg=--no-enrich.',
+            'Option passed as is to `scan` (repeatable), e.g.\n'
+                '--scan-arg=--no-enrich.'))
+    ..addOption('format',
+        abbr: 'f',
+        allowed: ['text', 'json'],
+        defaultsTo: 'text',
+        help: tr('Sortie : text (défaut) ou json (un événement par ligne).',
+            'Output: text (default) or json (one event per line).'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.', 'Help.'));
+
+  void usage() => stdout.writeln(tr('''
+sbom_generator watch – Rescanne des SBOM et signale les nouvelles CVE.
+
+Usage:
+  sbom_generator watch sbom/ autre.cdx.json --state-dir .watch
+  sbom_generator watch sbom/ -d .watch --interval 6h --notify-cmd './alerte.sh'
+
+Chaque SBOM est scanné (`scan --format json`) puis comparé au scan précédent.
+Un dossier est parcouru récursivement (*.cdx.json, *.spdx.json, *.spdx3.jsonld).
+
+${parser.usage}
+
+Codes de retour (un seul passage) :
+  0  Aucune nouvelle CVE
+  1  Erreur (usage, SBOM illisible, scan ou notification en échec)
+  3  Au moins une nouvelle CVE
+''', '''
+sbom_generator watch – Rescans SBOMs and reports new CVEs.
+
+Usage:
+  sbom_generator watch sbom/ other.cdx.json --state-dir .watch
+  sbom_generator watch sbom/ -d .watch --interval 6h --notify-cmd './alert.sh'
+
+Each SBOM is scanned (`scan --format json`) and compared with its previous scan.
+A directory is searched recursively (*.cdx.json, *.spdx.json, *.spdx3.jsonld).
+
+${parser.usage}
+
+Exit codes (single pass):
+  0  No new CVE
+  1  Error (usage, unreadable SBOM, failed scan or notification)
+  3  At least one new CVE
+'''));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('watch: ${_argError(e.message)}');
+    usage();
+    exit(1);
+  }
+  if (args['help'] as bool) {
+    usage();
+    exit(0);
+  }
+  if (args.rest.isEmpty) {
+    stderr.writeln(tr('watch: au moins un SBOM ou dossier requis.',
+        'watch: at least one SBOM or directory is required.'));
+    usage();
+    exit(1);
+  }
+  Duration? interval;
+  final intervalText = args['interval'] as String?;
+  if (intervalText != null) {
+    try {
+      interval = parseWatchInterval(intervalText);
+    } on FormatException catch (e) {
+      stderr.writeln('watch: --interval : ${e.message}');
+      exit(1);
+    }
+  }
+
+  final stateDir = args['state-dir'] as String;
+  final asJson = args['format'] == 'json';
+  final notifyCmd = args['notify-cmd'] as String?;
+  Directory(stateDir).createSync(recursive: true);
+
+  void emit(Map<String, dynamic> event, String text) =>
+      print(asJson ? jsonEncode(event) : text);
+
+  /// Un passage sur tous les SBOM : (SBOM avec nouvelles CVE, erreurs).
+  Future<(int, int)> pass() async {
+    var withNew = 0, errors = 0;
+    final sboms = collectWatchedSboms(args.rest);
+    if (sboms.isEmpty) {
+      emit({'event': 'watch', 'status': 'error', 'error': 'no sbom'},
+          tr('watch: aucun SBOM trouvé.', 'watch: no SBOM found.'));
+      return (0, 1);
+    }
+    for (final sbom in sboms) {
+      void fail(String why) {
+        errors++;
+        emit({'event': 'watch', 'sbom': sbom, 'status': 'error', 'error': why},
+            '$sbom : ${tr('erreur', 'error')} — $why');
+      }
+
+      if (!File(sbom).existsSync()) {
+        fail(tr('fichier introuvable', 'file not found'));
+        continue;
+      }
+      final cmd = _selfCommand();
+      final scan = await Process.run(cmd.first, [
+        ...cmd.skip(1),
+        'scan',
+        '--sbom',
+        sbom,
+        '--scanner',
+        args['scanner'] as String,
+        '--format',
+        'json',
+        ...(args['scan-arg'] as List<String>),
+      ]);
+      Map<String, dynamic> current;
+      try {
+        current = jsonDecode('${scan.stdout}') as Map<String, dynamic>;
+        if (current['findings'] is! List) throw const FormatException('');
+      } on FormatException {
+        final err = '${scan.stderr}'.trim().split('\n').last;
+        fail(tr('scan impossible (code ${scan.exitCode}) $err',
+            'scan failed (code ${scan.exitCode}) $err'));
+        continue;
+      }
+
+      final stateFile = watchStateFile(stateDir, sbom);
+      Map<String, dynamic>? previous;
+      if (File(stateFile).existsSync()) {
+        try {
+          previous = jsonDecode(File(stateFile).readAsStringSync())
+              as Map<String, dynamic>;
+        } on FormatException {
+          previous = null; // état corrompu : on repart d'un état initial
+        }
+      }
+
+      if (previous == null) {
+        File(stateFile).writeAsStringSync(jsonEncode(current));
+        final total = (current['findings'] as List).length;
+        emit({
+          'event': 'watch',
+          'sbom': sbom,
+          'status': 'initial',
+          'total': total
+        }, '$sbom : ${tr('état initial enregistré', 'initial state recorded')} ($total CVE)');
+        continue;
+      }
+
+      final diff = diffScans(previous, current);
+      if (diff.added.isEmpty) {
+        File(stateFile).writeAsStringSync(jsonEncode(current));
+        emit(
+            {
+              'event': 'watch',
+              'sbom': sbom,
+              'status': 'unchanged',
+              'total': diff.total,
+              'resolved': diff.resolved,
+            },
+            '$sbom : ${tr('aucune nouvelle CVE', 'no new CVE')} (${diff.total} CVE'
+            '${diff.resolved > 0 ? ', ${tr('${diff.resolved} corrigée(s)', '${diff.resolved} resolved')}' : ''})');
+        continue;
+      }
+
+      withNew++;
+      emit(
+          {
+            'event': 'watch',
+            'sbom': sbom,
+            'status': 'changed',
+            'total': diff.total,
+            'resolved': diff.resolved,
+            'new': diff.added,
+          },
+          [
+            '$sbom : ${diff.added.length} ${tr('nouvelle(s) CVE', 'new CVE(s)')} (${diff.total} CVE)',
+            for (final f in diff.added)
+              '  + ${f['id']}  ${f['package']}  ${f['severity'] ?? ''}',
+          ].join('\n'));
+
+      var notified = true;
+      if (notifyCmd != null) {
+        final report = File('$stateFile.new.json')
+          ..writeAsStringSync(jsonEncode(diff.added));
+        final r = await Process.run('sh', [
+          '-c',
+          notifyCmd
+        ], environment: {
+          'SBOMGEN_WATCH_SBOM': sbom,
+          'SBOMGEN_WATCH_NEW': '${diff.added.length}',
+          'SBOMGEN_WATCH_REPORT': report.path,
+        });
+        if (r.exitCode != 0) {
+          notified = false;
+          fail(tr('--notify-cmd en échec (code ${r.exitCode}) : état conservé',
+              '--notify-cmd failed (code ${r.exitCode}): state kept'));
+        }
+      }
+      if (notified) File(stateFile).writeAsStringSync(jsonEncode(current));
+    }
+    return (withNew, errors);
+  }
+
+  if (interval == null) {
+    final (withNew, errors) = await pass();
+    exit(errors > 0 ? 1 : (withNew > 0 ? 3 : 0));
+  }
+  while (true) {
+    await pass();
+    await Future<void>.delayed(interval);
   }
 }
 
