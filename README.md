@@ -2,7 +2,7 @@
 
 🇫🇷 **Français** · 🇬🇧 [English](README.en.md)
 
-Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn, Maven, Dart/Flutter), d'archives génériques, ou d'une **image de conteneur** (OCI).
+Génère un SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets (RPM, Python, Debian, Java, Go, npm/yarn/pnpm, Maven, Dart/Flutter, Rust, PHP, Ruby), d'archives génériques, ou d'une **image de conteneur** (OCI).
 L'outil est également capable de lancer des scans de CVE sur des SBOM, des conteneurs, etc., en utilisant Grype, Trivy et OSV-Scanner.
 
 IMPORTANT: Je suis développeur dans le monde de la cybersécurité et j'ai besoin de nombreux outils pour mon travail.
@@ -299,6 +299,32 @@ sbom_generator scan --image ./app.tar --per-layer --layer-scan each --layer-mode
 # exploitées (déclencheur notification ENISA sous 24 h, art. 14)
 sbom_generator cra --sbom sbom.cdx.json --config cra.yaml -o rapport-cra.pdf
 sbom_generator cra --sbom sbom.cdx.json --no-scan --format json   # exit 2 si non conforme
+
+# Lister les licences d'un SBOM (rapport AsciiDoc / Markdown / HTML / CSV / JSON)
+sbom_generator licenses -i sbom.cdx.json -o licences.adoc
+
+# Politique de scan : seuil d'échec, CVE déjà connues, CVE ignorées (avec
+# justification et expiration), cache du scanner
+sbom_generator scan --sbom sbom.cdx.json --fail-on high
+sbom_generator scan --sbom sbom.cdx.json --baseline scan-precedent.json --ignore ignore.txt --cache
+
+# VEX : déclarer une CVE « non affectée » (OpenVEX par défaut, ou -f cyclonedx|csaf),
+# puis l'appliquer au scan (OpenVEX, CycloneDX VEX et CSAF 2.0 sont lus)
+sbom_generator vex --cve CVE-2024-1234 --product pkg:npm/foo@1.0.0 \
+  --status not_affected --justification vulnerable_code_not_in_execute_path -o vex.json
+sbom_generator scan --sbom sbom.cdx.json --vex vex.json
+
+# Rapport de vulnérabilités (PDF) à partir d'un résultat `scan --format json`
+sbom_generator scan --sbom sbom.cdx.json --format json -o resultats.json
+sbom_generator report -i resultats.json -o rapport.pdf
+
+# Signer un SBOM (cosign), puis vérifier sa signature
+sbom_generator -i packages.txt -o sbom --sign
+sbom_generator verify sbom.cdx.json --key cosign.pub
+
+# Surveiller les nouvelles CVE de SBOM archivés (un passage : code 3 s'il y en a ;
+# --interval 6h pour boucler ; --notify-cmd pour alerter)
+sbom_generator watch sbom/ --state-dir .watch --scan-arg=--no-enrich
 ```
 
 ### Exemples
@@ -508,7 +534,7 @@ mongosh-2.5.6-linux-x64               → nom=mongosh           ver=2.5.6    arc
 sbom_generator/
 ├── bin/
 │   └── sbom_generator.dart      # Point d'entrée CLI + sous-commandes
-│                                #   diff/merge/convert/validate/scan
+│                                #   diff/merge/convert/validate/licenses/scan/cra/report/vex/verify/watch
 ├── lib/
 │   ├── i18n.dart                # Localisation FR / EN des messages (tr(), --lang)
 │   ├── models.dart              # Package, RpmPackage, WheelPackage, DebPackage,
@@ -526,6 +552,10 @@ sbom_generator/
 │   ├── yarn_parser.dart         # Parsing yarn.lock classique et Berry (pur Dart)
 │   ├── maven_parser.dart        # Parsing pom.xml (pur Dart, extraction XML légère)
 │   ├── pubspec_parser.dart      # Parsing pubspec.lock / pubspec.yaml (pur Dart)
+│   ├── cargo_parser.dart        # Parsing Cargo.lock (Rust, pur Dart)
+│   ├── pnpm_parser.dart         # Parsing pnpm-lock.yaml v5/v6/v9 (pur Dart)
+│   ├── composer_parser.dart     # Parsing composer.lock (PHP, pur Dart)
+│   ├── gem_parser.dart          # Parsing Gemfile.lock (Ruby, pur Dart)
 │   ├── oci_parser.dart          # Analyse images OCI (syft / trivy / skopeo / cdxgen)
 │   │                            #   skopeo : RPM, dpkg, APK, Maven JARs, PyPI, npm
 │   │                            #   cdxgen : SBOM CycloneDX natif, filtré aux PURL réels
@@ -539,6 +569,19 @@ sbom_generator/
 │   ├── vuln_enrichment.dart     # Enrichissement CVE : CISA KEV, EPSS, PoC, exploitabilité CVSS
 │   ├── cra_report.dart          # Rapport de conformité Cyber Resilience Act (sous-commande cra)
 │   ├── policy_checker.dart      # Contrôle de licences et score qualité CI/CD
+│   ├── nested_archive.dart      # Descente dans les objets imbriqués (--depth)
+│   ├── layer_scan.dart          # SBOM et CVE par couche (--per-layer)
+│   ├── license_report_generator.dart # Rapport de licences (sous-commande licenses)
+│   ├── spdx3_view.dart          # Lecture normalisée d'un graphe SPDX 3.0 (copie dans la GUI)
+│   ├── schema_validator.dart    # Validation par les schémas JSON officiels (validate)
+│   ├── schemas_data.dart        # Schémas embarqués (généré par tool/embed_schemas.dart)
+│   ├── vex.dart                 # Déclarations VEX : OpenVEX, CycloneDX VEX, CSAF 2.0
+│   ├── scan_policy.dart         # --ignore, --baseline, --cache, --fail-on
+│   ├── remediation.dart         # Version cible minimale par paquet, gain de risque
+│   ├── report_input.dart        # Entrée commune des rapports de vulnérabilités
+│   ├── signature.dart           # Vérification de signature cosign (sous-commande verify)
+│   ├── watch.dart               # Surveillance des nouvelles CVE (sous-commande watch)
+│   ├── tool_runner.dart         # Lancement d'un outil externe (code 127 si absent)
 │   ├── cyclonedx_generator.dart # Format CycloneDX 1.6/1.7 JSON
 │   ├── spdx_generator.dart      # Format SPDX 2.3 JSON
 │   ├── spdx3_generator.dart     # Format SPDX 3.0 JSON-LD

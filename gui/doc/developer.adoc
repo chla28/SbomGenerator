@@ -1099,7 +1099,7 @@ _scan` (défaut `true`), `String _scanner` (défaut `grype`), plus
   pas par `{` est traité comme une erreur. Les clés JSON sont stables et
   jamais traduites (y compris les clés NTIA et l'`id` des `fieldChecks`) : le
   panneau traduit les libellés affichés à partir de ces identifiants.
-* `_exportPdf()` — `FilePicker.saveFile` puis `cra ... --format pdf -o
+* `_exportPdf()` — `pickSavePath` puis `cra ... --format pdf -o
   <path>` ; `exitCode` 0 ou 2 = succès (fichier écrit).
 * `_metaArgs()` — n'ajoute `--manufacturer` / `--product` /
   `--product-version` / `--support-until` / `--vuln-contact` /
@@ -1356,7 +1356,7 @@ rapport via `filterForReport`, KEV toujours incluses — pas de second
 filtre), rendu par `CveDetail.toAdocRows(adocEscape)`
 (<<sec-cve-detail-widget>>). Suit ensuite le même patron que
 `_VulnTableViewState._exportAsciiDoc()` : écriture du `.adoc` via
-`FilePicker.saveFile`, conversion via `runAsciidoctorPdf`, retour `SnackBar`.
+`pickSavePath`, conversion via `runAsciidoctorPdf`, retour `SnackBar`.
 
 ==== `widgets/sbom_tree_panel.dart` — Onglet Arborescence SBOM
 
@@ -1583,7 +1583,7 @@ class _Component {
 
 Méthodes clés :
 
-* `_loadFile()` — `FilePicker.pickFiles()` puis `_openPath(path)`
+* `_loadFile()` — `FilePicker.pickFile()` puis `_openPath(path)`
 * `_openPath(path)` — JSON parse → `_Component.fromSbom()` ; calcule aussi
   `_nav` (`LayerNav.discover`), `_layerInfo` (`LayerDocInfo.fromSbom`) et
   `_layerLabels` — c'est aussi le callback `onOpen` du `LayerSelector`
@@ -2150,7 +2150,7 @@ vide :
 * *Export CSV* (`Icons.download_outlined`) — `_exportCsv()` : écrit
   `csvHeader` puis une ligne par élément de `_filtered` via `csvRow`,
   échappement RFC 4180 (`csvEscape`), chemin choisi via
-  `FilePicker.saveFile(...)`. `_filtered` dérive de `widget.vulns`, déjà
+  `pickSavePath(...)`. `_filtered` dérive de `widget.vulns`, déjà
   fusionné par `dedupeVulns` (voir <<sec-dedupe-vulns>>) : chaque panneau
   ajoute une colonne « Emplacements » à `csvHeader`/`csvRow` reportant
   `v.occurrenceCount`. L'en-tête CSV n'est *pas* traduit (lu par des
@@ -3067,6 +3067,36 @@ sommaire) sont deux fichiers séparés plutôt que deux `testWidgets` du même
 fichier — `package:test` isole chaque fichier dans son propre isolat, ce
 qui contourne le problème (vérifié : les deux passent une fois séparés).
 
+== Sélecteurs de fichiers (`file_picker` 13)
+
+Depuis la 1.10.4 la GUI utilise `file_picker` 13, dont l'API diffère de la 11 :
+
+* `FilePicker.pickFiles` renvoie une `List<PlatformFile>` (vide si l'utilisateur
+  annule, plus de `FilePickerResult` ni de `.files`) et choisit *plusieurs*
+  fichiers par défaut ; `allowMultiple` n'existe plus. Les choix d'un seul
+  fichier appellent donc `FilePicker.pickFile` (renvoie `PlatformFile?`), seul
+  `SbomMergePanel` garde `pickFiles`. `PlatformFile.path` (chemin local ou `null`)
+  reste lisible tel quel.
+* `FilePicker.saveFile` exige `bytes`, *écrit lui-même* le fichier et renvoie un
+  `Uri?` (plus un chemin). Les appelants de la GUI, eux, écrivent le contenu
+  après le choix (ou laissent la CLI le produire) :
+  `services/save_dialog.dart` expose `pickSavePath` qui passe des octets vides,
+  convertit l'`Uri` en chemin et *supprime le fichier vide* ainsi créé — sans
+  cela, annuler l'opération suivante laisserait un fichier vide à
+  l'emplacement choisi. `pickSavePath` accepte un `saveFile:` injectable
+  (`@visibleForTesting`), utilisé par `test/save_dialog_test.dart`.
+* `desktop_drop` reste en 0.8.4 : la 0.9 exige `cross_file ^0.4.0`, que
+  `file_picker` ≥ 12 (`^0.3.5+4`) interdit.
+
+== `models/spdx3_view.dart` — copie de la CLI
+
+`models/spdx3_view.dart` est une *copie identique* de `lib/spdx3_view.dart` du
+dépôt (la GUI ne dépend pas du paquet de la CLI). Elle normalise un graphe SPDX
+3.0 (types `software_Package`, licences en relations, annotations en éléments)
+pour `sbom_tree_panel`, `sbom_viewer_panel` et `sbom_diff_panel` via
+`spdx3Packages(graph)`, et lit toujours l'ancien format (≤ 1.10.4). Toute
+modification doit être reportée dans les deux fichiers (`cmp` pour vérifier).
+
 == Dépendances
 
 [cols="2,1,3", options="header"]
@@ -3074,7 +3104,7 @@ qui contourne le problème (vérifié : les deux passent une fois séparés).
 |Package |Version |Usage
 
 |`file_picker`
-|^11.0.2
+|^13.1.0
 |Sélecteurs de fichiers natifs (SBOM, template, config grype, sauvegarde logs)
 
 |`shared_preferences`
@@ -3090,7 +3120,7 @@ qui contourne le problème (vérifié : les deux passent une fois séparés).
 |Ouverture des fichiers générés avec l'application système (`launchUrl(Uri.file(...))`)
 
 |`desktop_drop`
-|^0.7.1
+|^0.8.4
 |Réception des glisser-déposer de fichiers depuis le gestionnaire de fichiers
 système (Linux) dans `ConfigPanel`
 

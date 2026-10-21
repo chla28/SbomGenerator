@@ -2010,7 +2010,7 @@ CycloneDX in this version of sbomqs (always 0, regardless of the content).
 sbom_generator/
 ├── .github/workflows/ci.yml       # CI: analysis + CLI and GUI tests
 ├── bin/
-│   └── sbom_generator.dart        # CLI entry point (subcommands: diff, merge, scan, convert, licenses, validate)
+│   └── sbom_generator.dart        # CLI entry point (subcommands: diff, merge, convert, validate, licenses, scan, cra, report, vex, verify, watch)
 ├── lib/
 │   ├── i18n.dart                  # FR / EN localisation of messages (tr(), --lang)
 │   ├── models.dart                # RpmPackage, WheelPackage, DebPackage, OciPackage, PackageDependency
@@ -2024,6 +2024,10 @@ sbom_generator/
 │   ├── go_parser.dart             # Reading go.sum and go.mod (pure Dart)
 │   ├── npm_parser.dart            # Reading package-lock.json v1/v2/v3 (pure Dart)
 │   ├── yarn_parser.dart           # Reading yarn.lock v1 and v2+ Berry (pure Dart)
+│   ├── pnpm_parser.dart           # Reading pnpm-lock.yaml v5/v6/v9 (pure Dart)
+│   ├── cargo_parser.dart          # Reading Cargo.lock (Rust, pure Dart)
+│   ├── composer_parser.dart       # Reading composer.lock (PHP, pure Dart)
+│   ├── gem_parser.dart            # Reading Gemfile.lock (Ruby, pure Dart)
 │   ├── maven_parser.dart          # Reading pom.xml (pure Dart, light XML extraction)
 │   ├── pubspec_parser.dart        # Reading pubspec.lock / pubspec.yaml (pure Dart)
 │   ├── oci_parser.dart            # OCI image analysis (syft / trivy / skopeo / cdxgen)
@@ -2036,6 +2040,19 @@ sbom_generator/
 │   ├── scan_report_generator.dart # Cross-scanner summary report (scan -f md/adoc/pdf)
 │   ├── license_report_generator.dart # AsciiDoc license report (licenses subcommand)
 │   ├── policy_checker.dart        # Forbidden licenses + CI/CD quality score
+│   ├── nested_archive.dart        # Descent into nested objects (--depth)
+│   ├── layer_scan.dart            # Per-layer SBOMs and CVEs (--per-layer)
+│   ├── spdx3_view.dart            # Normalised reading of an SPDX 3.0 graph
+│   ├── schema_validator.dart      # Validation against the official JSON schemas (validate)
+│   ├── schemas_data.dart          # Embedded schemas (generated)
+│   ├── vex.dart                   # VEX: OpenVEX, CycloneDX VEX, CSAF 2.0
+│   ├── scan_policy.dart           # --ignore, --baseline, --cache, --fail-on
+│   ├── remediation.dart           # Minimal target version per package
+│   ├── report_input.dart          # Common input of the vulnerability reports
+│   ├── cra_report.dart            # CRA compliance report (cra subcommand)
+│   ├── signature.dart             # Signature verification (verify subcommand)
+│   ├── watch.dart                 # New-CVE monitoring (watch subcommand)
+│   ├── tool_runner.dart           # External tool launcher (exit code 127 if missing)
 │   ├── cyclonedx_generator.dart   # CycloneDX 1.6/1.7 generator
 │   ├── spdx_generator.dart        # SPDX 2.3 generator
 │   ├── spdx3_generator.dart       # SPDX 3.0 JSON-LD generator
@@ -2054,7 +2071,7 @@ sbom_generator/
 │   └── integration/               # Integration tests
 ├── scripts/                       # Build, installation, uninstallation
 ├── example/3PP/                   # Third-party archive examples
-└── pubspec.yaml                   # Dart dependencies (args ^2.4.2)
+└── pubspec.yaml                   # Dart dependencies (args, crypto, json_schema)
 ....
 
 `sbomqs`, `grype`, `osv-scanner`, `cosign`, `syft`, `trivy`, `skopeo` and

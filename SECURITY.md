@@ -16,7 +16,7 @@ Merci d'indiquer : la version concernée (`sbom-generator --version`), le systè
 
 ### Périmètre
 
-Dans le périmètre : l'analyse de fichiers non fiables (archives tar/zip/jar/wheel/rpm/deb, lockfiles, images OCI, binaires) — extraction hors du dossier prévu, écrasement de fichiers, exécution de commandes, consommation de ressources non bornée — ainsi que le lancement des outils externes (`rpm`, `python3`, `syft`, `grype`, `trivy`, `osv-scanner`, `sbomqs`, `asciidoctor-pdf`) par le CLI et la GUI.
+Dans le périmètre : l'analyse de fichiers non fiables (archives tar/zip/jar/wheel/rpm/deb, lockfiles, images OCI, binaires) — extraction hors du dossier prévu, écrasement de fichiers, exécution de commandes, consommation de ressources non bornée — ainsi que le lancement des outils externes (`rpm`, `python3`, `syft`, `grype`, `trivy`, `osv-scanner`, `sbomqs`, `cosign`, `skopeo`, `asciidoctor-pdf`) par le CLI et la GUI. La commande `watch --notify-cmd` exécute, via `sh -c`, une commande fournie par l'utilisateur : elle fait partie de sa configuration et n'est pas considérée comme une entrée non fiable.
 
 Hors périmètre : les vulnérabilités des outils externes eux-mêmes (à signaler à leurs projets) et le contenu des bases de vulnérabilités qu'ils interrogent.
 
@@ -34,6 +34,6 @@ Please include: the affected version (`sbom-generator --version`), the system, s
 
 ### Scope
 
-In scope: analysis of untrusted inputs (tar/zip/jar/wheel/rpm/deb archives, lockfiles, OCI images, binaries) — extraction outside the intended folder, file overwrite, command execution, unbounded resource consumption — and the launching of external tools (`rpm`, `python3`, `syft`, `grype`, `trivy`, `osv-scanner`, `sbomqs`, `asciidoctor-pdf`) by the CLI and the GUI.
+In scope: analysis of untrusted inputs (tar/zip/jar/wheel/rpm/deb archives, lockfiles, OCI images, binaries) — extraction outside the intended folder, file overwrite, command execution, unbounded resource consumption — and the launching of external tools (`rpm`, `python3`, `syft`, `grype`, `trivy`, `osv-scanner`, `sbomqs`, `cosign`, `skopeo`, `asciidoctor-pdf`) by the CLI and the GUI. The `watch --notify-cmd` command runs a user-supplied command through `sh -c`: it is part of the user's own configuration and is not treated as untrusted input.
 
 Out of scope: vulnerabilities of the external tools themselves (report them to their projects) and the content of the vulnerability databases they query.

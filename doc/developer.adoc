@@ -24,6 +24,10 @@ Fichier d'entrée (.txt)           Image OCI (--image)
         ├─ go.sum/go.mod ─► GoParser        (pur Dart, pré-expansion)
         ├─ package-lock  ─► NpmParser       (pur Dart, pré-expansion)
         ├─ yarn.lock     ─► YarnParser      (pur Dart, pré-expansion)
+        ├─ pnpm-lock     ─► PnpmParser      (pur Dart, pré-expansion)
+        ├─ Cargo.lock    ─► CargoParser     (pur Dart, pré-expansion)
+        ├─ composer.lock ─► ComposerParser  (pur Dart, pré-expansion)
+        ├─ Gemfile.lock  ─► GemParser       (pur Dart, pré-expansion)
         ├─ pom.xml       ─► MavenParser     (pur Dart, pré-expansion)
         ├─ pubspec.lock  ─► PubspecParser   (pur Dart, pré-expansion)
         ├─ pubspec.yaml  ─► PubspecParser   (pur Dart, pré-expansion)
@@ -39,7 +43,8 @@ Fichier d'entrée (.txt)           Image OCI (--image)
 │  4. Détection du type par extension                        │
 │  5. Dispatch concurrent (--concurrency N)                  │
 │  6. Déduplication par bomRef                               │
-│  7. Sous-commandes : diff, merge, convert, validate        │
+│  7. Sous-commandes : diff, merge, convert, validate, scan, │
+│     cra, report, vex, verify, watch, licenses              │
 └──┬──────┬──────┬──────┬──────┬──────────────────┬──────────┘
    │      │      │      │      │                  │
    ▼      ▼      ▼      ▼      ▼                  ▼
@@ -82,8 +87,9 @@ Parser Parser Parser Parser Parser             Parser
 
 Tous les générateurs travaillent sur `List<Package>` — la classe abstraite
 commune à `RpmPackage`, `WheelPackage`, `DebPackage` et `OciPackage`.
-`WheelPackage` est également réutilisé pour Go, npm, yarn, Maven et
-Dart/Flutter (`packageType='pub'`) via le champ `packageType`.
+`WheelPackage` est également réutilisé pour Go, npm, yarn, pnpm, Maven,
+Dart/Flutter (`packageType='pub'`), Rust (`cargo`), PHP (`composer`) et Ruby
+(`gem`) via le champ `packageType`.
 
 [[sec-i18n]]
 == `lib/i18n.dart` — Localisation FR / EN des messages
@@ -2451,6 +2457,10 @@ if (arguments.first == 'validate') { await _runValidate(arguments.sublist(1)); r
 if (arguments.first == 'licenses') { await _runLicenses(arguments.sublist(1)); return; }
 if (arguments.first == 'scan')     { await _runScan(arguments.sublist(1));     return; }
 if (arguments.first == 'cra')      { await _runCra(arguments.sublist(1));      return; }
+if (arguments.first == 'report')   { await _runReport(arguments.sublist(1));   return; }
+if (arguments.first == 'vex')      { await _runVex(arguments.sublist(1));      return; }
+if (arguments.first == 'verify')   { await _runVerify(arguments.sublist(1));   return; }
+if (arguments.first == 'watch')    { await _runWatch(arguments.sublist(1));    return; }
 ----
 
 *`_runDiff(args)`* : valide 2 arguments positionnels, charge les fichiers via
@@ -3276,6 +3286,51 @@ qu'attendent les éléments minimaux NTIA et `sbomqs`. Idem pour le paquet OS.
 
 == `lib/spdx3_generator.dart` — Générateur SPDX 3.0 JSON-LD
 
+Depuis la 1.10.5 la sortie est *conforme au schéma JSON officiel* SPDX 3.0.0
+(vérifié par `test/unit/spdx3_generator_test.dart` avec `SchemaValidator`). Le
+graphe `@graph` contient, dans cet ordre :
+
+[cols="2,4",options="header"]
+|===
+|Élément |Contenu
+
+|`CreationInfo`
+|`specVersion` `3.0.0`, `created` (sans fraction de seconde), `createdBy` (les `Tool`)
+
+|`Tool`
+|`sbom_generator` et un par SDK (`--sdk-version`) ; la version va dans `comment`
+(`version 1.10.6`), `Tool` n'ayant pas de propriété de version
+
+|`Organization`
+|un par fournisseur distinct (`suppliedBy`)
+
+|`SpdxDocument`
+|`profileConformance` `core`, `software`, `simpleLicensing` ; `rootElement` ;
+`comment` (analyse par couche)
+
+|`software_Package`
+|`software_packageVersion`, `software_primaryPurpose`, `software_packageUrl` *et*
+`externalIdentifier` de type `packageUrl` (le PURL), `software_downloadLocation`,
+`software_copyrightText` (`NOASSERTION`), `verifiedUsing` (`Hash`)
+
+|`simplelicensing_LicenseExpression`
+|un seul élément par expression de licence, partagé entre paquets
+
+|`Relationship`
+|`describes` (document → racines), `dependsOn`, et `hasConcludedLicense` /
+`hasDeclaredLicense` (paquet → expression). Une licence inconnue n'émet *aucune*
+relation (l'absence vaut « non précisé »)
+
+|`Annotation`
+|un élément par paquet (`annotationType: other`, `subject` = le paquet) portant
+les champs `rpm:`, `deb:`, `layer:`, `nested:`…
+|===
+
+Le schéma interdit toute propriété inconnue (`unevaluatedProperties: false`) : le
+type `software:Package` de l'ancien générateur ne le violait pas seulement parce
+que le schéma le tient pour un type d'extension. La lecture passe par
+`lib/spdx3_view.dart`.
+
 Signature : `List<Package>`, plus `osInfo` (`OsInfo?`, optionnel). Normalisation via `LicenseNormalizer.toSpdxExpression()`.
 Même logique d'annotation que SPDX 2.3 (branche `DebPackage` incluse).
 `_buildVendorElements` crée un nœud `Organization` par valeur unique de `pkg.vendor`
@@ -3349,6 +3404,341 @@ _Généré par sbom_generator — N paquet(s)._
 
 Le caractère `|` dans les valeurs est échappé (`\|`) pour éviter toute
 ambiguïté avec les séparateurs de cellules AsciiDoc.
+
+== `lib/spdx3_view.dart` — Lecture normalisée d'un graphe SPDX 3.0
+
+Le schéma SPDX 3.0 officiel (types `software_Package`, licences portées par des
+relations, annotations en éléments distincts) est éloigné de ce dont les
+consommateurs (`SbomReader`, `SbomDiffer`, `CraReportGenerator`, `layer_scan`,
+`ScanCache`, GUI) ont besoin. Au lieu de dupliquer cette logique, ils passent
+tous par une même fonction.
+
+[cols="2,4",options="header"]
+|===
+|Membre |Rôle
+
+|`isSpdx3PackageType(type)`
+|vrai pour `software_Package`, l'ancien `software:Package` (≤ 1.10.4) ou une
+liste de types les contenant
+
+|`spdx3Prop(node, local)`
+|valeur d'une propriété du profil `software` : `software_<local>`, sinon
+`software:<local>`, sinon le nom nu
+
+|`spdx3Packages(graph)`
+|paquets du `@graph`, en *copies normalisées* : clés plates
+`software:packageVersion`, `software:downloadLocation`, `concludedLicense`,
+`declaredLicense` (reconstruites depuis les relations `hasConcludedLicense` /
+`hasDeclaredLicense` vers les éléments `simplelicensing_LicenseExpression`),
+`annotation` (en ligne + éléments `Annotation` dont `subject` est le paquet) et
+`externalIdentifier` dont le type `packageUrl` est ramené à `purl`
+|===
+
+Les fichiers produits avant la 1.10.5 (licences et annotations en ligne) restent
+lus : les clés en ligne sont conservées et ne sont complétées que si elles sont
+absentes. La GUI ne dépend pas du paquet de la CLI et embarque donc une *copie*
+de ce fichier (`gui/lib/models/spdx3_view.dart`) : les deux doivent rester
+identiques (`cmp lib/spdx3_view.dart gui/lib/models/spdx3_view.dart`).
+
+Tests : `test/unit/spdx3_view_test.dart`.
+
+== Lockfiles pnpm, Cargo, Composer et Gem
+
+Quatre parseurs purs Dart, construits comme `yarn_parser.dart` : une classe avec
+une méthode `parse…(String path)` qui renvoie des `WheelPackage` (champ
+`packageType`), un avertissement et une liste vide si le fichier est absent. Ils
+sont branchés à trois endroits : la pré-expansion de `bin/sbom_generator.dart`
+(`_isCargoLock`, `_isPnpmLock`, `_isComposerLock`, `_isGemfileLock`, qui testent le
+nom du fichier), le parcours de dossier (`_isSupportedPackageFile`, noms exacts)
+et `lib/nested_archive.dart` (`_manifestNames`, le script Python d'extraction et
+`_parse`, en minuscules).
+
+[cols="2,2,4",options="header"]
+|===
+|Fichier |`packageType` / PURL |Particularités
+
+|`lib/cargo_parser.dart` — `CargoParser.parseCargoLock`
+|`cargo` — `pkg:cargo/<nom>@<ver>`
+|blocs `[[package]]` ; seuls les crates ayant une `source` sont retenus (les
+membres du workspace et les dépendances `path` n'en ont pas) ; `checksum` →
+SHA-256
+
+|`lib/pnpm_parser.dart` — `PnpmParser.parsePnpmLock`
+|`npm` — `pkg:npm/…`
+|section `packages:` lue ligne à ligne ; clés v5 (`/nom/1.2.3_pairs`), v6
+(`/nom@1.2.3`) et v9 (`nom@1.2.3`), suffixe de pairs `(…)` ou `_…` retiré ;
+`resolution: {integrity: …}` → hash (SRI) ; entrées dont la « version » ne
+commence pas par un chiffre (dépôts git, tarballs) ignorées
+
+|`lib/composer_parser.dart` — `ComposerParser.parseComposerLock`
+|`composer` — `pkg:composer/<vendor>/<nom>@<ver>`
+|JSON `packages` + `packages-dev` ; préfixe `v` de la version retiré ; licence
+(tableau joint par ` OR `), premier auteur → fournisseur, `dist.shasum` → SHA-1
+
+|`lib/gem_parser.dart` — `GemParser.parseGemfileLock`
+|`gem` — `pkg:gem/<nom>@<ver>`
+|lignes à 4 espaces sous `specs:` des sections `GEM` et `GIT` (`PATH` = gem
+local, ignoré) ; plateforme retirée de la version (`1.15.4-x86_64-linux` →
+`1.15.4`) ; section `CHECKSUMS` (Bundler ≥ 2.5) → SHA-256
+|===
+
+`lib/models.dart` génère les identifiants de `composer` (le `/` du nom n'est pas
+encodé, comme pour `golang`) et de `gem` ; `SbomReader._purlToType` les reconnaît
+à la relecture. Aucune licence pour pnpm, Cargo et Gem : ces formats n'en
+portent pas.
+
+Tests : `test/unit/lockfile_parsers_test.dart`.
+
+== `lib/vex.dart` — Déclarations VEX
+
+Un VEX (_Vulnerability Exploitability eXchange_) dit qu'une CVE est
+`not_affected`, `fixed`, `affected` ou `under_investigation` pour des produits.
+Le module est pur (aucun I/O) ; il convertit entre trois formats et un modèle
+commun.
+
+[cols="2,4",options="header"]
+|===
+|Membre |Rôle
+
+|`VexStatement`
+|une déclaration : `vulnId`, `products` (PURL, `nom` ou `nom@version` ; liste
+vide = tous les produits), `status`, `justification` (vocabulaire OpenVEX),
+`impactStatement`, `actionStatement` ; `suppresses` (`not_affected` ou `fixed`)
+et `appliesTo(nom, version)`
+
+|`VexDocument.parse(json)`
+|détecte OpenVEX (`@context` contenant `openvex`), CSAF (`isCsafVex` :
+`document.category == "csaf_vex"`) ou CycloneDX (`bomFormat` + tableau
+`vulnerabilities`) ; lève `FormatException` sinon. `find(id, nom, version)`
+renvoie la première déclaration applicable
+
+|`buildOpenVex` / `buildCycloneDxVex` / `buildCsafVex`
+|écrivent un document à partir d'une liste de `VexStatement`
+|===
+
+*Correspondances.* Les justifications OpenVEX sont reprises telles quelles par
+CSAF (ses `flags` portent les mêmes libellés) et traduites pour CycloneDX
+(`_cdxJustification`, et son inverse `_cdxJustificationToOpenVex`). États
+CycloneDX : `not_affected`/`false_positive` → `not_affected`,
+`resolved*` → `fixed`, `exploitable` → `affected`, `in_triage` →
+`under_investigation`.
+
+*CSAF 2.0 (profil `csaf_vex`).* À la lecture, `_csafProducts` associe chaque
+`product_id` du `product_tree` à un PURL (`product_identification_helper.purl`,
+sinon le nom du produit) en parcourant `full_product_names`, les `branches`
+récursives et les `relationships` (un produit « composant installé sur
+plate-forme » désigne son composant). Pour chaque vulnérabilité et chaque clé de
+`product_status` (`known_not_affected`, `fixed`, `first_fixed`, `known_affected`,
+`under_investigation`), une `VexStatement` est créée ; la justification vient du
+`flags` dont les `product_ids` recoupent ceux de la déclaration, l'impact de
+`threats` (catégorie `impact`) et l'action de `remediations`. À l'écriture,
+`buildCsafVex` numérote les produits (`CSAFPID-0001`…), met le PURL dans
+`product_identification_helper` et utilise `cve` pour un identifiant `CVE-…`,
+sinon `ids`. CSAF ne sait pas dire « tous les produits » : une déclaration sans
+produit est écrite avec un produit joker de nom `*`, que la lecture ramène à une
+liste vide — l'aller-retour est donc fidèle.
+
+*Utilisation.* `scan --vex` et `report --vex` écartent les CVE couvertes par une
+déclaration `suppresses` (comptées dans `vexSuppressed`) ; `cra --vex` fait de
+même pour l'inventaire ; `scan --vex-out` écrit le VEX des CVE restantes
+(`--vex-format openvex|cyclonedx|csaf`) ; la sous-commande `vex` crée ou complète
+un document (`--append`, `-f openvex|cyclonedx|csaf`, format de `--append` repris
+par défaut). La GUI a sa propre copie (`gui/lib/models/vex.dart`, OpenVEX et
+CycloneDX seulement).
+
+Tests : `test/unit/vex_test.dart` (dont le bloc « CSAF 2.0 VEX »),
+`test/integration/scan_policy_test.dart`.
+
+== `lib/scan_policy.dart` — Politique de scan
+
+Trois mécanismes, indépendants des scanners, appliqués par `_runScan` et
+`_runCra` après lecture des résultats.
+
+[cols="2,4",options="header"]
+|===
+|Membre |Rôle
+
+|`severityLevels`, `severityRank(s)`
+|`critical` > `high` > `medium` > `low` ; sert à `--fail-on` (code 1 seulement à
+partir du seuil)
+
+|`IgnoreList` / `IgnoreEntry`
+|`--ignore fichier` : une règle par ligne,
+`CVE-2024-1234; package=openssl; expires=2026-12-31; reason=…`. Seul l'identifiant
+est obligatoire. Les lignes invalides ou sans `reason` remontent dans
+`warnings` ; une règle expirée (`isExpired`) n'est plus appliquée et est signalée.
+`match(id, paquet, now)`
+
+|`Baseline`
+|`--baseline rapport.json` : ensemble des couples (CVE, nom de paquet sans
+version) d'un `scan --format json` antérieur (tableau `findings`) ; seules les
+CVE absentes de la référence restent. La version du paquet est ignorée, pour
+qu'une montée de version ne « renouvelle » pas la CVE
+
+|`ScanCache`
+|`--cache` (`--cache-ttl` en heures, 6 par défaut ; `--cache-dir`, défaut
+`$XDG_CACHE_HOME/sbom-generator/scan`) : fichier JSON par clé
+`sha256(empreinte du SBOM | scanner | version du scanner)`. `sbomDigest`
+hache la liste *triée* des composants (nom, version, purl), donc ni les
+horodatages ni les UUID ne comptent ; sans composant lisible, l'empreinte des
+octets du fichier. Lecture/écriture « au mieux » : une erreur de cache ne fait
+jamais échouer le scan
+|===
+
+Tests : `test/integration/scan_policy_test.dart` (faux `grype` en tête du `PATH`,
+`SBOMGEN_OFFLINE=1`).
+
+== `lib/schema_validator.dart` — Validation par les schémas officiels
+
+`SchemaValidator.validate(sbom)` valide un SBOM contre le schéma JSON officiel de
+sa version : CycloneDX 1.4–1.7, SPDX 2.3, SPDX 3.0. `schemaKeyFor(sbom)` choisit
+la clé (`cyclonedx-1.6`, `spdx-2.3`, `spdx3-3.0.0`…) ou renvoie `null` pour une
+version sans schéma. Les schémas sont *embarqués* dans l'exécutable :
+`lib/schemas_data.dart` (généré, ne pas éditer) contient chaque schéma compressé
+(gzip + base64), décompressé et compilé à la première utilisation (cache
+`_raw` / `_compiled`). Il se régénère avec `dart run tool/embed_schemas.dart`
+(accès réseau : CycloneDX/specification, spdx/spdx-spec, spdx.org). Les
+références externes de CycloneDX (`jsf-0.82`, `cryptography-defs`) sont
+réécrites en références internes (`_inlineExternalRefs`, `_fixRef`).
+
+`validate` appelle ce module sauf `--no-schema`. `max` (50 par défaut) borne le
+nombre d'erreurs rapportées. Le validateur Dart (`json_schema`) donne des
+messages peu précis sur `oneOf` / `unevaluatedProperties` : pour SPDX 3.0,
+`validate` n'affiche donc qu'un message unique. Pour localiser un écart, extraire
+le schéma de `schemas_data.dart` et utiliser `jsonschema` (Python).
+
+Tests : `test/unit/spdx3_generator_test.dart` (le SPDX 3.0 généré satisfait le
+schéma), `test/unit/vex_test.dart` (CycloneDX VEX conforme 1.6).
+
+== `lib/remediation.dart` — Remédiation par paquet
+
+Calcule, à partir des CVE d'un ou plusieurs scanners, la *version cible minimale*
+de chaque paquet et classe les mises à jour par gain de risque. Pur (aucune
+dépendance à la GUI) ; utilisé par le rapport (`scan --format pdf|asciidoc|markdown`,
+`report`) et par la section « Remédiation » du tableau de bord de la GUI.
+
+[cols="2,4",options="header"]
+|===
+|Membre |Rôle
+
+|`RemediationInput`
+|enregistrement minimal d'une CVE vue par un scanner (paquet, version installée,
+sévérité, versions corrigées…)
+
+|`fixedVersionsOf(raw)`
+|versions contenues dans un champ « corrigé » (`1.2`, `1.2, 1.3`, ou un état
+comme `not-fixed`, ignoré)
+
+|`compareVersions(a, b)`
+|comparaison « au mieux » : segments numériques comparés comme entiers, époque
+`1:` et suffixe de distribution `-3.el9` ignorés — suffisant pour classer des
+correctifs, pas pour remplacer le gestionnaire de paquets
+
+|`buildRemediation(rows, {exploitById})`
+|regroupe les CVE par paquet installé ; pour chaque CVE retient la plus petite
+version corrigée supérieure à l'installée (sinon la plus petite), et porte le
+paquet à la plus grande de ces versions. Le gain est la somme de `cveRisk` :
+sévérité (10 / 5 / 2 / 1), +20 si exploitée activement (CISA KEV), +10 × EPSS.
+Résultat trié par gain décroissant
+
+|`RemediationItem` / `RemediationCve`
+|résultat par paquet (version cible, CVE corrigées, CVE sans correctif, gain)
+|===
+
+Tests : `gui/test/remediation_test.dart`.
+
+== `lib/report_input.dart` — Entrée commune des rapports de vulnérabilités
+
+`ReportInput.parse` lit deux sources et en fait la même structure : un
+`scan --format json` (`schema == "sbom-generator/scan/v1"`) ou une *session* de la
+GUI (`format` entier et `savedAt`) ; tout autre contenu lève `FormatException`.
+`ScanReportGenerator` (rapports AsciiDoc / Markdown / PDF) ne connaît que cette
+structure : le CLI (`scan`, `report`) et l'export du tableau de bord de la GUI
+produisent donc *le même rapport*. Elle porte les résultats par scanner
+(`reportScanners` : `grype`, `osv`, `trivy`), les enrichissements (KEV, EPSS,
+PoC), les analyses par couche, le VEX (`VexHit`, `vexSuppressed`) et les versions
+des outils.
+
+== `lib/tool_runner.dart` — Lancer un outil externe
+
+`runTool(exécutable, arguments)` se comporte comme `Process.run` mais renvoie un
+`ProcessResult` de code *127* (« commande introuvable ») quand le binaire est
+absent du `PATH`, au lieu de lever une `ProcessException`. L'appelant n'a qu'un
+code de sortie à tester, comme pour un outil présent qui échoue. À utiliser pour
+tout outil facultatif (`rpm`, `python3`, `dpkg-deb`, `unzip`, `skopeo`, `syft`,
+`trivy`, `sbomqs`, `cosign`).
+
+== `lib/signature.dart` — Vérification de signature (`verify`)
+
+`bin/sbom_generator.dart` écrit la signature avec `--sign` (`cosign sign-blob
+--bundle <sbom>.bundle`, variables d'environnement cosign standard) ; `verify` la
+contrôle.
+
+[cols="2,4",options="header"]
+|===
+|Membre |Rôle
+
+|`cosignVerifyArgs(...)`
+|arguments de `cosign verify-blob` : `--bundle`, puis `--key` *ou*
+`--certificate-identity[-regexp]` + `--certificate-oidc-issuer[-regexp]`, et le
+SBOM en dernier
+
+|`verifySbomSignature(...)`
+|vérifie l'existence du SBOM et du bundle, lance cosign (injectable via
+`verifyBlob` pour les tests, `runTool('cosign', …)` par défaut) et renvoie un
+`SignatureResult`
+
+|`SignatureStatus`
+|`verified`, `invalid` (cosign a rejeté), `fileMissing`, `cosignMissing` (code 127)
+|===
+
+`_runVerify` exige `--key`, ou l'identité *et* l'émetteur (sans clé, cosign
+refuse de vérifier sans l'un ni l'autre) avant de lancer l'outil. Codes de
+retour : `0` valide, `2` invalide, `1` usage, fichier ou cosign introuvable.
+`--format json` écrit `{path, status, verified, detail?}` sur stdout.
+
+Tests : `test/unit/signature_test.dart` (arguments et statuts avec un faux
+`verifyBlob`), `test/integration/cli_arguments_test.dart` (groupe « verify » avec
+un faux `cosign` dans le `PATH`).
+
+== `lib/watch.dart` — Surveillance des nouvelles CVE (`watch`)
+
+Fonctions pures de la sous-commande `watch` ; l'orchestration est dans
+`_runWatch` (`bin/sbom_generator.dart`).
+
+[cols="2,4",options="header"]
+|===
+|Membre |Rôle
+
+|`parseWatchInterval(texte)`
+|`90s`, `30m`, `6h`, `1d` → `Duration` ; `FormatException` sinon (zéro refusé)
+
+|`collectWatchedSboms(chemins)`
+|fichiers tels quels ; dossiers parcourus récursivement, filtrés sur
+`watchedSbomSuffixes` (`.cdx.json`, `.spdx.json`, `.spdx3.jsonld`) ; triés
+
+|`watchStateFile(dossier, sbom)`
+|`<nom>-<8 hex du SHA-1 du chemin absolu>.json` : deux SBOM de même nom dans
+deux dossiers ne partagent pas leur état
+
+|`diffScans(précédent, courant)`
+|compare deux rapports `scan --format json` avec `Baseline` (clé CVE + nom de
+paquet) : `WatchDiff(added, resolved, total)`
+|===
+
+Un passage, pour chaque SBOM : `scan --sbom … --scanner … --format json
+[--scan-arg …]` est relancé en sous-processus (`_selfCommand` : l'exécutable
+compilé, ou `dart <script>`), puis le rapport est comparé à l'état mémorisé.
+Sans état : état initial, rien n'est signalé. Sans nouvelle CVE : état mis à jour.
+Avec nouvelles CVE : elles sont listées, `--notify-cmd` est lancé via `sh -c`
+(variables `SBOMGEN_WATCH_SBOM`, `SBOMGEN_WATCH_NEW`, `SBOMGEN_WATCH_REPORT`),
+et l'état n'est mis à jour *que si* la notification réussit — sinon l'alerte est
+retentée au passage suivant. Un état illisible est traité comme un état initial.
+Sans `--interval`, un seul passage (code `3` si nouvelles CVE, `1` en cas
+d'erreur, `0` sinon) ; avec, une boucle sans fin.
+
+Tests : `test/unit/watch_test.dart`, `test/integration/watch_test.dart` (faux
+`grype` dont la sortie change entre deux passages).
 
 == Flux de données — exemples concrets
 
@@ -3875,10 +4265,10 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (231 au total)
-dart test test/unit/                 # tests unitaires seuls (212)
-dart test test/integration/          # tests d'intégration (19, dont certains
-                                      # sautés automatiquement selon l'environnement)
+dart test                            # tous les tests (574 au total)
+dart test test/unit/                 # tests unitaires seuls (491)
+dart test test/integration/          # tests d'intégration (83, dont 8 sautés
+                                      # automatiquement selon l'environnement)
 ----
 
 Comptage vérifié par exécution réelle (`dart test -r compact`), pas recopié
@@ -3939,11 +4329,11 @@ PDF ; notes = section `[X.Y.Z]` du CHANGELOG
 |Rapports lisibles en FR / EN (synthèse `scan`, rapport `cra` à clés JSON stables, rapport de licences)
 
 |`test/unit/license_normalizer_test.dart`
-|23
+|34
 |`toSpdxExpression`, `toCycloneDxLicenses`, cas limites
 
 |`test/unit/archive_helpers_test.dart`
-|18
+|19
 |`parseArchiveFilename` (archives réelles + edge cases), `identifyArchiveLicense`
 
 |`test/unit/rpm_parser_test.dart`
@@ -3955,7 +4345,7 @@ PDF ; notes = section `[X.Y.Z]` du CHANGELOG
 |parsing RFC, PEP 503, extras, marqueurs, directives
 
 |`test/unit/oci_parser_test.dart`
-|16
+|42
 |`OciParser.detectRefType` (registre, `.tar`, `.tar.gz`, `.tgz`, fichier local
 → `binary`), normalisation des types syft/trivy, construction PURL par
 écosystème, extraction OS de base + traduction de famille Trivy
@@ -3966,7 +4356,7 @@ PDF ; notes = section `[X.Y.Z]` du CHANGELOG
 |`parseGoSum`, `parseGoMod`, dédoublonnage, versions préfixées `v`, erreurs
 
 |`test/unit/npm_parser_test.dart`
-|13
+|11
 |lockfileVersion 1/2/3, licences liste/chaîne, PURLs, `integrity`→hash,
 fournisseur depuis `node_modules/<pkg>/package.json`, erreurs
 
@@ -3985,7 +4375,7 @@ intacts (RPM/Wheel/Deb/Oci)
 `dependencyManagement`, PURL, fichier inexistant
 
 |`test/unit/pubspec_parser_test.dart`
-|8
+|13
 |`pubspec.lock` (hosted/git/path/sdk, sha256, exclusion `direct dev`,
 registre privé), `pubspec.yaml` (hors `dev_dependencies:`), PURL, erreurs
 
@@ -3995,28 +4385,30 @@ registre privé), `pubspec.yaml` (hors `dev_dependencies:`), PURL, erreurs
 `MANIFEST.MF`, table `_knownGroupIdOverrides` (Spring)
 
 |`test/unit/cyclonedx_generator_test.dart`
-|18
+|23
 |spec 1.6 par défaut, activation 1.7, TLP, citations, brevets, erreurs de
 validation, composant OS de base (`osInfo`)
 
 |`test/unit/spdx_generator_test.dart`
-|18
+|19
 |enveloppe SPDX-2.3, paquets (purl, licence, downloadLocation), `supplier`
 (`Organization:` / `NOASSERTION`), `checksums`, `rpm:header-sha256` en
 annotation, relations DESCRIBES/DEPENDS_ON, paquet OS de base (`osInfo`,
 SPDXID `SPDXRef-OperatingSystem-`)
 
 |`test/unit/spdx3_generator_test.dart`
-|15
+|20
 |enveloppe JSON-LD (@context/@graph), paquets software_Package, Organization
-partagée par vendor, relations describes/dependsOn, élément OS de base (`osInfo`)
+partagée par vendor, relations describes/dependsOn, licences (éléments
+`LicenseExpression` partagés + relations `has*License`), élément OS de base
+(`osInfo`), conformité au schéma officiel SPDX 3.0
 
 |`test/unit/policy_checker_test.dart`
-|10
+|12
 |correspondance de licences interdites (exacte et partielle)
 
 |`test/unit/sbom_reader_test.dart`
-|2
+|9
 |détection de format, relecture d'un document CycloneDX
 
 |`test/unit/csv_generator_test.dart`
@@ -4024,7 +4416,7 @@ partagée par vendor, relations describes/dependsOn, élément OS de base (`osIn
 |en-têtes, tri par nom, échappement RFC 4180
 
 |`test/unit/sbom_diff_test.dart`
-|11
+|17
 |clé purl/name:type, CycloneDX/SPDX 2.3/SPDX 3.0 (y compris comparaison
 inter-format), toJson
 
@@ -4033,7 +4425,7 @@ inter-format), toJson
 |dédup CycloneDX (purl/bom-ref/dependencies) et SPDX 2.3 (purl/SPDXID/relationships)
 
 |`test/unit/license_report_generator_test.dart`
-|8
+|12
 |regroupement par licence exacte, classification copyleft fort (GPL/AGPL) vs
 faible (LGPL/…), découpage des expressions composées pour l'avertissement,
 paquets sans licence
@@ -4046,11 +4438,11 @@ paquets sans licence
 |Fichier |Tests |Couverture
 
 |`test/integration/tar_integration_test.dart`
-|8
+|6
 |`TarParser` sur archives réelles, `WheelParser` sur wheels, bomRefs uniques
 
 |`test/integration/oci_skopeo_test.dart`
-|8
+|2
 |Backend skopeo : détection du chemin de base RPM selon la version de
 distribution, extraction Java — nécessite `rpm` et `skopeo`, certains cas
 nécessitent une archive `keycloak_26.tar` non versionnée
@@ -4078,6 +4470,114 @@ repli `--supplier`
 |`--binary <fichier>` bout-en-bout (backend syft forcé, sur
 `Platform.resolvedExecutable`) — nécessite `syft` ; validations : fichier
 introuvable, `--oci-tool` ≠ syft, `--binary` + `--image`
+
+|`test/integration/cli_arguments_test.dart`
+|17
+|options obligatoires, dates de scan strictes, messages d'`args` traduits, `--sign` sans cosign, `verify` (faux `cosign`), dénominateur « Analysés »
+
+|`test/integration/cli_machine_output_test.dart`
+|6
+|`validate --format json`, `--log-format json` (NDJSON), sous-commande `vex`
+
+|`test/integration/cra_test.dart`
+|4
+|CLI réelle `cra --no-scan` sur un SBOM CycloneDX
+
+|`test/integration/flutter_sdk_detection_test.dart`
+|3
+|version du SDK Flutter détectée par projet (FVM) ; `--sdk-version` prioritaire
+
+|`test/integration/nested_depth_test.dart`
+|5
+|`--depth` : jar dans jar dans tgz + lockfile (fixtures fabriquées avec python3)
+
+|`test/integration/per_layer_test.dart`
+|7
+|`--per-layer` : image `docker save` à deux couches, mode rootfs, validation des options
+
+|`test/integration/report_command_test.dart`
+|4
+|sous-commande `report` (même rapport que `scan --format asciidoc`), `--vex`, `--no-vex`
+
+|`test/integration/scan_enrichment_test.dart`
+|2
+|enrichissement KEV / EPSS / PoC, `--only-kev`, `--epss-min`, `--sort risk` (sauté sans grype)
+
+|`test/integration/scan_policy_test.dart`
+|8
+|`scan` : VEX, `--ignore`, `--baseline`, `--fail-on`, `--cache`, JSON, avec un faux `grype`
+
+|`test/integration/watch_test.dart`
+|7
+|`watch` : état initial, nouvelles CVE, `--notify-cmd`, codes de retour (faux `grype` changeant)
+
+|`test/unit/cra_report_test.dart`
+|7
+|`CraMetadata`, `CraReportGenerator` (CDX complet / minimal, KEV, SPDX 2.3 / 3.0)
+
+|`test/unit/flutter_version_test.dart`
+|11
+|détection de la version de Flutter (projet FVM, `.fvmrc`, SDK global)
+
+|`test/unit/hash_utils_test.dart`
+|16
+|normalisation des algorithmes, `packageHash`, digests Trivy, SRI npm/yarn, Syft, CycloneDX
+
+|`test/unit/image_layers_test.dart`
+|20
+|couches d'image : config, lecture, fusion, `diffPackages`, `LayerAnalysis`
+
+|`test/unit/layer_scan_test.dart`
+|6
+|`LayeredSbomSet.load` (SBOM par couche)
+
+|`test/unit/lockfile_parsers_test.dart`
+|8
+|`Cargo.lock`, `pnpm-lock.yaml` (v5/v6/v9), `composer.lock`, `Gemfile.lock`
+
+|`test/unit/nested_archive_test.dart`
+|8
+|`--depth` : `parseNestedDepth`, `sourceRef` logique, dépendances imbriquées, `NestedSbomIndex`
+
+|`test/unit/report_unification_test.dart`
+|10
+|`ReportInput` (scan JSON et session GUI) et `ScanReportGenerator.fromInput`
+
+|`test/unit/scan_policy_test.dart`
+|9
+|`IgnoreList`, `Baseline`, `ScanCache`
+
+|`test/unit/scan_report_generator_test.dart`
+|19
+|rapport de scan AsciiDoc / Markdown, exploitabilité
+
+|`test/unit/schema_validator_test.dart`
+|5
+|validation par les schémas officiels (CycloneDX, SPDX)
+
+|`test/unit/signature_test.dart`
+|7
+|`cosignVerifyArgs`, `verifySbomSignature` (faux `verifyBlob`)
+
+|`test/unit/spdx3_view_test.dart`
+|4
+|`spdx3Packages` : forme officielle, `software_packageUrl`, ancien format
+
+|`test/unit/tool_runner_test.dart`
+|2
+|`runTool` : code 127 si l'outil est absent
+
+|`test/unit/vex_test.dart`
+|13
+|`VexDocument.parse` (OpenVEX, CycloneDX, CSAF), builders, CSAF aller-retour
+
+|`test/unit/vuln_enrichment_test.dart`
+|11
+|`parseCvssVector`, `ExploitInfo.riskScore`, `VulnEnricher`
+
+|`test/unit/watch_test.dart`
+|8
+|`parseWatchInterval`, `diffScans`, `collectWatchedSboms`, `watchStateFile`
 |===
 
 Les tests d'intégration sont marqués `@TestOn('posix')` et se sautent
@@ -4137,8 +4637,16 @@ sans faire échouer la suite. Ceux qui lancent le CLI passent `--lang fr` (voir
 |`^2.4.2`
 |Parsing des arguments CLI
 
+|`crypto`
+|`^3.0.0`
+|Empreintes (SHA-1 de l'identifiant de l'état `watch`, SHA-256 des clés du cache de scan et des SBOM)
+
+|`json_schema`
+|`^5.2.2`
+|Validation par les schémas JSON officiels (`validate`, `lib/schema_validator.dart`)
+
 |`test` _(dev)_
-|`^1.31.1`
+|`^1.31.1` (1.33.0 verrouillé)
 |Framework de tests unitaires et d'intégration
 |===
 
@@ -4185,7 +4693,7 @@ Outils système requis à l'exécution :
 |`--min-quality-score`
 
 |`cosign`
-|`--sign`
+|`--sign` et sous-commande `verify`
 |===
 
 == Compilation et déploiement

@@ -1093,7 +1093,7 @@ metadata), `String? _configPath` (`cra.yaml` file), `bool _scan` (default
   `{` is treated as an error. The JSON keys are stable and never translated
   (including the NTIA keys and the `id` of the `fieldChecks`): the panel
   translates the displayed labels from these identifiers.
-* `_exportPdf()` — `FilePicker.saveFile` then `cra ... --format pdf -o
+* `_exportPdf()` — `pickSavePath` then `cra ... --format pdf -o
   <path>`; `exitCode` 0 or 2 = success (file written).
 * `_metaArgs()` — only adds `--manufacturer` / `--product` /
   `--product-version` / `--support-until` / `--vuln-contact` /
@@ -1351,7 +1351,7 @@ comparison (already filtered by the report threshold through
 `filterForReport`, KEV always included — no second filter), rendered by
 `CveDetail.toAdocRows(adocEscape)` (<<sec-cve-detail-widget>>). Then follows
 the same pattern as `_VulnTableViewState._exportAsciiDoc()`: writing of the
-`.adoc` through `FilePicker.saveFile`, conversion through
+`.adoc` through `pickSavePath`, conversion through
 `runAsciidoctorPdf`, `SnackBar` feedback.
 
 ==== `widgets/sbom_tree_panel.dart` — SBOM Tree tab
@@ -1577,7 +1577,7 @@ State managed by `_SbomViewerPanelState`:
 
 Key methods:
 
-* `_loadFile()` — `FilePicker.pickFiles()` then `_openPath(path)`
+* `_loadFile()` — `FilePicker.pickFile()` then `_openPath(path)`
 * `_openPath(path)` — JSON parse → `_Component.fromSbom()`; also computes
   `_nav` (`LayerNav.discover`), `_layerInfo` (`LayerDocInfo.fromSbom`) and
   `_layerLabels` — it is also the `onOpen` callback of the `LayerSelector`
@@ -2130,7 +2130,7 @@ Two buttons in the toolbar, both disabled if `_filtered` is empty:
 * *CSV export* (`Icons.download_outlined`) — `_exportCsv()`: writes
   `csvHeader` then one row per element of `_filtered` through `csvRow`,
   RFC 4180 escaping (`csvEscape`), path chosen through
-  `FilePicker.saveFile(...)`. `_filtered` derives from `widget.vulns`, already
+  `pickSavePath(...)`. `_filtered` derives from `widget.vulns`, already
   merged by `dedupeVulns` (see <<sec-dedupe-vulns>>): each panel adds a
   “Locations” column to `csvHeader`/`csvRow` reporting `v.occurrenceCount`.
   The CSV header is *not* translated (it is read by programs).
@@ -3030,6 +3030,35 @@ translating them would silently break the coloring, the warning counter and
 the detection of the produced files. The same goes for the `sbom_generator:*`
 properties and the texts embedded in the SBOMs, which the GUI reads back.
 
+== File pickers (`file_picker` 13)
+
+Since 1.10.4 the GUI uses `file_picker` 13, whose API differs from 11:
+
+* `FilePicker.pickFiles` returns a `List<PlatformFile>` (empty when the user
+  cancels, no more `FilePickerResult` nor `.files`) and picks *several* files by
+  default; `allowMultiple` no longer exists. Single-file choices therefore call
+  `FilePicker.pickFile` (returns `PlatformFile?`); only `SbomMergePanel` keeps
+  `pickFiles`. `PlatformFile.path` (local path or `null`) is still readable as is.
+* `FilePicker.saveFile` requires `bytes`, *writes the file itself* and returns a
+  `Uri?` (no longer a path). The GUI callers write the content after the choice
+  (or let the CLI produce it): `services/save_dialog.dart` exposes `pickSavePath`,
+  which passes empty bytes, converts the `Uri` to a path and *deletes the empty
+  file* thus created — otherwise cancelling the following operation would leave
+  an empty file at the chosen location. `pickSavePath` accepts an injectable
+  `saveFile:` (`@visibleForTesting`), used by `test/save_dialog_test.dart`.
+* `desktop_drop` stays at 0.8.4: 0.9 requires `cross_file ^0.4.0`, which
+  `file_picker` ≥ 12 (`^0.3.5+4`) forbids.
+
+== `models/spdx3_view.dart` — copy of the CLI one
+
+`models/spdx3_view.dart` is an *identical copy* of the repository's
+`lib/spdx3_view.dart` (the GUI does not depend on the CLI package). It
+normalises an SPDX 3.0 graph (`software_Package` types, licenses as
+relationships, annotations as elements) for `sbom_tree_panel`,
+`sbom_viewer_panel` and `sbom_diff_panel` through `spdx3Packages(graph)`, and still
+reads the legacy format (≤ 1.10.4). Any change must be applied to both files
+(`cmp` to check).
+
 == Dependencies
 
 [cols="2,1,3", options="header"]
@@ -3037,7 +3066,7 @@ properties and the texts embedded in the SBOMs, which the GUI reads back.
 |Package |Version |Usage
 
 |`file_picker`
-|^11.0.2
+|^13.1.0
 |Native file pickers (SBOM, template, grype config, log saving)
 
 |`shared_preferences`
@@ -3053,7 +3082,7 @@ properties and the texts embedded in the SBOMs, which the GUI reads back.
 |Opening the generated files with the system application (`launchUrl(Uri.file(...))`)
 
 |`desktop_drop`
-|^0.7.1
+|^0.8.4
 |Reception of file drag and drop from the system file manager (Linux) in
 `ConfigPanel`
 
