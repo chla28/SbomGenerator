@@ -28,6 +28,10 @@ import 'package:sbom_generator/policy_checker.dart';
 import 'package:sbom_generator/go_parser.dart';
 import 'package:sbom_generator/npm_parser.dart';
 import 'package:sbom_generator/yarn_parser.dart';
+import 'package:sbom_generator/cargo_parser.dart';
+import 'package:sbom_generator/composer_parser.dart';
+import 'package:sbom_generator/gem_parser.dart';
+import 'package:sbom_generator/pnpm_parser.dart';
 import 'package:sbom_generator/maven_parser.dart';
 import 'package:sbom_generator/pubspec_parser.dart';
 import 'package:sbom_generator/csv_generator.dart';
@@ -193,6 +197,8 @@ Future<void> _runGenerate(List<String> arguments) async {
             '  • un chemin vers un package-lock.json ou un yarn.lock\n'
             '  • un chemin vers un fichier pom.xml\n'
             '  • un chemin vers un pubspec.lock ou un pubspec.yaml\n'
+            '  • un chemin vers un Cargo.lock, un pnpm-lock.yaml, un composer.lock\n'
+            '    ou un Gemfile.lock\n'
             'Si --input est un dossier, tous les types de fichiers ci-dessus\n'
             'y sont recherchés récursivement (unzip requis pour les .jar).\n'
             'Facultatif si --image est fourni.',
@@ -210,6 +216,8 @@ Future<void> _runGenerate(List<String> arguments) async {
             '  • a path to a package-lock.json or yarn.lock file\n'
             '  • a path to a pom.xml file\n'
             '  • a path to a pubspec.lock or pubspec.yaml file\n'
+            '  • a path to a Cargo.lock, pnpm-lock.yaml, composer.lock\n'
+            '    or Gemfile.lock file\n'
             'If --input is a directory, it is scanned recursively for all of\n'
             'the file types above (requires unzip for .jar).\n'
             'Optional when --image is provided.',
@@ -979,6 +987,10 @@ Future<void> _runGenerate(List<String> arguments) async {
   final goParser = GoParser();
   final npmParser = NpmParser();
   final yarnParser = YarnParser();
+  final cargoParser = CargoParser();
+  final pnpmParser = PnpmParser();
+  final composerParser = ComposerParser();
+  final gemParser = GemParser();
   final mavenParser = MavenParser();
   final pubspecParser = PubspecParser();
   final preloadedPackages = <Package>[];
@@ -994,6 +1006,14 @@ Future<void> _runGenerate(List<String> arguments) async {
       preloadedPackages.addAll(npmParser.parsePackageLock(ref));
     } else if (_isYarnLock(ref)) {
       preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
+    } else if (_isCargoLock(ref)) {
+      preloadedPackages.addAll(cargoParser.parseCargoLock(ref));
+    } else if (_isPnpmLock(ref)) {
+      preloadedPackages.addAll(pnpmParser.parsePnpmLock(ref));
+    } else if (_isComposerLock(ref)) {
+      preloadedPackages.addAll(composerParser.parseComposerLock(ref));
+    } else if (_isGemfileLock(ref)) {
+      preloadedPackages.addAll(gemParser.parseGemfileLock(ref));
     } else if (_isPomXml(ref)) {
       preloadedPackages.addAll(mavenParser.parsePomXml(ref));
     } else if (_isPubspecLock(ref)) {
@@ -1968,6 +1988,10 @@ bool _isGoSum(String ref) => ref.endsWith('go.sum');
 bool _isGoMod(String ref) => ref.endsWith('go.mod');
 bool _isPackageLock(String ref) => ref.endsWith('package-lock.json');
 bool _isYarnLock(String ref) => ref.endsWith('yarn.lock');
+bool _isCargoLock(String ref) => ref.endsWith('Cargo.lock');
+bool _isPnpmLock(String ref) => ref.endsWith('pnpm-lock.yaml');
+bool _isComposerLock(String ref) => ref.endsWith('composer.lock');
+bool _isGemfileLock(String ref) => ref.endsWith('Gemfile.lock');
 bool _isPomXml(String ref) => ref.endsWith('pom.xml');
 bool _isPubspecLock(String ref) => ref.endsWith('pubspec.lock');
 bool _isPubspecYaml(String ref) => ref.endsWith('pubspec.yaml');
@@ -1991,6 +2015,10 @@ bool _isSupportedPackageFile(String path) {
       base == 'go.mod' ||
       base == 'package-lock.json' ||
       base == 'yarn.lock' ||
+      base == 'Cargo.lock' ||
+      base == 'pnpm-lock.yaml' ||
+      base == 'composer.lock' ||
+      base == 'Gemfile.lock' ||
       base == 'pubspec.lock' ||
       base == 'pubspec.yaml';
 }
@@ -5457,6 +5485,7 @@ Format du fichier d'entrée (--input) :
     • Debian : chemin vers un fichier .deb
     • requirements.txt : chemin vers un fichier de dépendances pip
     • Manifestes/lockfiles : go.sum, go.mod, package-lock.json, yarn.lock,
+      pnpm-lock.yaml, Cargo.lock, composer.lock, Gemfile.lock,
       pom.xml, pubspec.lock, pubspec.yaml
 
 Formats d'image OCI (--image) :
@@ -5515,6 +5544,7 @@ Input file format (--input):
     • Debian: path to a .deb file
     • requirements.txt: path to a pip requirements file
     • Manifests/lockfiles: go.sum, go.mod, package-lock.json, yarn.lock,
+      pnpm-lock.yaml, Cargo.lock, composer.lock, Gemfile.lock,
       pom.xml, pubspec.lock, pubspec.yaml
 
 OCI image formats (--image):

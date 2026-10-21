@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Nouveaux lockfiles** : `pnpm-lock.yaml` (v5/v6/v9), `Cargo.lock` (crates externes, SHA-256), `composer.lock` (`packages` et `packages-dev`, licence, auteur) et `Gemfile.lock` (SHA-256 de la section `CHECKSUMS`, plateforme retirée de la version). Reconnus par `--input` (fichier, liste ou dossier récursif) et dans les archives ; PURL `pkg:cargo`, `pkg:composer`, `pkg:gem`.
+
 ### Fixed
 - **GUI : plus de fichier vide laissé par la boîte « Enregistrer sous »** (effet de la migration `file_picker` 13) ; ajout de tests de `pickSavePath`.
 

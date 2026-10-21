@@ -34,6 +34,10 @@ Ce repo github (ainsi que plusieurs autres) est le résultat de cette recherche.
 | Modules Go `go.sum` / `go.mod` | `/opt/myapp/go.sum` | *(aucun)* |
 | Paquets npm `package-lock.json` | `/opt/webapp/package-lock.json` (v1/v2/v3) | *(aucun)* |
 | Paquets yarn `yarn.lock` | `/opt/webapp/yarn.lock` (classique et Berry) | *(aucun)* |
+| Paquets pnpm `pnpm-lock.yaml` | `/opt/webapp/pnpm-lock.yaml` (v5, v6, v9) | *(aucun)* |
+| Crates Rust `Cargo.lock` | `/opt/rustapp/Cargo.lock` (crates externes) | *(aucun)* |
+| Paquets PHP `composer.lock` | `/opt/phpapp/composer.lock` (`packages` et `packages-dev`) | auteur du paquet |
+| Gems Ruby `Gemfile.lock` | `/opt/rubyapp/Gemfile.lock` | *(aucun)* |
 | Dépendances Maven `pom.xml` | `/opt/javaapp/pom.xml` (scope compile) | *(aucun)* |
 | Lockfile Dart/Flutter `pubspec.lock` | `/opt/flutterapp/pubspec.lock` (versions résolues + transitives) | *(aucun)* |
 | Manifeste Dart/Flutter `pubspec.yaml` | `/opt/flutterapp/pubspec.yaml` (dépendances directes) | *(aucun)* |
@@ -107,7 +111,7 @@ podman puis de Docker pour une image construite localement).
 - Image OCI (`--image`) : analyse via `syft`, `trivy`, `skopeo` ou `cdxgen` (`--oci-tool`), en dehors de la boucle concurrente ; combinable avec `--input`
   - `--per-layer` : analyse supplémentaire par couche (`lib/image_layers.dart`) ; les paquets venus de `--input` ne figurent que dans le SBOM global
   - `cdxgen` : produit un SBOM CycloneDX complet dont on ne retient que les composants porteurs d'un PURL d'écosystème réel (l'inventaire fichier par fichier de cdxgen et ses actifs cryptographiques sont écartés) ; l'OS de base est reconstitué depuis le qualifiant `distro=` des PURL système
-- Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`, `pubspec.yaml`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
+- Dossier : parcours récursif (liens symboliques ignorés) ; seuls les fichiers reconnus par extension/nom exact (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `pubspec.lock`, `pubspec.yaml`) sont retenus — un `.txt` quelconque n'est pas traité comme requirements sauf s'il s'appelle exactement `requirements.txt`
 
 **Empreintes cryptographiques :** l'empreinte d'un composant est renseignée
 sans requête réseau quand la source la fournit — `integrity` des lockfiles
@@ -571,8 +575,11 @@ sbom_generator/
 | Paquet Debian | `pkg:deb/<name>@<ver>?arch=<arch>` | `pkg:deb/libssl3@3.0.1?arch=amd64` |
 | Java Maven (`.jar` autonome, `pom.xml`, ou OCI via skopeo) | `pkg:maven/<groupId>/<artifactId>@<ver>` | `pkg:maven/org.yaml/snakeyaml@2.0` |
 | Go (`go.sum` / `go.mod`) | `pkg:golang/<module>@<ver>` | `pkg:golang/github.com/gorilla/mux@1.8.1` |
-| npm / yarn (`package-lock.json`, `yarn.lock`, ou OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
+| npm / yarn / pnpm (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, ou OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
 | Dart/Flutter (`pubspec.lock` / `pubspec.yaml`) | `pkg:pub/<name>@<ver>` | `pkg:pub/provider@6.1.2` |
+| Rust (`Cargo.lock`) | `pkg:cargo/<name>@<ver>` | `pkg:cargo/serde@1.0.200` |
+| PHP (`composer.lock`) | `pkg:composer/<vendor>/<name>@<ver>` | `pkg:composer/monolog/monolog@3.5.0` |
+| Ruby (`Gemfile.lock`) | `pkg:gem/<name>@<ver>` | `pkg:gem/racc@1.7.1` |
 | Image de conteneur (`--image`) | PURL fourni par l'outil d'analyse (syft/trivy/cdxgen), ou reconstruit selon l'écosystème détecté | `pkg:apk/alpine/musl@1.2.4-r2` |
 
 ## Licence

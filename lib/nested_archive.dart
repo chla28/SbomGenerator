@@ -35,6 +35,10 @@ import 'rpm_parser.dart';
 import 'tar_parser.dart';
 import 'wheel_parser.dart';
 import 'yarn_parser.dart';
+import 'cargo_parser.dart';
+import 'composer_parser.dart';
+import 'gem_parser.dart';
+import 'pnpm_parser.dart';
 import 'zip_parser.dart';
 import 'i18n.dart';
 
@@ -142,6 +146,10 @@ class NestedExplorer {
   final _go = GoParser();
   final _npm = NpmParser();
   final _yarn = YarnParser();
+  final _cargo = CargoParser();
+  final _pnpm = PnpmParser();
+  final _composer = ComposerParser();
+  final _gem = GemParser();
   final _maven = MavenParser();
   final _pubspec = PubspecParser();
 
@@ -220,6 +228,14 @@ class NestedExplorer {
         return _npm.parsePackageLock(path);
       case 'yarn.lock':
         return _yarn.parseYarnLock(path);
+      case 'cargo.lock':
+        return _cargo.parseCargoLock(path);
+      case 'pnpm-lock.yaml':
+        return _pnpm.parsePnpmLock(path);
+      case 'composer.lock':
+        return _composer.parseComposerLock(path);
+      case 'gemfile.lock':
+        return _gem.parseGemfileLock(path);
       case 'pom.xml':
         return _maven.parsePomXml(path);
       case 'pubspec.lock':
@@ -299,6 +315,10 @@ const _manifestNames = {
   'go.mod',
   'package-lock.json',
   'yarn.lock',
+  'cargo.lock',
+  'pnpm-lock.yaml',
+  'composer.lock',
+  'gemfile.lock',
   'pubspec.lock',
   'pubspec.yaml',
 };
@@ -461,7 +481,8 @@ MAX_TOTAL, MAX_FILES, MAX_MEMBER = (int(x) for x in sys.argv[3:6])
 
 ARCH = re.compile(r'\.(jar|war|ear|whl|zip|rpm|deb|tar|tgz|tar\.gz)$', re.I)
 MANIFESTS = {'requirements.txt', 'pom.xml', 'go.sum', 'go.mod',
-             'package-lock.json', 'yarn.lock', 'pubspec.lock', 'pubspec.yaml'}
+             'package-lock.json', 'yarn.lock', 'cargo.lock', 'pnpm-lock.yaml',
+             'composer.lock', 'gemfile.lock', 'pubspec.lock', 'pubspec.yaml'}
 
 out, warnings = [], []
 written = 0

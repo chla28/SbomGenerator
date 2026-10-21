@@ -34,6 +34,10 @@ This GitHub repository (as well as several others) is the result of that researc
 | Go modules `go.sum` / `go.mod` | `/opt/myapp/go.sum` | *(none)* |
 | npm packages `package-lock.json` | `/opt/webapp/package-lock.json` (v1/v2/v3) | *(none)* |
 | yarn packages `yarn.lock` | `/opt/webapp/yarn.lock` (classic and Berry) | *(none)* |
+| pnpm packages `pnpm-lock.yaml` | `/opt/webapp/pnpm-lock.yaml` (v5, v6, v9) | *(none)* |
+| Rust crates `Cargo.lock` | `/opt/rustapp/Cargo.lock` (external crates) | *(none)* |
+| PHP packages `composer.lock` | `/opt/phpapp/composer.lock` (`packages` and `packages-dev`) | package author |
+| Ruby gems `Gemfile.lock` | `/opt/rubyapp/Gemfile.lock` | *(none)* |
 | Maven dependencies `pom.xml` | `/opt/javaapp/pom.xml` (compile scope) | *(none)* |
 | Dart/Flutter lockfile `pubspec.lock` | `/opt/flutterapp/pubspec.lock` (resolved + transitive versions) | *(none)* |
 | Dart/Flutter manifest `pubspec.yaml` | `/opt/flutterapp/pubspec.yaml` (direct dependencies) | *(none)* |
@@ -106,7 +110,7 @@ storage for a locally built image).
 - OCI image (`--image`): analysis via `syft`, `trivy`, `skopeo` or `cdxgen` (`--oci-tool`), outside the concurrent loop; can be combined with `--input`
   - `--per-layer`: additional per-layer analysis (`lib/image_layers.dart`); packages coming from `--input` only appear in the global SBOM
   - `cdxgen`: produces a complete CycloneDX SBOM from which only the components carrying a real ecosystem PURL are kept (cdxgen's file-by-file inventory and its cryptographic assets are discarded); the base OS is reconstructed from the `distro=` qualifier of system PURLs
-- Directory: recursive traversal (symbolic links ignored); only files recognised by extension/exact name (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pubspec.lock`, `pubspec.yaml`) are kept — an arbitrary `.txt` is not treated as requirements unless it is named exactly `requirements.txt`
+- Directory: recursive traversal (symbolic links ignored); only files recognised by extension/exact name (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `pubspec.lock`, `pubspec.yaml`) are kept — an arbitrary `.txt` is not treated as requirements unless it is named exactly `requirements.txt`
 
 **Cryptographic hashes:** a component's hash is filled in without any network
 request when the source provides it — `integrity` of npm/yarn lockfiles,

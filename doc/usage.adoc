@@ -12,7 +12,7 @@
 🇫🇷 *Français* · 🇬🇧 link:usage.en.adoc[English]
 
 Générateur de SBOM (Software Bill of Materials) à partir d'une liste mixte de paquets ou d'une image OCI.
-Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml), *paquets Dart/Flutter* (pubspec.lock/pubspec.yaml) et *images OCI* (via syft, trivy, skopeo ou cdxgen). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
+Prend en charge les types d'entrée *RPM*, *Python wheel*, *archives tar/zip*, *paquets Debian*, *archives Java* (`.jar`), *requirements.txt*, *modules Go* (go.sum/go.mod), *paquets npm/yarn* (package-lock.json/yarn.lock), *paquets Maven* (pom.xml), *paquets Dart/Flutter* (pubspec.lock/pubspec.yaml), *paquets pnpm* (pnpm-lock.yaml), *crates Rust* (Cargo.lock), *paquets PHP* (composer.lock), *gems Ruby* (Gemfile.lock) et *images OCI* (via syft, trivy, skopeo ou cdxgen). `--input` accepte aussi un dossier, scanné récursivement pour tous ces types.
 Prend en charge les formats de sortie *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *JSON personnalisé*, *Markdown*, *AsciiDoc*, *HTML interactif* et *CSV*.
 
 == Prérequis

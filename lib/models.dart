@@ -285,8 +285,14 @@ class WheelPackage extends Package {
       final gn = name.toLowerCase();
       return version.isNotEmpty ? 'pkg:golang/$gn@$v' : 'pkg:golang/$gn';
     }
+    if (_packageType == 'composer') {
+      // vendor/package : le '/' sépare namespace et nom, il n'est pas encodé.
+      final cn = name.toLowerCase();
+      return version.isNotEmpty ? 'pkg:composer/$cn@$v' : 'pkg:composer/$cn';
+    }
     final n = Uri.encodeComponent(name.toLowerCase());
     return switch (_packageType) {
+      'gem' => version.isNotEmpty ? 'pkg:gem/$n@$v' : 'pkg:gem/$n',
       'npm' => version.isNotEmpty ? 'pkg:npm/$n@$v' : 'pkg:npm/$n',
       'pub' => version.isNotEmpty ? 'pkg:pub/$n@$v' : 'pkg:pub/$n',
       'cargo' => version.isNotEmpty ? 'pkg:cargo/$n@$v' : 'pkg:cargo/$n',
@@ -304,6 +310,8 @@ class WheelPackage extends Package {
       'pub' => 'pkg-pub',
       'maven' => 'pkg-maven',
       'cargo' => 'pkg-cargo',
+      'composer' => 'pkg-composer',
+      'gem' => 'pkg-gem',
       _ => 'pkg-src',
     };
     return '$prefix-${_safeId(name)}-${_safeId(version)}';
@@ -318,6 +326,8 @@ class WheelPackage extends Package {
       'pub' => 'SPDXRef-pub',
       'maven' => 'SPDXRef-maven',
       'cargo' => 'SPDXRef-cargo',
+      'composer' => 'SPDXRef-composer',
+      'gem' => 'SPDXRef-gem',
       _ => 'SPDXRef-src',
     };
     return '$prefix-${_spdxSafe(name)}-${_spdxSafe(version)}';
