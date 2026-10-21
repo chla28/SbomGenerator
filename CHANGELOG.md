@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-10-21
+
+### Changed
+- **Dépendances mises à jour** : `test` 1.33, `desktop_drop` 0.8.4, `file_picker` 11.0.3, `shared_preferences`, `url_launcher` et les dépendances transitives. `html` reste épinglé à 0.15.5 (incompatible avec `flutter_html` 3.0.0).
+
 ## [1.10.2] - 2026-10-08
 
 ### Fixed

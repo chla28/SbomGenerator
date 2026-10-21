@@ -1,7 +1,7 @@
 name: sbom_generator_gui
 description: Interface graphique pour SBOM Generator
 publish_to: 'none'
-version: 1.10.2+1
+version: 1.10.3+1
 
 environment:
   sdk: ^3.12.2
@@ -14,11 +14,11 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
-  file_picker: ^11.0.2
+  file_picker: ^11.0.3
   shared_preferences: ^2.3.5
   path: ^1.9.1
   url_launcher: ^6.3.1
-  desktop_drop: ^0.7.1
+  desktop_drop: ^0.8.4
   flutter_html: ^3.0.0
   # Dépendance directe (utilisée aussi par HelpViewerScreen pour extraire le
   # texte brut du HTML pré-généré, pour la recherche) — épinglée à 0.15.5
