@@ -941,6 +941,22 @@ link: a malicious layer cannot write anything outside the temporary directory.
 #            sbom.spdx.json + sbom.spdx.json.bundle
 ----
 
+Signature verification (`verify`, requires cosign):
+
+[source,bash]
+----
+# key-based
+./sbom_generator verify sbom.cdx.json --key cosign.pub
+# keyless (Sigstore): certificate identity and issuer are mandatory
+./sbom_generator verify sbom.cdx.json \
+  --certificate-identity me@example.org \
+  --certificate-oidc-issuer https://accounts.google.com
+----
+
+The bundle read is `<sbom>.bundle` (or `--bundle`). Exit codes: `0` valid
+signature, `2` invalid signature, `1` usage error, file or cosign not found.
+`--format json` writes the result to stdout.
+
 === CycloneDX 1.7 with TLP classification and patent declarations
 
 [source,bash]

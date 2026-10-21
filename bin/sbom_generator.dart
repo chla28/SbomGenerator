@@ -12,6 +12,7 @@ import 'package:sbom_generator/zip_parser.dart';
 import 'package:sbom_generator/jar_parser.dart';
 import 'package:sbom_generator/cyclonedx_generator.dart';
 import 'package:sbom_generator/spdx_generator.dart';
+import 'package:sbom_generator/signature.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:sbom_generator/spdx3_view.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
@@ -116,6 +117,12 @@ Future<void> main(List<String> rawArguments) async {
   // Sous-commande `validate` : valide la structure d'un fichier SBOM
   if (arguments.isNotEmpty && arguments.first == 'validate') {
     await _runValidate(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `verify` : vérifie la signature cosign d'un SBOM
+  if (arguments.isNotEmpty && arguments.first == 'verify') {
+    await _runVerify(arguments.sublist(1));
     return;
   }
 
@@ -5146,13 +5153,13 @@ Future<void> _runValidate(List<String> arguments) async {
             'Valide aussi le document par rapport au schéma JSON officiel\n'
                 '(CycloneDX 1.4–1.7, SPDX 2.3, SPDX 3.0), embarqué dans le\n'
                 'programme. --no-schema : contrôles structurels seuls.\n'
-                'Pour SPDX 3.0 les écarts de schéma sont des avertissements\n'
-                '(des erreurs avec --strict).',
+                'Les fichiers SPDX 3.0 générés avant la 1.10.5 (ancien format)\n'
+                'donnent un avertissement.',
             'Also validates the document against the official JSON schema\n'
                 '(CycloneDX 1.4–1.7, SPDX 2.3, SPDX 3.0), embedded in the\n'
                 'program. --no-schema: structural checks only.\n'
-                'For SPDX 3.0 schema deviations are warnings (errors with\n'
-                '--strict).'))
+                'SPDX 3.0 files generated before 1.10.5 (legacy format) only\n'
+                'raise a warning.'))
     ..addOption('format',
         abbr: 'f',
         allowed: ['text', 'json'],
@@ -5430,6 +5437,149 @@ void _validateSpdx3(Map<String, dynamic> json, List<String> errors,
           '[strict] @graph[$i]: spdxId missing'));
     }
   }
+}
+
+Future<void> _runVerify(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('bundle',
+        abbr: 'b',
+        help: tr('Bundle de signature (défaut : <sbom>.bundle, écrit par --sign).',
+            'Signature bundle (default: <sbom>.bundle, written by --sign).'))
+    ..addOption('key',
+        abbr: 'k',
+        help: tr('Clé publique cosign (vérification à clé).',
+            'cosign public key (key-based verification).'))
+    ..addOption('certificate-identity',
+        help: tr('Identité attendue du certificat (sans clé).',
+            'Expected certificate identity (keyless).'))
+    ..addOption('certificate-identity-regexp',
+        help: tr('Identité du certificat, en expression régulière.',
+            'Certificate identity, as a regular expression.'))
+    ..addOption('certificate-oidc-issuer',
+        help: tr('Émetteur OIDC attendu du certificat (sans clé).',
+            'Expected certificate OIDC issuer (keyless).'))
+    ..addOption('certificate-oidc-issuer-regexp',
+        help: tr('Émetteur OIDC du certificat, en expression régulière.',
+            'Certificate OIDC issuer, as a regular expression.'))
+    ..addOption('format',
+        abbr: 'f',
+        allowed: ['text', 'json'],
+        defaultsTo: 'text',
+        help: tr('Format du rapport : text (défaut) ou json (stdout).',
+            'Report format: text (default) or json (stdout).'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.', 'Help.'));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('verify: ${_argError(e.message)}');
+    _printVerifyUsage(parser);
+    exit(1);
+  }
+  if (args['help'] as bool) {
+    _printVerifyUsage(parser);
+    exit(0);
+  }
+  if (args.rest.length != 1) {
+    stderr.writeln(tr('verify: exactement un fichier SBOM requis.',
+        'verify: exactly one SBOM file is required.'));
+    _printVerifyUsage(parser);
+    exit(1);
+  }
+
+  final key = args['key'] as String?;
+  final identity = args['certificate-identity'] as String?;
+  final identityRe = args['certificate-identity-regexp'] as String?;
+  final issuer = args['certificate-oidc-issuer'] as String?;
+  final issuerRe = args['certificate-oidc-issuer-regexp'] as String?;
+  // Sans clé, cosign exige l'identité ET l'émetteur : on le dit avant de
+  // lancer l'outil plutôt que de relayer son message.
+  if (key == null &&
+      ((identity ?? identityRe) == null || (issuer ?? issuerRe) == null)) {
+    stderr.writeln(tr(
+        'verify: --key, ou --certificate-identity[-regexp] et '
+            '--certificate-oidc-issuer[-regexp], requis.',
+        'verify: --key, or --certificate-identity[-regexp] and '
+            '--certificate-oidc-issuer[-regexp], required.'));
+    exit(1);
+  }
+
+  final path = args.rest.single;
+  final result = await verifySbomSignature(
+    sbomPath: path,
+    bundlePath: args['bundle'] as String?,
+    key: key,
+    identity: identity,
+    identityRegexp: identityRe,
+    issuer: issuer,
+    issuerRegexp: issuerRe,
+  );
+
+  final label = switch (result.status) {
+    SignatureStatus.verified => tr('signature valide', 'valid signature'),
+    SignatureStatus.invalid => tr('signature INVALIDE', 'INVALID signature'),
+    SignatureStatus.fileMissing =>
+      tr('SBOM ou bundle introuvable', 'SBOM or bundle not found'),
+    SignatureStatus.cosignMissing =>
+      tr('cosign introuvable', 'cosign not found'),
+  };
+  if (args['format'] == 'json') {
+    print(const JsonEncoder.withIndent('  ').convert({
+      'path': path,
+      'status': result.status.name,
+      'verified': result.verified,
+      if (result.detail.isNotEmpty) 'detail': result.detail,
+    }));
+  } else {
+    print('$path : $label');
+    if (!result.verified && result.detail.isNotEmpty) {
+      stderr.writeln(result.detail);
+    }
+  }
+  exit(switch (result.status) {
+    SignatureStatus.verified => 0,
+    SignatureStatus.invalid => 2,
+    _ => 1,
+  });
+}
+
+void _printVerifyUsage(ArgParser parser) {
+  stdout.writeln(tr('''
+sbom_generator verify – Vérifie la signature cosign d'un SBOM (cosign verify-blob).
+
+Usage:
+  sbom_generator verify sbom.cdx.json --key cosign.pub
+  sbom_generator verify sbom.cdx.json \\
+      --certificate-identity moi@exemple.org \\
+      --certificate-oidc-issuer https://accounts.google.com
+
+Le bundle est celui écrit par `--sign` (<sbom>.bundle). Requiert cosign.
+
+${parser.usage}
+
+Codes de retour:
+  0  Signature valide
+  1  Erreur d'usage, fichier ou cosign introuvable
+  2  Signature invalide
+''', '''
+sbom_generator verify – Verifies the cosign signature of an SBOM (cosign verify-blob).
+
+Usage:
+  sbom_generator verify sbom.cdx.json --key cosign.pub
+  sbom_generator verify sbom.cdx.json \\
+      --certificate-identity me@example.org \\
+      --certificate-oidc-issuer https://accounts.google.com
+
+The bundle is the one written by `--sign` (<sbom>.bundle). Requires cosign.
+
+${parser.usage}
+
+Exit codes:
+  0  Valid signature
+  1  Usage error, file or cosign not found
+  2  Invalid signature
+'''));
 }
 
 void _printValidateUsage(ArgParser parser) {

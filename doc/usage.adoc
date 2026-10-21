@@ -944,6 +944,22 @@ rien écrire hors du répertoire temporaire.
 #          sbom.spdx.json + sbom.spdx.json.bundle
 ----
 
+Vérification de la signature (`verify`, requiert cosign) :
+
+[source,bash]
+----
+# à clé
+./sbom_generator verify sbom.cdx.json --key cosign.pub
+# sans clé (Sigstore) : identité et émetteur du certificat obligatoires
+./sbom_generator verify sbom.cdx.json \
+  --certificate-identity moi@exemple.org \
+  --certificate-oidc-issuer https://accounts.google.com
+----
+
+Le bundle lu est `<sbom>.bundle` (ou `--bundle`). Codes de retour : `0` signature
+valide, `2` signature invalide, `1` erreur d'usage, fichier ou cosign introuvable.
+`--format json` écrit le résultat sur stdout.
+
 === CycloneDX 1.7 avec classification TLP et déclarations de brevets
 
 [source,bash]

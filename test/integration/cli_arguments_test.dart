@@ -71,6 +71,71 @@ void main() {
     expect(r.stderr, contains('sign: cosign introuvable'));
   });
 
+  group('verify (cosign)', () {
+    // Faux cosign : sort avec le code donné par FAKE_COSIGN_EXIT.
+    String fakeCosign() {
+      final dir = Directory('${tmp.path}/bin')..createSync();
+      File('${dir.path}/cosign')
+        ..writeAsStringSync(
+            '#!/bin/sh\necho "\$@" > "${tmp.path}/cosign.args"\n'
+            'echo "boom" >&2\nexit \${FAKE_COSIGN_EXIT:-0}\n')
+        ..createSync();
+      Process.runSync('chmod', ['+x', '${dir.path}/cosign']);
+      return dir.path;
+    }
+
+    String sbom() {
+      final f = File('${tmp.path}/s.cdx.json')..writeAsStringSync('{}');
+      File('${f.path}.bundle').writeAsStringSync('{}');
+      return f.path;
+    }
+
+    test('signature valide : code 0', () async {
+      final r = await cli(['--lang', 'fr', 'verify', sbom(), '--key', 'k.pub'],
+          env: {'PATH': '${fakeCosign()}:${_dartDir()}:/usr/bin:/bin'});
+      expect(r.exitCode, 0, reason: '${r.stderr}');
+      expect(r.stdout, contains('signature valide'));
+      expect(File('${tmp.path}/cosign.args').readAsStringSync(),
+          contains('verify-blob --bundle'));
+    });
+
+    test('signature rejetée : code 2', () async {
+      final r = await cli([
+        '--lang',
+        'fr',
+        'verify',
+        sbom(),
+        '--key',
+        'k.pub'
+      ], env: {
+        'PATH': '${fakeCosign()}:${_dartDir()}:/usr/bin:/bin',
+        'FAKE_COSIGN_EXIT': '1',
+      });
+      expect(r.exitCode, 2);
+      expect(r.stdout, contains('INVALIDE'));
+    });
+
+    test('sans clé ni identité : erreur d\'usage, code 1', () async {
+      final r = await cli(['--lang', 'fr', 'verify', sbom()]);
+      expect(r.exitCode, 1);
+      expect(r.stderr, contains('--certificate-identity'));
+    });
+
+    test('cosign absent : code 1', () async {
+      final r = await cli(['--lang', 'fr', 'verify', sbom(), '--key', 'k'],
+          env: {'PATH': '${tmp.path}:${_dartDir()}'});
+      expect(r.exitCode, 1);
+      expect(r.stdout, contains('cosign introuvable'));
+    });
+
+    test('sortie json', () async {
+      final r = await cli(['verify', sbom(), '--key', 'k', '-f', 'json'],
+          env: {'PATH': '${fakeCosign()}:${_dartDir()}:/usr/bin:/bin'});
+      expect(r.exitCode, 0);
+      expect(r.stdout, contains('"verified": true'));
+    });
+  });
+
   test('« Analysés : X/Y » : le dénominateur compte les paquets des manifestes',
       () async {
     final req = File('${tmp.path}/requirements.txt')
