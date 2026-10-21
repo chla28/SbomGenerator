@@ -7,7 +7,7 @@ import 'package:sbom_generator_gui/widgets/help_viewer.dart';
 // rootBundle.loadString (ici toc.json), fait planter le second au chargement
 // (Future qui ne se résout jamais) — un défaut de l'isolation des assets
 // entre tests dans ce binding Flutter/test, reproduit même avec un widget
-// minimal sans rapport avec HelpViewerScreen ni flutter_html. Voir
+// minimal sans rapport avec HelpViewerScreen ni le rendu HTML. Voir
 // help_viewer_navigation_test.dart pour le test de changement de chapitre.
 void main() {
   testWidgets('charge le sommaire et affiche le premier chapitre par défaut', (
@@ -28,6 +28,9 @@ void main() {
     expect(find.textContaining('Prérequis'), findsWidgets);
 
     // Contenu du premier chapitre affiché par défaut.
-    expect(find.textContaining('Générer un premier SBOM'), findsWidgets);
+    expect(
+      find.textContaining('Générer un premier SBOM', findRichText: true),
+      findsWidgets,
+    );
   });
 }

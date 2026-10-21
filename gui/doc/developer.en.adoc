@@ -1890,7 +1890,7 @@ also reads `{word` as a parameter: a branch must not start with a letter;
 * tests: real file I/O in `testWidgets` → prepare data with `tester.runAsync`, then pass the
 already-loaded list (`initialEntries`); layout overflows caused by the test font are filtered
 through `FlutterError.onError` *inside the test body*;
-* `flutter_html`: do not pass a constant `anchorKey` (the content stops refreshing when the
+* HTML rendering: see `HtmlWidget` (`flutter_widget_from_html_core`) in `HelpViewerScreen`.
 chapter changes).
 
 == `widgets/vuln_shared.dart` — Components shared between Grype, OSV and Trivy
@@ -2231,7 +2231,7 @@ the two guides (`user.adoc` → `assets/help/manual/`, `user.en.adoc` →
 
 * Renders the guide as a single HTML through `asciidoctor -a icons! -a toc!`
   (`icons!`: text labels “Note”/“Tip”… rather than an external icon font that
-  `flutter_html` cannot load; `toc!`: the table of contents is rebuilt on the
+  the HTML renderer cannot load; `toc!`: the table of contents is rebuilt on the
   Flutter side, no need for asciidoctor's one).
 * Splits the HTML with `package:html` at each `<div class="sect1">`
   (asciidoctor already wraps each top-level `== ` section in such a div,
@@ -2251,9 +2251,9 @@ ids (`sec-…`) are identical in both guides.
 
 **Reader (`HelpViewerScreen`)** — `Scaffold` with a table of contents (search
 + `ListView` of chapter titles) on the left and the content of the selected
-chapter on the right, rendered by the `flutter_html` package (native Flutter
+chapter on the right, rendered by the `flutter_widget_from_html_core` package (`HtmlWidget`: native Flutter
 widgets, no WebView — `webview_flutter` has no stable Linux desktop support,
-`flutter_html` needs none). The chapters (HTML + plain text) are loaded only
+it needs none). The chapters (HTML + plain text) are loaded only
 once at startup (`_loadAll`, `Future.wait`, ~240 KB in total) rather than
 lazily at each selection: the search must be able to scan the content of all
 the chapters without a disk round-trip at each keystroke. `onAnchorTap`
@@ -2274,18 +2274,17 @@ tag-stripping regex — correctly handles entities such as `&#8217;`).
 the query (±60 characters, `…` at the start/end if truncated), displayed as
 subtitle of the table-of-contents `ListTile` when the match comes from the
 content rather than from the title. No highlighting *in* the content displayed
-on the right nor scrolling to the occurrence: `flutter_html` does not render
+on the right nor scrolling to the occurrence: `HtmlWidget` does not render
 individually addressable widgets (no key per node), finding and highlighting a
 precise passage would require rebuilding one's own rendering engine — out of
 proportion for what it would bring.
 
-NOTE: `flutter_html: ^3.0.0` imports an internal API
-(`package:html/src/query_selector.dart`) whose shape changed in `html 0.15.6+`
-(`Method not found: 'matches'` at compile time) — `html` is therefore pinned
-to `0.15.5` (see the comment in `pubspec.yaml`). Direct dependency (not only
-transitive through `flutter_html`): `HelpViewerScreen` also uses it directly
-for the search (`_stripHtml`), and `tool/generate_help.dart` relies on the same
-version resolution. To be re-evaluated if `flutter_html` is updated.
+NOTE: up to 1.10.5 the rendering used `flutter_html` 3.0.0, which imported an
+internal `html` API changed in 0.15.6 and forced `html` to be pinned to `0.15.5`;
+it was replaced by `flutter_widget_from_html_core`. `html` is a direct
+dependency: `HelpViewerScreen` uses it for the search (`_stripHtml`) and
+`tool/generate_help.dart` relies on the same resolution. The help tests look
+for text with `findRichText: true` (the content is rendered as `RichText`).
 
 === `DateFilterBar` / `DateChip`
 
@@ -3007,7 +3006,7 @@ a repeated `pump` (up to 4 s) changed nothing, and `pumpAndSettle` ended up
 timing out rather than crashing cleanly.
 
 Diagnosis by repetition with a minimal widget, without any project code nor
-`flutter_html`: a `StatefulWidget` whose `initState` just calls
+the HTML renderer: a `StatefulWidget` whose `initState` just calls
 `rootBundle.loadString('assets/…')` reproduces the same blocking as soon as it
 is mounted a second time in two `testWidgets` of the same file — first test:
 a 500 ms `pump` is enough; second test: even after 4 s of repeated `pump`s,
@@ -3058,13 +3057,13 @@ properties and the texts embedded in the SBOMs, which the GUI reads back.
 |Reception of file drag and drop from the system file manager (Linux) in
 `ConfigPanel`
 
-|`flutter_html`
-|^3.0.0
+|`flutter_widget_from_html_core`
+|^0.17.4
 |Rendering of the user manual (pre-generated HTML) in `HelpViewerScreen` —
 native Flutter widgets, no WebView (not supported on Linux desktop)
 
 |`html`
-|`0.15.5` (pinned — see the note in `widgets/help_viewer.dart` above)
+|`^0.15.5`
 |HTML parsing: `tool/generate_help.dart` (splitting into chapters, dev-time
 only) and `HelpViewerScreen._stripHtml` (plain text extraction for the
 search, at runtime)

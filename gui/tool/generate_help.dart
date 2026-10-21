@@ -50,7 +50,7 @@ Future<void> _generate(
   final result = await Process.run('asciidoctor', [
     '-o', tmpHtml.path,
     '-a', 'icons!', // labels texte ("Note", "Astuce"…) plutôt qu'une police
-    // d'icônes externe que flutter_html ne peut pas charger.
+    // d'icônes externe que le rendu HTML de l’aide ne peut pas charger.
     '-a', 'toc!', // le sommaire est reconstruit côté Flutter (liste des
     // chapitres, navigable sans JS ni ancre de défilement HTML).
     adocPath,
@@ -100,7 +100,7 @@ Future<void> _generate(
     final chapter = chapters[i];
     // On garde le contenu de la section (les enfants du <div class="sect1">
     // — h2, .sectionbody…) plutôt que le div englobant lui-même, dont la
-    // classe "sect1" n'a pas de style particulier côté flutter_html.
+    // classe "sect1" n'a pas de style particulier côté HtmlWidget.
     final html = chapter.innerHtml;
     await File('${outDir.path}/$i.html').writeAsString(html);
     chapterFiles.add('$i.html');

@@ -1902,8 +1902,7 @@ commencer par une lettre ;
 `tester.runAsync`, puis passer la liste déjà chargée (`initialEntries`) ; les débordements de
 mise en page dus à la police de test se filtrent via `FlutterError.onError` *dans le corps
 du test* ;
-* `flutter_html` : ne pas passer d'`anchorKey` constant (le contenu ne se rafraîchit plus
-au changement de chapitre).
+* Rendu HTML : voir `HtmlWidget` (`flutter_widget_from_html_core`) dans `HelpViewerScreen`.
 
 == `widgets/vuln_shared.dart` — Composants partagés entre Grype, OSV et Trivy
 
@@ -2257,7 +2256,7 @@ jamais `asciidoctor`. Pour chacun des deux guides (`user.adoc` →
 
 * Rend le guide en HTML unique via `asciidoctor -a icons! -a toc!`
   (`icons!` : labels texte "Note"/"Astuce"… plutôt qu'une police d'icônes
-  externe que `flutter_html` ne peut pas charger ; `toc!` : le sommaire est
+  externe que le rendu HTML ne peut pas charger ; `toc!` : le sommaire est
   reconstruit côté Flutter, pas besoin de celui d'asciidoctor).
 * Découpe le HTML avec `package:html` à chaque `<div class="sect1">`
   (asciidoctor enveloppe déjà chaque section `== ` de premier niveau dans
@@ -2279,9 +2278,9 @@ sinon. Les ids d'ancre (`sec-…`) sont identiques dans les deux guides.
 
 **Lecteur (`HelpViewerScreen`)** — `Scaffold` avec sommaire (recherche +
 `ListView` des titres de chapitres) à gauche et contenu du chapitre
-sélectionné à droite, rendu par le paquet `flutter_html` (widgets Flutter
+sélectionné à droite, rendu par le paquet `flutter_widget_from_html_core` (`HtmlWidget` : widgets Flutter
 natifs, pas de WebView — `webview_flutter` n'a pas de support desktop Linux
-stable, `flutter_html` n'en a besoin d'aucun). Les chapitres (HTML +
+stable, ce paquet n'en a besoin d'aucun ; styles par `customStylesBuilder`). Les chapitres (HTML +
 texte brut) sont chargés une seule fois au démarrage (`_loadAll`,
 `Future.wait`, ~240 Ko au total) plutôt que paresseusement à chaque
 sélection : la recherche doit pouvoir scanner le contenu de tous les
@@ -2304,19 +2303,18 @@ court extrait de contexte autour de la première occurrence de la requête
 (±60 caractères, `…` en tête/fin si tronqué), affiché en sous-titre du
 `ListTile` du sommaire quand la correspondance vient du contenu plutôt que
 du titre. Aucune mise en évidence *dans* le contenu affiché à droite ni
-défilement jusqu'à l'occurrence : `flutter_html` ne rend pas de widgets
+défilement jusqu'à l'occurrence : `HtmlWidget` ne rend pas de widgets
 adressables individuellement (pas de clé par nœud), retrouver et surligner
 un passage précis demanderait de reconstruire son propre moteur de rendu —
 hors de proportion pour ce que ça apporterait.
 
-NOTE: `flutter_html: ^3.0.0` importe une API interne
-(`package:html/src/query_selector.dart`) dont la forme a changé en
-`html 0.15.6+` (`Method not found: 'matches'` à la compilation) — `html` est
-donc épinglé à `0.15.5` (voir le commentaire dans `pubspec.yaml`). Dépendance
-directe (pas seulement transitive via `flutter_html`) : `HelpViewerScreen`
-l'utilise aussi directement pour la recherche (`_stripHtml`), et
-`tool/generate_help.dart` s'appuie sur la même résolution de version. À
-réévaluer si `flutter_html` est mis à jour.
+NOTE: jusqu'à la 1.10.5 le rendu passait par `flutter_html` 3.0.0, qui importait
+une API interne de `html` modifiée en 0.15.6 et obligeait à épingler `html` à
+`0.15.5` ; il a été remplacé par `flutter_widget_from_html_core`. `html` est une
+dépendance directe : `HelpViewerScreen` l'utilise pour la recherche
+(`_stripHtml`) et `tool/generate_help.dart` s'appuie sur la même résolution.
+Les tests de l'aide cherchent le texte avec `findRichText: true` (le contenu est
+rendu en `RichText`).
 
 === `DateFilterBar` / `DateChip`
 
@@ -3055,7 +3053,7 @@ jamais se résoudre : ni erreur, ni `setState`, un `pump` répété (jusqu'à
 plutôt que planter proprement.
 
 Diagnostic par répétition avec un widget minimal, sans aucun code du
-projet ni `flutter_html` : un `StatefulWidget` dont `initState` appelle
+projet ni le rendu HTML : un `StatefulWidget` dont `initState` appelle
 juste `rootBundle.loadString('assets/…')` reproduit le même blocage dès
 qu'il est monté une seconde fois dans deux `testWidgets` du même fichier —
 premier test : `pump` de 500 ms suffit ; second test : même après 4 s de
@@ -3096,13 +3094,13 @@ qui contourne le problème (vérifié : les deux passent une fois séparés).
 |Réception des glisser-déposer de fichiers depuis le gestionnaire de fichiers
 système (Linux) dans `ConfigPanel`
 
-|`flutter_html`
-|^3.0.0
+|`flutter_widget_from_html_core`
+|^0.17.4
 |Rendu du manuel utilisateur (HTML pré-généré) dans `HelpViewerScreen` —
 widgets Flutter natifs, sans WebView (non supportée sur desktop Linux)
 
 |`html`
-|`0.15.5` (épinglé — voir la note dans `widgets/help_viewer.dart` ci-dessus)
+|`^0.15.5`
 |Parsing HTML : `tool/generate_help.dart` (découpage en chapitres, dev-time
 uniquement) et `HelpViewerScreen._stripHtml` (extraction du texte brut pour
 la recherche, à l'exécution)

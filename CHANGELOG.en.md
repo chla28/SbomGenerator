@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **GUI: the manual is rendered with `flutter_widget_from_html_core`** (replaces the unmaintained `flutter_html`): `html` is no longer pinned to 0.15.5 and moves to 0.15.7.
+
 ### Added
 - **`watch`**: rescans SBOMs (files or a recursive directory) and reports the CVEs that appeared since the previous pass (per-SBOM state in `--state-dir`), as a single pass (exit code 3 on new CVEs) or in a loop (`--interval`), with `--notify-cmd` and `--format json` output.
 - **CSAF 2.0 VEX**: `--vex` (scan, report, cra) reads `csaf_vex` profile documents (products resolved to PURLs through `product_tree`, `flags` justifications, `threats`, `remediations`); `vex -f csaf` and `scan --vex-format csaf` write them (valid against the CSAF 2.0 schema).

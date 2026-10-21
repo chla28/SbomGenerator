@@ -19,7 +19,13 @@ void main() {
 
     // Le chapitre 1 (Introduction) doit maintenant être affiché — un texte
     // propre au chapitre 0 (Démarrage rapide) ne doit plus l'être.
-    expect(find.textContaining('Générer un premier SBOM'), findsNothing);
-    expect(find.textContaining('Qu’est-ce qu’un SBOM'), findsWidgets);
+    expect(
+      find.textContaining('Générer un premier SBOM', findRichText: true),
+      findsNothing,
+    );
+    expect(
+      find.textContaining('Qu’est-ce qu’un SBOM', findRichText: true),
+      findsWidgets,
+    );
   });
 }

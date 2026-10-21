@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey, rootBundle;
-import 'package:flutter_html/flutter_html.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/l10n.dart';
@@ -142,7 +143,7 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients || _hitCount == 0) return;
       // Estimation proportionnelle à la position de l'occurrence dans le
-      // texte du chapitre (flutter_html ne donne pas la position des
+      // texte du chapitre (HtmlWidget ne donne pas la position des
       // éléments en ligne).
       final text = _chapterText[_selected].toLowerCase();
       final q = _query.toLowerCase();
@@ -163,14 +164,16 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
     });
   }
 
-  void _onAnchorTap(String? url, Map<String, String> attrs, dynamic element) {
-    if (url == null) return;
+  /// Toujours « géré » (true) : ni lien interne ni lien externe ne doit
+  /// retomber sur le comportement par défaut du widget HTML.
+  Future<bool> _onTapUrl(String url) async {
     if (url.startsWith('#')) {
       final target = _anchors[url.substring(1)];
       if (target != null) _selectChapter(target);
-      return;
+      return true;
     }
-    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    return true;
   }
 
   /// Indices des chapitres correspondant à la recherche courante (titre ou
@@ -327,11 +330,15 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
                               horizontal: 32,
                               vertical: 24,
                             ),
-                            child: Html(
-                              data:
-                                  highlighted?.html ?? _chapterHtml[_selected],
-                              onAnchorTap: _onAnchorTap,
-                              style: _helpStyle(theme),
+                            child: HtmlWidget(
+                              highlighted?.html ?? _chapterHtml[_selected],
+                              onTapUrl: _onTapUrl,
+                              textStyle: TextStyle(
+                                color: theme.colorScheme.onSurface,
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                              customStylesBuilder: _helpStyle(theme),
                             ),
                           ),
                         ),
@@ -397,78 +404,80 @@ class _Chapter {
   const _Chapter({required this.title, required this.file});
 }
 
+/// Couleur au format CSS `rgba(...)` attendu par `customStylesBuilder`.
+String _css(Color c) {
+  int ch(double v) => (v * 255).round();
+  return 'rgba(${ch(c.r)},${ch(c.g)},${ch(c.b)},${c.a})';
+}
+
 /// Style du contenu HTML calqué sur le thème Material courant, pour rester
 /// cohérent en mode clair comme sombre (voir aussi pdf_report.dart pour le
 /// thème équivalent des exports PDF).
-Map<String, Style> _helpStyle(ThemeData theme) {
-  final onSurface = theme.colorScheme.onSurface;
-  final codeBg = theme.colorScheme.surfaceContainerHighest;
-  return {
-    'body': Style(
-      color: onSurface,
-      fontSize: FontSize(14),
-      lineHeight: LineHeight(1.5),
-      margin: Margins.zero,
-    ),
-    'h2': Style(
-      color: theme.colorScheme.primary,
-      fontSize: FontSize(22),
-      fontWeight: FontWeight.bold,
-      margin: Margins.only(top: 0, bottom: 12),
-    ),
-    'h3': Style(
-      color: theme.colorScheme.primary,
-      fontSize: FontSize(17),
-      fontWeight: FontWeight.bold,
-      margin: Margins.only(top: 20, bottom: 8),
-    ),
-    'h4': Style(
-      fontSize: FontSize(15),
-      fontWeight: FontWeight.bold,
-      margin: Margins.only(top: 16, bottom: 6),
-    ),
-    'a': Style(color: theme.colorScheme.primary),
-    'code': Style(
-      backgroundColor: codeBg,
-      fontFamily: 'monospace',
-      padding: HtmlPaddings.symmetric(horizontal: 4),
-    ),
-    'pre': Style(
-      backgroundColor: codeBg,
-      padding: HtmlPaddings.all(12),
-      margin: Margins.symmetric(vertical: 8),
-    ),
-    'table': Style(
-      border: Border.all(color: theme.dividerColor),
-      margin: Margins.symmetric(vertical: 12),
-    ),
-    'th': Style(
-      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-      padding: HtmlPaddings.all(6),
-      fontWeight: FontWeight.bold,
-    ),
-    'td': Style(
-      padding: HtmlPaddings.all(6),
-      border: Border.all(color: theme.dividerColor, width: 0.5),
-    ),
-    '.admonitionblock': Style(
-      backgroundColor: theme.colorScheme.secondaryContainer.withValues(
-        alpha: 0.4,
-      ),
-      padding: HtmlPaddings.all(12),
-      margin: Margins.symmetric(vertical: 12),
-    ),
-    'mark': Style(
-      backgroundColor: const Color(0xFFFFEB3B),
-      color: Colors.black,
-    ),
-    'mark.cur': Style(
-      backgroundColor: const Color(0xFFFF9800),
-      color: Colors.black,
-    ),
-    '.title': Style(
-      fontWeight: FontWeight.bold,
-      color: theme.colorScheme.secondary,
-    ),
+Map<String, String>? Function(dom.Element) _helpStyle(ThemeData theme) {
+  final primary = _css(theme.colorScheme.primary);
+  final codeBg = _css(theme.colorScheme.surfaceContainerHighest);
+  final border = _css(theme.dividerColor);
+  return (element) {
+    if (element.localName == 'mark') {
+      return {
+        'background-color': element.classes.contains('cur')
+            ? '#FF9800'
+            : '#FFEB3B',
+        'color': '#000000',
+      };
+    }
+    if (element.classes.contains('admonitionblock')) {
+      return {
+        'background-color': _css(
+          theme.colorScheme.secondaryContainer.withValues(alpha: 0.4),
+        ),
+        'padding': '12px',
+        'margin': '12px 0',
+      };
+    }
+    if (element.classes.contains('title')) {
+      return {
+        'font-weight': 'bold',
+        'color': _css(theme.colorScheme.secondary),
+      };
+    }
+    return switch (element.localName) {
+      'h2' => {
+        'color': primary,
+        'font-size': '22px',
+        'font-weight': 'bold',
+        'margin': '0 0 12px 0',
+      },
+      'h3' => {
+        'color': primary,
+        'font-size': '17px',
+        'font-weight': 'bold',
+        'margin': '20px 0 8px 0',
+      },
+      'h4' => {
+        'font-size': '15px',
+        'font-weight': 'bold',
+        'margin': '16px 0 6px 0',
+      },
+      'a' => {'color': primary},
+      'code' => {
+        'background-color': codeBg,
+        'font-family': 'monospace',
+        'padding': '0 4px',
+      },
+      'pre' => {
+        'background-color': codeBg,
+        'padding': '12px',
+        'margin': '8px 0',
+      },
+      'table' => {'border': '1px solid $border', 'margin': '12px 0'},
+      'th' => {
+        'background-color': codeBg,
+        'padding': '6px',
+        'font-weight': 'bold',
+      },
+      'td' => {'padding': '6px', 'border': '0.5px solid $border'},
+      _ => null,
+    };
   };
 }
