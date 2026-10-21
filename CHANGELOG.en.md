@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.4] - 2026-10-21
+
+### Changed
+- **GUI: migrated to `file_picker` 13** (single-file selection via `pickFile`, "Save as" dialog via the `pickSavePath` helper). `desktop_drop` stays at 0.8.4 (0.9 is incompatible with `file_picker` ≥ 12).
+
 ## [1.10.3] - 2026-10-21
 
 ### Changed

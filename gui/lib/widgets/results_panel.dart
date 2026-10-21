@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,6 +32,7 @@ import '../services/vex_controller.dart';
 import 'tasks_panel.dart';
 import 'trivy_panel.dart';
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 
 class ResultsPanel extends StatefulWidget {
   final List<String> logLines;
@@ -917,7 +917,7 @@ class _LogExportBar extends StatelessWidget {
           ),
           TextButton.icon(
             onPressed: () async {
-              final path = await FilePicker.saveFile(
+              final path = await pickSavePath(
                 dialogTitle: context.l10n.resultsSaveLogsTitle,
                 fileName: 'sbom_generator.log',
               );

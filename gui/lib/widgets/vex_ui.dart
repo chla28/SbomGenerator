@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 import '../models/vex.dart';
 import '../services/vex_controller.dart';
 import 'pdf_report.dart' show kGuiVersion;
@@ -299,12 +300,12 @@ class VexBar extends StatelessWidget {
 
   Future<void> _import(BuildContext context) async {
     final l = context.l10n;
-    final picked = await FilePicker.pickFiles(
+    final picked = await FilePicker.pickFile(
       dialogTitle: l.vexDialogImport,
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
-    final path = picked?.files.single.path;
+    final path = picked?.path;
     if (path == null) return;
     try {
       final doc = jsonDecode(await File(path).readAsString());
@@ -329,7 +330,7 @@ class VexBar extends StatelessWidget {
       ).showSnackBar(SnackBar(content: Text(l.vexNothingToExport)));
       return;
     }
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: l.vexDialogExport,
       fileName: cdx ? 'vex.cdx.json' : 'vex.openvex.json',
       type: FileType.custom,

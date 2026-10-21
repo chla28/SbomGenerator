@@ -8,6 +8,7 @@ import '../models/sbom_result.dart';
 import '../services/settings_service.dart';
 import 'help_icon.dart';
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 
 /// Onglet « Conformité CRA » — pilote la sous-commande `sbom-generator cra`
 /// (rapport de conformité Cyber Resilience Act, périmètre vérifiable
@@ -136,7 +137,7 @@ class _CraPanelState extends State<CraPanel> {
   Future<void> _exportPdf() async {
     final l = context.l10n;
     final sbom = _sbom.text.trim();
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: l.craExportTitle,
       fileName: l.craExportFileName,
       type: FileType.custom,
@@ -180,22 +181,22 @@ class _CraPanelState extends State<CraPanel> {
   }
 
   Future<void> _pickSbom() async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
-    if (r?.files.single.path != null) {
-      setState(() => _sbom.text = r!.files.single.path!);
+    if (r?.path != null) {
+      setState(() => _sbom.text = r!.path!);
     }
   }
 
   Future<void> _pickConfig() async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['yaml', 'yml', 'txt'],
     );
-    if (r?.files.single.path != null) {
-      setState(() => _configPath = r!.files.single.path);
+    if (r?.path != null) {
+      setState(() => _configPath = r!.path);
     }
   }
 

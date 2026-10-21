@@ -6,6 +6,7 @@ import '../models/sbom_config.dart';
 import '../services/settings_service.dart';
 import 'help_icon.dart';
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 
 class ConfigPanel extends StatefulWidget {
   final SbomConfig config;
@@ -149,13 +150,13 @@ class ConfigPanelState extends State<ConfigPanel> {
     List<String>? extensions,
     List<TextEditingController>? clears,
   }) async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       dialogTitle: title,
       type: extensions != null ? FileType.custom : FileType.any,
       allowedExtensions: extensions,
     );
-    if (r != null && r.files.single.path != null) {
-      ctrl.text = r.files.single.path!;
+    if (r != null && r.path != null) {
+      ctrl.text = r.path!;
       for (final other in clears ?? const <TextEditingController>[]) {
         other.clear();
       }
@@ -185,7 +186,7 @@ class ConfigPanelState extends State<ConfigPanel> {
     String? title,
     String? fileName,
   }) async {
-    final r = await FilePicker.saveFile(dialogTitle: title, fileName: fileName);
+    final r = await pickSavePath(dialogTitle: title, fileName: fileName);
     if (r != null) {
       ctrl.text = r;
       _sync();

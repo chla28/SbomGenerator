@@ -47,11 +47,10 @@ class _SbomMergePanelState extends State<SbomMergePanel>
       dialogTitle: context.l10n.mergePickTitle,
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? const ['json', 'jsonld'] : null,
-      allowMultiple: true,
     );
-    if (r == null) return;
+    if (r.isEmpty) return;
     setState(() {
-      for (final f in r.files) {
+      for (final f in r) {
         if (f.path != null && !_inputFiles.contains(f.path)) {
           _inputFiles.add(f.path!);
         }

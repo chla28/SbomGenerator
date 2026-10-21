@@ -191,13 +191,13 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   }
 
   Future<void> _loadFile() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       dialogTitle: context.l10n.viewerOpenTitle,
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
-    if (result == null || result.files.single.path == null) return;
-    await _openPath(result.files.single.path!);
+    if (result == null || result.path == null) return;
+    await _openPath(result.path!);
   }
 
   Future<void> _openPath(String path) async {

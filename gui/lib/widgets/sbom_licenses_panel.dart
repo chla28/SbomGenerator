@@ -107,13 +107,13 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
   }
 
   Future<void> _pickFile() async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       dialogTitle: context.l10n.licPickTitle,
       type: FileType.custom,
       allowedExtensions: const ['json', 'jsonld'],
     );
-    if (r == null || r.files.isEmpty || r.files.first.path == null) return;
-    _selectFile(r.files.first.path!);
+    if (r?.path == null) return;
+    _selectFile(r!.path!);
   }
 
   Future<void> _selectFile(String path) async {

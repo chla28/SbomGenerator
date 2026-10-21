@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
 import '../services/layer_scan_service.dart'
@@ -1511,7 +1512,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       ];
       buf.writeln(cells.map(csvEscape).join(','));
     }
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: widget.csvDialogTitle,
       fileName: widget.csvFileName,
       type: FileType.custom,
@@ -1532,7 +1533,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   Future<void> _exportAsciiDoc(BuildContext context) async {
     final l = context.l10n;
     final rows = _filtered;
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: context.l10n.vulnTableExportPdfDialog(widget.toolName),
       fileName: widget.csvFileName.replaceAll(RegExp(r'\.csv$'), '.adoc'),
       type: FileType.custom,

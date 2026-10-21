@@ -256,24 +256,24 @@ class _TrivyPanelState extends State<TrivyPanel>
   }
 
   Future<void> _pickSbomFile({bool filtered = true}) async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
       dialogTitle: context.l10n.scanPickSbomTitle,
     );
-    if (r?.files.single.path != null) {
-      setState(() => _fileCtrl.text = r!.files.single.path!);
+    if (r?.path != null) {
+      setState(() => _fileCtrl.text = r!.path!);
     }
   }
 
   Future<void> _pickImageArchive() async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['tar', 'gz', 'tgz'],
       dialogTitle: context.l10n.scanPickImageArchiveTitle,
     );
-    if (r?.files.single.path != null) {
-      setState(() => _imageCtrl.text = r!.files.single.path!);
+    if (r?.path != null) {
+      setState(() => _imageCtrl.text = r!.path!);
     }
   }
 
@@ -285,23 +285,23 @@ class _TrivyPanelState extends State<TrivyPanel>
   }
 
   Future<void> _pickConfigFile({bool filtered = true}) async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['yaml', 'yml'] : null,
       dialogTitle: context.l10n.trivyPickConfigTitle,
     );
-    if (r?.files.single.path != null) {
-      setState(() => _configCtrl.text = r!.files.single.path!);
+    if (r?.path != null) {
+      setState(() => _configCtrl.text = r!.path!);
     }
   }
 
   Future<void> _pickPackage() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: FileType.any,
       dialogTitle: context.l10n.scanPickPackageTitle,
     );
-    if (result?.files.single.path != null) {
-      setState(() => _packageCtrl.text = result!.files.single.path!);
+    if (result?.path != null) {
+      setState(() => _packageCtrl.text = result!.path!);
     }
   }
 

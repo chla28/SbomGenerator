@@ -19,6 +19,7 @@ import '../models/remediation.dart';
 import 'trivy_panel.dart';
 import 'vuln_shared.dart' show SortHeader, VulnRow;
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 
 // ─── Tableau de bord de synthèse ─────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
           exploit: widget.exploitById,
           layerScans: widget.layerScans,
         );
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: l.dashExportTitle,
       fileName: _threshold == ReportSeverityThreshold.all
           ? l.dashExportFileAll

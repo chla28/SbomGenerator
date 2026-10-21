@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 import '../models/scan_session.dart';
 import '../services/session_store.dart';
 import 'vuln_shared.dart' show severityFg;
@@ -58,7 +59,7 @@ class SessionBar extends StatelessWidget {
       ).showSnackBar(SnackBar(content: Text(l.sessNothingToSave)));
       return;
     }
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: l.sessDialogSave,
       fileName: SessionStore.fileNameFor(session),
       type: FileType.custom,
@@ -74,12 +75,12 @@ class SessionBar extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final l = context.l10n;
-    final picked = await FilePicker.pickFiles(
+    final picked = await FilePicker.pickFile(
       dialogTitle: l.sessDialogOpen,
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
-    final path = picked?.files.single.path;
+    final path = picked?.path;
     if (path == null) return;
     try {
       final s = ScanSession.decode(await File(path).readAsString());

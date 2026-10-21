@@ -298,16 +298,16 @@ class _SbomDiffPanelState extends State<SbomDiffPanel>
   }
 
   Future<void> _pickFile(bool isA, {bool filtered = true}) async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       dialogTitle: isA ? context.l10n.diffPickA : context.l10n.diffPickB,
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
     );
-    if (r?.files.single.path != null) {
+    if (r?.path != null) {
       if (isA) {
-        _loadA(r!.files.single.path!);
+        _loadA(r!.path!);
       } else {
-        _loadB(r!.files.single.path!);
+        _loadB(r!.path!);
       }
     }
   }

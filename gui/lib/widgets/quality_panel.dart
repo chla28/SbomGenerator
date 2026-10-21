@@ -278,13 +278,13 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   Future<void> _pickFile({bool filtered = true}) async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       dialogTitle: context.l10n.qualityPickTitle,
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
     );
-    if (result != null && result.files.single.path != null) {
-      setState(() => _fileCtrl.text = result.files.single.path!);
+    if (result != null && result.path != null) {
+      setState(() => _fileCtrl.text = result.path!);
     }
   }
 

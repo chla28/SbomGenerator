@@ -1,7 +1,7 @@
 name: sbom_generator_gui
 description: Interface graphique pour SBOM Generator
 publish_to: 'none'
-version: 1.10.3+1
+version: 1.10.4+1
 
 environment:
   sdk: ^3.12.2
@@ -14,7 +14,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
-  file_picker: ^11.0.3
+  file_picker: ^13.1.0
   shared_preferences: ^2.3.5
   path: ^1.9.1
   url_launcher: ^6.3.1

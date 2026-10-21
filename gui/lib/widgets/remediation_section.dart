@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
+import '../services/save_dialog.dart';
 import '../models/remediation.dart';
 import 'grype_panel.dart';
 import 'osv_panel.dart';
@@ -92,7 +93,7 @@ class _RemediationSectionState extends State<RemediationSection> {
   Future<void> _exportCsv() async {
     final l = context.l10n;
     final csv = remediationCsv(widget.items, l.remedCsvHeader);
-    final path = await FilePicker.saveFile(
+    final path = await pickSavePath(
       dialogTitle: l.remedCsvDialog,
       fileName: 'remediation.csv',
       type: FileType.custom,

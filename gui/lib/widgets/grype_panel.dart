@@ -260,24 +260,24 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   Future<void> _pickSbomFile({bool filtered = true}) async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
       dialogTitle: context.l10n.scanPickSbomTitle,
     );
-    if (result?.files.single.path != null) {
-      setState(() => _fileCtrl.text = result!.files.single.path!);
+    if (result?.path != null) {
+      setState(() => _fileCtrl.text = result!.path!);
     }
   }
 
   Future<void> _pickImageArchive() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['tar', 'gz', 'tgz'],
       dialogTitle: context.l10n.scanPickImageArchiveTitle,
     );
-    if (result?.files.single.path != null) {
-      setState(() => _imageCtrl.text = result!.files.single.path!);
+    if (result?.path != null) {
+      setState(() => _imageCtrl.text = result!.path!);
     }
   }
 
@@ -289,34 +289,34 @@ class _GrypePanelState extends State<GrypePanel>
   }
 
   Future<void> _pickConfigFile({bool filtered = true}) async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['yaml', 'yml'] : null,
       dialogTitle: context.l10n.grypePickConfigTitle,
     );
-    if (result?.files.single.path != null) {
-      setState(() => _configCtrl.text = result!.files.single.path!);
+    if (result?.path != null) {
+      setState(() => _configCtrl.text = result!.path!);
     }
   }
 
   Future<void> _pickTemplateFile({bool filtered = true}) async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['tmpl', 'tpl', 'txt'] : null,
       dialogTitle: context.l10n.grypePickTemplateTitle,
     );
-    if (result?.files.single.path != null) {
-      setState(() => _templateCtrl.text = result!.files.single.path!);
+    if (result?.path != null) {
+      setState(() => _templateCtrl.text = result!.path!);
     }
   }
 
   Future<void> _pickPackage() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: FileType.any,
       dialogTitle: context.l10n.scanPickPackageTitle,
     );
-    if (result?.files.single.path != null) {
-      setState(() => _packageCtrl.text = result!.files.single.path!);
+    if (result?.path != null) {
+      setState(() => _packageCtrl.text = result!.path!);
     }
   }
 

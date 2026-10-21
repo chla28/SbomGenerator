@@ -322,12 +322,12 @@ class _SbomTreePanelState extends State<SbomTreePanel>
   }
 
   Future<void> _pickFile() async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       dialogTitle: context.l10n.treePickTitle,
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
-    if (r?.files.single.path != null) _loadFile(r!.files.single.path!);
+    if (r?.path != null) _loadFile(r!.path!);
   }
 
   List<_ListItem> _buildItems() {

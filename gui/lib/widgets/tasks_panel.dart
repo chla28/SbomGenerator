@@ -102,12 +102,12 @@ class _TasksPanelState extends State<TasksPanel>
   }
 
   Future<void> _browse() async {
-    final r = await FilePicker.pickFiles(
+    final r = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
       dialogTitle: context.l10n.tasksPickDialog,
     );
-    final path = r?.files.single.path;
+    final path = r?.path;
     if (path != null) setState(() => _target = path);
   }
 
