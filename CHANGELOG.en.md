@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.6] - 2026-10-21
+
 ### Changed
 - **GUI: the manual is rendered with `flutter_widget_from_html_core`** (replaces the unmaintained `flutter_html`): `html` is no longer pinned to 0.15.5 and moves to 0.15.7.
 
