@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **GUI : plus de fichier vide laissé par la boîte « Enregistrer sous »** (effet de la migration `file_picker` 13) ; ajout de tests de `pickSavePath`.
+
 ## [1.10.5] - 2026-10-21
 
 ### Changed
