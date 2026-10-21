@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.7] - 2026-10-21
+
 ### Fixed
 - **`report`, `vex` and `watch` without their mandatory option** (`--input`, `--status`, `--state-dir`): usage error and exit code 1 instead of an uncaught exception (code 255), like the other subcommands.
 
