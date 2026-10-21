@@ -13,6 +13,7 @@ import 'package:sbom_generator/jar_parser.dart';
 import 'package:sbom_generator/cyclonedx_generator.dart';
 import 'package:sbom_generator/spdx_generator.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
+import 'package:sbom_generator/spdx3_view.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
 import 'package:sbom_generator/markdown_generator.dart';
 import 'package:sbom_generator/asciidoc_generator.dart';
@@ -42,7 +43,7 @@ import 'package:sbom_generator/vex.dart';
 import 'package:sbom_generator/scan_policy.dart';
 import 'package:sbom_generator/report_input.dart';
 
-const _version = '1.10.4';
+const _version = '1.10.5';
 
 const _validFormats = {
   'cyclonedx',
@@ -3097,7 +3098,7 @@ Map<String, String> _purlIndex(String sbomFile) {
         if (c is! Map) continue;
         final name = '${c['name'] ?? ''}';
         final ver =
-            '${c['version'] ?? c['versionInfo'] ?? c['software:packageVersion'] ?? ''}';
+            '${c['version'] ?? c['versionInfo'] ?? spdx3Prop(c, 'packageVersion') ?? ''}';
         String? purl = c['purl'] as String?;
         for (final r in (c['externalRefs'] as List? ?? const [])) {
           if (r is Map && r['referenceType'] == 'purl') {
@@ -5211,12 +5212,17 @@ Future<void> _runValidate(List<String> arguments) async {
         if (format == SbomFormat.spdx3) {
           // Le validateur ne localise pas les écarts du schéma SPDX 3.0
           // (oneOf / unevaluatedProperties) : un message unique et explicite.
-          final msg =
-              '$prefix${tr('le document ne satisfait pas le schéma JSON officiel SPDX 3.0 (écarts connus du générateur : noms `software:` au lieu de `software_`, externalIdentifier, toolVersion…).', 'the document does not satisfy the official SPDX 3.0 JSON schema (known generator deviations: `software:` names instead of `software_`, externalIdentifier, toolVersion…).')}';
-          if (strict) {
-            errors.add(msg);
+          // Les fichiers produits avant la 1.10.5 (types `software:Package`,
+          // licences en ligne…) n'étaient pas conformes : simple avertissement
+          // pour ne pas invalider des SBOM déjà archivés.
+          final legacy = ((json['@graph'] as List?) ?? const [])
+              .any((n) => n is Map && n['type'] == 'software:Package');
+          if (legacy && !strict) {
+            warnings.add(
+                '$prefix${tr('ancien format SPDX 3.0 non conforme au schéma officiel (généré avant la 1.10.5) : régénérez le SBOM.', 'legacy SPDX 3.0 format not conforming to the official schema (generated before 1.10.5): regenerate the SBOM.')}');
           } else {
-            warnings.add(msg);
+            errors.add(
+                '$prefix${tr('le document ne satisfait pas le schéma JSON officiel SPDX 3.0.', 'the document does not satisfy the official SPDX 3.0 JSON schema.')}');
           }
         } else {
           errors.addAll(schemaErrors.map((e) => '$prefix$e'));

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models/sbom_result.dart';
+import '../models/spdx3_view.dart';
 import '../l10n/l10n.dart';
 import 'on_pale.dart';
 
@@ -111,7 +112,7 @@ class _SbomInfo {
       (e) => e['type'] == 'SpdxDocument',
       orElse: () => const {},
     );
-    final comps = graph.where((e) => e['type'] == 'software:Package').map((p) {
+    final comps = spdx3Packages(graph).map((p) {
       String purl = '';
       for (final ref in (p['externalIdentifier'] as List? ?? [])) {
         final r = ref as Map<String, dynamic>;

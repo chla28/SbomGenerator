@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/layer_nav.dart';
+import '../models/spdx3_view.dart';
 import 'layer_selector.dart';
 import '../l10n/l10n.dart';
 
@@ -122,8 +123,7 @@ class _Component {
     AppLocalizations? l,
   ) {
     final graph = (d['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
-    return graph
-        .where((e) => e['type'] == 'software:Package')
+    return spdx3Packages(graph)
         .map((p) {
           String purl = '';
           for (final ref in (p['externalIdentifier'] as List? ?? [])) {

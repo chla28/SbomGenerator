@@ -52,6 +52,9 @@ class Spdx3Generator {
     final osId = osInfo != null ? '$base#os-${_safeId(osInfo.id)}' : null;
 
     final graph = <Map<String, dynamic>>[];
+    // Expression de licence -> id de l'élément `simplelicensing_LicenseExpression`
+    // (un seul élément par expression, partagé entre les paquets).
+    final licenseIds = <String, String>{};
 
     graph.add({
       '@id': ciId,
@@ -66,7 +69,8 @@ class Spdx3Generator {
       'spdxId': toolId,
       'creationInfo': ciId,
       'name': 'sbom_generator',
-      'toolVersion': '1.10.4',
+      // `Tool` n'a pas de propriété de version dans le schéma officiel.
+      'comment': 'version 1.10.5',
     });
 
     sdkTools.forEach((name, version) {
@@ -75,7 +79,7 @@ class Spdx3Generator {
         'spdxId': sdkToolIds[name],
         'creationInfo': ciId,
         'name': name,
-        if (version.isNotEmpty) 'toolVersion': version,
+        if (version.isNotEmpty) 'comment': 'version $version',
       });
     });
 
@@ -94,7 +98,7 @@ class Spdx3Generator {
           ? '${documentName ?? 'Package Set SBOM'} — ${layers!.layerLabel}'
           : documentName ?? 'Package Set SBOM',
       if (layers != null) 'comment': layers.describe().join('\n'),
-      'profileConformance': ['core', 'software'],
+      'profileConformance': ['core', 'software', 'simpleLicensing'],
       'rootElement': rootElements,
     });
 
@@ -103,13 +107,16 @@ class Spdx3Generator {
     }
 
     for (final pkg in packages) {
-      graph.add(_packageToElement(
+      _addPackage(
+        graph,
         pkg,
+        base: base,
         spdxId: pkgIds[pkg.bomRef]!,
         ciId: ciId,
         vendorId: vendorIds[pkg.vendor],
+        licenseIds: licenseIds,
         layers: layers,
-      ));
+      );
     }
 
     graph.add({
@@ -174,47 +181,59 @@ class Spdx3Generator {
     required String ciId,
   }) {
     final elem = <String, dynamic>{
-      'type': 'software:Package',
+      'type': 'software_Package',
       'spdxId': spdxId,
       'creationInfo': ciId,
       'name': os.id,
-      'software:packageVersion': os.version,
-      'software:primaryPurpose': 'operatingSystem',
-      'copyrightText': 'NOASSERTION',
+      'software_packageVersion': os.version,
+      'software_primaryPurpose': 'operatingSystem',
+      'software_copyrightText': 'NOASSERTION',
     };
     if (_hasValue(os.prettyName ?? '')) elem['summary'] = os.prettyName;
     if (_hasValue(os.cpe ?? '')) {
       elem['externalIdentifier'] = [
-        {'externalIdentifierType': 'cpe23', 'identifier': os.cpe},
+        {
+          'type': 'ExternalIdentifier',
+          'externalIdentifierType': 'cpe23',
+          'identifier': os.cpe,
+        },
       ];
     }
     return elem;
   }
 
-  Map<String, dynamic> _packageToElement(
+  /// Ajoute au graphe le paquet et ses éléments liés : licences (relations
+  /// vers des `simplelicensing_LicenseExpression`) et annotations — le schéma
+  /// SPDX 3.0 n'admet ni licence ni annotation en ligne sur un paquet.
+  void _addPackage(
+    List<Map<String, dynamic>> graph,
     Package pkg, {
+    required String base,
     required String spdxId,
     required String ciId,
+    required Map<String, String> licenseIds,
     String? vendorId,
     LayerAnnotations? layers,
   }) {
     final elem = <String, dynamic>{
-      'type': 'software:Package',
+      'type': 'software_Package',
       'spdxId': spdxId,
       'creationInfo': ciId,
       'name': pkg.name,
-      'software:packageVersion': pkg.fullVersion,
-      'software:primaryPurpose': 'library',
+      'software_packageVersion': pkg.fullVersion,
+      'software_primaryPurpose': 'library',
+      'software_packageUrl': pkg.purl,
       'externalIdentifier': [
         {
-          'externalIdentifierType': 'purl',
+          'type': 'ExternalIdentifier',
+          'externalIdentifierType': 'packageUrl',
           'identifier': pkg.purl,
         }
       ],
     };
 
     if (_hasValue(pkg.summary)) elem['summary'] = pkg.summary;
-    if (_hasValue(pkg.url)) elem['software:downloadLocation'] = pkg.url;
+    if (_hasValue(pkg.url)) elem['software_downloadLocation'] = pkg.url;
 
     if (pkg.hashes.isNotEmpty) {
       elem['verifiedUsing'] = [
@@ -227,11 +246,34 @@ class Spdx3Generator {
       ];
     }
 
-    elem['concludedLicense'] = _normalizeLicense(pkg.license);
-    elem['declaredLicense'] = _normalizeLicense(pkg.license);
-    elem['copyrightText'] = 'NOASSERTION';
+    elem['software_copyrightText'] = 'NOASSERTION';
 
     if (vendorId != null) elem['suppliedBy'] = vendorId;
+    graph.add(elem);
+
+    final license = _normalizeLicense(pkg.license);
+    if (license != 'NOASSERTION') {
+      final licenseId = licenseIds.putIfAbsent(license, () {
+        final id = '$base#license-${licenseIds.length + 1}';
+        graph.add({
+          'type': 'simplelicensing_LicenseExpression',
+          'spdxId': id,
+          'creationInfo': ciId,
+          'simplelicensing_licenseExpression': license,
+        });
+        return id;
+      });
+      for (final kind in const ['hasConcludedLicense', 'hasDeclaredLicense']) {
+        graph.add({
+          'type': 'Relationship',
+          'spdxId': '$spdxId-$kind',
+          'creationInfo': ciId,
+          'from': spdxId,
+          'to': [licenseId],
+          'relationshipType': kind,
+        });
+      }
+    }
 
     final statement = [
       _annotationStatement(pkg),
@@ -241,17 +283,15 @@ class Spdx3Generator {
         '$nestedPropertyPrefix${e.key}=${e.value}',
     ].where((c) => c.isNotEmpty).join('; ');
     if (statement.isNotEmpty) {
-      elem['annotation'] = [
-        {
-          'type': 'Annotation',
-          'annotationType': 'other',
-          'subject': spdxId,
-          'statement': statement,
-        }
-      ];
+      graph.add({
+        'type': 'Annotation',
+        'spdxId': '$spdxId-annotation',
+        'creationInfo': ciId,
+        'annotationType': 'other',
+        'subject': spdxId,
+        'statement': statement,
+      });
     }
-
-    return elem;
   }
 
   String _annotationStatement(Package pkg) {

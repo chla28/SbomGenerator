@@ -22,6 +22,7 @@ import 'dart:convert';
 import 'sbom_reader.dart';
 import 'vuln_enrichment.dart';
 import 'i18n.dart';
+import 'spdx3_view.dart';
 
 // `cra` réutilise le rendu PDF partagé de `scan_report_generator.dart`.
 export 'scan_report_generator.dart' show renderAsciiDocToPdf;
@@ -207,9 +208,7 @@ class CraReportGenerator {
             .where((p) => p['SPDXID'] != rootId)
             .toList();
       case SbomFormat.spdx3:
-        return _spdx3Nodes
-            .where((n) => '${n['type']}'.endsWith('Package'))
-            .toList();
+        return spdx3Packages((sbom['@graph'] as List?) ?? const []);
       case SbomFormat.unknown:
         return const [];
     }
@@ -281,7 +280,7 @@ class CraReportGenerator {
                 c['supplier'] != 'NONE';
     bool hasName(Map<String, dynamic> c) => _nonEmptyStr(c['name']);
     bool hasVersion(Map<String, dynamic> c) => s3
-        ? _nonEmptyStr(c['software:packageVersion'])
+        ? _nonEmptyStr(spdx3Prop(c, 'packageVersion'))
         : cdx
             ? _nonEmptyStr(c['version'])
             : _nonEmptyStr(c['versionInfo']);

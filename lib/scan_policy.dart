@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'i18n.dart';
+import 'spdx3_view.dart';
 import 'vex.dart' show splitPackage;
 
 // ── Sévérités ────────────────────────────────────────────────────────────────
@@ -198,7 +199,7 @@ class ScanCache {
         void add(Object? c) {
           if (c is Map) {
             items.add(
-                '${c['name']}|${c['version'] ?? c['versionInfo'] ?? c['software:packageVersion']}|${c['purl'] ?? ''}');
+                '${c['name']}|${c['version'] ?? c['versionInfo'] ?? spdx3Prop(c, 'packageVersion')}|${c['purl'] ?? ''}');
             for (final sub in (c['components'] as List? ?? const [])) {
               add(sub);
             }
@@ -212,7 +213,7 @@ class ScanCache {
           add(c);
         }
         for (final c in (j['@graph'] as List? ?? const [])) {
-          if ('${(c as Map)['type']}'.endsWith('Package')) add(c);
+          if (isSpdx3PackageType((c as Map)['type'])) add(c);
         }
         if (items.isNotEmpty) {
           items.sort();

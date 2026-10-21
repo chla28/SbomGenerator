@@ -2185,10 +2185,11 @@ Dispatches according to the format:
 
 * *CycloneDX*: reads `json['components']` → `List<Map>` → `_cdxComponent(c)` for each element
 * *SPDX 2.3*: reads `json['packages']` → `_spdx2Package(p)` for each element
-* *SPDX 3.0*: reads `json['@graph']` → filters the nodes of type `software:Package`
-  (`_isSpdx3Package` also tolerates `software_Package`) → `_spdx3Package(node)`,
-  which reads the `software:`-prefixed fields (`software:packageVersion`,
-  `software:downloadLocation`)
+* *SPDX 3.0*: reads `json['@graph']` → `spdx3Packages(graph)` (`lib/spdx3_view.dart`)
+  returns the `software_Package` nodes (or the legacy `software:Package`) in a
+  normalized form — licenses taken from `has*License` relationships, annotations
+  from `Annotation` elements — → `_spdx3Package(node)`. The GUI embeds a copy of
+  this file (`gui/lib/models/spdx3_view.dart`): keep them identical
 
 Each extractor fills in: `name`, `version`, `purl`, `license`, `vendor`,
 `url`, `hashes` (`hashes` / `checksums` / `verifiedUsing` depending on the format), and
@@ -2525,7 +2526,7 @@ Fields checked:
 
 |SPDX 3.0
 |`@context`, `@graph`
-|nodes of type `software:Package` in `@graph`
+|nodes of type `software_Package` in `@graph`
 |===
 
 === `scan` subcommand — vulnerability scan _(new)_
@@ -3279,7 +3280,7 @@ Same annotation logic as SPDX 2.3 (`DebPackage` branch included).
 (works for all types).
 
 When `osInfo` is provided, `_osToElement()` adds a
-`software:Package` element with `software:primaryPurpose: "operatingSystem"`,
+`software_Package` element with `software_primaryPurpose: "operatingSystem"`,
 included in the `SpdxDocument`'s `rootElement` and in the `describes` relationship.
 Correct representation according to the SPDX 3.0 spec, but *Trivy cannot read
 SPDX 3.0 JSON-LD SBOMs at all* (`trivy sbom` fails with `SBOM decode
@@ -4007,7 +4008,7 @@ SPDXID `SPDXRef-OperatingSystem-`)
 
 |`test/unit/spdx3_generator_test.dart`
 |15
-|JSON-LD envelope (@context/@graph), software:Package packages, Organization
+|JSON-LD envelope (@context/@graph), software_Package packages, Organization
 shared by vendor, describes/dependsOn relationships, base OS element (`osInfo`)
 
 |`test/unit/policy_checker_test.dart`

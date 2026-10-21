@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.5] - 2026-10-21
+
+### Changed
+- **SPDX 3.0 conforme au schéma officiel** : types `software_Package`, `software_packageVersion`, `software_packageUrl`, identifiants externes `packageUrl`, licences portées par des éléments `simplelicensing_LicenseExpression` reliés par `hasDeclaredLicense`/`hasConcludedLicense`, annotations en éléments `Annotation`, version de l'outil en `comment` (plus de `toolVersion`). Lecture, diff, `cra`, `convert` et la GUI relisent le nouveau format et l'ancien (≤ 1.10.4). `validate` : un écart de schéma SPDX 3.0 est désormais une erreur (avertissement « ancien format » pour les fichiers antérieurs).
+
 ## [1.10.4] - 2026-10-21
 
 ### Changed

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'i18n.dart';
+import 'spdx3_view.dart';
 
 /// Résultat de la comparaison entre deux SBOMs CycloneDX.
 class SbomDiffResult {
@@ -327,9 +328,7 @@ class SbomDiffer {
   Map<String, SbomComponent> _indexSpdx3Components(Map<String, dynamic> sbom) {
     final result = <String, SbomComponent>{};
     final graph = (sbom['@graph'] as List?) ?? [];
-    for (final raw in graph) {
-      final e = raw as Map<String, dynamic>;
-      if (e['type'] != 'software:Package') continue;
+    for (final e in spdx3Packages(graph)) {
       String purl = '';
       for (final ref in (e['externalIdentifier'] as List? ?? [])) {
         final r = ref as Map<String, dynamic>;

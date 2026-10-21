@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.5] - 2026-10-21
+
+### Changed
+- **SPDX 3.0 now conforms to the official schema**: `software_Package`, `software_packageVersion`, `software_packageUrl` names, `packageUrl` external identifiers, licenses carried by `simplelicensing_LicenseExpression` elements linked through `hasDeclaredLicense`/`hasConcludedLicense`, annotations as `Annotation` elements, tool version in `comment` (no more `toolVersion`). Reading, diff, `cra`, `convert` and the GUI read both the new and the legacy (≤ 1.10.4) format. `validate`: an SPDX 3.0 schema deviation is now an error ("legacy format" warning for earlier files).
+
 ## [1.10.4] - 2026-10-21
 
 ### Changed

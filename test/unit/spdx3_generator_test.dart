@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:sbom_generator/models.dart';
+import 'package:sbom_generator/schema_validator.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:test/test.dart';
 
@@ -55,7 +58,7 @@ void main() {
         provides: const ['lib'],
         packageType: 'npm',
       );
-      final elem = _findType(generator.generate([pkg], []), 'software:Package');
+      final elem = _findType(generator.generate([pkg], []), 'software_Package');
       expect(elem['verifiedUsing'], [
         {'type': 'Hash', 'algorithm': 'sha256', 'hashValue': 'a' * 64},
       ]);
@@ -63,7 +66,7 @@ void main() {
 
     test('aucun verifiedUsing sans hash', () {
       final elem = _findType(
-          generator.generate([_pkg(name: 'foo')], []), 'software:Package');
+          generator.generate([_pkg(name: 'foo')], []), 'software_Package');
       expect(elem.containsKey('verifiedUsing'), isFalse);
     });
   });
@@ -101,37 +104,69 @@ void main() {
       final tools = _findAllType(sbom, 'Tool');
       expect(tools, hasLength(3));
       final byName = {for (final t in tools) t['name']: t};
-      expect(byName['flutter']!['toolVersion'], '3.47.2');
-      expect(byName['dart']!['toolVersion'], '3.9.0');
+      expect(byName['flutter']!['comment'], 'version 3.47.2');
+      expect(byName['dart']!['comment'], 'version 3.9.0');
       final ci = _findType(sbom, 'CreationInfo');
       expect((ci['createdBy'] as List).length, 3);
     });
   });
 
   group('Spdx3Generator.generate — paquets', () {
-    test('génère un software:Package par paquet avec purl', () {
+    test('génère un software_Package par paquet avec purl', () {
       final sbom =
           generator.generate([_pkg(name: 'foo', version: '1.2.3')], []);
-      final pkgs = _findAllType(sbom, 'software:Package');
+      final pkgs = _findAllType(sbom, 'software_Package');
       expect(pkgs, hasLength(1));
       final pkg = pkgs.single;
       expect(pkg['name'], 'foo');
-      expect(pkg['software:packageVersion'], contains('1.2.3'));
+      expect(pkg['software_packageVersion'], contains('1.2.3'));
       final ids = pkg['externalIdentifier'] as List;
-      expect((ids.single as Map)['externalIdentifierType'], 'purl');
+      expect((ids.single as Map)['externalIdentifierType'], 'packageUrl');
+      expect(pkg['software_packageUrl'], (ids.single as Map)['identifier']);
     });
 
-    test('licence absente devient NOASSERTION', () {
+    test('licence absente : aucune relation de licence', () {
       final sbom = generator.generate([_pkg(name: 'foo', license: '')], []);
-      final pkg = _findAllType(sbom, 'software:Package').single;
-      expect(pkg['concludedLicense'], 'NOASSERTION');
-      expect(pkg['declaredLicense'], 'NOASSERTION');
+      expect(_findAllType(sbom, 'simplelicensing_LicenseExpression'), isEmpty);
+      expect(
+          _findAllType(sbom, 'Relationship')
+              .where((r) => '${r['relationshipType']}'.contains('License')),
+          isEmpty);
+    });
+
+    test('licence : élément LicenseExpression partagé + relations has*License',
+        () {
+      final sbom = generator.generate([
+        _pkg(name: 'foo', license: 'MIT'),
+        _pkg(name: 'bar', license: 'MIT'),
+      ], []);
+      final lic = _findAllType(sbom, 'simplelicensing_LicenseExpression');
+      expect(lic, hasLength(1));
+      expect(lic.single['simplelicensing_licenseExpression'], 'MIT');
+      final kinds = _findAllType(sbom, 'Relationship')
+          .where((r) => '${r['relationshipType']}'.contains('License'))
+          .map((r) => r['relationshipType'])
+          .toList();
+      expect(kinds.where((k) => k == 'hasConcludedLicense'), hasLength(2));
+      expect(kinds.where((k) => k == 'hasDeclaredLicense'), hasLength(2));
+    });
+
+    test('le document généré satisfait le schéma officiel SPDX 3.0', () {
+      final sbom = generator.generate([
+        _pkg(name: 'foo', license: 'MIT', vendor: 'ACME', summary: 'x'),
+        _pkg(name: 'bar'),
+      ], [
+        PackageDependency(sourceRef: 'foo', dependsOn: ['bar']),
+      ]);
+      // Aller-retour JSON : le validateur travaille sur le document décodé.
+      final decoded = jsonDecode(jsonEncode(sbom)) as Map<String, dynamic>;
+      expect(SchemaValidator.validate(decoded), isEmpty);
     });
 
     test('summary reporté si présent', () {
       final sbom =
           generator.generate([_pkg(name: 'foo', summary: 'Un paquet')], []);
-      final pkg = _findAllType(sbom, 'software:Package').single;
+      final pkg = _findAllType(sbom, 'software_Package').single;
       expect(pkg['summary'], 'Un paquet');
     });
 
@@ -140,7 +175,7 @@ void main() {
       final orgs = _findAllType(sbom, 'Organization');
       expect(orgs, hasLength(1));
       expect(orgs.single['name'], 'ACME');
-      final pkg = _findAllType(sbom, 'software:Package').single;
+      final pkg = _findAllType(sbom, 'software_Package').single;
       expect(pkg['suppliedBy'], orgs.single['spdxId']);
     });
 
@@ -198,25 +233,25 @@ void main() {
     );
 
     test(
-        'ajoute un élément software:Package avec '
-        'software:primaryPurpose: operatingSystem', () {
+        'ajoute un élément software_Package avec '
+        'software_primaryPurpose: operatingSystem', () {
       final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
-      final osElems = _findAllType(sbom, 'software:Package')
-          .where((e) => e['software:primaryPurpose'] == 'operatingSystem')
+      final osElems = _findAllType(sbom, 'software_Package')
+          .where((e) => e['software_primaryPurpose'] == 'operatingSystem')
           .toList();
 
       expect(osElems, hasLength(1));
       final elem = osElems.single;
       expect(elem['name'], 'redhat');
-      expect(elem['software:packageVersion'], '9.6');
+      expect(elem['software_packageVersion'], '9.6');
       expect(elem['summary'], os.prettyName);
     });
 
     test('inclut l\'élément OS dans rootElement et la relation describes', () {
       final sbom = generator.generate([_pkg(name: 'bash')], [], osInfo: os);
       final doc = _findType(sbom, 'SpdxDocument');
-      final osSpdxId = _findAllType(sbom, 'software:Package').firstWhere(
-          (e) => e['software:primaryPurpose'] == 'operatingSystem')['spdxId'];
+      final osSpdxId = _findAllType(sbom, 'software_Package').firstWhere(
+          (e) => e['software_primaryPurpose'] == 'operatingSystem')['spdxId'];
 
       expect(doc['rootElement'], contains(osSpdxId));
 
@@ -227,8 +262,8 @@ void main() {
 
     test('aucun élément OS quand osInfo est absent', () {
       final sbom = generator.generate([_pkg(name: 'bash')], []);
-      final osElems = _findAllType(sbom, 'software:Package')
-          .where((e) => e['software:primaryPurpose'] == 'operatingSystem');
+      final osElems = _findAllType(sbom, 'software_Package')
+          .where((e) => e['software_primaryPurpose'] == 'operatingSystem');
       expect(osElems, isEmpty);
     });
   });

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'hash_utils.dart' show hashesFromCycloneDx, packageHash;
 import 'models.dart';
 import 'i18n.dart';
+import 'spdx3_view.dart';
 
 /// Detected format of a SBOM file.
 enum SbomFormat { cyclonedx, spdx2, spdx3, unknown }
@@ -211,27 +212,11 @@ class SbomReader {
 
   List<Package> _readSpdx3(Map<String, dynamic> json) {
     final graph = (json['@graph'] as List?) ?? [];
-    return [
-      for (final node in graph.whereType<Map<String, dynamic>>())
-        if (_isSpdx3Package(node['type'])) _spdx3Package(node),
-    ];
-  }
-
-  /// `type` d'un élément paquet SPDX 3.0. Le générateur émet `software:Package`
-  /// (forme préfixée du contexte JSON-LD) ; on tolère aussi la forme aplatie
-  /// `software_Package` et une valeur `type` sous forme de liste.
-  bool _isSpdx3Package(Object? type) {
-    bool match(Object? t) => t == 'software:Package' || t == 'software_Package';
-    return type is List ? type.any(match) : match(type);
+    return [for (final node in spdx3Packages(graph)) _spdx3Package(node)];
   }
 
   Package _spdx3Package(Map<String, dynamic> node) {
-    // Le générateur émet les champs `software:` préfixés (forme du contexte
-    // JSON-LD) ; on tolère aussi la forme aplatie `software_` et sans préfixe.
-    String prop(String local) =>
-        (node['software:$local'] ?? node['software_$local'] ?? node[local])
-            as String? ??
-        '';
+    String prop(String local) => spdx3Prop(node, local) as String? ?? '';
     final name = (node['name'] as String?) ?? '';
     final version = prop('packageVersion');
     final license = _spdxLicense((node['concludedLicense'] as String?) ??

@@ -1061,9 +1061,9 @@ Besides the structural checks, `validate` checks each document against the
 *official JSON schema* of its version — CycloneDX 1.4 to 1.7, SPDX 2.3, SPDX 3.0 —
 embedded in the program (no network access). Schema errors are prefixed
 `[schema]` and give the offending JSON path. `--no-schema` turns this check off.
-For SPDX 3.0 schema deviations remain *warnings* (errors with `--strict`): the
-SPDX 3.0 generator is not yet fully conformant (`software:` names instead of
-`software_`, `externalIdentifier`, `toolVersion`).
+The SPDX 3.0 generated since 1.10.5 conforms to the official schema; files
+produced earlier (`software:Package` types, inline licenses) are still read but
+`validate` reports them with a *warning* ("legacy format").
 
 [source,bash]
 ----
@@ -1705,7 +1705,7 @@ forwards its own language to the CLI it launches (via `SBOM_LANG`).
 |Generation date/time (UTC ISO 8601)
 
 |Tool
-|`sbom_generator 1.10.4`
+|`sbom_generator 1.10.5`
 
 |Author
 |Fixed to `sbom_generator` (not configurable)
@@ -1919,7 +1919,7 @@ JSON-LD structure:
     { type: "CreationInfo", specVersion: "3.0.0", … },
     { type: "Tool", … },
     { type: "Organization", … },         ← one per unique supplier
-    { type: "software:Package", … },     ← one per RPM package
+    { type: "software_Package", … },     ← one per RPM package
     { type: "Relationship", relationshipType: "describes", … },
     { type: "Relationship", relationshipType: "dependsOn", … }
   ]

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../models/layer_nav.dart';
 import '../models/sbom_result.dart';
+import '../models/spdx3_view.dart';
 import 'help_icon.dart';
 import 'layer_selector.dart';
 import '../l10n/l10n.dart';
@@ -144,7 +145,7 @@ class _SbomInfo {
       orElse: () => const {},
     );
     final comps =
-        graph.where((e) => e['type'] == 'software:Package').map((p) {
+        spdx3Packages(graph).map((p) {
           String purl = '';
           for (final ref in (p['externalIdentifier'] as List? ?? [])) {
             final r = ref as Map<String, dynamic>;

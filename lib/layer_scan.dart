@@ -17,6 +17,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'spdx3_view.dart';
+
 /// Méthodes acceptées par `scan --layer-scan`.
 const validLayerScanModes = {'attribute', 'each'};
 
@@ -149,11 +151,9 @@ class LayeredSbomSet {
         }
       }
     } else if (json['@graph'] is List) {
-      for (final e in json['@graph'] as List) {
-        if (e is Map && e['type'] == 'software:Package') {
-          take(e['name'] as String?, e['software:packageVersion'] as String?,
-              _fields(e));
-        }
+      for (final e in spdx3Packages(json['@graph'] as List)) {
+        take(e['name'] as String?, e['software:packageVersion'] as String?,
+            _fields(e));
       }
     }
 
