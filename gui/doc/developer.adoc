@@ -110,7 +110,8 @@ gui/
 ├── lib/
 │   ├── main.dart                     # Point d'entrée — StatefulWidget, ThemeMode + couleur + langue
 │   ├── home_screen.dart              # Écran principal — layout 2 colonnes + palette thème
-│   ├── l10n/                         # Localisation (gen-l10n) : app_fr.arb / app_en.arb + code généré
+│   ├── i18n.dart                     # tr() / isPlural() / langue courante
+│   ├── l10n/                         # Catalogue anglais (en.dart) + AppLanguage / appLocale (l10n.dart)
 │   ├── models/
 │   │   ├── sbom_config.dart          # Configuration SBOM (état + toJson/fromJson + toCommandLine)
 │   │   ├── sbom_result.dart          # Modèles de sortie (OutputFile, SbomResult…)
@@ -845,9 +846,7 @@ les collisions entre noms contenant des caractères spéciaux.
 * propose la checkbox *Score qualité sbomqs* (pilote `SbomConfig.enableSbomqs`)
 * expose un bouton 🔖 dans l'en-tête pour la gestion des profils nommés
 
-Tous les textes visibles viennent des fichiers ARB (clés `cfg…`) : `build()`
-lit `final l = context.l10n;` et les sous-widgets privés font de même dans
-leur propre `build()`.
+Tous les textes visibles passent par `tr()` (catalogue `lib/l10n/en.dart`).
 
 Le paramètre `VoidCallback? onChanged` est appelé après chaque modification
 d'un champ (texte via `_sync()`, booléens directement dans leur `setState`).
@@ -2158,7 +2157,7 @@ vide :
 * *Export AsciiDoc + PDF* (`Icons.picture_as_pdf_outlined`) — `_exportAsciiDoc()` :
   écrit un rapport AsciiDoc sur `_filtered` (donc après filtres
   sévérité/recherche/date, comme le CSV), dans la langue de l'interface
-  (`AppLocalizations l`, transmis aux générateurs) — résumé chiffré (décompte par
+  (`tr()`) — résumé chiffré (décompte par
   sévérité, chaque libellé passé à `pdfSeverityBadge` + barre
   `buildSeverityBarSvg`/`svgImageMacro`, filtre de date appliqué le cas
   échéant), section `== Outils` (`pdfToolVersionRow('sbom_generator_gui',
@@ -2235,10 +2234,9 @@ chacun un PDF noir et blanc par défaut :
   afficher la ligne "null", d'où `pdfToolVersionRow(label, version)` qui
   affiche `_indisponible_` en italique dans ce cas.
 
-Tous les textes visibles des rapports viennent des fichiers ARB (clés `pdf*`,
-`adoc*`, `rep*`, `dash*`) via un paramètre optionnel `AppLocalizations? l`
-(défaut : français, ce qui laisse les tests existants inchangés) ; les exports
-déclenchés depuis l'interface passent `context.l10n`.
+Tous les textes visibles des rapports passent par `tr()` : ils suivent la
+langue courante (`currentLang`), français par défaut, ce qui laisse les tests
+existants inchangés.
 
 === `widgets/help_viewer.dart` — aide en ligne (manuel utilisateur intégré)
 
@@ -2447,52 +2445,44 @@ TrivyRunner.run(...)   →   Process.start('trivy', ['sbom'|'image', '--format',
 [[sec-l10n]]
 == Localisation (FR / EN)
 
-L'interface utilise le mécanisme standard de Flutter (`gen-l10n`) :
+Les textes de l'interface passent par `tr('texte français {param}', {...})`
+(`lib/i18n.dart`) : le français est la langue source et sert de clé au
+catalogue anglais `lib/l10n/en.dart`. Le CLI (racine) a son propre
+`lib/i18n.dart` et son propre catalogue, car la GUI ne dépend pas du paquet
+`sbom_generator`.
 
-* `l10n.yaml` : fichiers ARB dans `lib/l10n/`, *français = langue de
-  référence* (`app_fr.arb`, template), classe générée `AppLocalizations`.
-* `lib/l10n/app_<langue>.arb` : un fichier par langue ; le français porte
-  la description de chaque clé (`@clé.description`) et les paramètres
-  (`placeholders`). Pluriels et paramètres en syntaxe ICU
-  (`{count, plural, =1{…} other{…}}`) — jamais de concaténation de
-  morceaux de phrase ni de « (s) ».
-* `lib/l10n/app_localizations*.dart` : code *généré* (par `flutter pub get`
-  ou `flutter gen-l10n`), versionné ; ne pas le modifier à la main.
+* `tr(fr, [args])` remplace chaque `{nom}` par `args['nom']` ; un texte absent
+  du catalogue reste en français. `isPlural(n)` choisit le pluriel (0 et 1 sont
+  au singulier en français, seul 1 en anglais) : `isPlural(n) ? tr('{count}
+  fichiers') : tr('{count} fichier')`. Jamais de concaténation de morceaux de
+  phrase ni de « (s) », et pas d'interpolation `$x` dans le littéral.
 * `lib/l10n/l10n.dart` : `AppLanguage` (`system` / `fr` / `en`, réglage
   mémorisé par `SettingsService.load/saveLanguage`, clé `ui_language_v1`),
-  `resolveAppLocale` (langue du système si prise en charge, sinon
-  français), l'extension `context.l10n`, la globale `appLocale` (locale
-  effective, mise à jour par `main.dart`) et `appL10n()` pour le code sans
-  `BuildContext` (services, exports). `context.l10n` retombe sur le français
-  hors d'une application localisée : les tests de widgets montés sans
-  délégués — la plupart des tests existants — voient donc les textes
-  français sans modification.
-* `main.dart` branche `localizationsDelegates`, `supportedLocales`,
-  `locale` et `localeListResolutionCallback`, et `_applyLanguage` met à jour
-  `appLocale` et `SettingsService.cliLang` ; `home_screen.dart` porte le menu
-  de langue (clé `language-menu`).
+  `resolveAppLocale` (langue du système si prise en charge, sinon français),
+  `supportedAppLocales` et la globale `appLocale`, dont l'affectation fixe aussi
+  `currentLang` (donc la langue de `tr()`).
+* `main.dart` branche `GlobalMaterialLocalizations.delegates` (traductions des
+  widgets Material), `supportedLocales`, `locale` et
+  `localeListResolutionCallback` ; `_applyLanguage` met à jour `appLocale` et
+  `SettingsService.cliLang`, et la `KeyedSubtree` autour de `HomeScreen`
+  reconstruit tout l'écran quand la langue change. `home_screen.dart` porte le
+  menu de langue (clé `language-menu`).
 
-*Ajouter un texte* : clé dans `app_fr.arb` (avec description), traduction
-dans `app_en.arb`, `flutter gen-l10n`, puis `context.l10n.maCle` (ou
-`l10n.maCle(param)`) dans le widget. Préfixe par zone : `common…`,
-`scanSource…`, `vulnTable…`, `dateFilter…`, `layerScan…`, `cliCommand…`,
-`cfg…` (panneau de configuration), `dash…`, `pdf…` / `adoc…` / `rep…`
-(rapports exportés), `<onglet>…` (`grype…`). Une fonction hors widget reçoit
-`AppLocalizations` en paramètre — obligatoire quand elle est appelée depuis un
-widget, `{AppLocalizations? l}` optionnel (défaut : français) pour les
-exports et modèles testés sans contexte (ex. `equivalentScanNote(l10n, …)`,
-`pdfSeverityBadge(sev, l: l)`) ; un service ne produit jamais de phrase
-affichée mais une valeur typée que l'interface traduit (ex. `LayerScanStep` →
-`layerScanStepLabel`). Dans une méthode `async`, lire `final l = context.l10n;`
-en début de méthode, avant le premier `await`.
+*Ajouter un texte* : écrire `tr('Mon texte {param}', {'param': valeur})` dans le
+widget, puis ajouter la même chaîne française comme clé de `lib/l10n/en.dart`
+avec sa traduction (mêmes `{param}`). Une fonction hors widget appelle `tr()`
+directement : aucune `AppLocalizations` à transmettre. Un service ne produit
+jamais de phrase affichée mais une valeur typée que l'interface traduit (ex.
+`LayerScanStep` → `layerScanStepLabel`).
 
-*Ajouter une langue* : `lib/l10n/app_<code>.arb` avec toutes les clés, puis
-une valeur dans `AppLanguage` et son libellé dans le menu.
+*Ajouter une langue* : une valeur dans `AppLanguage`, un catalogue (comme
+`lib/l10n/en.dart`) consulté par `tr()` et son libellé dans le menu.
 
-*Tests* : `test/l10n_test.dart` vérifie que chaque fichier ARB a les mêmes
-clés et paramètres que le français, que chaque clé française est
-documentée, la résolution de langue, le repli et le menu ;
-`test/l10n_grype_test.dart` affiche l'onglet pilote en anglais.
+*Tests* : `test/l10n_test.dart` vérifie que chaque texte passé à `tr()` a sa
+traduction, qu'aucune entrée du catalogue n'est orpheline, que les `{param}`
+sont les mêmes dans les deux langues, la résolution de langue, le repli et le
+menu ; `test/l10n_grype_test.dart` affiche l'onglet pilote en anglais (les
+tests fixent la langue avec `appLocale`).
 
 *Ce qui n'est pas traduit* (contrats machine, identiques quelle que soit la
 langue) : les lignes du CLI analysées par la GUI (`SBOM written → …`, la
@@ -2698,7 +2688,7 @@ Tab(
     children: [
       Icon(Icons.my_icon, size: 16),
       SizedBox(width: 6),
-      Text(context.l10n.tabNouvelOnglet),
+      Text(tr('Nouvel onglet')),
     ],
   ),
 ),

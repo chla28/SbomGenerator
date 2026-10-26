@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import '../i18n.dart';
 import 'layer_nav.dart';
-import '../l10n/l10n.dart';
 
 // Analyse de vulnérabilités par couche d'image (onglets Grype, OSV-Scanner,
 // Trivy, source « Image de conteneur »). Le jeu de SBOM par couche est
@@ -206,11 +206,11 @@ class LayerScanResult {
     return null;
   }
 
-  String modeLabelFor(AppLocalizations l) => mode == LayerScanMode.each
-      ? l.layerScanModeEach
-      : l.layerScanModeAttribute;
+  String modeLabelFor() => mode == LayerScanMode.each
+      ? tr('SBOM de chaque couche scanné')
+      : tr('rattachement à la couche d\'origine du paquet');
 
-  String get modeLabel => modeLabelFor(lookupAppLocalizations(fallbackLocale));
+  String get modeLabel => modeLabelFor();
 }
 
 // ── Fusion des sorties JSON (mode « chaque couche ») ────────────────────────

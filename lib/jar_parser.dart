@@ -145,13 +145,7 @@ class JarParser {
 
     if (ownPackage == null && embedded.isEmpty) {
       stderr.writeln('Warning: ' +
-          tr(
-              'impossible de déterminer les coordonnées Maven de "$path" '
-                  '(pas de META-INF/maven/*/*/pom.properties exploitable, et aucun '
-                  'suffixe de version reconnaissable dans le nom de fichier)',
-              'cannot determine the Maven coordinates of "$path" '
-                  '(no usable META-INF/maven/*/*/pom.properties, and no '
-                  'recognisable version suffix in the file name)'));
+          tr('impossible de déterminer les coordonnées Maven de "{path}" (pas de META-INF/maven/*/*/pom.properties exploitable, et aucun suffixe de version reconnaissable dans le nom de fichier)', {'path': path}));
       return const [];
     }
 

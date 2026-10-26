@@ -11,7 +11,7 @@ import 'i18n.dart';
 ///   • Tableau filtrable + triable en JavaScript vanilla
 class HtmlGenerator {
   /// Libellé de licence absente (aussi clé de regroupement des statistiques).
-  String get _unspecified => tr('Non spécifiée', 'Not specified');
+  String get _unspecified => tr('Non spécifiée');
 
   Future<void> writeToFile(
     List<Package> packages,
@@ -107,12 +107,12 @@ class HtmlGenerator {
         ? ''
         : '''
   <div class="chart-card layer-info">
-    <h2>${tr('Supprimés par cette couche', 'Removed by this layer')} (${layers.removed.length})</h2>
+    <h2>${tr('Supprimés par cette couche')} (${layers.removed.length})</h2>
     <ul>${layers.removed.map((p) => '<li>${_esc(p.name)} ${_esc(p.fullVersion)}</li>').join()}</ul>
   </div>''';
 
     return '''<!DOCTYPE html>
-<html lang="${tr('fr', 'en')}">
+<html lang="${tr('fr')}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -174,16 +174,16 @@ class HtmlGenerator {
 <body>
 <header>
   <h1>${_esc(title)}</h1>
-  <div class="meta">${tr('Généré le', 'Generated on')} $date &nbsp;•&nbsp; ${packages.length} ${tr('composant(s)', 'component(s)')} &nbsp;•&nbsp; sbom_generator</div>
+  <div class="meta">${tr('Généré le')} $date &nbsp;•&nbsp; ${packages.length} ${tr('composant(s)')} &nbsp;•&nbsp; sbom_generator</div>
 </header>
 <div class="container">
 
   <!-- Statistiques -->
   <div class="stats-grid">
-    <div class="stat-card"><div class="num">${packages.length}</div><div class="lbl">${tr('Composants', 'Components')}</div></div>
-    <div class="stat-card"><div class="num">${ecosystems.length}</div><div class="lbl">${tr('Écosystèmes', 'Ecosystems')}</div></div>
-    <div class="stat-card"><div class="num">${licenses.length}</div><div class="lbl">${tr('Licences distinctes', 'Distinct licenses')}</div></div>
-    <div class="stat-card"><div class="num">${licenses.entries.where((e) => e.key == _unspecified).fold(0, (s, e) => s + e.value)}</div><div class="lbl">${tr('Sans licence', 'No license')}</div></div>
+    <div class="stat-card"><div class="num">${packages.length}</div><div class="lbl">${tr('Composants')}</div></div>
+    <div class="stat-card"><div class="num">${ecosystems.length}</div><div class="lbl">${tr('Écosystèmes')}</div></div>
+    <div class="stat-card"><div class="num">${licenses.length}</div><div class="lbl">${tr('Licences distinctes')}</div></div>
+    <div class="stat-card"><div class="num">${licenses.entries.where((e) => e.key == _unspecified).fold(0, (s, e) => s + e.value)}</div><div class="lbl">${tr('Sans licence')}</div></div>
   </div>
 
 $layerInfo
@@ -192,32 +192,32 @@ $removedInfo
   <!-- Graphiques -->
   <div class="charts">
     <div class="chart-card">
-      <h2>${tr('Écosystèmes', 'Ecosystems')}</h2>
+      <h2>${tr('Écosystèmes')}</h2>
       <table class="chart"><tbody>$ecoRows</tbody></table>
     </div>
     <div class="chart-card">
-      <h2>${tr('Licences (top 15)', 'Licenses (top 15)')}</h2>
+      <h2>${tr('Licences (top 15)')}</h2>
       <table class="chart"><tbody>$licRows</tbody></table>
     </div>
   </div>
 
   <!-- Tableau des composants -->
   <div class="toolbar">
-    <input type="search" id="search" placeholder="${tr('Filtrer par nom, version, licence…', 'Filter by name, version, license…')}" oninput="filterTable()">
+    <input type="search" id="search" placeholder="${tr('Filtrer par nom, version, licence…')}" oninput="filterTable()">
     <select id="typeFilter" onchange="filterTable()">
-      <option value="">${tr('Tous les types', 'All types')}</option>
+      <option value="">${tr('Tous les types')}</option>
       ${sortedEco.map((e) => '<option value="${_esc(e.key)}">${_esc(e.key)} (${e.value})</option>').join('\n      ')}
     </select>
-    <span class="count-label" id="countLabel">${packages.length} ${tr('composant(s)', 'component(s)')}</span>
+    <span class="count-label" id="countLabel">${packages.length} ${tr('composant(s)')}</span>
   </div>
   <div class="table-wrapper">
     <table class="components" id="compTable">
       <thead>
         <tr>
-          <th onclick="sortTable(0)" class="sorted">${tr('Nom', 'Name')} <span class="sort-icon">▲</span></th>
+          <th onclick="sortTable(0)" class="sorted">${tr('Nom')} <span class="sort-icon">▲</span></th>
           <th onclick="sortTable(1)">Version <span class="sort-icon">↕</span></th>
-          <th onclick="sortTable(2)">${tr('Type', 'Type')} <span class="sort-icon">↕</span></th>
-          <th onclick="sortTable(3)">${tr('Licence', 'License')} <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(2)">${tr('Type')} <span class="sort-icon">↕</span></th>
+          <th onclick="sortTable(3)">${tr('Licence')} <span class="sort-icon">↕</span></th>
           <th onclick="sortTable(4)">Description <span class="sort-icon">↕</span></th>
           <th onclick="sortTable(5)">URL <span class="sort-icon">↕</span></th>
           <th>PURL</th>
@@ -230,7 +230,7 @@ $rows
     </table>
   </div>
 </div>
-<footer>${tr('Rapport généré par', 'Report generated by')} <strong>sbom_generator</strong></footer>
+<footer>${tr('Rapport généré par')} <strong>sbom_generator</strong></footer>
 
 <script>
   let sortCol = 0, sortAsc = true;
@@ -247,7 +247,7 @@ $rows
       row.style.display = match ? '' : 'none';
       if (match) visible++;
     });
-    document.getElementById('countLabel').textContent = visible + ' ${tr('composant(s)', 'component(s)')}';
+    document.getElementById('countLabel').textContent = visible + ' ${tr('composant(s)')}';
   }
 
   function sortTable(col) {

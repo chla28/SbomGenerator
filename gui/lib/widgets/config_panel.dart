@@ -2,10 +2,10 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../i18n.dart';
 import '../models/sbom_config.dart';
 import '../services/settings_service.dart';
 import 'help_icon.dart';
-import '../l10n/l10n.dart';
 import '../services/save_dialog.dart';
 
 class ConfigPanel extends StatefulWidget {
@@ -197,7 +197,6 @@ class ConfigPanelState extends State<ConfigPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     final c = widget.config;
 
     return Container(
@@ -221,7 +220,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                 children: [
                   Expanded(
                     child: Text(
-                      l.cfgTitle,
+                      tr('Configuration'),
                       style: TextStyle(
                         color: theme.colorScheme.onPrimary,
                         fontWeight: FontWeight.bold,
@@ -235,7 +234,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                       color: theme.colorScheme.onPrimary,
                       size: 18,
                     ),
-                    tooltip: l.cfgProfilesTooltip,
+                    tooltip: tr('Profils de configuration'),
                     onPressed: () => _showProfilesDialog(context),
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(),
@@ -250,7 +249,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                 children: [
                   // ── Entrée ──────────────────────────────────────
                   _Section(
-                    title: l.cfgSectionInput,
+                    title: tr('Entrée'),
                     icon: Icons.input,
                     children: [
                       // Drag & drop wrapping le champ fichier d'entrée
@@ -280,27 +279,27 @@ class ConfigPanelState extends State<ConfigPanel> {
                                 )
                               : const BoxDecoration(),
                           child: _FileField(
-                            label: l.cfgInputLabel,
+                            label: tr('Paquets à analyser (--input)'),
                             controller: _inputCtrl,
                             hint: _isDragging
-                                ? l.cfgInputHintDrop
-                                : l.cfgInputHint,
-                            helpText: l.cfgInputHelp,
+                                ? tr('Déposez un fichier ou un dossier ici…')
+                                : tr('rpm.lst, un .jar, ou un dossier…'),
+                            helpText: tr('Fichier liste (une référence par ligne),\nune archive/un paquet unique (.rpm, .deb,\n.whl, .jar, .zip, .tar.gz…), ou un dossier\nscanné récursivement pour tous ces types.'),
                             onPickFiltered: () => _pickFile(
                               _inputCtrl,
-                              title: l.cfgPickInputFile,
+                              title: tr('Sélectionner le fichier d\'entrée'),
                               extensions: ['lst', 'txt'],
                               clears: [_imageCtrl, _binaryCtrl],
                             ),
                             filterLabel: '.lst .txt',
                             onPick: () => _pickFile(
                               _inputCtrl,
-                              title: l.cfgPickInputFile,
+                              title: tr('Sélectionner le fichier d\'entrée'),
                               clears: [_imageCtrl, _binaryCtrl],
                             ),
                             onPickDir: () => _pickDir(
                               _inputCtrl,
-                              title: l.cfgPickPackagesDir,
+                              title: tr('Sélectionner un dossier de paquets'),
                               onDone: () {
                                 _imageCtrl.clear();
                                 _sync();
@@ -321,14 +320,14 @@ class ConfigPanelState extends State<ConfigPanel> {
                                 (v == null || v.trim().isEmpty) &&
                                     _imageCtrl.text.trim().isEmpty &&
                                     _binaryCtrl.text.trim().isEmpty
-                                ? l.cfgInputRequired
+                                ? tr('Requis (ou spécifiez une image OCI / un binaire)')
                                 : null,
                           ),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        l.cfgDragHint,
+                        tr('Glissez-déposez un fichier ou un dossier depuis votre gestionnaire'),
                         style: TextStyle(
                           fontSize: 10,
                           color: theme.colorScheme.onSurface.withValues(
@@ -361,7 +360,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                                 horizontal: 10,
                               ),
                               child: Text(
-                                l.cfgOr,
+                                tr('OU'),
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -386,13 +385,13 @@ class ConfigPanelState extends State<ConfigPanel> {
                         controller: _imageCtrl,
                         onPickTar: () => _pickFile(
                           _imageCtrl,
-                          title: l.cfgPickOciArchive,
+                          title: tr('Sélectionner une archive OCI'),
                           extensions: ['tar', 'gz', 'tgz'],
                           clears: [_inputCtrl, _binaryCtrl],
                         ),
                         onPickDir: () => _pickDir(
                           _imageCtrl,
-                          title: l.cfgPickOciDir,
+                          title: tr('Sélectionner un répertoire OCI layout'),
                           onDone: _sync,
                           clears: [_inputCtrl, _binaryCtrl],
                         ),
@@ -440,7 +439,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                                 horizontal: 10,
                               ),
                               child: Text(
-                                l.cfgOr,
+                                tr('OU'),
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -465,7 +464,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                         controller: _binaryCtrl,
                         onPick: () => _pickFile(
                           _binaryCtrl,
-                          title: l.cfgPickBinary,
+                          title: tr('Sélectionner un binaire'),
                           clears: [_inputCtrl, _imageCtrl],
                         ),
                         onChanged: (v) {
@@ -480,7 +479,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                       if (c.binaryPath.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
-                          l.cfgBinarySyftForced,
+                          tr('Backend : syft (forcé — seul capable d\'analyser un binaire autonome)'),
                           style: TextStyle(
                             fontSize: 10,
                             color: theme.colorScheme.onSurface.withValues(
@@ -499,17 +498,17 @@ class ConfigPanelState extends State<ConfigPanel> {
 
                   // ── Sortie ──────────────────────────────────────
                   _Section(
-                    title: l.cfgSectionOutput,
+                    title: tr('Sortie'),
                     icon: Icons.file_download_outlined,
                     children: [
                       _FileField(
-                        label: l.cfgOutputBase,
+                        label: tr('Chemin de base (--output)'),
                         controller: _outputCtrl,
-                        hint: l.cfgOutputBaseHint,
-                        helpText: l.cfgOutputBaseHelp,
+                        hint: tr('sbom  →  sbom.cdx.json, sbom.spdx.json…'),
+                        helpText: tr('Préfixe du chemin de sortie. Le suffixe de\nformat est ajouté automatiquement.\nEx : sbom → sbom.cdx.json, sbom.spdx.json…'),
                         onPick: () => _saveFile(
                           _outputCtrl,
-                          title: l.cfgOutputBaseTitle,
+                          title: tr('Chemin de base du SBOM'),
                           fileName: 'sbom',
                         ),
                         onChanged: (_) => _sync(),
@@ -521,14 +520,14 @@ class ConfigPanelState extends State<ConfigPanel> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            l.cfgFormats,
+                            tr('Formats (--format)'),
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(width: 4),
-                          HelpIcon(l.cfgFormatsHelp),
+                          HelpIcon(tr('Sélectionnez un ou plusieurs formats de sortie.\nCycloneDX (1.6 ou 1.7) et SPDX sont les standards industrie.\nMarkdown et AsciiDoc sont lisibles directement.')),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -566,11 +565,11 @@ class ConfigPanelState extends State<ConfigPanel> {
                         CheckboxListTile.adaptive(
                           dense: true,
                           title: Text(
-                            l.cfgPdf,
+                            tr('Convertir en PDF (asciidoctor-pdf)'),
                             style: const TextStyle(fontSize: 13),
                           ),
                           subtitle: Text(
-                            l.cfgPdfSub,
+                            tr('Lance asciidoctor-pdf après la génération'),
                             style: const TextStyle(fontSize: 11),
                           ),
                           secondary: const Icon(Icons.picture_as_pdf, size: 20),
@@ -584,12 +583,12 @@ class ConfigPanelState extends State<ConfigPanel> {
                         if (c.generatePdf) ...[
                           const SizedBox(height: 4),
                           _FileField(
-                            label: l.cfgPdfPath,
+                            label: tr('Chemin du PDF (optionnel)'),
                             controller: _pdfCtrl,
-                            hint: l.cfgPdfPathHint,
+                            hint: tr('Défaut : même dossier que .adoc'),
                             onPick: () => _saveFile(
                               _pdfCtrl,
-                              title: l.cfgPdfSaveTitle,
+                              title: tr('Enregistrer le PDF sous…'),
                               fileName: 'sbom.pdf',
                             ),
                             onChanged: (_) => _sync(),
@@ -608,14 +607,14 @@ class ConfigPanelState extends State<ConfigPanel> {
 
                   // ── Options ─────────────────────────────────────
                   _Section(
-                    title: l.cfgSectionOptions,
+                    title: tr('Options'),
                     icon: Icons.tune,
                     children: [
                       TextFormField(
                         controller: _nameCtrl,
                         decoration: InputDecoration(
-                          label: HelpLabel(l.cfgName, l.cfgNameHelp),
-                          hintText: l.cfgNameHint,
+                          label: HelpLabel(tr('Nom du document SBOM (--name)'), tr('Nom logique du document SBOM\n(champ metadata.component.name).\nEx : "Mon Application 1.0"')),
+                          hintText: tr('Mon Application 1.0'),
                           border: const OutlineInputBorder(),
                           isDense: true,
                           prefixIcon: const Icon(Icons.label_outline),
@@ -625,13 +624,13 @@ class ConfigPanelState extends State<ConfigPanel> {
                       const SizedBox(height: 12),
 
                       _FileField(
-                        label: l.cfgRpmDir,
+                        label: tr('Répertoire RPM local (--rpm-dir)'),
                         controller: _rpmDirCtrl,
-                        hint: l.cfgRpmDirHint,
-                        helpText: l.cfgRpmDirHelp,
+                        hint: tr('Dossier contenant des fichiers .rpm'),
+                        helpText: tr('Dossier contenant des fichiers .rpm.\nsbom_generator extrait les métadonnées\nsans installer les paquets (rpm -qp).'),
                         onPick: () => _pickDir(
                           _rpmDirCtrl,
-                          title: l.cfgRpmDirTitle,
+                          title: tr('Répertoire de fichiers RPM'),
                           onDone: _sync,
                         ),
                         onChanged: (_) => _sync(),
@@ -639,19 +638,19 @@ class ConfigPanelState extends State<ConfigPanel> {
                       const SizedBox(height: 12),
 
                       _FileField(
-                        label: l.cfgLicenseMap,
+                        label: tr('Override licences (--license-map)'),
                         controller: _licenseMapCtrl,
-                        hint: l.cfgLicenseMapHint,
-                        helpText: l.cfgLicenseMapHelp,
+                        hint: tr('Fichier "paquet: SPDX-expression"'),
+                        helpText: tr('Fichier de substitution de licences,\nformat "paquet: SPDX-expression" par ligne.\nEx : mon-paquet-interne: MIT'),
                         onPickFiltered: () => _pickFile(
                           _licenseMapCtrl,
-                          title: l.cfgLicenseMapTitle,
+                          title: tr('Fichier de map licences'),
                           extensions: ['txt', 'map'],
                         ),
                         filterLabel: '.txt .map',
                         onPick: () => _pickFile(
                           _licenseMapCtrl,
-                          title: l.cfgLicenseMapTitle,
+                          title: tr('Fichier de map licences'),
                         ),
                         onChanged: (_) => _sync(),
                       ),
@@ -662,10 +661,10 @@ class ConfigPanelState extends State<ConfigPanel> {
                         controller: _sdkCtrl,
                         decoration: InputDecoration(
                           label: HelpLabel(
-                            l.cfgSdkVersions,
-                            l.cfgSdkVersionsHelp,
+                            tr('Versions de SDK'),
+                            tr('Vraie version des SDK Dart/Flutter d\'un pubspec.lock (--sdk-version).\nFormat : flutter=3.47.5 dart=3.13.4 (séparés par des espaces ou virgules).\nVide : la version de Flutter installé est détectée automatiquement ;\nsans version, les scanners signalent TOUTES les CVE du SDK.'),
                           ),
-                          hintText: l.cfgSdkVersionsHint,
+                          hintText: tr('flutter=3.47.5'),
                           border: const OutlineInputBorder(),
                           isDense: true,
                           prefixIcon: const Icon(Icons.flutter_dash),
@@ -680,15 +679,15 @@ class ConfigPanelState extends State<ConfigPanel> {
                           const Icon(Icons.speed, size: 16),
                           const SizedBox(width: 6),
                           Text(
-                            l.cfgConcurrency,
+                            tr('Concurrence (--concurrency)'),
                             style: const TextStyle(fontSize: 12),
                           ),
                           const SizedBox(width: 4),
-                          HelpIcon(l.cfgConcurrencyHelp),
+                          HelpIcon(tr('Nombre de paquets analysés simultanément.\n0 = illimité (tous en parallèle).\nRéduire si les outils externes nécessitent\ndes accès exclusifs ou si la machine est lente.')),
                           const Spacer(),
                           Text(
                             c.concurrency == 0
-                                ? l.cfgUnlimited
+                                ? tr('illimitée')
                                 : '${c.concurrency}',
                             style: TextStyle(
                               fontSize: 13,
@@ -704,7 +703,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                         max: 16,
                         divisions: 16,
                         label: c.concurrency == 0
-                            ? l.cfgUnlimited
+                            ? tr('illimitée')
                             : '${c.concurrency}',
                         onChanged: (v) => setState(() {
                           c.concurrency = v.round();
@@ -713,8 +712,8 @@ class ConfigPanelState extends State<ConfigPanel> {
                       ),
                       Text(
                         c.concurrency == 0
-                            ? l.cfgConcurrencyZero
-                            : l.cfgConcurrencyNote,
+                            ? tr('0 = tous les paquets en parallèle')
+                            : tr('1 = séquentiel  •  défaut : 4'),
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.colorScheme.onSurface.withValues(
@@ -727,14 +726,14 @@ class ConfigPanelState extends State<ConfigPanel> {
                       CheckboxListTile.adaptive(
                         dense: true,
                         title: Text(
-                          l.cfgVerbose,
+                          tr('Mode verbeux (--verbose)'),
                           style: const TextStyle(fontSize: 13),
                         ),
                         subtitle: Text(
-                          l.cfgVerboseSub,
+                          tr('Affiche les outils détectés et les statistiques'),
                           style: const TextStyle(fontSize: 11),
                         ),
-                        secondary: HelpIcon(l.cfgVerboseHelp),
+                        secondary: HelpIcon(tr('Affiche pour chaque paquet : outil utilisé,\nversion, durée de traitement.\nUtile pour déboguer les paquets dont la\nlicence n\'est pas reconnue.')),
                         value: c.verbose,
                         onChanged: (v) => setState(() {
                           c.verbose = v ?? false;
@@ -750,15 +749,15 @@ class ConfigPanelState extends State<ConfigPanel> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              l.cfgSbomqs,
+                              tr('Score qualité sbomqs'),
                               style: const TextStyle(fontSize: 13),
                             ),
                             const SizedBox(width: 4),
-                            HelpIcon(l.cfgSbomqsHelp),
+                            HelpIcon(tr('Exécute sbomqs (Interlynk) sur le SBOM généré\npour calculer un score de conformité (0–10).\nRequiert que sbomqs soit installé dans le PATH.')),
                           ],
                         ),
                         subtitle: Text(
-                          l.cfgSbomqsSub,
+                          tr('Analyse le SBOM généré avec sbomqs après génération'),
                           style: const TextStyle(fontSize: 11),
                         ),
                         secondary: const Icon(
@@ -790,7 +789,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                       ),
                       onPressed: widget.onStop,
                       icon: const Icon(Icons.stop),
-                      label: Text(l.cfgStop),
+                      label: Text(tr('Arrêter la génération')),
                     )
                   : FilledButton.icon(
                       style: FilledButton.styleFrom(
@@ -799,7 +798,7 @@ class ConfigPanelState extends State<ConfigPanel> {
                       onPressed: _run,
                       icon: const Icon(Icons.play_arrow),
                       label: Text(
-                        l.cfgGenerate,
+                        tr('Générer le SBOM'),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -854,7 +853,7 @@ class _CommandPreview extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Tooltip(
-              message: context.l10n.cfgCopyCommand,
+              message: tr('Copier la commande'),
               child: InkWell(
                 borderRadius: BorderRadius.circular(4),
                 onTap: () =>
@@ -942,7 +941,6 @@ class _FileField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
@@ -963,7 +961,7 @@ class _FileField extends StatelessWidget {
         suffixIcon: (onPickFiltered != null || onPickDir != null)
             ? PopupMenuButton<_PickKind>(
                 icon: const Icon(Icons.folder_open, size: 18),
-                tooltip: l.cfgBrowse,
+                tooltip: tr('Parcourir…'),
                 onSelected: (kind) => switch (kind) {
                   _PickKind.filtered => onPickFiltered!(),
                   _PickKind.directory => onPickDir!(),
@@ -980,7 +978,7 @@ class _FileField extends StatelessWidget {
                           Icons.filter_alt_outlined,
                           size: 16,
                         ),
-                        title: Text(l.cfgPickFiltered(filterLabel ?? '')),
+                        title: Text(tr('Type filtré ({filter})', {'filter': filterLabel ?? ''})),
                       ),
                     ),
                   PopupMenuItem(
@@ -989,7 +987,7 @@ class _FileField extends StatelessWidget {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.folder_open, size: 16),
-                      title: Text(l.cfgPickAny),
+                      title: Text(tr('Tous les fichiers')),
                     ),
                   ),
                   if (onPickDir != null)
@@ -999,7 +997,7 @@ class _FileField extends StatelessWidget {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.folder_outlined, size: 16),
-                        title: Text(l.cfgPickDirRecursive),
+                        title: Text(tr('Dossier (scan récursif)')),
                       ),
                     ),
                 ],
@@ -1007,7 +1005,7 @@ class _FileField extends StatelessWidget {
             : IconButton(
                 icon: const Icon(Icons.folder_open, size: 18),
                 onPressed: onPick,
-                tooltip: l.cfgBrowse,
+                tooltip: tr('Parcourir…'),
               ),
       ),
       style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
@@ -1034,7 +1032,7 @@ class _FormatCheckbox extends StatelessWidget {
     return CheckboxListTile.adaptive(
       dense: true,
       title: Text(
-        formatLabel(format, context.l10n),
+        formatLabel(format),
         style: const TextStyle(fontSize: 13),
       ),
       subtitle: Text(
@@ -1065,7 +1063,7 @@ class _OutputPreview extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.l10n.cfgFilesToGenerate,
+            tr('Fichiers qui seront générés :'),
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
@@ -1142,20 +1140,19 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
   }
 
   Future<void> _delete(String name) async {
-    final l = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(l.cfgProfDeleteTitle),
-        content: Text(l.cfgProfDeleteConfirm(name)),
+        title: Text(tr('Supprimer le profil')),
+        content: Text(tr('Supprimer « {name} » ?', {'name': name})),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(l.homeCancel),
+            child: Text(tr('Annuler')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(l.cfgDelete, style: TextStyle(color: Colors.red)),
+            child: Text(tr('Supprimer'), style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -1169,13 +1166,12 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     return AlertDialog(
       title: Row(
         children: [
           const Icon(Icons.bookmarks_outlined, size: 20),
           const SizedBox(width: 8),
-          Text(l.cfgProfTitle),
+          Text(tr('Profils de configuration')),
         ],
       ),
       content: SizedBox(
@@ -1185,7 +1181,7 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Enregistrer ──
-            Text(l.cfgProfSaveCurrent, style: theme.textTheme.labelMedium),
+            Text(tr('Enregistrer la configuration actuelle'), style: theme.textTheme.labelMedium),
             const SizedBox(height: 6),
             Row(
               children: [
@@ -1193,7 +1189,7 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
                   child: TextField(
                     controller: _ctrl,
                     decoration: InputDecoration(
-                      hintText: l.cfgProfNameHint,
+                      hintText: tr('Nom du profil…'),
                       isDense: true,
                       border: const OutlineInputBorder(),
                       contentPadding: const EdgeInsets.symmetric(
@@ -1208,7 +1204,7 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
                 const SizedBox(width: 8),
                 FilledButton.icon(
                   icon: const Icon(Icons.save_outlined, size: 16),
-                  label: Text(l.cfgProfSave),
+                  label: Text(tr('Enregistrer')),
                   onPressed: _save,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
@@ -1225,7 +1221,7 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
             const SizedBox(height: 12),
 
             // ── Liste des profils ──
-            Text(l.cfgProfSaved, style: theme.textTheme.labelMedium),
+            Text(tr('Profils enregistrés'), style: theme.textTheme.labelMedium),
             const SizedBox(height: 6),
 
             if (_names.isEmpty)
@@ -1233,7 +1229,7 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 alignment: Alignment.center,
                 child: Text(
-                  l.cfgProfNone,
+                  tr('Aucun profil enregistré.'),
                   style: const TextStyle(color: Colors.grey),
                 ),
               )
@@ -1261,14 +1257,14 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
                               ),
                             ),
                             child: Text(
-                              l.cfgProfLoad,
+                              tr('Charger'),
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, size: 17),
                             color: Colors.red[400],
-                            tooltip: l.cfgDelete,
+                            tooltip: tr('Supprimer'),
                             onPressed: () => _delete(name),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
@@ -1285,7 +1281,7 @@ class _ProfilesDialogState extends State<_ProfilesDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(l.commonClose),
+          child: Text(tr('Fermer')),
         ),
       ],
     );
@@ -1309,18 +1305,17 @@ class _OciImageField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        label: HelpLabel(l.cfgOciLabel, l.cfgOciHelp),
-        hintText: l.cfgOciHint,
+        label: HelpLabel(tr('Image OCI (--image)'), tr('Référence d\'une image conteneur à analyser.\n• Registre : nginx:latest, ghcr.io/org/app:v1\n• Archive tar : ./image.tar / .tar.gz / .tgz (docker save)\n• Répertoire OCI layout : ./oci/ (index.json)')),
+        hintText: tr('nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/'),
         border: const OutlineInputBorder(),
         isDense: true,
         prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18),
         suffixIcon: PopupMenuButton<String>(
           icon: const Icon(Icons.folder_open, size: 18),
-          tooltip: l.cfgBrowse,
+          tooltip: tr('Parcourir…'),
           onSelected: (v) {
             if (v == 'tar') {
               onPickTar();
@@ -1335,7 +1330,7 @@ class _OciImageField extends StatelessWidget {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.archive_outlined, size: 16),
-                title: Text(l.cfgOciTar),
+                title: Text(tr('Archive tar (.tar / .tar.gz / .tgz)')),
               ),
             ),
             PopupMenuItem(
@@ -1344,7 +1339,7 @@ class _OciImageField extends StatelessWidget {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.folder_outlined, size: 16),
-                title: Text(l.cfgOciDir),
+                title: Text(tr('Répertoire OCI layout')),
               ),
             ),
           ],
@@ -1371,18 +1366,17 @@ class _BinaryField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        label: HelpLabel(l.cfgBinaryLabel, l.cfgBinaryHelp),
-        hintText: l.cfgBinaryHint,
+        label: HelpLabel(tr('Binaire autonome (--binary)'), tr('Exécutable local à analyser directement (pas une image de conteneur) — ex. un binaire Go lié statiquement.\nForce le backend syft : seul capable de lire les métadonnées embarquées dans un binaire (buildinfo Go via go-module-binary-cataloger ; classifieur générique syft pour quelques bibliothèques connues — OpenSSL, zlib, sqlite…).\nNe récupère pas les dépendances liées statiquement sans métadonnée embarquée (C/C++ « fait maison », Rust sans cargo-auditable).')),
+        hintText: tr('/usr/local/bin/mon-app'),
         border: const OutlineInputBorder(),
         isDense: true,
         prefixIcon: const Icon(Icons.terminal_outlined, size: 18),
         suffixIcon: IconButton(
           icon: const Icon(Icons.folder_open, size: 18),
-          tooltip: l.cfgBrowse,
+          tooltip: tr('Parcourir…'),
           onPressed: onPick,
         ),
       ),
@@ -1403,17 +1397,16 @@ class _NestedDepthOptions extends StatelessWidget {
 
   const _NestedDepthOptions({required this.config, required this.onChanged});
 
-  static String _label(AppLocalizations l, String d) => switch (d) {
-    '0' => l.cfgDepth0,
-    'all' => l.cfgDepthAll,
-    '1' => l.cfgDepth1,
-    _ => l.cfgDepthN(d),
+  static String _label(String d) => switch (d) {
+    '0' => tr('0 — objet seul'),
+    'all' => tr('Illimitée'),
+    '1' => tr('1 niveau'),
+    _ => tr('{n} niveaux', {'n': d}),
   };
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     final style = TextStyle(fontSize: 12, color: theme.colorScheme.onSurface);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1426,9 +1419,9 @@ class _NestedDepthOptions extends StatelessWidget {
               color: theme.colorScheme.secondary,
             ),
             const SizedBox(width: 6),
-            Text(l.cfgDepthLabel, style: style),
+            Text(tr('Profondeur (--depth)'), style: style),
             const SizedBox(width: 4),
-            HelpIcon(l.cfgDepthHelp),
+            HelpIcon(tr('Descend dans les objets contenus dans l\'entrée : par exemple les jars d\'un RPM, les paquets ou archives d\'un tar.gz, les jars d\'un fat jar.\n• 0 : l\'objet seul (défaut)\n• N : N niveaux (1 = objets directs, 2 = ce qu\'ils contiennent…)\n• Illimitée : tous les niveaux (plafonnés à 10)\nLes manifestes rencontrés (package-lock.json, go.sum, pom.xml…) sont analysés. Le SBOM global fusionne tous les composants (propriétés location/depth, dépendances parent → enfant). Extraction bornée en taille.')),
             const SizedBox(width: 12),
             DropdownButton<String>(
               value: config.nestedDepth,
@@ -1437,7 +1430,7 @@ class _NestedDepthOptions extends StatelessWidget {
                 for (final d in allNestedDepths)
                   DropdownMenuItem(
                     value: d,
-                    child: Text(_label(l, d), style: style),
+                    child: Text(_label( d), style: style),
                   ),
               ],
               onChanged: (v) {
@@ -1462,9 +1455,9 @@ class _NestedDepthOptions extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Flexible(child: Text(l.cfgNestedFiles, style: style)),
+              Flexible(child: Text(tr('Un SBOM par objet imbriqué'), style: style)),
               const SizedBox(width: 4),
-              HelpIcon(l.cfgNestedFilesHelp),
+              HelpIcon(tr('En plus du SBOM fusionné, écrit un SBOM par objet imbriqué (<sortie>.nested-NN-<objet>.<ext>, dans chaque format coché). Décocher = --no-nested-files : fusionné seulement.')),
             ],
           ),
       ],
@@ -1483,7 +1476,6 @@ class _PerLayerOptions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     final metadataOk = metadataLayerTools.contains(config.ociTool);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1504,7 +1496,7 @@ class _PerLayerOptions extends StatelessWidget {
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                l.cfgPerLayer,
+                tr('Un SBOM par couche (--per-layer)'),
                 style: TextStyle(
                   fontSize: 12,
                   color: theme.colorScheme.onSurface,
@@ -1512,7 +1504,7 @@ class _PerLayerOptions extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            HelpIcon(l.cfgPerLayerHelp),
+            HelpIcon(tr('Génère, en plus du SBOM global, un SBOM par couche de l\'image (<sortie>.layer-NN-<digest>.<ext>, dans chaque format coché) décrivant le delta de la couche : composants ajoutés ou modifiés, composants supprimés listés à part. Le SBOM global indique la couche d\'origine de chaque composant.\n• Métadonnées : couche d\'origine indiquée par Syft/Trivy — rapide, ajouts seulement\n• Rootfs : couches appliquées une à une et réanalysées — ajouts, modifications, suppressions (seul mode possible avec Skopeo et cdxgen)')),
           ],
         ),
         if (config.perLayer) ...[
@@ -1526,16 +1518,16 @@ class _PerLayerOptions extends StatelessWidget {
             segments: [
               ButtonSegment(
                 value: 'metadata',
-                label: Text(l.cfgLayerMetadata),
+                label: Text(tr('Métadonnées')),
                 icon: const Icon(Icons.bolt_outlined, size: 14),
                 enabled: metadataOk,
-                tooltip: l.cfgLayerMetadataTip,
+                tooltip: tr('Couche d\'origine indiquée par le backend'),
               ),
               ButtonSegment(
                 value: 'rootfs',
-                label: Text(l.cfgLayerRootfs),
+                label: Text(tr('Rootfs')),
                 icon: const Icon(Icons.layers_outlined, size: 14),
-                tooltip: l.cfgLayerRootfsTip,
+                tooltip: tr('Réanalyse du rootfs après chaque couche'),
               ),
             ],
             selected: {config.effectiveLayerMode},
@@ -1548,9 +1540,7 @@ class _PerLayerOptions extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                l.cfgRootfsForced(
-                  ociToolLabels[config.ociTool] ?? config.ociTool,
-                ),
+                tr('Mode rootfs forcé : {tool} n\'indique pas la couche d\'origine des paquets', {'tool': ociToolLabels[config.ociTool] ?? config.ociTool}),
                 style: TextStyle(
                   fontSize: 10,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
@@ -1573,7 +1563,6 @@ class _OciToolSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1586,7 +1575,7 @@ class _OciToolSelector extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              l.cfgOciToolLabel,
+              tr('Backend OCI (--oci-tool)'),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -1594,7 +1583,7 @@ class _OciToolSelector extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            HelpIcon(l.cfgOciToolHelp),
+            HelpIcon(tr('Outil utilisé pour extraire les paquets de l\'image :\n• Syft (Anchore) — le plus complet, tous écosystèmes\n• Trivy (Aqua) — rapide, CVE intégrées\n• Skopeo — extraction manuelle dpkg/rpm/apk\n• cdxgen (OWASP) — CycloneDX natif, tous écosystèmes')),
           ],
         ),
         const SizedBox(height: 6),
@@ -1609,25 +1598,25 @@ class _OciToolSelector extends StatelessWidget {
               value: 'syft',
               label: const Text('Syft'),
               icon: const Icon(Icons.search, size: 14),
-              tooltip: l.cfgSyftTip,
+              tooltip: tr('Anchore Syft — tous écosystèmes'),
             ),
             ButtonSegment(
               value: 'trivy',
               label: const Text('Trivy'),
               icon: const Icon(Icons.security, size: 14),
-              tooltip: l.cfgTrivyTip,
+              tooltip: tr('Aqua Trivy — tous écosystèmes'),
             ),
             ButtonSegment(
               value: 'skopeo',
               label: const Text('Skopeo'),
               icon: const Icon(Icons.layers_outlined, size: 14),
-              tooltip: l.cfgSkopeoTip,
+              tooltip: tr('Skopeo + extraction manuelle (dpkg/rpm/apk)'),
             ),
             ButtonSegment(
               value: 'cdxgen',
               label: const Text('cdxgen'),
               icon: const Icon(Icons.inventory_2_outlined, size: 14),
-              tooltip: l.cfgCdxgenTip,
+              tooltip: tr('OWASP cdxgen — CycloneDX natif, tous écosystèmes'),
             ),
           ],
           selected: {selected},
@@ -1636,12 +1625,12 @@ class _OciToolSelector extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           selected == 'syft'
-              ? l.cfgSyftDesc
+              ? tr('Syft (recommandé) — supporte tous les écosystèmes')
               : selected == 'trivy'
-              ? l.cfgTrivyDesc
+              ? tr('Trivy — tous écosystèmes, déjà utilisé pour les CVE')
               : selected == 'skopeo'
-              ? l.cfgSkopeoDesc
-              : l.cfgCdxgenDesc,
+              ? tr('Skopeo — extraction manuelle dpkg / rpm / apk')
+              : tr('cdxgen — SBOM CycloneDX natif, tous écosystèmes (nécessite Node.js)'),
           style: TextStyle(
             fontSize: 10,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
@@ -1665,7 +1654,6 @@ class _CycloneDxVersionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     return Padding(
       padding: const EdgeInsets.only(left: 32, bottom: 4),
       child: Column(
@@ -1674,7 +1662,7 @@ class _CycloneDxVersionSelector extends StatelessWidget {
           Row(
             children: [
               Text(
-                l.cfgCdxVersion,
+                tr('Version (--cyclonedx-version)'),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -1682,7 +1670,7 @@ class _CycloneDxVersionSelector extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              HelpIcon(l.cfgCdxVersionHelp),
+              HelpIcon(tr('1.6 — la plus répandue chez les consommateurs actuels (défaut).\n1.7 — ajoute citations / patentAssertions / distributionConstraints\n(voir --tlp et --patent-map en ligne de commande).')),
             ],
           ),
           const SizedBox(height: 6),
@@ -1711,7 +1699,6 @@ class _InputTypeLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = context.l10n;
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -1722,7 +1709,7 @@ class _InputTypeLegend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l.cfgLegendAccepted,
+            tr('Types acceptés (fichier liste, paquet unique, ou dossier scanné) :'),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -1732,18 +1719,18 @@ class _InputTypeLegend extends StatelessWidget {
           const SizedBox(height: 4),
           for (final item in [
             (
-              l.cfgLegRpmInstalled,
-              'bash  ${l.cfgLegOr}  bash-5.1.8-6.el9.x86_64',
+              tr('RPM installé'),
+              'bash  ${tr('ou')}  bash-5.1.8-6.el9.x86_64',
             ),
-            (l.cfgLegRpmFile, '/path/to/package.rpm'),
-            (l.cfgLegWheel, '/path/to/package.whl'),
-            (l.cfgLegTar, '/path/to/pkg.tar.gz  ${l.cfgLegOr}  .tgz'),
-            (l.cfgLegZip, '/path/to/archive.zip'),
-            (l.cfgLegDeb, '/path/to/package.deb'),
-            (l.cfgLegJar, '/path/to/lib.jar'),
+            (tr('Fichier .rpm'), '/path/to/package.rpm'),
+            (tr('Wheel Python'), '/path/to/package.whl'),
+            (tr('Archive tar'), '/path/to/pkg.tar.gz  ${tr('ou')}  .tgz'),
+            (tr('Archive .zip'), '/path/to/archive.zip'),
+            (tr('Paquet Debian'), '/path/to/package.deb'),
+            (tr('Archive Java'), '/path/to/lib.jar'),
             ('requirements', '/path/to/requirements.txt'),
             (
-              l.cfgLegManifest,
+              tr('Manifeste/lock'),
               'go.sum, package-lock.json, pom.xml, pubspec.lock…',
             ),
           ])
@@ -1778,7 +1765,7 @@ class _InputTypeLegend extends StatelessWidget {
           const SizedBox(height: 6),
           const Divider(height: 8),
           Text(
-            l.cfgLegendImage,
+            tr('Image OCI (champ --image) :'),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -1787,9 +1774,9 @@ class _InputTypeLegend extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           for (final item in [
-            (l.cfgLegRegistry, 'nginx:latest  •  ubuntu@sha256:…'),
-            (l.cfgLegTar, '/path/image.tar  (docker save)'),
-            (l.cfgLegOciLayout, l.cfgLegOciLayoutVal),
+            (tr('Registre'), 'nginx:latest  •  ubuntu@sha256:…'),
+            (tr('Archive tar'), '/path/image.tar  (docker save)'),
+            (tr('OCI layout'), tr('/path/oci_dir/  (index.json présent)')),
           ])
             Padding(
               padding: const EdgeInsets.only(top: 2),
@@ -1822,7 +1809,7 @@ class _InputTypeLegend extends StatelessWidget {
           const SizedBox(height: 6),
           const Divider(height: 8),
           Text(
-            l.cfgLegendBinary,
+            tr('Binaire autonome (champ --binary) :'),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -1831,7 +1818,7 @@ class _InputTypeLegend extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            l.cfgLegendBinaryText,
+            tr('Exécutable local (ex. binaire Go lié statiquement) — force le backend syft. Dépendances Go embarquées lues systématiquement ; seul un catalogue fixe de bibliothèques connues (OpenSSL, zlib, sqlite…) est détecté pour les autres langages.'),
             style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
           ),
         ],

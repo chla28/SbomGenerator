@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 import '../widgets/grype_panel.dart';
 import '../widgets/osv_panel.dart';
 import '../widgets/trivy_panel.dart';
@@ -42,8 +42,7 @@ ScanJobExecutor makeScanJobExecutor({
   required Future<bool> Function() enrichOnline,
 }) {
   return (job, cancel) async {
-    final l = appL10n();
-    final label = l.scanTargetSbom(job.target.split(RegExp(r'[/\\]')).last);
+    final label = tr('SBOM {name}', {'name': job.target.split(RegExp(r'[/\\]')).last});
 
     String? json;
     int? code;
@@ -90,9 +89,9 @@ ScanJobExecutor makeScanJobExecutor({
     }
     if (cancel.isCancelled) throw ScanJobFailure('cancelled');
     if (json == null || json.trim().isEmpty) {
-      if (code == 127) throw ScanJobFailure(l.tasksToolMissing(job.scanner));
+      if (code == 127) throw ScanJobFailure(tr('{tool} introuvable (installez-le ou retirez-le de la sélection).', {'tool': job.scanner}));
       throw ScanJobFailure(
-        l.tasksNoOutput(job.scanner, code ?? -1, (err ?? '').trim()),
+        tr('{tool} n\'a produit aucun résultat (code {code}) : {detail}', {'tool': job.scanner, 'code': code ?? -1, 'detail': (err ?? '').trim()}),
       );
     }
 
@@ -158,7 +157,7 @@ ScanJobExecutor makeScanJobExecutor({
           return v.length;
       }
     } on FormatException catch (e) {
-      throw ScanJobFailure(l.tasksParseFailed(job.scanner, e.message));
+      throw ScanJobFailure(tr('Sortie de {tool} illisible : {error}', {'tool': job.scanner, 'error': e.message}));
     }
   };
 }

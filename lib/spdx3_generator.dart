@@ -70,7 +70,7 @@ class Spdx3Generator {
       'creationInfo': ciId,
       'name': 'sbom_generator',
       // `Tool` n'a pas de propriété de version dans le schéma officiel.
-      'comment': 'version 1.10.7',
+      'comment': 'version 1.10.8',
     });
 
     sdkTools.forEach((name, version) {

@@ -9,7 +9,7 @@ class SbomMerger {
   }) {
     if (sboms.isEmpty) {
       throw ArgumentError(
-          tr('Au moins un SBOM requis', 'At least one SBOM is required'));
+          tr('Au moins un SBOM requis'));
     }
     if (sboms.length == 1) return sboms.first;
 
@@ -162,7 +162,7 @@ class SbomMerger {
             .toUtc()
             .toIso8601String()
             .replaceFirst(RegExp(r'\.\d+Z$'), 'Z'),
-        'creators': ['Tool: sbom_generator-1.10.7'],
+        'creators': ['Tool: sbom_generator-1.10.8'],
         'licenseListVersion': baseCreationInfo?['licenseListVersion'] ?? '3.21',
       },
       'name': documentName ?? (base['name'] as String? ?? 'Merged SBOM'),

@@ -411,13 +411,12 @@ class SbomDiffer {
     final file = File(path);
     if (!await file.exists()) {
       throw Exception(
-          tr('Fichier introuvable : $path', 'File not found: $path'));
+          tr('Fichier introuvable : {path}', {'path': path}));
     }
     try {
       return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception(tr(
-          'Impossible de parser "$path" : $e', 'Unable to parse "$path": $e'));
+      throw Exception(tr('Impossible de parser "{path}" : {e}', {'path': path, 'e': e}));
     }
   }
 
@@ -431,19 +430,19 @@ class SbomDiffer {
 
     if (result.isEmpty) {
       print(
-          '$bold${tr('Aucun changement détecté.', 'No change detected.')}$reset');
+          '$bold${tr('Aucun changement détecté.')}$reset');
       return;
     }
 
-    print('$bold${tr('Résumé', 'Summary')}: '
-        '$green+${result.added.length} ${tr('ajouté(s)', 'added')}$reset  '
-        '$red-${result.removed.length} ${tr('supprimé(s)', 'removed')}$reset  '
-        '$yellow~${result.updated.length} ${tr('mis à jour', 'updated')}$reset');
+    print('$bold${tr('Résumé')}: '
+        '$green+${result.added.length} ${tr('ajouté(s)')}$reset  '
+        '$red-${result.removed.length} ${tr('supprimé(s)')}$reset  '
+        '$yellow~${result.updated.length} ${tr('mis à jour')}$reset');
     stdout.writeln();
 
     if (result.added.isNotEmpty) {
       print(
-          '$bold$green── ${tr('Ajoutés', 'Added')} (${result.added.length}) ──$reset');
+          '$bold$green── ${tr('Ajoutés')} (${result.added.length}) ──$reset');
       for (final c in result.added) {
         final purl = c.purl.isNotEmpty ? '  ${c.purl}' : '';
         print('${green}  + ${c.name} ${c.version}$reset$purl');
@@ -453,7 +452,7 @@ class SbomDiffer {
 
     if (result.removed.isNotEmpty) {
       print(
-          '$bold$red── ${tr('Supprimés', 'Removed')} (${result.removed.length}) ──$reset');
+          '$bold$red── ${tr('Supprimés')} (${result.removed.length}) ──$reset');
       for (final c in result.removed) {
         final purl = c.purl.isNotEmpty ? '  ${c.purl}' : '';
         print('${red}  - ${c.name} ${c.version}$reset$purl');
@@ -463,7 +462,7 @@ class SbomDiffer {
 
     if (result.updated.isNotEmpty) {
       print(
-          '$bold$yellow── ${tr('Mis à jour', 'Updated')} (${result.updated.length}) ──$reset');
+          '$bold$yellow── ${tr('Mis à jour')} (${result.updated.length}) ──$reset');
       for (final c in result.updated) {
         print('${yellow}  ~ ${c.name}  '
             '${c.oldVersion} → ${c.newVersion}$reset');
@@ -477,7 +476,7 @@ class SbomDiffer {
 
     if (result.modified.isNotEmpty) {
       print(
-          '$bold$yellow── ${tr('Modifiés (même version)', 'Modified (same version)')} (${result.modified.length}) ──$reset');
+          '$bold$yellow── ${tr('Modifiés (même version)')} (${result.modified.length}) ──$reset');
       for (final c in result.modified) {
         print('${yellow}  ~ ${c.name} ${c.version}$reset');
         for (final e in c.changes.entries) {
@@ -491,12 +490,12 @@ class SbomDiffer {
     final layers = result.layers;
     if (layers != null && !layers.isEmpty) {
       print(
-          '$bold── ${tr('Couches', 'Layers')} (${layers.beforeCount} → ${layers.afterCount}) ──$reset');
+          '$bold── ${tr('Couches')} (${layers.beforeCount} → ${layers.afterCount}) ──$reset');
       for (final d in layers.removed) {
-        print('$red  - ${tr('couche supprimée', 'layer removed')} $d$reset');
+        print('$red  - ${tr('couche supprimée')} $d$reset');
       }
       for (final d in layers.added) {
-        print('$green  + ${tr('couche ajoutée', 'layer added')} $d$reset');
+        print('$green  + ${tr('couche ajoutée')} $d$reset');
       }
       for (final e in layers.changed.entries) {
         print('$yellow  ~ ${e.key}  ${e.value.$1} → ${e.value.$2}$reset');
@@ -506,10 +505,10 @@ class SbomDiffer {
   }
 
   static String _fieldLabel(String field) => switch (field) {
-        'license' => tr('licence', 'license'),
-        'hashes' => tr('empreintes', 'hashes'),
-        'supplier' => tr('fournisseur', 'supplier'),
-        'layer' => tr('couche', 'layer'),
+        'license' => tr('licence'),
+        'hashes' => tr('empreintes'),
+        'supplier' => tr('fournisseur'),
+        'layer' => tr('couche'),
         _ => field,
       };
 

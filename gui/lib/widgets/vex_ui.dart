@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 import '../services/save_dialog.dart';
 import '../models/vex.dart';
 import '../services/vex_controller.dart';
@@ -23,29 +23,29 @@ class VexScope extends InheritedNotifier<VexController> {
       context.dependOnInheritedWidgetOfExactType<VexScope>()?.notifier;
 }
 
-String vexStatusLabel(AppLocalizations l, String status) => switch (status) {
-  'not_affected' => l.vexStatusNotAffected,
-  'affected' => l.vexStatusAffected,
-  'fixed' => l.vexStatusFixed,
-  _ => l.vexStatusInvestigation,
+String vexStatusLabel(String status) => switch (status) {
+  'not_affected' => tr('non affectée'),
+  'affected' => tr('affectée'),
+  'fixed' => tr('corrigée'),
+  _ => tr('à l\'étude'),
 };
 
-String vexJustificationLabel(AppLocalizations l, String j) => switch (j) {
-  'component_not_present' => l.vexJustComponentNotPresent,
-  'vulnerable_code_not_present' => l.vexJustCodeNotPresent,
-  'vulnerable_code_not_in_execute_path' => l.vexJustNotInExecutePath,
+String vexJustificationLabel(String j) => switch (j) {
+  'component_not_present' => tr('composant absent'),
+  'vulnerable_code_not_present' => tr('code vulnérable absent'),
+  'vulnerable_code_not_in_execute_path' => tr('code vulnérable jamais exécuté'),
   'vulnerable_code_cannot_be_controlled_by_adversary' =>
-    l.vexJustCannotBeControlled,
-  'inline_mitigations_already_exist' => l.vexJustInlineMitigations,
+    tr('code non contrôlable par un attaquant'),
+  'inline_mitigations_already_exist' => tr('mesures d\'atténuation déjà en place'),
   _ => j,
 };
 
 /// Une ligne lisible pour une déclaration : « non affectée — code jamais… ».
-String vexSummary(AppLocalizations l, VexStatement s) {
+String vexSummary(VexStatement s) {
   final j = s.justification == null
       ? ''
-      : ' — ${vexJustificationLabel(l, s.justification!)}';
-  return '${vexStatusLabel(l, s.status)}$j';
+      : ' — ${vexJustificationLabel( s.justification!)}';
+  return '${vexStatusLabel( s.status)}$j';
 }
 
 /// Dialogue de saisie d'une déclaration VEX. [packages] : paquets (« nom
@@ -100,9 +100,8 @@ class _VexDialogState extends State<_VexDialog> {
   }
 
   void _save() {
-    final l = context.l10n;
     if (_status == 'not_affected' && _justification == null) {
-      setState(() => _error = l.vexNeedJustification);
+      setState(() => _error = tr('Une justification est requise pour « non affectée ».'));
       return;
     }
     Navigator.pop(
@@ -121,7 +120,6 @@ class _VexDialogState extends State<_VexDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final scopes = <String?>[
       for (final p in widget.packages) '${p.name}@${p.version}',
       if (_scope != null &&
@@ -130,7 +128,7 @@ class _VexDialogState extends State<_VexDialog> {
       null,
     ];
     return AlertDialog(
-      title: Text(l.vexDialogTitle(widget.vulnId)),
+      title: Text(tr('Déclaration VEX — {id}', {'id': widget.vulnId})),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -141,12 +139,12 @@ class _VexDialogState extends State<_VexDialog> {
               DropdownButtonFormField<String>(
                 key: const Key('vex-status'),
                 initialValue: _status,
-                decoration: InputDecoration(labelText: l.vexFieldStatus),
+                decoration: InputDecoration(labelText: tr('État')),
                 items: [
                   for (final s in vexStatuses)
                     DropdownMenuItem(
                       value: s,
-                      child: Text(vexStatusLabel(l, s)),
+                      child: Text(vexStatusLabel( s)),
                     ),
                 ],
                 onChanged: (v) => setState(() => _status = v!),
@@ -157,13 +155,13 @@ class _VexDialogState extends State<_VexDialog> {
                   initialValue: _justification,
                   isExpanded: true,
                   decoration: InputDecoration(
-                    labelText: l.vexFieldJustification,
+                    labelText: tr('Justification'),
                   ),
                   items: [
                     for (final j in vexJustifications)
                       DropdownMenuItem(
                         value: j,
-                        child: Text(vexJustificationLabel(l, j)),
+                        child: Text(vexJustificationLabel( j)),
                       ),
                   ],
                   onChanged: (v) => setState(() {
@@ -175,16 +173,16 @@ class _VexDialogState extends State<_VexDialog> {
                 key: const Key('vex-impact'),
                 controller: _impact,
                 maxLines: 2,
-                decoration: InputDecoration(labelText: l.vexFieldImpact),
+                decoration: InputDecoration(labelText: tr('Explication (facultative)')),
               ),
               DropdownButtonFormField<String?>(
                 key: const Key('vex-scope'),
                 initialValue: _scope,
                 isExpanded: true,
-                decoration: InputDecoration(labelText: l.vexFieldScope),
+                decoration: InputDecoration(labelText: tr('Portée')),
                 items: [
                   for (final s in scopes)
-                    DropdownMenuItem(value: s, child: Text(s ?? l.vexScopeAll)),
+                    DropdownMenuItem(value: s, child: Text(s ?? tr('Tous les paquets'))),
                 ],
                 onChanged: (v) => setState(() => _scope = v),
               ),
@@ -205,12 +203,12 @@ class _VexDialogState extends State<_VexDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(l.homeCancel),
+          child: Text(tr('Annuler')),
         ),
         FilledButton(
           key: const Key('vex-save'),
           onPressed: _save,
-          child: Text(l.vexSave),
+          child: Text(tr('Enregistrer')),
         ),
       ],
     );
@@ -232,7 +230,6 @@ class CveVexRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     VexStatement? current;
     for (final p in packages) {
       current = controller.find(vulnId, p.name, p.version);
@@ -257,24 +254,21 @@ class CveVexRow extends StatelessWidget {
           TextButton(
             key: const Key('vex-declare'),
             onPressed: edit,
-            child: Text(l.vexDeclare),
+            child: Text(tr('Déclarer via VEX…')),
           )
         else ...[
           Flexible(
             child: Text(
-              l.vexCurrent(
-                vexSummary(l, current),
-                current.impactStatement == null
+              tr('VEX : {status}{detail}', {'status': vexSummary( current), 'detail': current.impactStatement == null
                     ? ''
-                    : ' (${current.impactStatement})',
-              ),
+                    : ' (${current.impactStatement})'}),
               style: const TextStyle(fontSize: 12),
             ),
           ),
-          TextButton(onPressed: edit, child: Text(l.vexEdit)),
+          TextButton(onPressed: edit, child: Text(tr('Modifier'))),
           TextButton(
             onPressed: () => controller.remove(current!),
-            child: Text(l.vexRemove),
+            child: Text(tr('Retirer')),
           ),
         ],
       ],
@@ -299,9 +293,8 @@ class VexBar extends StatelessWidget {
   });
 
   Future<void> _import(BuildContext context) async {
-    final l = context.l10n;
     final picked = await FilePicker.pickFile(
-      dialogTitle: l.vexDialogImport,
+      dialogTitle: tr('Importer un document VEX'),
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
@@ -313,25 +306,24 @@ class VexBar extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l.vexImported(n))));
+      ).showSnackBar(SnackBar(content: Text(tr('{count} déclaration(s) VEX importée(s)', {'count': n}))));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l.vexInvalid('$e'))));
+      ).showSnackBar(SnackBar(content: Text(tr('Document VEX illisible : {error}', {'error': '$e'}))));
     }
   }
 
   Future<void> _export(BuildContext context, bool cdx) async {
-    final l = context.l10n;
     if (controller.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l.vexNothingToExport)));
+      ).showSnackBar(SnackBar(content: Text(tr('Aucune déclaration VEX à exporter.'))));
       return;
     }
     final path = await pickSavePath(
-      dialogTitle: l.vexDialogExport,
+      dialogTitle: tr('Exporter les déclarations VEX'),
       fileName: cdx ? 'vex.cdx.json' : 'vex.openvex.json',
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -344,12 +336,11 @@ class VexBar extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(l.vexExported(path))));
+    ).showSnackBar(SnackBar(content: Text(tr('VEX exporté → {path}', {'path': path}))));
   }
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => Card(
@@ -363,27 +354,27 @@ class VexBar extends StatelessWidget {
             children: [
               const Icon(Icons.rule, size: 18),
               Text(
-                l.vexBarSummary(controller.statements.length),
+                (isPlural(controller.statements.length) ? tr('VEX : {count} déclarations', {'count': controller.statements.length}) : tr('VEX : {count} déclaration', {'count': controller.statements.length})),
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               if (!controller.isEmpty)
                 FilterChip(
                   key: const Key('vex-hide'),
-                  label: Text(l.vexHideSuppressed(hiddenCount)),
+                  label: Text(tr('Masquer les CVE couvertes par un VEX ({count})', {'count': hiddenCount})),
                   selected: hide,
                   onSelected: onHideChanged,
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.file_open_outlined, size: 18),
-                label: Text(l.vexImport),
+                label: Text(tr('Importer un VEX…')),
                 onPressed: () => _import(context),
               ),
               PopupMenuButton<bool>(
-                tooltip: l.vexExport,
+                tooltip: tr('Exporter'),
                 onSelected: (cdx) => _export(context, cdx),
                 itemBuilder: (_) => [
-                  PopupMenuItem(value: false, child: Text(l.vexExportOpenVex)),
-                  PopupMenuItem(value: true, child: Text(l.vexExportCdx)),
+                  PopupMenuItem(value: false, child: Text(tr('OpenVEX (.json)'))),
+                  PopupMenuItem(value: true, child: Text(tr('CycloneDX VEX (.json)'))),
                 ],
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -395,7 +386,7 @@ class VexBar extends StatelessWidget {
                     children: [
                       const Icon(Icons.upload_file, size: 18),
                       const SizedBox(width: 4),
-                      Text(l.vexExport),
+                      Text(tr('Exporter')),
                     ],
                   ),
                 ),
@@ -406,7 +397,7 @@ class VexBar extends StatelessWidget {
                     context: context,
                     builder: (_) => _VexListDialog(controller: controller),
                   ),
-                  child: Text(l.vexManage),
+                  child: Text(tr('Gérer')),
                 ),
             ],
           ),
@@ -422,11 +413,10 @@ class _VexListDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => AlertDialog(
-        title: Text(l.vexManageTitle),
+        title: Text(tr('Déclarations VEX')),
         content: SizedBox(
           width: 560,
           height: 360,
@@ -437,11 +427,11 @@ class _VexListDialog extends StatelessWidget {
                   dense: true,
                   title: Text(s.vulnId),
                   subtitle: Text(
-                    '${s.products.isEmpty ? l.vexAnyPackage : s.products.join(', ')}'
-                    ' · ${vexSummary(l, s)}',
+                    '${s.products.isEmpty ? tr('tous les paquets') : s.products.join(', ')}'
+                    ' · ${vexSummary( s)}',
                   ),
                   trailing: IconButton(
-                    tooltip: l.vexRemove,
+                    tooltip: tr('Retirer'),
                     icon: const Icon(Icons.delete_outline, size: 18),
                     onPressed: () => controller.remove(s),
                   ),
@@ -457,11 +447,11 @@ class _VexListDialog extends StatelessWidget {
                     controller.clear();
                     Navigator.pop(context);
                   },
-            child: Text(l.vexClearAll),
+            child: Text(tr('Tout retirer')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(l.commonClose),
+            child: Text(tr('Fermer')),
           ),
         ],
       ),

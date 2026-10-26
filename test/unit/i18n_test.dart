@@ -47,21 +47,20 @@ void main() {
     });
   });
 
-  group('tr / plural', () {
-    test('tr suit la langue courante', () {
+  group('tr / isPlural', () {
+    test('tr suit la langue courante et remplace les paramètres', () {
       currentLang = Lang.fr;
-      expect(tr('bonjour', 'hello'), 'bonjour');
+      expect(tr('bonjour {nom}', {'nom': 'Ana'}), 'bonjour Ana');
       currentLang = Lang.en;
-      expect(tr('bonjour', 'hello'), 'hello');
+      expect(tr('Système'), 'Système', reason: 'repli sur le français');
+      expect(tr('Mettre à jour vers {versions}.', {'versions': '1.2'}),
+          'Upgrade to 1.2.');
     });
-    test('plural : 0 et 1 singulier en français, 1 seul en anglais', () {
+    test('isPlural : 0 et 1 singulier en français, 1 seul en anglais', () {
       currentLang = Lang.fr;
-      expect(plural(0, 'paquet', 'paquets', 'package', 'packages'), 'paquet');
-      expect(plural(1, 'paquet', 'paquets', 'package', 'packages'), 'paquet');
-      expect(plural(2, 'paquet', 'paquets', 'package', 'packages'), 'paquets');
+      expect([isPlural(0), isPlural(1), isPlural(2)], [false, false, true]);
       currentLang = Lang.en;
-      expect(plural(0, 'paquet', 'paquets', 'package', 'packages'), 'packages');
-      expect(plural(1, 'paquet', 'paquets', 'package', 'packages'), 'package');
+      expect([isPlural(0), isPlural(1), isPlural(2)], [true, false, true]);
     });
   });
 }

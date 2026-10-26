@@ -33,8 +33,7 @@ class RpmParser {
     final infoResult = results[0];
     if (infoResult.exitCode != 0) {
       stderr.writeln('Warning: ' +
-          tr('interrogation impossible de "$packageRef"',
-              'cannot query "$packageRef"'));
+          tr('interrogation impossible de "{packageRef}"', {'packageRef': packageRef}));
       final errMsg = infoResult.stderr.toString().trim();
       if (errMsg.isNotEmpty) stderr.writeln('  $errMsg');
       return null;
@@ -43,8 +42,7 @@ class RpmParser {
     final rawOutput = infoResult.stdout.toString().trim();
     if (rawOutput.isEmpty) {
       stderr.writeln('Warning: ' +
-          tr('sortie vide pour "$packageRef"',
-              'empty output for "$packageRef"'));
+          tr('sortie vide pour "{packageRef}"', {'packageRef': packageRef}));
       return null;
     }
 
@@ -53,8 +51,7 @@ class RpmParser {
     final allParts = line.split('|');
     if (allParts.length < 13) {
       stderr.writeln('Warning: ' +
-          tr('sortie de requête inattendue pour "$packageRef" : $line',
-              'unexpected query output for "$packageRef": $line'));
+          tr('sortie de requête inattendue pour "{packageRef}" : {line}', {'packageRef': packageRef, 'line': line}));
       return null;
     }
 

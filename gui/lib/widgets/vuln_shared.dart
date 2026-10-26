@@ -10,7 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 import '../services/save_dialog.dart';
 import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
@@ -75,19 +75,19 @@ Future<String?> _toolVersionFor(String toolName) => switch (toolName) {
   _ => Future.value(null),
 };
 
-String _dateFilterSummary(CveDateFilter f, AppLocalizations l) {
+String _dateFilterSummary(CveDateFilter f) {
   final fieldLabel = switch (f.field) {
-    CveDateField.published => l.vrDatePublished,
-    CveDateField.modified => l.vrDateModified,
-    CveDateField.latest => l.vrDateLatest,
+    CveDateField.published => tr('publication'),
+    CveDateField.modified => tr('dernière modification'),
+    CveDateField.latest => tr('plus récente des deux'),
   };
   String day(DateTime d) => d.toIso8601String().split('T').first;
   final parts = <String>[
-    if (f.after != null) l.vrDateAfter(day(f.after!)),
-    if (f.before != null) l.vrDateBefore(day(f.before!)),
+    if (f.after != null) tr('après {date}', {'date': day(f.after!)}),
+    if (f.before != null) tr('avant {date}', {'date': day(f.before!)}),
   ];
-  final bounds = parts.isEmpty ? l.vrDateNoBound : parts.join(', ');
-  final undated = f.includeUndated ? l.vrDateUndated : '';
+  final bounds = parts.isEmpty ? tr('aucune borne') : parts.join(', ');
+  final undated = f.includeUndated ? tr(', dont sans date connue') : '';
   return '$fieldLabel — $bounds$undated';
 }
 
@@ -135,7 +135,7 @@ class JsonView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (json.isEmpty) {
-      return Center(child: Text(context.l10n.jsonViewEmpty));
+      return Center(child: Text(tr('Pas de sortie JSON.')));
     }
     final pretty = _pretty();
     return Stack(
@@ -161,7 +161,7 @@ class JsonView extends StatelessWidget {
           top: 8,
           right: 8,
           child: Tooltip(
-            message: context.l10n.jsonViewCopyTooltip,
+            message: tr('Copier le JSON'),
             child: IconButton(
               icon: const Icon(
                 Icons.copy_outlined,
@@ -172,7 +172,7 @@ class JsonView extends StatelessWidget {
                 Clipboard.setData(ClipboardData(text: json));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(context.l10n.jsonViewCopied),
+                    content: Text(tr('JSON copié')),
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -274,7 +274,7 @@ class _SplitPickButtonState extends State<SplitPickButton> {
             _menu.close();
             widget.onPickFiltered();
           },
-          child: Text(context.l10n.commonPickFiltered(widget.filterLabel)),
+          child: Text(tr('Type filtré ({filter})', {'filter': widget.filterLabel})),
         ),
         MenuItemButton(
           leadingIcon: const Icon(Icons.folder_open, size: 16),
@@ -282,7 +282,7 @@ class _SplitPickButtonState extends State<SplitPickButton> {
             _menu.close();
             widget.onPickAll();
           },
-          child: Text(context.l10n.commonPickAllFiles),
+          child: Text(tr('Tous les fichiers')),
         ),
       ],
       builder: (context, controller, _) => OutlinedButton.icon(
@@ -291,7 +291,7 @@ class _SplitPickButtonState extends State<SplitPickButton> {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(context.l10n.commonBrowse),
+            Text(tr('Choisir')),
             const SizedBox(width: 4),
             const Icon(Icons.arrow_drop_down, size: 16),
           ],
@@ -346,17 +346,17 @@ class ScanSourceToggle extends StatelessWidget {
         ButtonSegment(
           value: ScanSourceKind.sbomFile,
           icon: const Icon(Icons.description_outlined, size: 16),
-          label: Text(context.l10n.scanSourceSbom),
+          label: Text(tr('Fichier SBOM')),
         ),
         ButtonSegment(
           value: ScanSourceKind.image,
           icon: const Icon(Icons.inventory_2_outlined, size: 16),
-          label: Text(context.l10n.scanSourceImage),
+          label: Text(tr('Image de conteneur')),
         ),
         ButtonSegment(
           value: ScanSourceKind.package,
           icon: const Icon(Icons.folder_zip_outlined, size: 16),
-          label: Text(context.l10n.scanSourcePackage),
+          label: Text(tr('Paquet / archive')),
         ),
       ],
       selected: {kind},
@@ -387,16 +387,15 @@ class PackageSourceField extends StatelessWidget {
     required this.onPick,
   });
 
-  static String depthLabel(AppLocalizations l10n, String depth) =>
+  static String depthLabel(String depth) =>
       switch (depth) {
-        '0' => l10n.scanPackageDepthNone,
-        'all' => l10n.scanPackageDepthAll,
-        _ => l10n.scanPackageDepthLevels(int.tryParse(depth) ?? 0),
+        '0' => tr('0 — objet seul'),
+        'all' => tr('Illimitée'),
+        _ => (isPlural((int.tryParse(depth) ?? 0)) ? tr('{count} niveaux', {'count': int.tryParse(depth) ?? 0}) : tr('1 niveau')),
       };
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -408,10 +407,10 @@ class PackageSourceField extends StatelessWidget {
                 enabled: enabled,
                 decoration: InputDecoration(
                   label: HelpLabel(
-                    l10n.scanSourcePackage,
-                    l10n.scanSourcePackageHelp,
+                    tr('Paquet / archive'),
+                    tr('Paquet ou archive local (rpm, deb, tar/tgz, zip, jar/war/ear,\nwheel) analysé directement : le SBOM est d\'abord généré\npar sbom-generator (--input … --depth N) puis scanné.\nAvec une profondeur > 0, les jars, paquets et archives\ncontenus (ex. les jars d\'un RPM) sont aussi analysés.'),
                   ),
-                  hintText: l10n.scanSourcePackageHint,
+                  hintText: tr('chemin/vers/app.rpm, release.tar.gz, app.jar…'),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -422,7 +421,7 @@ class PackageSourceField extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: enabled ? onPick : null,
               icon: const Icon(Icons.folder_open, size: 16),
-              label: Text(l10n.commonBrowse),
+              label: Text(tr('Choisir')),
             ),
           ],
         ),
@@ -434,8 +433,8 @@ class PackageSourceField extends StatelessWidget {
             isDense: true,
             decoration: InputDecoration(
               label: HelpLabel(
-                l10n.scanPackageDepthLabel,
-                l10n.scanPackageDepthHelp,
+                tr('Profondeur'),
+                tr('Niveaux d\'objets imbriqués dans lesquels descendre :\n• 0 : l\'objet seul\n• N : N niveaux (1 = jars/paquets/archives contenus\n  dans l\'objet, 2 = ce que ceux-ci contiennent…)\n• Illimitée : tous les niveaux (plafonnés à 10)\nLes manifestes rencontrés (package-lock.json, go.sum,\npom.xml…) sont analysés. Extraction bornée en taille.'),
               ),
               border: const OutlineInputBorder(),
               isDense: true,
@@ -445,7 +444,7 @@ class PackageSourceField extends StatelessWidget {
                 DropdownMenuItem(
                   value: d,
                   child: Text(
-                    depthLabel(l10n, d),
+                    depthLabel( d),
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
@@ -491,10 +490,8 @@ class ImageRefField extends StatelessWidget {
             enabled: enabled,
             decoration: InputDecoration(
               label: HelpLabel(
-                context.l10n.scanSourceImage,
-                context.l10n.scanSourceImageHelp(
-                  allowOciDir ? context.l10n.scanSourceImageHelpOciDir : '',
-                ),
+                tr('Image de conteneur'),
+                tr('Référence d\'une image à analyser directement, sans\npasser par un fichier SBOM :\n• Registre : nginx:latest, ghcr.io/org/app:tag\n• Archive : ./image.tar(.gz) (docker save)\n{ociDirLine}Un registre privé est résolu via la configuration\nDocker locale (docker login), sans champ dédié ici.', {'ociDirLine': allowOciDir ? tr('• Répertoire OCI layout : ./oci_dir/\n') : ''}),
               ),
               hintText: allowOciDir
                   ? 'nginx:latest  •  ./image.tar(.gz)  •  ./oci_dir/'
@@ -508,14 +505,14 @@ class ImageRefField extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         IconButton.outlined(
-          tooltip: context.l10n.scanSourcePickArchive,
+          tooltip: tr('Choisir une archive (.tar, .tar.gz, .tgz)'),
           onPressed: enabled ? onPickArchive : null,
           icon: const Icon(Icons.archive_outlined, size: 18),
         ),
         if (allowOciDir) ...[
           const SizedBox(width: 4),
           IconButton.outlined(
-            tooltip: context.l10n.scanSourcePickOciDir,
+            tooltip: tr('Choisir un répertoire OCI layout'),
             onPressed: enabled ? onPickOciDir : null,
             icon: const Icon(Icons.folder_outlined, size: 18),
           ),
@@ -606,7 +603,7 @@ class CliCommandButton extends StatelessWidget {
       height: height,
       child: OutlinedButton.icon(
         icon: const Icon(Icons.terminal, size: 18),
-        label: Text(context.l10n.cliCommandButton),
+        label: Text(tr('CLI Commande')),
         onPressed: () => showDialog<void>(
           context: context,
           builder: (_) => CliCommandDialog(sections: sections()),
@@ -629,7 +626,7 @@ class CliCommandDialog extends StatelessWidget {
         children: [
           const Icon(Icons.terminal, size: 20),
           const SizedBox(width: 8),
-          Text(context.l10n.cliCommandDialogTitle),
+          Text(tr('Ligne de commande')),
         ],
       ),
       content: SizedBox(
@@ -674,12 +671,12 @@ class CliCommandDialog extends StatelessWidget {
                           size: 16,
                           color: Color(0xFFBDBDBD),
                         ),
-                        tooltip: context.l10n.commonCopy,
+                        tooltip: tr('Copier'),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: sec.command));
                           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                             SnackBar(
-                              content: Text(context.l10n.cliCommandCopied),
+                              content: Text(tr('Commande copiée')),
                               duration: const Duration(seconds: 2),
                             ),
                           );
@@ -707,7 +704,7 @@ class CliCommandDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.commonClose),
+          child: Text(tr('Fermer')),
         ),
       ],
     );
@@ -717,13 +714,13 @@ class CliCommandDialog extends StatelessWidget {
 /// Remarque de la section « Équivalent sbom-generator scan » : différence
 /// de cible en mode image, options de l'onglet sans équivalent.
 String? equivalentScanNote(
-  AppLocalizations l10n,
+  
   bool useImage,
   List<String> notCarried,
 ) {
   final parts = [
-    if (useImage) l10n.cliCommandImageNote,
-    if (notCarried.isNotEmpty) l10n.cliCommandNotCarried(notCarried.join(', ')),
+    if (useImage) tr('Avec --image, sbom-generator scanne le SBOM CycloneDX généré (syft), pas l\'image directement.'),
+    if (notCarried.isNotEmpty) tr('Non transposable : {options}.', {'options': notCarried.join(', ')}),
   ];
   return parts.isEmpty ? null : parts.join(' ');
 }
@@ -754,12 +751,12 @@ String layeredCliSequence({
 }
 
 /// Libellé d'une étape de l'analyse par couche, dans la langue de [l10n].
-String layerScanStepLabel(AppLocalizations l10n, LayerScanStep step) =>
+String layerScanStepLabel(LayerScanStep step) =>
     switch (step) {
-      LayerScanPreparing() => l10n.layerScanStepPreparing,
-      LayerScanScanningImage() => l10n.layerScanStepImage,
+      LayerScanPreparing() => tr('Préparation des SBOM de couche…'),
+      LayerScanScanningImage() => tr('Analyse de l\'image…'),
       LayerScanScanningLayer(:final index, :final total) =>
-        l10n.layerScanStepLayer(index, total),
+        tr('Couche {index}/{total}…', {'index': index, 'total': total}),
     };
 
 /// Ligne d'état sous la barre de progression d'un scan (étapes de l'analyse
@@ -793,7 +790,6 @@ class LayerScanOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     const segStyle = ButtonStyle(
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -813,9 +809,9 @@ class LayerScanOptions extends StatelessWidget {
                   ? (v) => onChanged(settings.copyWith(enabled: v ?? false))
                   : null,
             ),
-            Text(l10n.layerScanCheckbox, style: const TextStyle(fontSize: 13)),
+            Text(tr('Par couche'), style: const TextStyle(fontSize: 13)),
             const SizedBox(width: 4),
-            HelpIcon(l10n.layerScanHelp),
+            HelpIcon(tr('Attribue chaque vulnérabilité à la couche de l\'image qui\napporte le paquet vulnérable (SBOM par couche générés par\nsbom-generator --per-layer, via syft).\n• Rattachement : un seul scan de l\'image, chaque CVE\n  rattachée à la couche d\'origine de son paquet — CVE de\n  l\'image finale uniquement.\n• Chaque couche : le SBOM de chaque couche est scanné —\n  inclut les CVE d\'une version remplacée plus haut dans la\n  pile (avec le calcul Rootfs).\n• Métadonnées / Rootfs : calcul des couches (--layer-mode).')),
           ],
         ),
         if (settings.enabled) ...[
@@ -824,13 +820,13 @@ class LayerScanOptions extends StatelessWidget {
             segments: [
               ButtonSegment(
                 value: LayerScanMode.attribute,
-                label: Text(l10n.layerScanAttribute),
-                tooltip: l10n.layerScanAttributeTooltip,
+                label: Text(tr('Rattachement')),
+                tooltip: tr('Un scan de l\'image, CVE rattachées à la couche d\'origine du paquet'),
               ),
               ButtonSegment(
                 value: LayerScanMode.each,
-                label: Text(l10n.layerScanEach),
-                tooltip: l10n.layerScanEachTooltip,
+                label: Text(tr('Chaque couche')),
+                tooltip: tr('Un scan par SBOM de couche'),
               ),
             ],
             selected: {settings.mode},
@@ -843,13 +839,13 @@ class LayerScanOptions extends StatelessWidget {
             segments: [
               ButtonSegment(
                 value: 'metadata',
-                label: Text(l10n.layerModeMetadata),
-                tooltip: l10n.layerModeMetadataTooltip,
+                label: Text(tr('Métadonnées')),
+                tooltip: tr('Couche d\'origine indiquée par syft — ajouts'),
               ),
               ButtonSegment(
                 value: 'rootfs',
-                label: Text(l10n.layerModeRootfs),
-                tooltip: l10n.layerModeRootfsTooltip,
+                label: Text(tr('Rootfs')),
+                tooltip: tr('Réanalyse après chaque couche — ajouts, modifications, suppressions'),
               ),
             ],
             selected: {settings.layerMode},
@@ -895,7 +891,6 @@ class DateFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = context.l10n;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -909,7 +904,7 @@ class DateFilterBar extends StatelessWidget {
         children: [
           const Icon(Icons.calendar_today_outlined, size: 14),
           const SizedBox(width: 6),
-          Text(l10n.dateFilterLabel, style: const TextStyle(fontSize: 11)),
+          Text(tr('Date CVE :'), style: const TextStyle(fontSize: 11)),
           const SizedBox(width: 6),
           // Champ de date (published / modified / latest)
           SegmentedButton<CveDateField>(
@@ -917,21 +912,21 @@ class DateFilterBar extends StatelessWidget {
               ButtonSegment(
                 value: CveDateField.published,
                 label: Text(
-                  l10n.dateFilterPublished,
+                  tr('Publication'),
                   style: const TextStyle(fontSize: 10),
                 ),
               ),
               ButtonSegment(
                 value: CveDateField.modified,
                 label: Text(
-                  l10n.dateFilterModified,
+                  tr('Modification'),
                   style: const TextStyle(fontSize: 10),
                 ),
               ),
               ButtonSegment(
                 value: CveDateField.latest,
                 label: Text(
-                  l10n.dateFilterLatest,
+                  tr('La plus récente'),
                   style: const TextStyle(fontSize: 10),
                 ),
               ),
@@ -956,8 +951,8 @@ class DateFilterBar extends StatelessWidget {
           // Après le
           DateChip(
             label: filter.after == null
-                ? l10n.dateFilterAfterEmpty
-                : l10n.dateFilterAfter(_fmtDate(filter.after!)),
+                ? tr('Après le…')
+                : tr('Après : {date}', {'date': _fmtDate(filter.after!)}),
             active: filter.after != null,
             onTap: () => _pickDate(
               context,
@@ -972,8 +967,8 @@ class DateFilterBar extends StatelessWidget {
           // Avant le
           DateChip(
             label: filter.before == null
-                ? l10n.dateFilterBeforeEmpty
-                : l10n.dateFilterBefore(_fmtDate(filter.before!)),
+                ? tr('Avant le…')
+                : tr('Avant : {date}', {'date': _fmtDate(filter.before!)}),
             active: filter.before != null,
             onTap: () => _pickDate(
               context,
@@ -1003,7 +998,7 @@ class DateFilterBar extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                l10n.dateFilterUndated,
+                tr('Sans date'),
                 style: const TextStyle(fontSize: 11),
               ),
             ],
@@ -1014,7 +1009,7 @@ class DateFilterBar extends StatelessWidget {
             TextButton.icon(
               icon: const Icon(Icons.sync_alt, size: 14),
               label: Text(
-                l10n.dateFilterPropagate,
+                tr('Propager aux autres onglets'),
                 style: const TextStyle(fontSize: 11),
               ),
               style: TextButton.styleFrom(
@@ -1410,14 +1405,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     if (e.inKev) {
       chips.add(
         Tooltip(
-          message: context.l10n.vulnTableKevTooltip(
-            e.kevDateAdded != null
-                ? context.l10n.vulnTableKevAdded(
-                    e.kevDateAdded!.toIso8601String().substring(0, 10),
-                  )
-                : '',
-            e.kevRansomware ? context.l10n.vulnTableKevRansomware : '',
-          ),
+          message: tr('CISA KEV — exploitée activement dans la nature{added}{ransomware}', {'added': e.kevDateAdded != null
+                ? tr(' (ajoutée le {date})', {'date': e.kevDateAdded!.toIso8601String().substring(0, 10)})
+                : '', 'ransomware': e.kevRansomware ? tr(' · usage par rançongiciel') : ''}),
           child: pill('KEV', Colors.red, icon: Icons.local_fire_department),
         ),
       );
@@ -1426,7 +1416,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       final pct = ((e.epssPercentile ?? 0) * 100).round();
       chips.add(
         Tooltip(
-          message: context.l10n.vulnTableEpssTooltip(pct),
+          message: tr('EPSS — probabilité d\'exploitation à 30 jours (percentile {percentile})', {'percentile': pct}),
           child: pill(
             'EPSS ${e.epssScore!.toStringAsFixed(2)}',
             e.epssScore! >= 0.10 ? Colors.deepOrange : Colors.blueGrey,
@@ -1438,8 +1428,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       chips.add(
         Tooltip(
           message: e.pocCount > 0
-              ? context.l10n.vulnTablePocRepos(e.pocCount)
-              : context.l10n.vulnTablePocMaturity(e.exploitMaturity ?? 'PoC'),
+              ? (isPlural(e.pocCount) ? tr('{count} dépôts PoC publics recensés', {'count': e.pocCount}) : tr('1 dépôt PoC public recensé'))
+              : tr('Maturité de l\'exploit : {maturity}', {'maturity': e.exploitMaturity ?? 'PoC'}),
           child: pill(
             e.pocCount > 0 ? 'PoC ${e.pocCount}' : 'PoC',
             Colors.purple,
@@ -1451,13 +1441,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     if (e.cvssExploitabilityScore != null) {
       chips.add(
         Tooltip(
-          message: context.l10n.vulnTableExploitabilityTooltip(
-            e.exploitMaturity != null
-                ? context.l10n.vulnTableExploitabilityMaturity(
-                    e.exploitMaturity!,
-                  )
-                : '',
-          ),
+          message: tr('Sous-score d\'exploitabilité CVSS (AV/AC/PR/UI){maturity}', {'maturity': e.exploitMaturity != null
+                ? tr(' · maturité {maturity}', {'maturity': e.exploitMaturity!})
+                : ''}),
           child: pill(
             'expl. ${e.cvssExploitabilityScore!.toStringAsFixed(1)}',
             Colors.teal,
@@ -1469,7 +1455,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       return Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Text(
-          context.l10n.vulnTableNoExploitSignal,
+          tr('aucun signal d\'exploitation'),
           style: const TextStyle(fontSize: 10, color: Colors.grey),
         ),
       );
@@ -1480,7 +1466,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     );
   }
 
-  List<String> _exploitCells(T v, AppLocalizations l) {
+  List<String> _exploitCells(T v) {
     final e = _ex(v);
     final epss = e.epssScore == null
         ? '—'
@@ -1488,12 +1474,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
               '(p${((e.epssPercentile ?? 0) * 100).round()})';
     final poc = e.pocCount > 0
         ? '${e.pocCount}'
-        : (e.pocKnown ? l.adocYes : '—');
-    return [e.inKev ? l.adocYes : '—', epss, poc];
+        : (e.pocKnown ? tr('oui') : '—');
+    return [e.inKev ? tr('oui') : '—', epss, poc];
   }
 
   Future<void> _exportCsv(BuildContext context) async {
-    final l = context.l10n;
     final rows = _filtered;
     final buf = StringBuffer();
     final withLayers = widget.layerScan != null;
@@ -1501,13 +1486,13 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       [
         widget.csvHeader,
         if (_hasExploit) _exploitHeaders.join(','),
-        if (withLayers) l.vrLayersCol,
+        if (withLayers) tr('Couche(s)'),
       ].join(','),
     );
     for (final v in rows) {
       final cells = [
         ...widget.csvRow(v),
-        if (_hasExploit) ..._exploitCells(v, l),
+        if (_hasExploit) ..._exploitCells(v),
         if (withLayers) _layerLabel(v),
       ];
       buf.writeln(cells.map(csvEscape).join(','));
@@ -1523,7 +1508,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.vulnTableExported(rows.length, path)),
+          content: Text((isPlural(rows.length) ? tr('{count} vulnérabilités exportées → {path}', {'count': rows.length, 'path': path}) : tr('1 vulnérabilité exportée → {path}', {'path': path}))),
           duration: const Duration(seconds: 4),
         ),
       );
@@ -1531,10 +1516,9 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
   }
 
   Future<void> _exportAsciiDoc(BuildContext context) async {
-    final l = context.l10n;
     final rows = _filtered;
     final path = await pickSavePath(
-      dialogTitle: context.l10n.vulnTableExportPdfDialog(widget.toolName),
+      dialogTitle: tr('Exporter le rapport {tool} (AsciiDoc + PDF)', {'tool': widget.toolName}),
       fileName: widget.csvFileName.replaceAll(RegExp(r'\.csv$'), '.adoc'),
       type: FileType.custom,
       allowedExtensions: ['adoc'],
@@ -1549,7 +1533,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final columns = [
       ...widget.csvHeader.split(','),
       if (_hasExploit) ..._exploitHeaders,
-      if (layerScan != null) l.vrLayersCol,
+      if (layerScan != null) tr('Couche(s)'),
     ];
     final kevCount = _hasExploit ? rows.where((v) => _ex(v).inKev).length : 0;
 
@@ -1560,37 +1544,33 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final high = cnt('high');
 
     final buf = StringBuffer();
-    buf.writeln(l.vrTitle(widget.toolName));
+    buf.writeln(tr('= Rapport de vulnérabilités: {tool}', {'tool': widget.toolName}));
     buf.writeln('SBOM Generator $kGuiVersion');
     buf.writeln(':doctype: article');
     buf.writeln(':title-page:');
     buf.writeln(':toc:');
-    buf.writeln(l.repTocTitle);
+    buf.writeln(tr(':toc-title: Sommaire'));
     buf.writeln(':toclevels: 2');
-    buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now(), l: l)}');
+    buf.writeln(':revdate: ${pdfFrenchDate(DateTime.now())}');
     buf.writeln(':icons: font');
     buf.writeln();
-    buf.writeln(l.repExecSummary);
+    buf.writeln(tr('== Résumé exécutif'));
     buf.writeln();
     if (widget.scanTarget != null) {
-      buf.writeln(l.repTarget(adocEscape(widget.scanTarget!)));
+      buf.writeln(tr('*Cible analysée* : {target} +', {'target': adocEscape(widget.scanTarget!)}));
     }
     buf.writeln(
-      l.vrScannerLine(
-        widget.toolName,
-        rows.length,
-        widget.dateFilter.hasConstraints ? l.vrAfterDateFilter : '',
-      ),
+      (isPlural(rows.length) ? tr('*Scanner* : {tool} — *{count}* vulnérabilités{filtered}', {'tool': widget.toolName, 'count': rows.length, 'filtered': widget.dateFilter.hasConstraints ? tr(' après filtre de date') : ''}) : tr('*Scanner* : {tool} — *{count}* vulnérabilité{filtered}', {'tool': widget.toolName, 'count': rows.length, 'filtered': widget.dateFilter.hasConstraints ? tr(' après filtre de date') : ''})),
     );
     buf.writeln();
     final svg = buildSeverityBarSvg(counts);
     if (svg != null) {
-      buf.writeln(svgImageMacro(svg, l: l));
+      buf.writeln(svgImageMacro(svg));
       buf.writeln();
     }
     buf.writeln('[cols="^1,^1,^1,^1",frame=none,grid=cols]');
     buf.writeln('|===');
-    buf.writeln(l.vrStatsHeader);
+    buf.writeln(tr('h| Critiques h| Élevées h| CISA KEV h| Total'));
     buf.writeln(
       '| [.${crit > 0 ? 'h1-num-alert' : 'h1-num'}]*$crit* '
       '| [.h1-num]*$high* '
@@ -1600,15 +1580,15 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     buf.writeln('|===');
     buf.writeln();
     if (widget.dateFilter.hasConstraints) {
-      buf.writeln(l.vrDateNote(_dateFilterSummary(widget.dateFilter, l)));
+      buf.writeln(tr('NOTE: Filtre de date appliqué — {summary}.', {'summary': _dateFilterSummary(widget.dateFilter)}));
       buf.writeln();
     }
     buf.writeln('[cols="<2,>1",options="header"]');
     buf.writeln('|===');
-    buf.writeln(l.repSevCountHeader);
+    buf.writeln(tr('| Sévérité | Nombre'));
     for (final s in widget.severityOrder) {
       if (counts.containsKey(s)) {
-        buf.writeln('| ${pdfSeverityBadge(s, l: l)} | ${counts[s]}');
+        buf.writeln('| ${pdfSeverityBadge(s)} | ${counts[s]}');
       }
     }
     buf.writeln('|===');
@@ -1616,37 +1596,33 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
 
     // Versions détectées au moment de l'export (pas au moment du scan) —
     // toujours à jour même si l'outil a été mis à jour depuis.
-    buf.writeln(l.repTools);
+    buf.writeln(tr('== Outils'));
     buf.writeln();
     buf.writeln('[cols="<3,<1",options="header"]');
     buf.writeln('|===');
-    buf.writeln(l.repToolHeader);
-    buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion, l: l));
+    buf.writeln(tr('| Outil | Version'));
+    buf.writeln(pdfToolVersionRow('sbom_generator_gui', kGuiVersion));
     buf.writeln(
       pdfToolVersionRow(
         widget.toolName,
         await _toolVersionFor(widget.toolName),
-        l: l,
       ),
     );
     buf.writeln('|===');
     buf.writeln();
 
     if (layerScan != null) {
-      buf.writeln(l.repLayersTitle);
+      buf.writeln(tr('== Couches de l\'image'));
       buf.writeln();
       buf.writeln(
-        l.vrLayerMethod(
-          layerScan.modeLabelFor(l),
-          layerScan.unattributed > 0
-              ? l.vrLayerUnattr(layerScan.unattributed)
-              : '',
-        ),
+        tr('Méthode : {mode}{extra}.', {'mode': layerScan.modeLabelFor(), 'extra': layerScan.unattributed > 0
+              ? (isPlural(layerScan.unattributed) ? tr(' — {count} vulnérabilités sans couche connue', {'count': layerScan.unattributed}) : tr(' — {count} vulnérabilité sans couche connue', {'count': layerScan.unattributed}))
+              : ''}),
       );
       buf.writeln();
       buf.writeln('[cols="2,3,7,2,3,3",options="header"]');
       buf.writeln('|===');
-      buf.writeln(l.vrLayersHeader);
+      buf.writeln(tr('| Couche | Digest | Instruction | Vulnérabilités | Critiques | Élevées'));
       for (final layer in layerScan.layers) {
         final inLayer = rows.where((v) => _layersOf(v).contains(layer.index));
         int sev(String k) =>
@@ -1662,7 +1638,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       buf.writeln();
     }
 
-    buf.writeln(l.vrDetail);
+    buf.writeln(tr('== Détail'));
     buf.writeln();
     buf.writeln(
       '[cols="${List.filled(columns.length, "<1").join(',')}",options="header"]',
@@ -1673,11 +1649,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     for (final v in rows) {
       final cells = [
         ...widget.csvRow(v),
-        if (_hasExploit) ..._exploitCells(v, l),
+        if (_hasExploit) ..._exploitCells(v),
         if (layerScan != null) _layerLabel(v),
       ];
       final formatted = [
-        pdfSeverityBadge(cells.first, l: l),
+        pdfSeverityBadge(cells.first),
         ...cells.skip(1).map(adocEscape),
       ];
       buf.writeln('| ${formatted.join(' | ')}');
@@ -1699,12 +1675,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
         SnackBar(
           content: Text(
             result.exitCode == 0
-                ? context.l10n.vulnTableExportedPdf(rows.length, path, pdfPath)
-                : context.l10n.vulnTableExportedPdfFailed(
-                    rows.length,
-                    path,
-                    result.exitCode,
-                  ),
+                ? (isPlural(rows.length) ? tr('{count} vulnérabilités exportées → {path} et {pdf}', {'count': rows.length, 'path': path, 'pdf': pdfPath}) : tr('1 vulnérabilité exportée → {path} et {pdf}', {'path': path, 'pdf': pdfPath}))
+                : (isPlural(rows.length) ? tr('{count} vulnérabilités exportées → {path} (échec conversion PDF, code {code})', {'count': rows.length, 'path': path, 'code': result.exitCode}) : tr('1 vulnérabilité exportée → {path} (échec conversion PDF, code {code})', {'path': path, 'code': result.exitCode})),
           ),
           duration: const Duration(seconds: 5),
         ),
@@ -1713,7 +1685,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.vulnTableExportedNoPdf(rows.length, path)),
+          content: Text((isPlural(rows.length) ? tr('{count} vulnérabilités exportées → {path} (asciidoctor-pdf introuvable, PDF non généré)', {'count': rows.length, 'path': path}) : tr('1 vulnérabilité exportée → {path} (asciidoctor-pdf introuvable, PDF non généré)', {'path': path}))),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -1749,14 +1721,14 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
       value: _layerFilter,
       isDense: true,
       hint: Text(
-        context.l10n.vulnTableAllLayers,
+        tr('Toutes les couches'),
         style: const TextStyle(fontSize: 12),
       ),
       items: [
         DropdownMenuItem<int?>(
           value: null,
           child: Text(
-            context.l10n.vulnTableAllLayers,
+            tr('Toutes les couches'),
             style: const TextStyle(fontSize: 12),
           ),
         ),
@@ -1764,7 +1736,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           DropdownMenuItem<int?>(
             value: l.index,
             child: Text(
-              context.l10n.vulnTableLayerItem(l.index, count(l.index)),
+              tr('Couche {index} ({count})', {'index': l.index, 'count': count(l.index)}),
               style: const TextStyle(fontSize: 12),
             ),
           ),
@@ -1777,11 +1749,11 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
     final layers = _layersOf(v);
     final scan = widget.layerScan!;
     final tip = layers.isEmpty
-        ? context.l10n.vulnTableLayerUnknownTooltip
+        ? tr('Couche inconnue (paquet absent du SBOM de l\'image)')
         : layers
               .map((i) {
                 final l = scan.layer(i);
-                return '${context.l10n.vulnTableLayerLabel(i)}'
+                return '${tr('Couche {index}', {'index': i})}'
                     '${l == null ? '' : ' (${l.shortDigest})'}'
                     '${l?.createdBy == null ? '' : ' — ${l!.createdBy}'}';
               })
@@ -1828,8 +1800,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           const SizedBox(width: 6),
           Text(
             index < 0
-                ? context.l10n.vulnTableLayerUnknown
-                : '${context.l10n.vulnTableLayerLabel(index)}'
+                ? tr('Couche inconnue')
+                : '${tr('Couche {index}', {'index': index})}'
                       '${l == null ? '' : ' (${l.shortDigest})'}',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
@@ -1898,7 +1870,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
             ),
             const SizedBox(height: 12),
             Text(
-              context.l10n.scanNoVulnerabilities,
+              tr('Aucune vulnérabilité détectée'),
               style: const TextStyle(color: Colors.green, fontSize: 15),
             ),
           ],
@@ -1922,7 +1894,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           child: Row(
             children: [
               Text(
-                context.l10n.vulnTableFilter,
+                tr('Filtre :'),
                 style: const TextStyle(fontSize: 11),
               ),
               const SizedBox(width: 8),
@@ -1961,9 +1933,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                           color: _kevOnly ? Colors.white : Colors.red,
                         ),
                         label: Text(
-                          context.l10n.vulnTableKevChip(
-                            widget.vulns.where((v) => _ex(v).inKev).length,
-                          ),
+                          tr('CISA KEV ({count})', {'count': widget.vulns.where((v) => _ex(v).inKev).length}),
                           style: const TextStyle(fontSize: 11),
                         ),
                         labelStyle: TextStyle(
@@ -1978,7 +1948,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                     if (_activeFilters.isNotEmpty || _kevOnly)
                       ActionChip(
                         label: Text(
-                          context.l10n.vulnTableShowAll,
+                          tr('Tout voir'),
                           style: const TextStyle(fontSize: 11),
                         ),
                         onPressed: () => setState(() {
@@ -1999,8 +1969,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                   ),
                   isSelected: _groupByLayer,
                   tooltip: _groupByLayer
-                      ? context.l10n.vulnTableFlatList
-                      : context.l10n.vulnTableGroupByLayer,
+                      ? tr('Liste à plat')
+                      : tr('Grouper par couche'),
                   onPressed: () =>
                       setState(() => _groupByLayer = !_groupByLayer),
                 ),
@@ -2012,7 +1982,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                   controller: _searchCtrl,
                   onChanged: (v) => setState(() => _searchTerm = v),
                   decoration: InputDecoration(
-                    hintText: context.l10n.vulnTableSearchHint,
+                    hintText: tr('Paquet ou CVE…'),
                     isDense: true,
                     prefixIcon: const Icon(Icons.search, size: 16),
                     suffixIcon: _searchTerm.isNotEmpty
@@ -2045,19 +2015,19 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                     color: widget.enrichOnline ? null : Colors.grey,
                   ),
                   tooltip: widget.enrichOnline
-                      ? context.l10n.vulnTableEnrichOnline
-                      : context.l10n.vulnTableEnrichOffline,
+                      ? tr('Enrichissement en ligne actif (CISA KEV / EPSS / poc-in-github) — cliquer pour passer hors-ligne')
+                      : tr('Enrichissement hors-ligne (Grype + cache local seulement) — cliquer pour réactiver le réseau'),
                   onPressed: () =>
                       widget.onEnrichOnlineChanged!(!widget.enrichOnline),
                 ),
               IconButton(
                 icon: const Icon(Icons.download_outlined, size: 18),
-                tooltip: context.l10n.vulnTableExportCsv,
+                tooltip: tr('Exporter CSV'),
                 onPressed: _filtered.isEmpty ? null : () => _exportCsv(context),
               ),
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                tooltip: context.l10n.vulnTableExportPdf,
+                tooltip: tr('Exporter en AsciiDoc + PDF'),
                 onPressed: _filtered.isEmpty
                     ? null
                     : () => _exportAsciiDoc(context),
@@ -2080,21 +2050,21 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
           child: Row(
             children: [
               SortHeader(
-                context.l10n.vulnTableColSeverity,
+                tr('SÉVÉRITÉ'),
                 _sortCol == VulnSortCol.severity,
                 _sortAsc,
                 () => _onSort(VulnSortCol.severity),
               ),
               const SizedBox(width: 16),
               SortHeader(
-                context.l10n.vulnTableColId,
+                tr('CVE / ID'),
                 _sortCol == VulnSortCol.cveId,
                 _sortAsc,
                 () => _onSort(VulnSortCol.cveId),
               ),
               const SizedBox(width: 16),
               SortHeader(
-                context.l10n.vulnTableColPackage,
+                tr('PAQUET'),
                 _sortCol == VulnSortCol.package,
                 _sortAsc,
                 () => _onSort(VulnSortCol.package),
@@ -2129,7 +2099,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
               if (widget.layerScan != null) ...[
                 const SizedBox(width: 16),
                 Text(
-                  context.l10n.vulnTableColLayer,
+                  tr('COUCHE'),
                   style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
@@ -2147,9 +2117,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
             child: Text(
-              context.l10n.vulnTableUnattributed(
-                widget.layerScan!.unattributed,
-              ),
+              (isPlural((widget.layerScan!.unattributed)) ? tr('{count} vulnérabilités sans couche connue (paquet absent du SBOM de l\'image) — colonne « ? ».', {'count': widget.layerScan!.unattributed}) : tr('1 vulnérabilité sans couche connue (paquet absent du SBOM de l\'image) — colonne « ? ».')),
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ),
@@ -2159,7 +2127,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
             child: Text(
-              context.l10n.vulnTableEnrichPending,
+              tr('Enrichissement en ligne (CISA KEV / EPSS / PoC) en cours…'),
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ),
@@ -2181,10 +2149,8 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                       const SizedBox(height: 8),
                       Text(
                         _searchTerm.isNotEmpty
-                            ? context.l10n.vulnTableNoMatchSearch(_searchTerm)
-                            : context.l10n.vulnTableNoMatchFilter(
-                                _activeFilters.join(', '),
-                              ),
+                            ? tr('Aucun résultat pour "{term}"', {'term': _searchTerm})
+                            : tr('Aucun résultat pour {filters}', {'filters': _activeFilters.join(', ')}),
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -2244,9 +2210,7 @@ class _VulnTableViewState<T extends VulnRow> extends State<VulnTableView<T>> {
                           if (v.occurrenceCount > 1) ...[
                             const SizedBox(width: 6),
                             Tooltip(
-                              message: context.l10n.vulnTableOccurrences(
-                                v.occurrenceCount,
-                              ),
+                              message: tr('Ce composant est présent à {count} emplacements distincts de l\'image/du SBOM (ex. une bibliothèque autonome et une copie embarquée dans un autre paquet) — la même vulnérabilité y a été fusionnée en une seule ligne.', {'count': v.occurrenceCount}),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 5,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'i18n.dart';
 import 'l10n/l10n.dart';
 import 'models/app_themes.dart';
 import 'models/sbom_config.dart';
@@ -75,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _saveSettings() => SettingsService.saveConfig(_config);
 
   void _startScan() {
-    final l = context.l10n;
     _saveSettings();
     final cmdLine = _config.toCommandLine(SettingsService.cliBinary);
     setState(() {
@@ -129,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _isRunning = false;
                   _exitCode = exitCode;
                   if (exitCode != 0 && _fatalError == null) {
-                    _fatalError = l.homeGenerationFailed(exitCode);
+                    _fatalError = tr('Génération échouée (exit {code})', {'code': exitCode});
                   }
                 });
                 if (exitCode == 0) {
@@ -162,7 +162,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _generatePdf(String adocPath) async {
-    final l = context.l10n;
     final pdfPath = _config.pdfOutputPath.isNotEmpty
         ? _config.pdfOutputPath
         : adocPath.endsWith('.adoc')
@@ -172,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isPdfRunning = true;
       _logLines.add('');
-      _logLines.add(l.homePdfHeader);
+      _logLines.add(tr('Conversion PDF (asciidoctor-pdf)…'));
       _logLines.add('  ← $adocPath');
       _logLines.add('  → $pdfPath');
     });
@@ -199,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final stderr = (result.stderr as String).trim();
         setState(() {
           _isPdfRunning = false;
-          _logLines.add(l.homePdfError(result.exitCode));
+          _logLines.add(tr('Erreur asciidoctor-pdf (exit {code})', {'code': result.exitCode}));
           if (stderr.isNotEmpty) _logLines.add('  $stderr');
         });
       }
@@ -208,8 +207,8 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isPdfRunning = false;
         _logLines.add('');
-        _logLines.add(l.homePdfMissing);
-        _logLines.add(l.homePdfInstall);
+        _logLines.add(tr('Erreur : asciidoctor-pdf introuvable.'));
+        _logLines.add(tr('  Installez avec : gem install asciidoctor-pdf'));
       });
     }
   }
@@ -243,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _runner.kill();
     setState(() {
       _isRunning = false;
-      _logLines.add(context.l10n.homeInterrupted);
+      _logLines.add(tr('[Génération interrompue par l\'utilisateur]'));
     });
   }
 
@@ -309,8 +308,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Center(
                 child: Tooltip(
                   message: _isPdfRunning
-                      ? context.l10n.homePdfRunning
-                      : context.l10n.homeSbomRunning,
+                      ? tr('Conversion PDF en cours…')
+                      : tr('Génération SBOM en cours…'),
                   child: const SizedBox(
                     width: 18,
                     height: 18,
@@ -324,18 +323,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           IconButton(
             icon: const Icon(Icons.keyboard_outlined),
-            tooltip: context.l10n.shortcutsTooltip,
+            tooltip: tr('Raccourcis clavier'),
             onPressed: () => _showShortcuts(context),
           ),
           IconButton(
             icon: const Icon(Icons.help_outline),
-            tooltip: context.l10n.homeHelpTooltip,
+            tooltip: tr('Aide — Manuel utilisateur'),
             onPressed: () => _showHelp(context),
           ),
           PopupMenuButton<AppLanguage>(
             key: const Key('language-menu'),
             icon: const Icon(Icons.translate),
-            tooltip: context.l10n.languageMenuTooltip,
+            tooltip: tr('Langue de l\'interface'),
             initialValue: widget.language,
             onSelected: widget.onLanguageChanged,
             itemBuilder: (context) => [
@@ -344,28 +343,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   value: l,
                   checked: l == widget.language,
                   child: Text(switch (l) {
-                    AppLanguage.system => context.l10n.languageSystem,
-                    AppLanguage.fr => context.l10n.languageFrench,
-                    AppLanguage.en => context.l10n.languageEnglish,
+                    AppLanguage.system => tr('Système'),
+                    AppLanguage.fr => tr('Français'),
+                    AppLanguage.en => tr('English'),
                   }),
                 ),
             ],
           ),
           IconButton(
             icon: const Icon(Icons.palette_outlined),
-            tooltip: context.l10n.homeThemeColor,
+            tooltip: tr('Couleur du thème'),
             onPressed: () => _showThemePicker(context),
           ),
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             tooltip: isDark
-                ? context.l10n.homeLightMode
-                : context.l10n.homeDarkMode,
+                ? tr('Mode clair')
+                : tr('Mode sombre'),
             onPressed: widget.onThemeToggle,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            tooltip: context.l10n.homeAbout,
+            tooltip: tr('À propos'),
             onPressed: () => _showAbout(context),
           ),
         ],
@@ -407,19 +406,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showShortcuts(BuildContext context) {
-    final l = context.l10n;
     final rows = <(String, String)>[
-      ('Ctrl+Entrée', l.shortcutRun),
-      ('Échap', l.shortcutStop),
-      ('Ctrl+1 … Ctrl+9', l.shortcutTabs),
-      ('Ctrl+PgSuiv / Ctrl+PgPréc', l.shortcutNextTab),
-      ('F1', l.shortcutHelp),
-      ('Ctrl+/', l.shortcutShortcuts),
+      ('Ctrl+Entrée', tr('Lancer la génération')),
+      ('Échap', tr('Arrêter l\'exécution en cours')),
+      ('Ctrl+1 … Ctrl+9', tr('Aller à l\'onglet 1 à 9')),
+      ('Ctrl+PgSuiv / Ctrl+PgPréc', tr('Onglet suivant / précédent')),
+      ('F1', tr('Ouvrir l\'aide')),
+      ('Ctrl+/', tr('Afficher cette liste')),
     ];
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(l.shortcutsTitle),
+        title: Text(tr('Raccourcis clavier')),
         content: SizedBox(
           width: 460,
           child: Column(
@@ -447,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               const SizedBox(height: 8),
               Text(
-                l.shortcutNavigate,
+                tr('Parcourir : Tab / flèches ; ouvrir une ligne : Entrée ou Espace'),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -456,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(l.commonClose),
+            child: Text(tr('Fermer')),
           ),
         ],
       ),
@@ -488,7 +486,7 @@ class _HomeScreenState extends State<HomeScreen> {
       applicationName: 'SBOM Generator',
       applicationVersion: kGuiVersion,
       applicationIcon: const Icon(Icons.assignment_outlined, size: 48),
-      children: [Text(context.l10n.homeAboutText)],
+      children: [Text(tr('Interface graphique pour l\'outil sbom_generator.\n\nGénère des SBOM (Software Bill of Materials) depuis des listes de paquets RPM, .whl, .tar.gz, .deb, .zip, .jar, ou de manifestes (requirements.txt, go.sum, package-lock.json, pom.xml, pubspec.lock…) — fichier liste, paquet unique, ou dossier scanné récursivement.\n\nFormats supportés : CycloneDX 1.6/1.7, SPDX 2.3, SPDX 3.0 JSON-LD, JSON personnalisé, Markdown, AsciiDoc.'))],
     );
   }
 }
@@ -511,7 +509,7 @@ class _ThemePickerDialog extends StatelessWidget {
         children: [
           const Icon(Icons.palette_outlined, size: 20),
           const SizedBox(width: 8),
-          Text(context.l10n.homeThemeColor),
+          Text(tr('Couleur du thème')),
         ],
       ),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
@@ -533,7 +531,7 @@ class _ThemePickerDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.homeCancel),
+          child: Text(tr('Annuler')),
         ),
       ],
     );
@@ -554,7 +552,7 @@ class _ThemeSwatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: themeLabel(context.l10n, theme),
+      message: themeLabel( theme),
       child: InkWell(
         borderRadius: BorderRadius.circular(32),
         onTap: onTap,
@@ -590,7 +588,7 @@ class _ThemeSwatch extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              themeLabel(context.l10n, theme),
+              themeLabel( theme),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
@@ -605,13 +603,13 @@ class _ThemeSwatch extends StatelessWidget {
 
 /// Nom d'une couleur de thème dans la langue courante (les libellés de
 /// [kAppThemes] sont en français, langue de référence).
-String themeLabel(AppLocalizations l, AppTheme t) => switch (t.label) {
-  'Bleu' => l.themeBlue,
-  'Violet' => l.themePurple,
-  'Vert' => l.themeGreen,
-  'Rouge' => l.themeRed,
-  'Rose' => l.themePink,
-  'Ardoise' => l.themeSlate,
-  'Marron' => l.themeBrown,
+String themeLabel(AppTheme t) => switch (t.label) {
+  'Bleu' => tr('Bleu'),
+  'Violet' => tr('Violet'),
+  'Vert' => tr('Vert'),
+  'Rouge' => tr('Rouge'),
+  'Rose' => tr('Rose'),
+  'Ardoise' => tr('Ardoise'),
+  'Marron' => tr('Marron'),
   _ => t.label,
 };

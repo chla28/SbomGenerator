@@ -72,7 +72,7 @@ class OciParser {
             return _parseCdxgen(resolvedRef, verbose: verbose);
           default:
             throw ArgumentError(
-                tr('Outil OCI inconnu : $tool', 'Unknown OCI tool: $tool'));
+                tr('Outil OCI inconnu : {tool}', {'tool': tool}));
         }
       });
 
@@ -118,23 +118,19 @@ class OciParser {
             switch (tool) {
               case 'trivy':
                 if (verbose)
-                  print(tr('trivy : attribution des couches de $ref…',
-                      'trivy: attributing the layers of $ref…'));
+                  print(tr('trivy : attribution des couches de {ref}…', {'ref': ref}));
                 return _trivyLayerAttribution(
                     await _runTrivyJson(_trivyImageArgs(ref)), ref);
               case 'syft':
                 if (verbose) {
-                  print(tr('syft : analyse de toutes les couches de $ref…',
-                      'syft: analysing all the layers of $ref…'));
+                  print(tr('syft : analyse de toutes les couches de {ref}…', {'ref': ref}));
                 }
                 return _syftLayerAttribution(
                     await _runSyftJson(
                         [_syftRef(ref), '--scope', 'all-layers']),
                     ref);
               default:
-                throw ArgumentError(tr(
-                    '--layer-mode metadata non pris en charge par $tool',
-                    '--layer-mode metadata is not supported by $tool'));
+                throw ArgumentError(tr('--layer-mode metadata non pris en charge par {tool}', {'tool': tool}));
             }
           });
 
@@ -212,8 +208,7 @@ class OciParser {
       final layers =
           await _materializeLayers(imageRef, work.path, verbose: verbose);
       if (layers.isEmpty) {
-        throw StateError(tr('aucune couche trouvée dans $imageRef',
-            'no layer found in $imageRef'));
+        throw StateError(tr('aucune couche trouvée dans {imageRef}', {'imageRef': imageRef}));
       }
       return await analyzeRootfsLayers(
         layers: layers,
@@ -243,8 +238,7 @@ class OciParser {
         final x = await Process.run(
             'tar', ['-C', save.path, '--warning=none', '-xf', ref]);
         if (x.exitCode != 0) {
-          throw Exception(tr('extraction de $ref échouée : ${x.stderr}',
-              'extraction of $ref failed: ${x.stderr}'));
+          throw Exception(tr('extraction de {ref} échouée : {stderr}', {'ref': ref, 'stderr': x.stderr}));
         }
         if (File('${save.path}/manifest.json').existsSync()) {
           return readDockerArchiveLayers(save.path);
@@ -252,11 +246,7 @@ class OciParser {
         if (File('${save.path}/index.json').existsSync()) {
           return readOciLayoutLayers(save.path);
         }
-        throw Exception(tr(
-            '$ref : ni manifest.json ni index.json — '
-                'archive d\'image non reconnue',
-            '$ref: neither manifest.json nor index.json — '
-                'unrecognised image archive'));
+        throw Exception(tr('{ref} : ni manifest.json ni index.json — archive d\'image non reconnue', {'ref': ref}));
       case OciRefType.ociLayout:
         return readOciLayoutLayers(ref);
       case OciRefType.registry:
@@ -264,8 +254,7 @@ class OciParser {
             ref, '$workDir/oci_layout',
             verbose: verbose));
       case OciRefType.binary:
-        throw ArgumentError(tr('un binaire autonome n\'a pas de couches',
-            'a standalone binary has no layers'));
+        throw ArgumentError(tr('un binaire autonome n\'a pas de couches'));
     }
   }
 
@@ -315,7 +304,7 @@ class OciParser {
             .packages;
       default:
         throw ArgumentError(
-            tr('Outil OCI inconnu : $tool', 'Unknown OCI tool: $tool'));
+            tr('Outil OCI inconnu : {tool}', {'tool': tool}));
     }
   }
 
@@ -333,16 +322,13 @@ class OciParser {
     bool verbose = false,
   }) async {
     if (verbose)
-      print(tr('OCI : décompression de $imageRef…',
-          'OCI: decompressing $imageRef…'));
+      print(tr('OCI : décompression de {imageRef}…', {'imageRef': imageRef}));
 
     final step1 = '$workDir/image.tar';
     final zcatRes = await Process.run(
         'sh', ['-c', 'zcat "\$1" > "\$2"', '--', imageRef, step1]);
     if (zcatRes.exitCode != 0) {
-      throw Exception(tr(
-          'Décompression de $imageRef échouée : ${zcatRes.stderr}',
-          'Decompression of $imageRef failed: ${zcatRes.stderr}'));
+      throw Exception(tr('Décompression de {imageRef} échouée : {stderr}', {'imageRef': imageRef, 'stderr': zcatRes.stderr}));
     }
 
     // Cas 1 : gzip direct → manifest.json est à la racine
@@ -355,8 +341,7 @@ class OciParser {
 
     if (entries.contains('manifest.json')) {
       if (verbose)
-        print(tr('OCI : gzip direct détecté, utilisation de $step1',
-            'OCI: direct gzip detected, using $step1'));
+        print(tr('OCI : gzip direct détecté, utilisation de {step1}', {'step1': step1}));
       return step1;
     }
 
@@ -366,23 +351,16 @@ class OciParser {
       orElse: () => '',
     );
     if (inner.isEmpty) {
-      throw Exception(tr(
-          'Format .tgz non reconnu : manifest.json absent et aucun .tar '
-              'imbriqué trouvé. Contenu : ${entries.take(5).join(', ')}',
-          'Unrecognised .tgz format: manifest.json missing and no nested '
-              '.tar found. Content: ${entries.take(5).join(', ')}'));
+      throw Exception(tr('Format .tgz non reconnu : manifest.json absent et aucun .tar imbriqué trouvé. Contenu : {take}', {'take': entries.take(5).join(', ')}));
     }
 
     if (verbose)
-      print(tr('OCI : tar-de-tar détecté, extraction de $inner…',
-          'OCI: nested tar detected, extracting $inner…'));
+      print(tr('OCI : tar-de-tar détecté, extraction de {inner}…', {'inner': inner}));
     final step2 = '$workDir/inner.tar';
     final extractRes = await Process.run('sh',
         ['-c', 'tar -xOf "\$1" "\$2" > "\$3"', '--', step1, inner, step2]);
     if (extractRes.exitCode != 0) {
-      throw Exception(tr(
-          'Extraction du tar imbriqué ($inner) échouée : ${extractRes.stderr}',
-          'Extraction of the nested tar ($inner) failed: ${extractRes.stderr}'));
+      throw Exception(tr('Extraction du tar imbriqué ({inner}) échouée : {stderr}', {'inner': inner, 'stderr': extractRes.stderr}));
     }
 
     return step2;
@@ -394,7 +372,7 @@ class OciParser {
       {bool verbose = false}) async {
     final syftRef = _syftRef(imageRef);
     if (verbose)
-      print(tr('syft : analyse de $syftRef…', 'syft: analysing $syftRef…'));
+      print(tr('syft : analyse de {syftRef}…', {'syftRef': syftRef}));
     return _syftJsonToResult(await _runSyftJson([syftRef]), imageRef);
   }
 
@@ -410,15 +388,12 @@ class OciParser {
   Future<Map<String, dynamic>> _runSyftJson(List<String> args) async {
     final result = await runTool('syft', [...args, '--output', 'json']);
     if (result.exitCode != 0) {
-      throw Exception(tr(
-          'syft a échoué (code ${result.exitCode}) : ${result.stderr}',
-          'syft failed (code ${result.exitCode}): ${result.stderr}'));
+      throw Exception(tr('syft a échoué (code {exitCode}) : {stderr}', {'exitCode': result.exitCode, 'stderr': result.stderr}));
     }
     try {
       return jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception(tr('syft : impossible de parser le JSON : $e',
-          'syft: unable to parse the JSON: $e'));
+      throw Exception(tr('syft : impossible de parser le JSON : {e}', {'e': e}));
     }
   }
 
@@ -729,7 +704,7 @@ class OciParser {
   Future<OciParseResult> _parseTrivy(String imageRef,
       {bool verbose = false}) async {
     if (verbose)
-      print(tr('trivy : analyse de $imageRef…', 'trivy: analysing $imageRef…'));
+      print(tr('trivy : analyse de {imageRef}…', {'imageRef': imageRef}));
     return _trivyJsonToResult(
         await _runTrivyJson(_trivyImageArgs(imageRef)), imageRef);
   }
@@ -743,15 +718,12 @@ class OciParser {
       result = await runTool('trivy', args);
     }
     if (result.exitCode > 1) {
-      throw Exception(tr(
-          'trivy a échoué (code ${result.exitCode}) : ${result.stderr}',
-          'trivy failed (code ${result.exitCode}): ${result.stderr}'));
+      throw Exception(tr('trivy a échoué (code {exitCode}) : {stderr}', {'exitCode': result.exitCode, 'stderr': result.stderr}));
     }
     try {
       return jsonDecode(result.stdout as String) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception(tr('trivy : impossible de parser le JSON : $e',
-          'trivy: unable to parse the JSON: $e'));
+      throw Exception(tr('trivy : impossible de parser le JSON : {e}', {'e': e}));
     }
   }
 
@@ -971,9 +943,7 @@ class OciParser {
       final packages =
           await _scanExtractedRootfs(fsDir, imageRef, verbose: verbose);
       if (packages.isEmpty && verbose) {
-        stderr.writeln(tr(
-            'skopeo : aucune base de paquets reconnue dans les layers.',
-            'skopeo: no recognised package database in the layers.'));
+        stderr.writeln(tr('skopeo : aucune base de paquets reconnue dans les layers.'));
       }
 
       return (packages: packages, os: null);
@@ -1008,7 +978,7 @@ class OciParser {
     final errors = <String>[];
     for (final src in sources) {
       if (verbose)
-        print(tr('skopeo : copie de $src…', 'skopeo: copying $src…'));
+        print(tr('skopeo : copie de {src}…', {'src': src}));
       final copyResult = await Process.run('skopeo', [
         'copy',
         '--insecure-policy',
@@ -1018,8 +988,7 @@ class OciParser {
       if (copyResult.exitCode == 0) return destDir;
       errors.add('$src : ${(copyResult.stderr as String).trim()}');
     }
-    throw Exception(tr('skopeo copy a échoué :\n  ${errors.join('\n  ')}',
-        'skopeo copy failed:\n  ${errors.join('\n  ')}'));
+    throw Exception(tr('skopeo copy a échoué :\n  {n}', {'n': errors.join('\n  ')}));
   }
 
   /// Paquets d'un rootfs déjà extrait dans [fsDir] (backend skopeo) : bases
@@ -1031,7 +1000,7 @@ class OciParser {
     final dpkgStatus = File('$fsDir/var/lib/dpkg/status');
     if (await dpkgStatus.exists()) {
       if (verbose)
-        print(tr('skopeo : base dpkg trouvée', 'skopeo: dpkg database found'));
+        print(tr('skopeo : base dpkg trouvée'));
       packages.addAll(await _parseDpkgStatus(dpkgStatus, imageRef, fsDir));
     }
 
@@ -1041,14 +1010,14 @@ class OciParser {
     final rpmDbNew = Directory('$fsDir/usr/lib/sysimage/rpm');
     if (await rpmDb.exists() || await rpmDbNew.exists()) {
       if (verbose)
-        print(tr('skopeo : base RPM trouvée', 'skopeo: RPM database found'));
+        print(tr('skopeo : base RPM trouvée'));
       packages.addAll(await _parseRpmRoot(fsDir, imageRef, verbose: verbose));
     }
 
     final apkDb = File('$fsDir/lib/apk/db/installed');
     if (await apkDb.exists()) {
       if (verbose)
-        print(tr('skopeo : base APK trouvée', 'skopeo: APK database found'));
+        print(tr('skopeo : base APK trouvée'));
       packages.addAll(await _parseApkInstalled(apkDb, imageRef));
     }
 
@@ -1067,8 +1036,7 @@ class OciParser {
 
     final manifests = (indexData['manifests'] as List?) ?? [];
     if (manifests.isEmpty) {
-      throw Exception(tr('skopeo : aucun manifest dans le layout OCI',
-          'skopeo: no manifest in the OCI layout'));
+      throw Exception(tr('skopeo : aucun manifest dans le layout OCI'));
     }
 
     // Premier manifest (on prend la première plateforme disponible)
@@ -1089,7 +1057,7 @@ class OciParser {
 
       if (verbose) {
         print(
-            '  ${tr('couche', 'layer')} ${i + 1}/${layers.length} : ${layerDigestPath.split('/').last.substring(0, 12)}…');
+            '  ${tr('couche')} ${i + 1}/${layers.length} : ${layerDigestPath.split('/').last.substring(0, 12)}…');
       }
 
       final result = await Process.run('tar', [
@@ -1108,8 +1076,7 @@ class OciParser {
       if (result.exitCode != 0 && verbose) {
         final firstErr = (result.stderr as String).split('\n').first.trim();
         if (firstErr.isNotEmpty) {
-          stderr.writeln(tr('  Warning (tar layer $i) : $firstErr',
-              '  Warning (tar layer $i): $firstErr'));
+          stderr.writeln(tr('  Warning (tar layer {i}) : {firstErr}', {'i': i, 'firstErr': firstErr}));
         }
       }
     }
@@ -1259,16 +1226,13 @@ class OciParser {
     }
     if (dbPath == null) {
       if (verbose) {
-        stderr.writeln(tr(
-            'skopeo/rpm : base RPM trouvée mais vide dans $rootDir',
-            'skopeo/rpm: RPM database found but empty in $rootDir'));
+        stderr.writeln(tr('skopeo/rpm : base RPM trouvée mais vide dans {rootDir}', {'rootDir': rootDir}));
       }
       return [];
     }
 
     if (verbose)
-      print(tr(
-          'skopeo : requête RPM sur $dbPath', 'skopeo: RPM query on $dbPath'));
+      print(tr('skopeo : requête RPM sur {dbPath}', {'dbPath': dbPath}));
 
     final result = await Process.run('rpm', [
       '--dbpath',
@@ -1279,11 +1243,7 @@ class OciParser {
     ]);
 
     if (result.exitCode != 0) {
-      stderr.writeln(tr(
-          'skopeo/rpm : échec (code ${result.exitCode}) : '
-              '${(result.stderr as String).split('\n').first.trim()}',
-          'skopeo/rpm: failed (code ${result.exitCode}): '
-              '${(result.stderr as String).split('\n').first.trim()}'));
+      stderr.writeln(tr('skopeo/rpm : échec (code {exitCode}) : {trim}', {'exitCode': result.exitCode, 'trim': (result.stderr as String).split('\n').first.trim()}));
       return [];
     }
 
@@ -1324,8 +1284,7 @@ class OciParser {
     if (jarFiles.isEmpty) return [];
 
     if (verbose) {
-      print(tr('skopeo : ${jarFiles.length} JARs trouvés, extraction Maven…',
-          'skopeo: ${jarFiles.length} JARs found, Maven extraction…'));
+      print(tr('skopeo : {jarFiles} JARs trouvés, extraction Maven…', {'jarFiles': jarFiles.length}));
     }
 
     final packages = <Package>[];
@@ -1435,8 +1394,7 @@ class OciParser {
     }
 
     if (verbose && packages.isNotEmpty) {
-      print(tr('skopeo : ${packages.length} paquets Maven extraits',
-          'skopeo: ${packages.length} Maven packages extracted'));
+      print(tr('skopeo : {packages} paquets Maven extraits', {'packages': packages.length}));
     }
     return packages;
   }
@@ -1464,8 +1422,7 @@ class OciParser {
     if (metaFiles.isEmpty) return [];
 
     if (verbose)
-      print(tr('skopeo : ${metaFiles.length} métadonnées Python trouvées…',
-          'skopeo: ${metaFiles.length} Python metadata files found…'));
+      print(tr('skopeo : {metaFiles} métadonnées Python trouvées…', {'metaFiles': metaFiles.length}));
 
     final packages = <Package>[];
     final seen = <String>{};
@@ -1522,8 +1479,7 @@ class OciParser {
     }
 
     if (verbose && packages.isNotEmpty) {
-      print(tr('skopeo : ${packages.length} paquets Python extraits',
-          'skopeo: ${packages.length} Python packages extracted'));
+      print(tr('skopeo : {packages} paquets Python extraits', {'packages': packages.length}));
     }
     return packages;
   }
@@ -1553,8 +1509,7 @@ class OciParser {
     if (pkgFiles.isEmpty) return [];
 
     if (verbose)
-      print(tr('skopeo : ${pkgFiles.length} package.json npm trouvés…',
-          'skopeo: ${pkgFiles.length} npm package.json files found…'));
+      print(tr('skopeo : {pkgFiles} package.json npm trouvés…', {'pkgFiles': pkgFiles.length}));
 
     final packages = <Package>[];
     final seen = <String>{};
@@ -1611,8 +1566,7 @@ class OciParser {
     }
 
     if (verbose && packages.isNotEmpty) {
-      print(tr('skopeo : ${packages.length} paquets npm extraits',
-          'skopeo: ${packages.length} npm packages extracted'));
+      print(tr('skopeo : {packages} paquets npm extraits', {'packages': packages.length}));
     }
     return packages;
   }
@@ -1711,7 +1665,7 @@ class OciParser {
     };
 
     if (verbose)
-      print(tr('cdxgen : analyse de $target…', 'cdxgen: analysing $target…'));
+      print(tr('cdxgen : analyse de {target}…', {'target': target}));
 
     return _cdxgenRun([
       '--type',
@@ -1726,9 +1680,7 @@ class OciParser {
   Future<OciParseResult> _cdxgenRun(List<String> args, String imageRef) async {
     final result = await Process.run('cdxgen', args);
     if (result.exitCode != 0) {
-      throw Exception(tr(
-          'cdxgen a échoué (code ${result.exitCode}) : ${result.stderr}',
-          'cdxgen failed (code ${result.exitCode}): ${result.stderr}'));
+      throw Exception(tr('cdxgen a échoué (code {exitCode}) : {stderr}', {'exitCode': result.exitCode, 'stderr': result.stderr}));
     }
 
     // cdxgen écrit le BOM sur stdout (--output -) et ses logs sur stderr ;
@@ -1737,16 +1689,14 @@ class OciParser {
     final out = result.stdout as String;
     final start = out.indexOf('{');
     if (start < 0) {
-      throw Exception(tr('cdxgen : aucune sortie JSON reçue.',
-          'cdxgen: no JSON output received.'));
+      throw Exception(tr('cdxgen : aucune sortie JSON reçue.'));
     }
 
     final Map<String, dynamic> data;
     try {
       data = jsonDecode(out.substring(start)) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception(tr('cdxgen : impossible de parser le JSON : $e',
-          'cdxgen: unable to parse the JSON: $e'));
+      throw Exception(tr('cdxgen : impossible de parser le JSON : {e}', {'e': e}));
     }
 
     final components = (data['components'] as List?) ?? [];

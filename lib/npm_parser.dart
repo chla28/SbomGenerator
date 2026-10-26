@@ -10,8 +10,7 @@ class NpmParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('package-lock.json introuvable : $path',
-              'package-lock.json not found: $path'));
+          tr('package-lock.json introuvable : {path}', {'path': path}));
       return [];
     }
 
@@ -20,7 +19,7 @@ class NpmParser {
       root = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     } catch (e) {
       stderr.writeln('Warning: ' +
-          tr('analyse impossible de $path : $e', 'cannot parse $path: $e'));
+          tr('analyse impossible de {path} : {e}', {'path': path, 'e': e}));
       return [];
     }
 

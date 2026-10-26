@@ -9,7 +9,7 @@ class YarnParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('yarn.lock introuvable : $path', 'yarn.lock not found: $path'));
+          tr('yarn.lock introuvable : {path}', {'path': path}));
       return [];
     }
     final content = file.readAsStringSync();

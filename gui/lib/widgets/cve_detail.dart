@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../i18n.dart';
 import '../services/scan_enrichment.dart';
 import 'vex_ui.dart';
 import 'pdf_report.dart' show frenchSeverityLabel;
-import '../l10n/l10n.dart';
 
 /// Ce qu'un scanner donné rapporte sur une CVE. Les scanners divergent souvent
 /// sur la sévérité, les versions corrigées et les dates — on les garde donc
@@ -100,65 +100,60 @@ class CveDetail {
 
   /// Rendu AsciiDoc compact (une ligne « libellé | valeur » par attribut) —
   /// utilisé par l'export du tableau de bord.
-  String toAdocRows(String Function(String) esc, {AppLocalizations? l}) {
-    final t = l ?? lookupAppLocalizations(fallbackLocale);
+  String toAdocRows(String Function(String) esc) {
     final b = StringBuffer();
     final p = primary;
     if (p != null && p.packageName.isNotEmpty) {
       final fixed = p.fixedVersion.isEmpty ? '' : ' → ${p.fixedVersion}';
       b.writeln(
-        '| ${t.adocPackage} | `${esc('${p.packageName} ${p.installedVersion}'
+        '| ${tr('Paquet')} | `${esc('${p.packageName} ${p.installedVersion}'
         '$fixed')}`',
       );
     }
     final reported = views
-        .map((v) => '${v.scanner} (${frenchSeverityLabel(v.severity, l: t)})')
+        .map((v) => '${v.scanner} (${frenchSeverityLabel(v.severity)})')
         .join(', ');
     if (reported.isNotEmpty) {
-      b.writeln('| ${t.cveReportedBy} | ${esc(reported)}');
+      b.writeln('| ${tr('Rapporté par')} | ${esc(reported)}');
     }
     final dates = views
         .where((v) => v.publishedDate != null || v.modifiedDate != null)
         .map(
-          (v) => t.adocDateEntry(
-            v.scanner,
-            _fmtDate(v.publishedDate),
-            _fmtDate(v.modifiedDate),
-          ),
+          (v) => tr('{scanner} : publié {published}, modifié {modified}', {'scanner': v.scanner, 'published': _fmtDate(v.publishedDate), 'modified': _fmtDate(v.modifiedDate)}),
         )
         .join(' +\n');
-    if (dates.isNotEmpty) b.writeln('| ${t.adocDates} | ${esc(dates)}');
+    if (dates.isNotEmpty) b.writeln('| ${tr('Dates')} | ${esc(dates)}');
     if (description.isNotEmpty) {
-      b.writeln('| ${t.adocDescription} | ${esc(description)}');
+      b.writeln('| ${tr('Description')} | ${esc(description)}');
     }
 
     final ex = exploit;
     if (ex.inKev) {
-      final parts = <String>[t.adocKevAdded(_fmtDate(ex.kevDateAdded))];
+      final parts = <String>[tr('ajoutée {date}', {'date': _fmtDate(ex.kevDateAdded)})];
       if (ex.kevDueDate != null) {
-        parts.add(t.adocKevDue(_fmtDate(ex.kevDueDate)));
+        parts.add(tr('échéance {date}', {'date': _fmtDate(ex.kevDueDate)}));
       }
-      if (ex.kevRansomware) parts.add(t.adocKevRansomware);
-      b.writeln('| CISA KEV | ${esc(t.adocKevYes(parts.join(', ')))}');
+      if (ex.kevRansomware) parts.add(tr('usage par rançongiciel'));
+      b.writeln('| CISA KEV | ${esc(tr('Oui — {details}', {'details': parts.join(', ')}))}');
     }
     if (ex.epssScore != null) {
       final pct = ((ex.epssPercentile ?? 0) * 100).round();
       b.writeln(
-        '| EPSS | ${t.adocEpss(ex.epssScore!.toStringAsFixed(2), pct)}',
+        '| EPSS | ${tr('{score} (percentile p{pct})', {'score': ex.epssScore!.toStringAsFixed(2), 'pct': pct})}',
       );
     }
     if (ex.cvssExploitabilityScore != null || ex.exploitMaturity != null) {
       final parts = <String>[];
       if (ex.cvssBaseScore != null) {
-        parts.add(t.adocCvssBase(ex.cvssBaseScore!.toStringAsFixed(1)));
+        parts.add(tr('base {score}', {'score': ex.cvssBaseScore!.toStringAsFixed(1)}));
       }
       if (ex.cvssExploitabilityScore != null) {
         parts.add(
-          t.cveExploitability(ex.cvssExploitabilityScore!.toStringAsFixed(1)),
+          tr('exploitabilité {score}/3.9', {'score': ex.cvssExploitabilityScore!.toStringAsFixed(1)}),
         );
       }
       if (ex.exploitMaturity != null) {
-        parts.add(t.cveMaturity(ex.exploitMaturity!));
+        parts.add(tr('maturité {value}', {'value': ex.exploitMaturity!}));
       }
       b.writeln(
         '| CVSS | ${esc(parts.join(' · '))}'
@@ -168,12 +163,12 @@ class CveDetail {
     if (ex.pocKnown) {
       final n = ex.pocCount;
       b.writeln(
-        '| ${t.adocPocPublic} | ${n > 0 ? t.adocPocRepos(n) : t.adocYes}'
+        '| ${tr('PoC public')} | ${n > 0 ? (isPlural(n) ? tr('{n} dépôts', {'n': n}) : tr('{n} dépôt', {'n': n})) : tr('oui')}'
         '${ex.pocUrls.isNotEmpty ? ' +\n${ex.pocUrls.map(esc).join(' +\n')}' : ''}',
       );
     }
     if (links.isNotEmpty) {
-      b.writeln('| ${t.adocLinks} | ${links.map((x) => x.$2).join(' +\n')}');
+      b.writeln('| ${tr('Liens')} | ${links.map((x) => x.$2).join(' +\n')}');
     }
     return b.toString();
   }
@@ -228,12 +223,12 @@ class CveDetailPanel extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.copy, size: 14),
                 visualDensity: VisualDensity.compact,
-                tooltip: context.l10n.cveCopyId,
+                tooltip: tr('Copier l\'identifiant'),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: detail.id));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(context.l10n.cveCopied),
+                      content: Text(tr('CVE copié')),
                       duration: const Duration(seconds: 2),
                     ),
                   );
@@ -286,7 +281,7 @@ class CveDetailPanel extends StatelessWidget {
           const SizedBox(height: 6),
 
           // ── Sévérité par scanner + dates ──
-          _sectionTitle(context.l10n.cveReportedBy),
+          _sectionTitle(tr('Rapporté par')),
           Table(
             columnWidths: const {
               0: IntrinsicColumnWidth(),
@@ -297,8 +292,8 @@ class CveDetailPanel extends StatelessWidget {
               TableRow(
                 children: [
                   const _Th('Scanner'),
-                  _Th(context.l10n.cveThSeverity),
-                  _Th(context.l10n.cveThPublishedModified),
+                  _Th(tr('Sévérité')),
+                  _Th(tr('Publié / modifié')),
                 ],
               ),
               for (final v in detail.views)
@@ -317,10 +312,10 @@ class CveDetailPanel extends StatelessWidget {
           const SizedBox(height: 8),
 
           // ── Exploitabilité ──
-          _sectionTitle(context.l10n.cveExploitTitle),
+          _sectionTitle(tr('Exploitabilité et exploitation active')),
           if (!e.hasAnySignal)
             Text(
-              context.l10n.cveNoSignal,
+              tr('Aucun signal d\'exploitation connu.'),
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             )
           else ...[
@@ -328,27 +323,20 @@ class CveDetailPanel extends StatelessWidget {
               _line(
                 Icons.local_fire_department,
                 Colors.red,
-                context.l10n.cveKevLine +
+                tr('CISA KEV — exploitée activement dans la nature') +
                     (e.kevDateAdded != null
-                        ? context.l10n.cveKevAddedOn(
-                            detail._fmtDate(e.kevDateAdded),
-                          )
+                        ? tr(' · ajoutée le {date}', {'date': detail._fmtDate(e.kevDateAdded)})
                         : '') +
                     (e.kevDueDate != null
-                        ? context.l10n.cveKevDueOn(
-                            detail._fmtDate(e.kevDueDate),
-                          )
+                        ? tr(' · échéance {date}', {'date': detail._fmtDate(e.kevDueDate)})
                         : '') +
-                    (e.kevRansomware ? context.l10n.cveKevRansomware : ''),
+                    (e.kevRansomware ? tr(' · usage par rançongiciel') : ''),
               ),
             if (e.epssScore != null)
               _line(
                 Icons.trending_up,
                 Colors.deepOrange,
-                context.l10n.cveEpssLine(
-                  e.epssScore!.toStringAsFixed(2),
-                  ((e.epssPercentile ?? 0) * 100).round(),
-                ),
+                tr('EPSS {score} (percentile p{pct}) — probabilité d\'exploitation à 30 jours', {'score': e.epssScore!.toStringAsFixed(2), 'pct': ((e.epssPercentile ?? 0) * 100).round()}),
               ),
             if (e.cvssExploitabilityScore != null || e.exploitMaturity != null)
               _line(
@@ -358,11 +346,9 @@ class CveDetailPanel extends StatelessWidget {
                   if (e.cvssBaseScore != null)
                     'CVSS base ${e.cvssBaseScore!.toStringAsFixed(1)}',
                   if (e.cvssExploitabilityScore != null)
-                    context.l10n.cveExploitability(
-                      e.cvssExploitabilityScore!.toStringAsFixed(1),
-                    ),
+                    tr('exploitabilité {score}/3.9', {'score': e.cvssExploitabilityScore!.toStringAsFixed(1)}),
                   if (e.exploitMaturity != null)
-                    context.l10n.cveMaturity(e.exploitMaturity!),
+                    tr('maturité {value}', {'value': e.exploitMaturity!}),
                 ].join(' · '),
                 mono: e.cvssVector,
               ),
@@ -371,8 +357,8 @@ class CveDetailPanel extends StatelessWidget {
                 Icons.code,
                 Colors.purple,
                 e.pocCount > 0
-                    ? context.l10n.cvePocRepos(e.pocCount)
-                    : context.l10n.cvePocKnown,
+                    ? (isPlural(e.pocCount) ? tr('{n} dépôts PoC publics recensés', {'n': e.pocCount}) : tr('{n} dépôt PoC public recensé', {'n': e.pocCount}))
+                    : tr('Exploit / PoC public recensé'),
               ),
             for (final url in e.pocUrls)
               Padding(
@@ -397,7 +383,7 @@ class CveDetailPanel extends StatelessWidget {
 
           // ── Liens externes ──
           if (detail.links.isNotEmpty) ...[
-            _sectionTitle(context.l10n.cveReferences),
+            _sectionTitle(tr('Références')),
             Wrap(
               spacing: 8,
               runSpacing: 4,

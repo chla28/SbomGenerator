@@ -157,8 +157,7 @@ class PubspecParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('pubspec.lock introuvable : $path',
-              'pubspec.lock not found: $path'));
+          tr('pubspec.lock introuvable : {path}', {'path': path}));
       return [];
     }
 
@@ -349,8 +348,7 @@ class PubspecParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('pubspec.yaml introuvable : $path',
-              'pubspec.yaml not found: $path'));
+          tr('pubspec.yaml introuvable : {path}', {'path': path}));
       return [];
     }
 

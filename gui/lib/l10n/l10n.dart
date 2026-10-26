@@ -1,8 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import 'app_localizations.dart';
-
-export 'app_localizations.dart';
+import '../i18n.dart';
 
 /// Langues proposées par le réglage « Langue de l'interface ».
 enum AppLanguage {
@@ -24,29 +22,28 @@ enum AppLanguage {
 /// Langue de référence (textes sources, repli).
 const fallbackLocale = Locale('fr');
 
+/// Locales prises en charge : les textes passent par `tr()`, les widgets
+/// Material ont leurs propres traductions pour ces deux langues.
+const supportedAppLocales = [Locale('fr'), Locale('en')];
+
 /// Locale effective pour la langue du système [systemLocales] : la première
 /// prise en charge, sinon [fallbackLocale].
 Locale resolveAppLocale(List<Locale>? systemLocales) {
   for (final l in systemLocales ?? const <Locale>[]) {
-    for (final s in AppLocalizations.supportedLocales) {
+    for (final s in supportedAppLocales) {
       if (s.languageCode == l.languageCode) return s;
     }
   }
   return fallbackLocale;
 }
 
-extension AppLocalizationsContext on BuildContext {
-  /// Textes de l'interface dans la langue courante. Hors d'une application
-  /// localisée (tests de widgets montés sans délégués, par exemple), repli
-  /// sur la langue de référence plutôt qu'une exception.
-  AppLocalizations get l10n =>
-      AppLocalizations.of(this) ?? lookupAppLocalizations(fallbackLocale);
+/// Locale effective de l'interface, mise à jour par `main.dart` ; la langue
+/// des textes (`tr()`) la suit.
+Locale _appLocale = fallbackLocale;
+
+Locale get appLocale => _appLocale;
+
+set appLocale(Locale locale) {
+  _appLocale = locale;
+  currentLang = locale.languageCode == 'en' ? Lang.en : Lang.fr;
 }
-
-/// Locale effective de l'interface, mise à jour par `main.dart` : sert au code
-/// sans `BuildContext` (services, exports) qui doit produire un texte
-/// localisé.
-Locale appLocale = fallbackLocale;
-
-/// Textes de l'interface dans [appLocale] — pour le code sans `BuildContext`.
-AppLocalizations appL10n() => lookupAppLocalizations(appLocale);

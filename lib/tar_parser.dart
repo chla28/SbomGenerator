@@ -79,8 +79,7 @@ class TarParser {
 
     if (result.exitCode != 0) {
       stderr.writeln('Warning: ' +
-          tr('lecture impossible de l\'archive "$path"',
-              'cannot read archive "$path"'));
+          tr('lecture impossible de l\'archive "{path}"', {'path': path}));
       final err = result.stderr.toString().trim();
       if (err.isNotEmpty) stderr.writeln('  $err');
       return null;
@@ -92,8 +91,7 @@ class TarParser {
           jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
     } catch (_) {
       stderr.writeln('Warning: ' +
-          tr('sortie inattendue de python3 pour "$path"',
-              'unexpected output from python3 for "$path"'));
+          tr('sortie inattendue de python3 pour "{path}"', {'path': path}));
       return null;
     }
 
@@ -103,7 +101,7 @@ class TarParser {
       final content = payload['content'] as String? ?? '';
       if (content.isEmpty) {
         stderr.writeln('Warning: ' +
-            tr('métadonnées vides pour "$path"', 'empty metadata for "$path"'));
+            tr('métadonnées vides pour "{path}"', {'path': path}));
         return null;
       }
       return _wheelParser.parseMetadataText(path, content);
@@ -119,8 +117,7 @@ class TarParser {
 
     // type == 'error' should have caused a non-zero exit code, but guard anyway
     stderr.writeln('Warning: ' +
-        tr('échec de l\'extraction pour "$path"',
-            'extraction failed for "$path"'));
+        tr('échec de l\'extraction pour "{path}"', {'path': path}));
     return null;
   }
 }

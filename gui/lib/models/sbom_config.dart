@@ -1,4 +1,4 @@
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 
 const _formatExtensions = {
   'cyclonedx': '.cdx.json',
@@ -56,8 +56,8 @@ const formatLabels = {
 };
 
 /// Libellé affiché d'un format : [formatLabels], sauf `json` qui est traduit.
-String formatLabel(String fmt, AppLocalizations l) =>
-    fmt == 'json' ? l.formatJsonCustom : formatLabels[fmt] ?? fmt;
+String formatLabel(String fmt) =>
+    fmt == 'json' ? tr('JSON personnalisé') : formatLabels[fmt] ?? fmt;
 
 const allOciTools = ['syft', 'trivy', 'skopeo', 'cdxgen'];
 

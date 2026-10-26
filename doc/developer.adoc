@@ -95,15 +95,15 @@ Dart/Flutter (`packageType='pub'`), Rust (`cargo`), PHP (`composer`) et Ruby
 == `lib/i18n.dart` — Localisation FR / EN des messages
 
 Tout texte destiné à un humain (messages console, `--help`, erreurs, rapports
-lisibles) existe en français et en anglais. Il n'y a pas de catalogue de clés :
-chaque message est écrit en ligne avec ses deux versions, au plus près de son
-usage.
+lisibles) existe en français et en anglais. Le texte source est en français,
+passé à `tr()` ; la version anglaise est dans `lib/l10n/en.dart`, où le texte
+français sert de clé.
 
 [source,dart]
 ----
 import 'i18n.dart';
 
-stderr.writeln(tr('Fichier introuvable : $path', 'File not found: $path'));
+stderr.writeln(tr('Fichier introuvable : {path}', {'path': path}));
 ----
 
 [cols="1,3", options="header"]
@@ -117,11 +117,14 @@ stderr.writeln(tr('Fichier introuvable : $path', 'File not found: $path'));
 |Langue courante des messages (français par défaut). Fixée une fois au démarrage
 par `initLang` ; les tests unitaires la positionnent directement.
 
-|`tr(fr, en)`
-|Renvoie l'un ou l'autre texte selon `currentLang`.
+|`tr(fr, [args])`
+|Renvoie le texte français ou sa traduction de `catalogEn` selon `currentLang` ;
+remplace chaque `{nom}` par `args['nom']`. Un texte absent du catalogue reste en
+français (et est noté dans `missingTranslations`).
 
-|`plural(n, frOne, frMany, enOne, enMany)`
-|Pluriel simple (en français 0 et 1 sont au singulier, en anglais seul 1 l'est).
+|`isPlural(n)`
+|Pluriel simple (en français 0 et 1 sont au singulier, en anglais seul 1 l'est) :
+`isPlural(n) ? tr('paquets') : tr('paquet')`.
 
 |`langFromLocale(code)`
 |`fr_FR.UTF-8` → `Lang.fr`, `en_US` → `Lang.en`, `C` / `POSIX` / inconnu → `null`.
@@ -143,9 +146,12 @@ fait par `initLang`).
 
 Règles pour ajouter ou modifier un message :
 
-* écrire ensemble le texte français et le texte anglais (`tr('…', '…')`), en
-  gardant les interpolations identiques (`$path`, `${x.length}`) ; pas de
-  concaténation de fragments traduits — un `tr()` par phrase complète ;
+* écrire le texte en français dans `tr('…', {...})` (paramètres `{nom}`, jamais
+  d'interpolation `$x` dans le littéral) et ajouter sa traduction dans
+  `lib/l10n/en.dart`, avec les mêmes `{nom}` ; pas de concaténation de
+  fragments traduits — un `tr()` par phrase complète ; `test/unit/i18n_catalog_test.dart`
+  échoue s'il manque une traduction, s'il reste une entrée orpheline ou si les
+  `{nom}` diffèrent ;
 * *ne jamais traduire* un texte lu par un programme : la ligne
   `SBOM written → …` (analysée par la GUI, `sbom_runner.dart`), les noms et
   valeurs de propriétés (`sbom_generator:*`), les clés JSON, les identifiants
@@ -3867,7 +3873,7 @@ case 'mon-format':
     uniquePackages, dependencies, outputPath, documentName: docName);
 ----
 
-. Si le format contient du texte lisible par un humain, l'écrire avec `tr(fr, en)`
+. Si le format contient du texte lisible par un humain, l'écrire avec `tr('texte français')` (et son entrée anglaise dans `lib/l10n/en.dart`)
   (voir <<sec-i18n>>) et ajouter un test FR/EN dans `test/unit/i18n_reports_test.dart`.
 
 === Ajouter un nouveau type de paquet
@@ -4592,7 +4598,7 @@ sans faire échouer la suite. Ceux qui lancent le CLI passent `--lang fr` (voir
 * [ ] `dart format --output=none lib/ bin/` passe sans différence
 * [ ] `dart test` — tout vert (certains tests d'intégration se sautent
   proprement selon l'environnement)
-* [ ] Tout nouveau texte visible par l'utilisateur a ses deux versions `tr('fr', 'en')`
+* [ ] Tout nouveau texte visible par l'utilisateur passe par `tr('fr')` et a sa traduction dans `lib/l10n/en.dart`
   — et n'a pas cassé un contrat (ligne `SBOM written → …`, barre de progression,
   textes de couche, clés JSON) : voir le piège 11
 * [ ] Documentation mise à jour dans les deux langues (`*.adoc` et `*.en.adoc`,

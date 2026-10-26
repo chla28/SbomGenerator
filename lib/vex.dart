@@ -113,9 +113,7 @@ class VexDocument {
     if (json['bomFormat'] == 'CycloneDX' && json['vulnerabilities'] is List) {
       return VexDocument(_parseCdx(json));
     }
-    throw FormatException(tr(
-        'document VEX non reconnu (attendu : OpenVEX, CSAF VEX ou CycloneDX avec "vulnerabilities")',
-        'unrecognised VEX document (expected: OpenVEX, CSAF VEX or CycloneDX with "vulnerabilities")'));
+    throw FormatException(tr('document VEX non reconnu (attendu : OpenVEX, CSAF VEX ou CycloneDX avec "vulnerabilities")'));
   }
 
   static List<VexStatement> _parseOpenVex(Map<String, dynamic> json) {
@@ -348,8 +346,7 @@ Map<String, dynamic> buildOpenVex({
               'impact_statement': s.impactStatement,
             if (s.status == 'affected')
               'action_statement': s.actionStatement ??
-                  tr('Voir les correctifs de l\'éditeur.',
-                      'See the vendor fixes.'),
+                  tr('Voir les correctifs de l\'éditeur.'),
           },
       ],
     };

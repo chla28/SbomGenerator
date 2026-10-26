@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
 import '../models/cve_date_filter.dart';
 import '../models/sbom_result.dart';
-import '../l10n/l10n.dart';
 import '../models/layer_scan.dart';
 import '../services/layer_scan_service.dart';
 import '../services/osv_runner.dart';
@@ -320,7 +320,7 @@ class _OsvPanelState extends State<OsvPanel>
     final r = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
-      dialogTitle: context.l10n.scanPickSbomTitle,
+      dialogTitle: tr('Choisir un fichier SBOM'),
     );
     if (r?.path != null) {
       setState(() => _fileCtrl.text = r!.path!);
@@ -331,7 +331,7 @@ class _OsvPanelState extends State<OsvPanel>
     final r = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['tar', 'gz', 'tgz'],
-      dialogTitle: context.l10n.scanPickImageArchiveTitle,
+      dialogTitle: tr('Choisir une archive image (docker save / OCI)'),
     );
     if (r?.path != null) {
       setState(() => _imageCtrl.text = r!.path!);
@@ -342,7 +342,7 @@ class _OsvPanelState extends State<OsvPanel>
     final r = await FilePicker.pickFile(
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['toml'] : null,
-      dialogTitle: context.l10n.osvPickConfigTitle,
+      dialogTitle: tr('Choisir osv-scanner.toml'),
     );
     if (r?.path != null) {
       setState(() => _configCtrl.text = r!.path!);
@@ -352,7 +352,7 @@ class _OsvPanelState extends State<OsvPanel>
   Future<void> _pickPackage() async {
     final result = await FilePicker.pickFile(
       type: FileType.any,
-      dialogTitle: context.l10n.scanPickPackageTitle,
+      dialogTitle: tr('Choisir un paquet ou une archive'),
     );
     if (result?.path != null) {
       setState(() => _packageCtrl.text = result!.path!);
@@ -369,8 +369,8 @@ class _OsvPanelState extends State<OsvPanel>
     if (target.isEmpty) {
       setState(
         () => _error = useImage
-            ? context.l10n.scanSourceMissingImage
-            : context.l10n.scanSourceMissingSbom,
+            ? tr('Veuillez indiquer une image à analyser.')
+            : tr('Veuillez sélectionner un fichier SBOM.'),
       );
       return;
     }
@@ -379,13 +379,13 @@ class _OsvPanelState extends State<OsvPanel>
     // locale explicitement désignée comme telle (préfixe ./, /, ~).
     if ((!useImage || looksLikeLocalPath(target)) &&
         !File(target).existsSync()) {
-      setState(() => _error = context.l10n.commonFileNotFound(target));
+      setState(() => _error = tr('Fichier introuvable : {path}', {'path': target}));
       return;
     }
 
     final targetLabel = useImage
-        ? context.l10n.scanTargetImage(target)
-        : context.l10n.scanTargetSbom(target.split(RegExp(r'[/\\]')).last);
+        ? tr('image « {target} »', {'target': target})
+        : tr('SBOM {name}', {'name': target.split(RegExp(r'[/\\]')).last});
     _launch(target, useImage, targetLabel);
   }
 
@@ -393,14 +393,13 @@ class _OsvPanelState extends State<OsvPanel>
   /// profondeur choisie, voir [PackageScanService]) puis le scanne comme un
   /// fichier SBOM.
   Future<void> _analyzePackage() async {
-    final l10n = context.l10n;
     final pkg = _packageCtrl.text.trim();
     if (pkg.isEmpty) {
-      setState(() => _error = l10n.scanSourceMissingPackage);
+      setState(() => _error = tr('Veuillez sélectionner un paquet ou une archive.'));
       return;
     }
     if (!File(pkg).existsSync()) {
-      setState(() => _error = l10n.commonFileNotFound(pkg));
+      setState(() => _error = tr('Fichier introuvable : {path}', {'path': pkg}));
       return;
     }
     final depth = _packageDepth;
@@ -416,7 +415,7 @@ class _OsvPanelState extends State<OsvPanel>
       _parseFailed = false;
       _exitCode = null;
       _layerScan = null;
-      _status = l10n.scanPackagePreparing;
+      _status = tr('Génération du SBOM du paquet…');
     });
     final String sbom;
     try {
@@ -428,7 +427,7 @@ class _OsvPanelState extends State<OsvPanel>
         _isRunning = false;
         _status = null;
         _exitCode = 1;
-        _error = l10n.scanPackageFailed('$e');
+        _error = tr('Génération du SBOM impossible : {error}', {'error': '$e'});
       });
       return;
     }
@@ -484,7 +483,7 @@ class _OsvPanelState extends State<OsvPanel>
                 _jsonOutput = jsonOutput;
                 _vulns = [];
                 _parseFailed = true;
-                _error = context.l10n.scanUnreadableOutput('OSV-Scanner', '$e');
+                _error = tr('Sortie {tool} illisible (JSON invalide) : {error}', {'tool': 'OSV-Scanner', 'error': '$e'});
               });
             }
           case OsvDoneEvent(:final exitCode, :final stderr):
@@ -519,16 +518,15 @@ class _OsvPanelState extends State<OsvPanel>
   List<CliCommandSection> _cliSections() {
     if (_sourceKind != ScanSourceKind.package) return _scanCliSections();
     final raw = _packageCtrl.text.trim();
-    final pkg = raw.isNotEmpty ? raw : context.l10n.cliPlaceholderPackage;
-    final l10n = context.l10n;
+    final pkg = raw.isNotEmpty ? raw : tr('<paquet>');
     return [
       CliCommandSection(
-        l10n.cliCommandPackagePrepare,
+        tr('Génération du SBOM du paquet (étape préalable)'),
         shellCommand(
           SettingsService.cliBinary,
           PackageScanService.prepareArgs(pkg, _packageDepth, cliPackageSbom),
         ),
-        note: l10n.cliCommandPackageNote,
+        note: tr('Le SBOM est généré dans un répertoire temporaire ; chaque CVE est rattachée à l\'objet qui contient le paquet vulnérable (colonne OBJET) dans l\'équivalent sbom-generator scan.'),
       ),
       ..._scanCliSections(sbomTarget: cliPackageSbom, packageTarget: pkg),
     ];
@@ -553,7 +551,7 @@ class _OsvPanelState extends State<OsvPanel>
     return [
       layered
           ? CliCommandSection(
-              context.l10n.cliCommandExecutedLayered,
+              tr('Commandes exécutées par l\'onglet (analyse par couche)'),
               layeredCliSequence(
                 cliBinary: SettingsService.cliBinary,
                 prepareArgs: LayerScanService.prepareArgs(
@@ -568,17 +566,17 @@ class _OsvPanelState extends State<OsvPanel>
                   args('LAYER_SBOM', false),
                 ).replaceAll('LAYER_SBOM', f),
               ),
-              note: context.l10n.cliCommandLayerDirNote(cliLayerDir),
+              note: tr('Le jeu de SBOM par couche est généré dans un répertoire temporaire (ici {dir}).', {'dir': cliLayerDir}),
             )
           : CliCommandSection(
-              context.l10n.cliCommandExecuted,
+              tr('Commande exécutée par l\'onglet'),
               shellCommand('osv-scanner', args(target, useImage)),
               note: useImage && RegExp(r'\.(tar\.gz|tgz)$').hasMatch(target)
-                  ? context.l10n.cliOsvGunzipNote
+                  ? tr('osv-scanner n\'accepte qu\'un tar non compressé : l\'application décompresse d\'abord l\'archive .tar.gz / .tgz vers un fichier temporaire (équivalent : gunzip -c archive.tar.gz > image.tar), le passe à osv-scanner puis le supprime.')
                   : null,
             ),
       CliCommandSection(
-        context.l10n.cliCommandEquivalent,
+        tr('Équivalent sbom-generator scan'),
         shellCommand(
           SettingsService.cliBinary,
           sbomGeneratorScanArgs(
@@ -592,8 +590,8 @@ class _OsvPanelState extends State<OsvPanel>
             enrichOnline: _enrichOnline,
           ),
         ),
-        note: equivalentScanNote(context.l10n, useImage, [
-          if (config != null) context.l10n.osvCliConfigNote,
+        note: equivalentScanNote( useImage, [
+          if (config != null) tr('fichier de config (toml)'),
         ]),
       ),
     ];
@@ -630,7 +628,7 @@ class _OsvPanelState extends State<OsvPanel>
         nativeDigests: osvLayerDigests,
         onStatus: (step) {
           if (mounted) {
-            setState(() => _status = layerScanStepLabel(context.l10n, step));
+            setState(() => _status = layerScanStepLabel( step));
           }
         },
         isCancelled: () => _layeredCancelled,
@@ -648,7 +646,7 @@ class _OsvPanelState extends State<OsvPanel>
           error = null;
         } catch (e) {
           parseFailed = true;
-          error = context.l10n.scanUnreadableOutput('OSV-Scanner', '$e');
+          error = tr('Sortie {tool} illisible (JSON invalide) : {error}', {'tool': 'OSV-Scanner', 'error': '$e'});
         }
       }
       setState(() {
@@ -734,7 +732,7 @@ class _OsvPanelState extends State<OsvPanel>
                     children: [
                       const Icon(Icons.security_outlined, size: 16),
                       const SizedBox(width: 6),
-                      Text(context.l10n.scanTabVulns),
+                      Text(tr('Vulnérabilités')),
                     ],
                   ),
                 ),
@@ -744,7 +742,7 @@ class _OsvPanelState extends State<OsvPanel>
                     children: [
                       const Icon(Icons.data_object, size: 16),
                       const SizedBox(width: 6),
-                      Text(context.l10n.scanTabRawJson),
+                      Text(tr('JSON brut')),
                     ],
                   ),
                 ),
@@ -759,9 +757,7 @@ class _OsvPanelState extends State<OsvPanel>
                 VulnTableView<OsvVuln>(
                   vulns: _vulns,
                   parseFailed: _parseFailed,
-                  parseFailedMessage: context.l10n.scanUnreadableOutputShort(
-                    'OSV-Scanner',
-                  ),
+                  parseFailedMessage: tr('Sortie {tool} illisible : voir le message d\'erreur ci-dessus', {'tool': 'OSV-Scanner'}),
                   severityOrder: const [
                     'Critical',
                     'High',
@@ -770,11 +766,9 @@ class _OsvPanelState extends State<OsvPanel>
                     'Unknown',
                   ],
                   toolName: 'OSV-Scanner',
-                  csvDialogTitle: context.l10n.scanExportCsvDialog(
-                    'OSV-Scanner',
-                  ),
+                  csvDialogTitle: tr('Exporter les vulnérabilités {tool}', {'tool': 'OSV-Scanner'}),
                   csvFileName: 'osv_vulns.csv',
-                  csvHeader: context.l10n.vulnCsvHeaderOsv,
+                  csvHeader: tr('Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Écosystème,Emplacements'),
                   csvRow: (v) => [
                     v.severity,
                     v.id,
@@ -784,7 +778,7 @@ class _OsvPanelState extends State<OsvPanel>
                     v.ecosystem,
                     '${v.occurrenceCount}',
                   ],
-                  extraColumnHeader: context.l10n.osvEcosystemColumn,
+                  extraColumnHeader: tr('ÉCOSYSTÈME'),
                   extraOf: (v) => v.ecosystem,
                   dateFilter: widget.dateFilter,
                   onDateFilterChanged: widget.onDateFilterChanged,
@@ -902,8 +896,8 @@ class _ConfigSection extends StatelessWidget {
                   child: TextField(
                     controller: fileCtrl,
                     decoration: InputDecoration(
-                      labelText: context.l10n.scanSourceSbom,
-                      hintText: context.l10n.commonSbomFileHint,
+                      labelText: tr('Fichier SBOM'),
+                      hintText: tr('chemin/vers/sbom.cdx.json'),
                       border: const OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -951,8 +945,8 @@ class _ConfigSection extends StatelessWidget {
                   controller: configCtrl,
                   decoration: InputDecoration(
                     label: HelpLabel(
-                      context.l10n.osvConfigLabel,
-                      context.l10n.osvConfigHelp,
+                      tr('Fichier de config (optionnel)'),
+                      tr('Fichier TOML de configuration osv-scanner.\nPermet d\'exclure des CVE, de configurer\ndes sources ou de définir des politiques.'),
                     ),
                     hintText: 'osv-scanner.toml',
                     border: const OutlineInputBorder(),
@@ -982,7 +976,7 @@ class _ConfigSection extends StatelessWidget {
                         ),
                         onPressed: onStop,
                         icon: const Icon(Icons.stop),
-                        label: Text(context.l10n.commonStopAction),
+                        label: Text(tr('Arrêter')),
                       )
                     : FilledButton.icon(
                         style: FilledButton.styleFrom(
@@ -990,7 +984,7 @@ class _ConfigSection extends StatelessWidget {
                         ),
                         onPressed: onRun,
                         icon: const Icon(Icons.search),
-                        label: Text(context.l10n.scanRunButton('osv-scanner')),
+                        label: Text(tr('Analyser avec {tool}', {'tool': 'osv-scanner'})),
                       ),
               ),
               const SizedBox(width: 8),
@@ -1022,7 +1016,7 @@ class _OsvBanner extends StatelessWidget {
             const Icon(Icons.verified_user, color: Colors.green, size: 18),
             const SizedBox(width: 8),
             Text(
-              context.l10n.scanNoVulnFound,
+              tr('Aucune vulnérabilité trouvée'),
               style: TextStyle(
                 color: Colors.green[800],
                 fontWeight: FontWeight.w500,
@@ -1048,7 +1042,7 @@ class _OsvBanner extends StatelessWidget {
             const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
             const SizedBox(width: 8),
             Text(
-              context.l10n.scanBannerCount(vulns.length),
+              (isPlural(vulns.length) ? tr('{count} vulnérabilités — ', {'count': vulns.length}) : tr('{count} vulnérabilité — ', {'count': vulns.length})),
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             Expanded(
@@ -1096,7 +1090,7 @@ class _EmptyHint extends StatelessWidget {
         const Icon(Icons.plagiarism_outlined, size: 56, color: Colors.grey),
         const SizedBox(height: 12),
         Text(
-          context.l10n.scanHintPick,
+          tr('Sélectionnez un SBOM ou une image et lancez l\'analyse'),
           style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
         const SizedBox(height: 4),
@@ -1120,7 +1114,7 @@ class _RunningHint extends StatelessWidget {
         const CircularProgressIndicator(),
         const SizedBox(height: 16),
         Text(
-          context.l10n.scanRunningTool('osv-scanner'),
+          tr('Analyse {tool} en cours…', {'tool': 'osv-scanner'}),
           style: const TextStyle(color: Colors.grey, fontSize: 15),
         ),
       ],

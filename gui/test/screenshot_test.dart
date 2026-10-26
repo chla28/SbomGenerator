@@ -16,7 +16,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sbom_generator_gui/i18n.dart';
 import 'package:sbom_generator_gui/l10n/l10n.dart';
 import 'package:sbom_generator_gui/models/sbom_config.dart';
 import 'package:sbom_generator_gui/models/sbom_result.dart';
@@ -394,8 +396,8 @@ void main() {
         key: const Key('shot'),
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          supportedLocales: supportedAppLocales,
           locale: _locale,
           theme: ThemeData(
             useMaterial3: true,
@@ -441,7 +443,6 @@ void main() {
   for (final lang in ['fr', 'en']) {
     testWidgets('captures $lang', (tester) async {
       _locale = Locale(lang);
-      final l = lookupAppLocalizations(_locale);
 
       // 1. Génération : configuration + progression.
       Widget generation() {
@@ -500,7 +501,7 @@ void main() {
         'resultats',
         generation,
         act: (t) async {
-          await t.tap(find.text(l.tabResultsCount(3)));
+          await t.tap(find.text(tr('Résultats ({count})', {'count': 3})));
         },
       );
 
@@ -537,9 +538,9 @@ void main() {
           toolName: 'Grype',
           csvDialogTitle: '',
           csvFileName: 'grype_vulns.csv',
-          csvHeader: l.vulnCsvHeaderGrype,
+          csvHeader: tr('Sévérité,CVE / ID,Paquet,Version installée,Version corrigée,Type,Emplacements'),
           csvRow: (v) => [v.id],
-          extraColumnHeader: l.grypeColType,
+          extraColumnHeader: tr('TYPE'),
           extraOf: (v) => v.packageType,
           exploitById: _exploit,
         ),
@@ -558,8 +559,8 @@ void main() {
         ),
         size: const Size(1300, 1100),
         act: (t) async {
-          await pressReal(t, find.widgetWithText(FilledButton, l.craEvaluate));
-          await waitFor(t, find.text(l.craTileFields));
+          await pressReal(t, find.widgetWithText(FilledButton, tr('Évaluer')));
+          await waitFor(t, find.text(tr('Champs SBOM conformes')));
         },
       );
 
@@ -574,9 +575,9 @@ void main() {
         act: (t) async {
           await pressReal(
             t,
-            find.widgetWithText(FilledButton, l.qualityAnalyze),
+            find.widgetWithText(FilledButton, tr('Analyser')),
           );
-          await waitFor(t, find.text(l.qualityIndustryProfiles));
+          await waitFor(t, find.text(tr('Profils d\'industrie')));
         },
       );
     }, skip: _dir == null);

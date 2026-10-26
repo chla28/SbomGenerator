@@ -4,10 +4,10 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
 import '../models/sbom_result.dart';
 import '../services/settings_service.dart';
 import 'help_icon.dart';
-import '../l10n/l10n.dart';
 import '../services/save_dialog.dart';
 
 /// Onglet « Conformité CRA » — pilote la sous-commande `sbom-generator cra`
@@ -93,10 +93,9 @@ class _CraPanelState extends State<CraPanel> {
   ];
 
   Future<void> _run() async {
-    final l = context.l10n;
     final sbom = _sbom.text.trim();
     if (sbom.isEmpty || !File(sbom).existsSync()) {
-      setState(() => _error = l.craInvalidSbom);
+      setState(() => _error = tr('Sélectionnez un fichier SBOM valide.'));
       return;
     }
     setState(() {
@@ -123,23 +122,22 @@ class _CraPanelState extends State<CraPanel> {
       } else {
         setState(
           () => _error = (r.stderr as String).trim().isEmpty
-              ? l.craUnexpectedOutput(r.exitCode)
+              ? tr('Sortie inattendue (code {code}).', {'code': r.exitCode})
               : (r.stderr as String).trim(),
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = l.craLaunchFailed('$e'));
+      if (mounted) setState(() => _error = tr('Échec du lancement : {error}', {'error': '$e'}));
     } finally {
       if (mounted) setState(() => _running = false);
     }
   }
 
   Future<void> _exportPdf() async {
-    final l = context.l10n;
     final sbom = _sbom.text.trim();
     final path = await pickSavePath(
-      dialogTitle: l.craExportTitle,
-      fileName: l.craExportFileName,
+      dialogTitle: tr('Exporter le rapport CRA (PDF)'),
+      fileName: tr('rapport-cra.pdf'),
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );
@@ -163,8 +161,8 @@ class _CraPanelState extends State<CraPanel> {
         SnackBar(
           content: Text(
             r.exitCode == 2 || r.exitCode == 0
-                ? l.craReportWritten(path)
-                : l.craFailed((r.stderr as String).trim()),
+                ? tr('Rapport CRA écrit → {path}', {'path': path})
+                : tr('Échec : {detail}', {'detail': (r.stderr as String).trim()}),
           ),
           duration: const Duration(seconds: 5),
         ),
@@ -173,7 +171,7 @@ class _CraPanelState extends State<CraPanel> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(l.craFailed('$e'))));
+        ).showSnackBar(SnackBar(content: Text(tr('Échec : {detail}', {'detail': '$e'}))));
       }
     } finally {
       if (mounted) setState(() => _running = false);
@@ -210,39 +208,39 @@ class _CraPanelState extends State<CraPanel> {
             const Icon(Icons.gpp_good_outlined, size: 18),
             const SizedBox(width: 8),
             Text(
-              context.l10n.craTitle,
+              tr('Rapport de conformité — Cyber Resilience Act'),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             const SizedBox(width: 6),
-            HelpIcon(context.l10n.craHelp),
+            HelpIcon(tr('Périmètre vérifiable automatiquement uniquement : format et complétude du SBOM (Annexe I §2 point 1, BSI TR-03183-2, éléments minimaux NTIA), inventaire des vulnérabilités connues et disponibilité des correctifs, vulnérabilités activement exploitées (art. 14). Les autres obligations du CRA relèvent du fabricant. Ce rapport n\'est pas une déclaration de conformité.')),
           ],
         ),
         const SizedBox(height: 12),
 
         _field(
           _sbom,
-          context.l10n.craSbomField,
+          tr('Fichier SBOM à évaluer'),
           trailing: TextButton(
             onPressed: _pickSbom,
-            child: Text(context.l10n.commonBrowse),
+            child: Text(tr('Choisir')),
           ),
         ),
         const SizedBox(height: 8),
 
         ExpansionTile(
           title: Text(
-            context.l10n.craProductMeta,
+            tr('Métadonnées produit (facultatif)'),
             style: const TextStyle(fontSize: 13),
           ),
           tilePadding: EdgeInsets.zero,
           childrenPadding: const EdgeInsets.only(bottom: 8),
           children: [
-            _field(_manufacturer, context.l10n.craManufacturer),
-            _field(_product, context.l10n.craProduct),
-            _field(_productVersion, context.l10n.craProductVersion),
-            _field(_supportUntil, context.l10n.craSupportUntil),
-            _field(_vulnContact, context.l10n.craVulnContact),
-            _field(_cvdUrl, context.l10n.craCvdUrl),
+            _field(_manufacturer, tr('Fabricant')),
+            _field(_product, tr('Produit')),
+            _field(_productVersion, tr('Version du produit')),
+            _field(_supportUntil, tr('Fin de support (AAAA-MM-JJ)')),
+            _field(_vulnContact, tr('Contact de signalement des vulnérabilités')),
+            _field(_cvdUrl, tr('URL de la politique de divulgation coordonnée')),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerLeft,
@@ -250,10 +248,8 @@ class _CraPanelState extends State<CraPanel> {
                 icon: const Icon(Icons.upload_file, size: 16),
                 label: Text(
                   _configPath == null
-                      ? context.l10n.craLoadConfig
-                      : context.l10n.craConfigLoaded(
-                          _configPath!.split('/').last,
-                        ),
+                      ? tr('Charger un cra.yaml')
+                      : tr('cra.yaml : {name}', {'name': _configPath!.split('/').last}),
                 ),
                 onPressed: _pickConfig,
               ),
@@ -269,7 +265,7 @@ class _CraPanelState extends State<CraPanel> {
               onChanged: (v) => setState(() => _scan = v ?? true),
             ),
             Text(
-              context.l10n.craScanVulns,
+              tr('Analyser les vulnérabilités connues'),
               style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(width: 12),
@@ -286,7 +282,7 @@ class _CraPanelState extends State<CraPanel> {
                   const DropdownMenuItem(value: 'trivy', child: Text('Trivy')),
                   DropdownMenuItem(
                     value: 'all',
-                    child: Text(context.l10n.craScannerAll),
+                    child: Text(tr('Les trois')),
                   ),
                 ],
                 onChanged: (v) => setState(() => _scanner = v ?? 'grype'),
@@ -305,13 +301,13 @@ class _CraPanelState extends State<CraPanel> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.play_arrow, size: 18),
-              label: Text(context.l10n.craEvaluate),
+              label: Text(tr('Évaluer')),
               onPressed: _running ? null : _run,
             ),
             const SizedBox(width: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-              label: Text(context.l10n.craExportPdf),
+              label: Text(tr('Exporter le rapport PDF')),
               onPressed: _running || _sbom.text.trim().isEmpty
                   ? null
                   : _exportPdf,
@@ -371,10 +367,10 @@ class _CraResultView extends StatelessWidget {
     _ => Colors.grey,
   };
   String _l(BuildContext context, String status) => switch (status) {
-    'ok' => context.l10n.craStatusOk,
-    'partial' => context.l10n.craStatusPartial,
-    'fail' => context.l10n.craStatusFail,
-    _ => context.l10n.craStatusNa,
+    'ok' => tr('Conforme'),
+    'partial' => tr('Partiel'),
+    'fail' => tr('Non conforme'),
+    _ => tr('Non évalué'),
   };
 
   @override
@@ -423,7 +419,7 @@ class _CraResultView extends StatelessWidget {
             border: Border.all(color: _c(verdict).withValues(alpha: 0.5)),
           ),
           child: Text(
-            '${context.l10n.craVerdict(_l(context, verdict))}\n'
+            '${tr('Verdict (périmètre vérifié) : {status}', {'status': _l(context, verdict)})}\n'
             '${result['verdictSentence'] ?? ''}',
             style: TextStyle(
               color: _c(verdict),
@@ -436,17 +432,17 @@ class _CraResultView extends StatelessWidget {
         Row(
           children: [
             tile(
-              context.l10n.craTileFields,
+              tr('Champs SBOM conformes'),
               '${checks.where((c) => (c as Map)['status'] == 'ok').length} / ${checks.length}',
             ),
-            tile(context.l10n.craTileNtia, '$ntiaOk / 7'),
+            tile(tr('Éléments NTIA'), '$ntiaOk / 7'),
             tile(
-              context.l10n.craTileNoFix,
+              tr('Vuln. sans correctif'),
               evaluated ? '$noFix' : '—',
               alert: noFix > 0,
             ),
             tile(
-              context.l10n.craTileKev,
+              tr('CVE exploitées (KEV)'),
               evaluated ? '$kev' : '—',
               alert: kev > 0,
             ),
@@ -456,7 +452,7 @@ class _CraResultView extends StatelessWidget {
 
         if (blockers.isNotEmpty) ...[
           Text(
-            context.l10n.craBlockers,
+            tr('Points bloquants'),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
           const SizedBox(height: 4),
@@ -477,7 +473,7 @@ class _CraResultView extends StatelessWidget {
         ],
 
         Text(
-          context.l10n.craFieldsTitle,
+          tr('Champs de données SBOM (BSI TR-03183-2)'),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         ),
         const SizedBox(height: 4),
@@ -490,9 +486,9 @@ class _CraResultView extends StatelessWidget {
           children: [
             TableRow(
               children: [
-                _Th(context.l10n.craThField),
-                _Th(context.l10n.craThCoverage),
-                _Th(context.l10n.craThStatus),
+                _Th(tr('Champ')),
+                _Th(tr('Couverture')),
+                _Th(tr('Statut')),
               ],
             ),
             for (final c in checks.cast<Map>())
@@ -510,22 +506,14 @@ class _CraResultView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          context.l10n.craSbomSummary(
-            '${sbom['format']}',
-            '${sbom['componentCount']}',
-            '${sbom['dependencyRelations']}',
-          ),
+          tr('SBOM : {format} — {components} composants, {relations} relations de dépendance.', {'format': '${sbom['format']}', 'components': '${sbom['componentCount']}', 'relations': '${sbom['dependencyRelations']}'}),
           style: const TextStyle(fontSize: 11, color: Colors.grey),
         ),
         if (evaluated)
           Text(
-            context.l10n.craVulnSummary(
-                  '${vulns['total']}',
-                  '${(vulns['bySeverity'] as Map)['critical']}',
-                  '${(vulns['bySeverity'] as Map)['high']}',
-                ) +
+            tr('Vulnérabilités : {total} CVE — {critical} critiques, {high} élevées.', {'total': '${vulns['total']}', 'critical': '${(vulns['bySeverity'] as Map)['critical']}', 'high': '${(vulns['bySeverity'] as Map)['high']}'}) +
                 (vulns['article14NotificationRequired'] == true
-                    ? context.l10n.craEnisaNotice
+                    ? tr(' ⚠ Notification ENISA sous 24 h requise (art. 14).')
                     : ''),
             style: const TextStyle(fontSize: 11, color: Colors.grey),
           ),

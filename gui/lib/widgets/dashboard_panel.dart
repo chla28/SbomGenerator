@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
 import '../models/layer_scan.dart';
 import '../services/scan_enrichment.dart';
 import '../services/settings_service.dart';
@@ -18,7 +19,6 @@ import 'session_bar.dart';
 import '../models/remediation.dart';
 import 'trivy_panel.dart';
 import 'vuln_shared.dart' show SortHeader, VulnRow;
-import '../l10n/l10n.dart';
 import '../services/save_dialog.dart';
 
 // ─── Tableau de bord de synthèse ─────────────────────────────────────────────
@@ -94,7 +94,6 @@ class _DashboardPanelState extends State<DashboardPanel> {
   /// Exporte le rapport : le CLI (`sbom-generator report`) le produit à partir
   /// des résultats courants — c'est le même rapport que `scan --format pdf`.
   Future<void> _export(BuildContext context) async {
-    final l = context.l10n;
     final sessions = widget.sessions;
     final session =
         sessions?.current() ??
@@ -109,10 +108,10 @@ class _DashboardPanelState extends State<DashboardPanel> {
           layerScans: widget.layerScans,
         );
     final path = await pickSavePath(
-      dialogTitle: l.dashExportTitle,
+      dialogTitle: tr('Exporter le tableau de bord (AsciiDoc + PDF)'),
       fileName: _threshold == ReportSeverityThreshold.all
-          ? l.dashExportFileAll
-          : l.dashExportFileThreshold(_threshold.name),
+          ? tr('rapport-vulnerabilites.adoc')
+          : tr('rapport-vulnerabilites-{threshold}.adoc', {'threshold': _threshold.name}),
       type: FileType.custom,
       allowedExtensions: ['adoc'],
     );
@@ -130,12 +129,12 @@ class _DashboardPanelState extends State<DashboardPanel> {
         applyVex: sessions?.applyVex ?? true,
       );
       message = r.exitCode != 0 || !r.adocWritten
-          ? l.dashExportCliFailed(r.exitCode, r.stderr)
+          ? tr('Échec de l\'export du rapport (code {code}) : {error}', {'code': r.exitCode, 'error': r.stderr})
           : r.pdfWritten
-          ? l.dashExported(r.adocPath, r.pdfPath)
-          : l.dashExportedNoPdf(r.adocPath);
+          ? tr('Tableau de bord exporté → {path} et {pdf}', {'path': r.adocPath, 'pdf': r.pdfPath})
+          : tr('Tableau de bord exporté → {path} (asciidoctor-pdf introuvable, PDF non généré)', {'path': r.adocPath});
     } on ProcessException {
-      message = l.dashExportCliMissing(SettingsService.cliBinary);
+      message = tr('Impossible de lancer sbom-generator ({path}) : le rapport est produit par le CLI.', {'path': SettingsService.cliBinary});
     }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -184,7 +183,6 @@ class _DashboardPanelState extends State<DashboardPanel> {
       osv,
       trivy,
       widget.layerScans,
-      l: context.l10n,
     );
 
     return SingleChildScrollView(
@@ -401,11 +399,8 @@ _LayerSynthesis? _layerSynthesis(
   List<GrypeVuln>? grype,
   List<OsvVuln>? osv,
   List<TrivyVuln>? trivy,
-  Map<String, LayerScanResult> scans, {
-  AppLocalizations? l,
-}) {
+  Map<String, LayerScanResult> scans) {
   if (scans.isEmpty) return null;
-  final t = l ?? lookupAppLocalizations(fallbackLocale);
   final layers = <int, LayerInfo>{};
   for (final s in scans.values) {
     for (final l in s.layers) {
@@ -435,7 +430,7 @@ _LayerSynthesis? _layerSynthesis(
   take('Trivy', trivy);
   return _LayerSynthesis(
     layers.values.toList()..sort((a, b) => a.index.compareTo(b.index)),
-    {for (final e in scans.entries) e.key: e.value.modeLabelFor(t)},
+    {for (final e in scans.entries) e.key: e.value.modeLabelFor()},
     byId,
     worst,
   );
@@ -601,7 +596,7 @@ class _GlobalSummary extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    context.l10n.dashTitle,
+                    tr('Tableau de bord des vulnérabilités'),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -609,8 +604,10 @@ class _GlobalSummary extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     scansRun == 0
-                        ? context.l10n.dashNoScan
-                        : context.l10n.dashScanSummary(scansRun, uniqueIds),
+                        ? tr('Aucun scanner exécuté — lancez un scan depuis les onglets Grype, OSV-Scanner ou Trivy.')
+                        : '${isPlural(scansRun) ? tr('{scans} scanners exécutés', {'scans': scansRun}) : tr('{scans} scanner exécuté', {'scans': scansRun})}'
+                            ' · '
+                            '${isPlural(uniqueIds) ? tr('{ids} CVE uniques détectées', {'ids': uniqueIds}) : tr('{ids} CVE unique détectée', {'ids': uniqueIds})}',
                     style: TextStyle(
                       fontSize: 13,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -621,14 +618,14 @@ class _GlobalSummary extends StatelessWidget {
             ),
             if (scansRun > 0) ...[
               _StatBadge(
-                label: context.l10n.dashUniqueCves,
+                label: tr('CVE uniques'),
                 value: uniqueIds,
                 color: uniqueIds == 0 ? Colors.green : Colors.red[700]!,
               ),
               const SizedBox(width: 8),
             ],
             Tooltip(
-              message: context.l10n.dashThresholdTooltip,
+              message: tr('Sévérité minimale des CVE du rapport PDF (les CVE CISA KEV sont toujours incluses)'),
               child: DropdownButton<ReportSeverityThreshold>(
                 key: const Key('report-severity'),
                 value: threshold,
@@ -651,7 +648,7 @@ class _GlobalSummary extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: context.l10n.vulnTableExportPdf,
+              tooltip: tr('Exporter en AsciiDoc + PDF'),
               onPressed: onExport,
             ),
           ],
@@ -745,7 +742,7 @@ class _ScannerCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      context.l10n.dashNotRun,
+                      tr('Non exécuté'),
                       style: const TextStyle(fontSize: 10, color: Colors.grey),
                     ),
                   )
@@ -761,8 +758,8 @@ class _ScannerCard extends StatelessWidget {
                     ),
                     child: Text(
                       total == 0
-                          ? context.l10n.dashNone
-                          : context.l10n.dashTotalVulns(total),
+                          ? tr('✓ Aucune')
+                          : (isPlural(total) ? tr('{count} vulnérabilités', {'count': total}) : tr('{count} vulnérabilité', {'count': total})),
                       style: TextStyle(
                         fontSize: 11,
                         color: total == 0 ? Colors.green[700] : Colors.red[700],
@@ -788,7 +785,7 @@ class _ScannerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      context.l10n.dashRunScanFrom(name),
+                      tr('Lancez le scan depuis\nl\'onglet {name}', {'name': name}),
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
@@ -808,7 +805,7 @@ class _ScannerCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      context.l10n.scanNoVulnerabilities,
+                      tr('Aucune vulnérabilité détectée'),
                       style: TextStyle(fontSize: 11, color: Colors.green[700]),
                     ),
                   ],
@@ -819,7 +816,7 @@ class _ScannerCard extends StatelessWidget {
               _SeverityBar(counts: counts, total: total),
               const SizedBox(height: 12),
               // ── Détail par sévérité ──
-              for (final entry in _sevRows(counts, context.l10n))
+              for (final entry in _sevRows(counts))
                 _SevRow(
                   label: entry.label,
                   count: entry.count,
@@ -834,7 +831,7 @@ class _ScannerCard extends StatelessWidget {
     );
   }
 
-  static List<_SevEntry> _sevRows(Map<String, int> counts, AppLocalizations l) {
+  static List<_SevEntry> _sevRows(Map<String, int> counts) {
     return [
       _SevEntry(
         'Critical',
@@ -861,7 +858,7 @@ class _ScannerCard extends StatelessWidget {
         const Color(0xFFF1F8E9),
       ),
       _SevEntry(
-        l.dashOtherSeverity,
+        tr('Autre'),
         (counts['negligible'] ?? 0) +
             (counts['unknown'] ?? 0) +
             counts.entries
@@ -1158,8 +1155,8 @@ class _CrossScannerSectionState extends State<_CrossScannerSection> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${context.l10n.dashCompareTitle(rows.length)}'
-                    '${kevCount > 0 ? context.l10n.dashCompareKev(kevCount) : ''})',
+                    '${tr('Comparaison inter-scanners ({count} CVE', {'count': rows.length})}'
+                    '${kevCount > 0 ? tr(', dont {kev} CISA KEV', {'kev': kevCount}) : ''})',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -1176,7 +1173,7 @@ class _CrossScannerSectionState extends State<_CrossScannerSection> {
               child: Row(
                 children: [
                   header(
-                    context.l10n.dashHdrSeverity,
+                    tr('SÉV.'),
                     _CrossSort.severity,
                     width: 80,
                   ),
@@ -1192,7 +1189,7 @@ class _CrossScannerSectionState extends State<_CrossScannerSection> {
                     SizedBox(
                       width: 70,
                       child: Text(
-                        context.l10n.dashHdrLayers,
+                        tr('COUCHE(S)'),
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -1353,7 +1350,7 @@ class _CrossRow extends StatelessWidget {
                   ),
                   if (isIsolated) ...[
                     Tooltip(
-                      message: context.l10n.dashSeenByOne(scansRun),
+                      message: tr('Vu par un seul scanner sur {count}', {'count': scansRun}),
                       child: Icon(
                         Icons.error_outline,
                         size: 13,
@@ -1379,7 +1376,7 @@ class _CrossRow extends StatelessWidget {
                         if (exploit?.pocKnown ?? false) ...[
                           const SizedBox(width: 6),
                           Tooltip(
-                            message: context.l10n.cvePocKnown,
+                            message: tr('Exploit / PoC public recensé'),
                             child: const Icon(
                               Icons.code,
                               size: 12,
@@ -1441,10 +1438,7 @@ class _CrossRow extends StatelessWidget {
       );
     }
     return Tooltip(
-      message: context.l10n.vulnTableKevTooltip(
-        '',
-        e.kevRansomware ? context.l10n.vulnTableKevRansomware : '',
-      ),
+      message: tr('CISA KEV — exploitée activement dans la nature{added}{ransomware}', {'added': '', 'ransomware': e.kevRansomware ? tr(' · usage par rançongiciel') : ''}),
       child: Icon(
         Icons.local_fire_department,
         size: 14,
@@ -1463,7 +1457,7 @@ class _CrossRow extends StatelessWidget {
     }
     final pct = ((exploit!.epssPercentile ?? 0) * 100).round();
     return Tooltip(
-      message: context.l10n.dashEpssTooltip(s.toStringAsFixed(2), pct),
+      message: tr('EPSS {score} — probabilité d\'exploitation à 30 jours (percentile {pct})', {'score': s.toStringAsFixed(2), 'pct': pct}),
       child: Text(
         s.toStringAsFixed(2),
         style: TextStyle(
@@ -1517,7 +1511,7 @@ class _LayersSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  context.l10n.dashLayersCard(synthesis.layers.length),
+                  tr('Couches de l\'image ({count})', {'count': synthesis.layers.length}),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -1539,7 +1533,7 @@ class _LayersSection extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 60,
-                    child: Text(context.l10n.dashHdrLayer, style: head),
+                    child: Text(tr('COUCHE'), style: head),
                   ),
                   const SizedBox(
                     width: 100,
@@ -1561,7 +1555,7 @@ class _LayersSection extends StatelessWidget {
                   SizedBox(
                     width: 64,
                     child: Text(
-                      context.l10n.dashHdrHigh,
+                      tr('ÉLEV.'),
                       textAlign: TextAlign.right,
                       style: head,
                     ),

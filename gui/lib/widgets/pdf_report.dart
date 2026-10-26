@@ -8,14 +8,14 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 
 // ─── Version de la GUI ───────────────────────────────────────────────────────
 //
 // Unique endroit à mettre à jour côté GUI lors d'un bump de version (avec
 // gui/pubspec.yaml) — home_screen.dart (À propos) et les exports PDF s'y
 // réfèrent tous les deux, au lieu de dupliquer le littéral.
-const String kGuiVersion = '1.10.7';
+const String kGuiVersion = '1.10.8';
 
 // ─── Thème asciidoctor-pdf ──────────────────────────────────────────────────
 //
@@ -208,15 +208,14 @@ String _severityRole(String severity) => switch (severity.toLowerCase()) {
 
 /// Libellé français d'une sévérité (les scanners rapportent l'anglais, parfois
 /// en casses différentes). Utilisé pour un rendu homogène dans les rapports.
-String frenchSeverityLabel(String severity, {AppLocalizations? l}) {
-  final t = l ?? lookupAppLocalizations(fallbackLocale);
+String frenchSeverityLabel(String severity) {
   return switch (severity.toLowerCase()) {
-    'critical' => t.pdfSeverityCritical,
-    'high' => t.pdfSeverityHigh,
-    'medium' => t.pdfSeverityMedium,
-    'low' => t.pdfSeverityLow,
-    'negligible' => t.pdfSeverityNegligible,
-    'autre' => t.pdfSeverityOther,
+    'critical' => tr('CRITIQUE'),
+    'high' => tr('ÉLEVÉE'),
+    'medium' => tr('MOYENNE'),
+    'low' => tr('FAIBLE'),
+    'negligible' => tr('NÉGLIGEABLE'),
+    'autre' => tr('AUTRE'),
     '' => '?',
     _ => severity.toUpperCase(),
   };
@@ -224,13 +223,13 @@ String frenchSeverityLabel(String severity, {AppLocalizations? l}) {
 
 /// Rend une sévérité en badge coloré AsciiDoc (`[.sev-xxx]#LIBELLÉ#`), libellé
 /// francisé, à utiliser directement comme contenu d'une cellule de tableau.
-String pdfSeverityBadge(String severity, {AppLocalizations? l}) =>
-    '[.${_severityRole(severity)}]#${frenchSeverityLabel(severity, l: l)}#';
+String pdfSeverityBadge(String severity) =>
+    '[.${_severityRole(severity)}]#${frenchSeverityLabel(severity)}#';
 
 /// Date longue en français, ex. « 8 septembre 2026 » — pour l'en-tête des
 /// rapports (évite une dépendance `intl`).
-String pdfFrenchDate(DateTime d, {AppLocalizations? l}) {
-  if ((l ?? lookupAppLocalizations(fallbackLocale)).localeName == 'en') {
+String pdfFrenchDate(DateTime d) {
+  if (currentLang == Lang.en) {
     const en = [
       'January',
       'February',
@@ -322,8 +321,8 @@ String? buildSeverityBarSvg(
 }
 
 /// Encode un SVG en macro image AsciiDoc (data URI, sans fichier temporaire).
-String svgImageMacro(String svg, {String? alt, AppLocalizations? l}) {
-  alt ??= (l ?? lookupAppLocalizations(fallbackLocale)).pdfSeverityBarAlt;
+String svgImageMacro(String svg, {String? alt}) {
+  alt ??= tr('Répartition par sévérité');
   final b64 = base64Encode(utf8.encode(svg));
   return 'image::data:image/svg+xml;base64,$b64[$alt,pdfwidth=100%]';
 }
@@ -373,7 +372,5 @@ Future<String?> osvScannerVersion() => _detectToolVersion('osv-scanner', [
 /// PATH, sortie inattendue…).
 String pdfToolVersionRow(
   String label,
-  String? version, {
-  AppLocalizations? l,
-}) =>
-    '| $label | ${version ?? (l ?? lookupAppLocalizations(fallbackLocale)).pdfUnavailable}';
+  String? version) =>
+    '| $label | ${version ?? tr('_indisponible_')}';

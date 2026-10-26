@@ -110,7 +110,8 @@ gui/
 ├── lib/
 │   ├── main.dart                     # Entry point — StatefulWidget, ThemeMode + color + language
 │   ├── home_screen.dart              # Main screen — 2-column layout + theme palette
-│   ├── l10n/                         # Localization (gen-l10n): app_fr.arb / app_en.arb + generated code
+│   ├── i18n.dart                     # tr() / isPlural() / current language
+│   ├── l10n/                         # English catalog (en.dart) + AppLanguage / appLocale (l10n.dart)
 │   ├── models/
 │   │   ├── sbom_config.dart          # SBOM configuration (state + toJson/fromJson + toCommandLine)
 │   │   ├── sbom_result.dart          # Output models (OutputFile, SbomResult…)
@@ -849,9 +850,7 @@ The `VoidCallback? onChanged` parameter is called after each field change
 uses it to trigger `SettingsService.saveConfig()` without waiting for the next
 launch.
 
-All the visible texts come from the ARB files (`cfg*` keys): `build()` reads
-`final l = context.l10n;` and the private sub-widgets do the same in their own
-`build()`.
+All the visible texts go through `tr()` (catalog `lib/l10n/en.dart`).
 
 *Configuration profiles*: the panel header is a `Row` with the title on the
 left and an `IconButton(Icons.bookmarks_outlined)` on the right. This button
@@ -2137,7 +2136,7 @@ Two buttons in the toolbar, both disabled if `_filtered` is empty:
 * *AsciiDoc + PDF export* (`Icons.picture_as_pdf_outlined`) —
   `_exportAsciiDoc()`: writes an AsciiDoc report on `_filtered` (hence after
   the severity/search/date filters, like the CSV) — in the interface language
-  (`AppLocalizations l`, passed to the report builders) — figures summary
+  (`tr()`) — figures summary
   (count per severity, each label passed to `pdfSeverityBadge` +
   `buildSeverityBarSvg`/`svgImageMacro` bar, date filter applied if any),
   tools section (`pdfToolVersionRow('sbom_generator_gui', kGuiVersion)` then
@@ -2209,10 +2208,9 @@ white PDF:
   `pdfToolVersionRow(label, version)` which displays `_unavailable_` in italic
   in this case.
 
-All the visible texts of the reports come from the ARB files (`pdf*`, `adoc*`,
-`rep*`, `dash*` keys) through an optional `AppLocalizations? l` parameter
-(default: French, which keeps the existing tests unchanged); the exports
-triggered from the UI pass `context.l10n`.
+All the visible texts of the reports go through `tr()`: they follow the current
+language (`currentLang`), French by default, which keeps the existing tests
+unchanged.
 
 === `widgets/help_viewer.dart` — online help (embedded user manual)
 
@@ -2416,51 +2414,43 @@ TrivyRunner.run(...)   →   Process.start('trivy', ['sbom'|'image', '--format',
 [[sec-l10n]]
 == Localization (FR / EN)
 
-The interface uses Flutter's standard mechanism (`gen-l10n`):
+The interface texts go through `tr('French text {param}', {...})`
+(`lib/i18n.dart`): French is the source language and the key of the English
+catalog `lib/l10n/en.dart`. The CLI (root) has its own `lib/i18n.dart` and its
+own catalog, since the GUI does not depend on the `sbom_generator` package.
 
-* `l10n.yaml`: ARB files in `lib/l10n/`, *French = reference language*
-  (`app_fr.arb`, template), generated class `AppLocalizations`.
-* `lib/l10n/app_<language>.arb`: one file per language; the French one carries
-  the description of each key (`@key.description`) and the parameters
-  (`placeholders`). Plurals and parameters in ICU syntax
-  (`{count, plural, =1{…} other{…}}`) — never concatenation of sentence
-  fragments nor “(s)”.
-* `lib/l10n/app_localizations*.dart`: *generated* code (by `flutter pub get`
-  or `flutter gen-l10n`), versioned; do not edit by hand.
+* `tr(fr, [args])` replaces each `{name}` with `args['name']`; a text missing
+  from the catalog stays in French. `isPlural(n)` picks the plural (0 and 1 are
+  singular in French, only 1 in English): `isPlural(n) ? tr('{count} fichiers')
+  : tr('{count} fichier')`. Never concatenation of sentence fragments nor
+  “(s)”, and no `$x` interpolation in the literal.
 * `lib/l10n/l10n.dart`: `AppLanguage` (`system` / `fr` / `en`, setting
   remembered by `SettingsService.load/saveLanguage`, key `ui_language_v1`),
-  `resolveAppLocale` (system language if supported, otherwise French), the
-  `context.l10n` extension, the global `appLocale` (effective locale, updated
-  by `main.dart`) and `appL10n()` for the code without a `BuildContext`
-  (services, exports). `context.l10n` falls back to French outside a localized
-  application: widget tests mounted without delegates — most existing tests —
-  therefore see the French texts without modification.
-* `main.dart` wires `localizationsDelegates`, `supportedLocales`, `locale` and
-  `localeListResolutionCallback`, and `_applyLanguage` updates `appLocale` and
-  `SettingsService.cliLang`; `home_screen.dart` carries the language menu (key
-  `language-menu`).
+  `resolveAppLocale` (system language if supported, otherwise French),
+  `supportedAppLocales` and the global `appLocale`, whose assignment also sets
+  `currentLang` (hence the language of `tr()`).
+* `main.dart` wires `GlobalMaterialLocalizations.delegates` (translations of
+  the Material widgets), `supportedLocales`, `locale` and
+  `localeListResolutionCallback`; `_applyLanguage` updates `appLocale` and
+  `SettingsService.cliLang`, and the `KeyedSubtree` around `HomeScreen`
+  rebuilds the whole screen when the language changes. `home_screen.dart`
+  carries the language menu (key `language-menu`).
 
-*Adding a text*: key in `app_fr.arb` (with description), translation in
-`app_en.arb`, `flutter gen-l10n`, then `context.l10n.myKey` (or
-`l10n.myKey(param)`) in the widget. Prefix per area: `common…`,
-`scanSource…`, `vulnTable…`, `dateFilter…`, `layerScan…`, `cliCommand…`,
-`cfg…` (configuration panel), `dash…`, `pdf…` / `adoc…` / `rep…` (exported
-reports), `<tab>…` (`grype…`). A function outside a widget receives
-`AppLocalizations` as a parameter — mandatory when it is called from a widget,
-optional `{AppLocalizations? l}` (default: French) for the exports and models
-tested without a context (e.g. `equivalentScanNote(l10n, …)`,
-`pdfSeverityBadge(sev, l: l)`); a service never produces a displayed sentence
-but a typed value that the interface translates (e.g. `LayerScanStep` →
-`layerScanStepLabel`). In an `async` method, read `final l = context.l10n;` at
-the beginning, before the first `await`.
+*Adding a text*: write `tr('My text {param}', {'param': value})` in the widget,
+then add the same French string as a key of `lib/l10n/en.dart` with its
+translation (same `{param}`s). A function outside a widget calls `tr()`
+directly: no `AppLocalizations` to pass around. A service never produces a
+displayed sentence but a typed value that the interface translates (e.g.
+`LayerScanStep` → `layerScanStepLabel`).
 
-*Adding a language*: `lib/l10n/app_<code>.arb` with all the keys, then a value
-in `AppLanguage` and its label in the menu.
+*Adding a language*: a value in `AppLanguage`, a catalog (like
+`lib/l10n/en.dart`) consulted by `tr()` and its label in the menu.
 
-*Tests*: `test/l10n_test.dart` checks that each ARB file has the same keys and
-parameters as the French one, that each French key is documented, the language
-resolution, the fallback and the menu; `test/l10n_grype_test.dart` displays the
-pilot tab in English.
+*Tests*: `test/l10n_test.dart` checks that each text passed to `tr()` has its
+translation, that no catalog entry is orphaned, that the `{param}`s are the
+same in both languages, the language resolution, the fallback and the menu;
+`test/l10n_grype_test.dart` displays the pilot tab in English (tests set the
+language with `appLocale`).
 
 *What is not translated* (machine contracts, identical whatever the language):
 the lines of the CLI parsed by the GUI (`SBOM written → …`, the `] n/m %`
@@ -2663,7 +2653,7 @@ Tab(
     children: [
       Icon(Icons.my_icon, size: 16),
       SizedBox(width: 6),
-      Text(context.l10n.tabMyTab),
+      Text(tr('My tab')),
     ],
   ),
 ),

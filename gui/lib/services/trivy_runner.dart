@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 
 sealed class TrivyEvent {}
 
@@ -92,7 +92,7 @@ class TrivyRunner {
           _process = null;
           if (!controller.isClosed) {
             final msg = e.toString().contains('No such file')
-                ? appL10n().svcTrivyMissing
+                ? tr('trivy introuvable — https://github.com/aquasecurity/trivy')
                 : e.toString();
             controller.add(TrivyDoneEvent(127, stderr: msg));
             controller.close();

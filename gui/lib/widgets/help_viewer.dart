@@ -6,6 +6,7 @@ import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
+import '../i18n.dart';
 import '../l10n/l10n.dart';
 import 'help_highlight.dart';
 
@@ -111,7 +112,7 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = appL10n().helpLoadError('$e');
+        _error = tr('Aide indisponible : impossible de charger le manuel ({error}).', {'error': '$e'});
       });
     }
   }
@@ -217,7 +218,7 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
     if (_hitCount > 0 && _hit >= _hitCount) _hit = 0;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.helpTitle)),
+      appBar: AppBar(title: Text(tr('Aide — Manuel utilisateur'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -246,13 +247,13 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
                             controller: _searchController,
                             onSubmitted: (_) => _moveHit(1),
                             decoration: InputDecoration(
-                              hintText: context.l10n.helpSearchHint,
+                              hintText: tr('Rechercher dans le manuel…'),
                               prefixIcon: const Icon(Icons.search, size: 20),
                               suffixIcon: _query.isEmpty
                                   ? null
                                   : IconButton(
                                       icon: const Icon(Icons.clear, size: 18),
-                                      tooltip: context.l10n.helpClear,
+                                      tooltip: tr('Effacer'),
                                       onPressed: _searchController.clear,
                                     ),
                               isDense: true,
@@ -267,7 +268,7 @@ class _HelpViewerScreenState extends State<HelpViewerScreen> {
                               ? Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: Text(
-                                    context.l10n.helpNoMatch(_query),
+                                    tr('Aucun chapitre ne contient « {query} ».', {'query': _query}),
                                     style: theme.textTheme.bodySmall,
                                   ),
                                 )
@@ -367,7 +368,6 @@ class _HitBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final theme = Theme.of(context);
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
@@ -376,18 +376,18 @@ class _HitBar extends StatelessWidget {
         child: Row(
           children: [
             Text(
-              count == 0 ? l.helpHitNone : l.helpHitCount(hit + 1, count),
+              count == 0 ? tr('Aucune occurrence dans ce chapitre') : tr('Occurrence {current} sur {total}', {'current': hit + 1, 'total': count}),
               key: const Key('help-hit-count'),
               style: theme.textTheme.bodySmall,
             ),
             const Spacer(),
             IconButton(
-              tooltip: l.helpPrevHit,
+              tooltip: tr('Occurrence précédente (Maj+F3)'),
               icon: const Icon(Icons.keyboard_arrow_up),
               onPressed: count == 0 ? null : onPrev,
             ),
             IconButton(
-              tooltip: l.helpNextHit,
+              tooltip: tr('Occurrence suivante (F3 / Entrée)'),
               icon: const Icon(Icons.keyboard_arrow_down),
               onPressed: count == 0 ? null : onNext,
             ),

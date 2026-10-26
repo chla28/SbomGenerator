@@ -5,12 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../i18n.dart';
 import '../models/layer_nav.dart';
 import '../models/sbom_result.dart';
 import '../models/spdx3_view.dart';
 import 'help_icon.dart';
 import 'layer_selector.dart';
-import '../l10n/l10n.dart';
 
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ class _SbomComponent {
   });
 
   String get key => '$name@$version';
-  String layerText(AppLocalizations l) => layerColumnLabel(layerFields, l: l);
+  String layerText() => layerColumnLabel(layerFields);
 }
 
 class _SbomInfo {
@@ -270,7 +270,6 @@ class _SbomTreePanelState extends State<SbomTreePanel>
   }
 
   Future<void> _loadFile(String path) async {
-    final l = context.l10n;
     setState(() {
       _loading = true;
       _error = null;
@@ -286,7 +285,6 @@ class _SbomTreePanelState extends State<SbomTreePanel>
         try {
           layerInfo = LayerDocInfo.fromSbom(
             jsonDecode(raw) as Map<String, dynamic>,
-            l: l,
           );
         } catch (_) {}
       }
@@ -296,7 +294,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
           ? layerInfo.layerLabels
           : nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty
           ? _layerLabels
-          : await readLayerLabels(nav.globalPath, l: l);
+          : await readLayerLabels(nav.globalPath);
       setState(() {
         _loading = false;
         _selectedPath = path;
@@ -307,7 +305,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
         if (_groupBy == _GroupBy.layer && info?.hasLayers != true) {
           _groupBy = _GroupBy.type;
         }
-        _error = info == null ? l.treeFormatUnknown : null;
+        _error = info == null ? tr('Format non reconnu (ni CycloneDX ni SPDX).') : null;
         if (info != null) {
           // Déplier tous les groupes si peu nombreux
           final types = info.components.map((c) => c.type).toSet();
@@ -317,14 +315,14 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     } catch (e) {
       setState(() {
         _loading = false;
-        _error = l.treeReadError('$e');
+        _error = tr('Erreur de lecture : {error}', {'error': '$e'});
       });
     }
   }
 
   Future<void> _pickFile() async {
     final r = await FilePicker.pickFile(
-      dialogTitle: context.l10n.treePickTitle,
+      dialogTitle: tr('Sélectionner un fichier SBOM (JSON)'),
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
@@ -335,7 +333,6 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     final info = _info;
     if (info == null) return [];
 
-    final l = context.l10n;
     var comps = info.components;
     if (_searchTerm.isNotEmpty) {
       final q = _searchTerm.toLowerCase();
@@ -357,8 +354,8 @@ class _SbomTreePanelState extends State<SbomTreePanel>
     for (final c in comps) {
       final k = switch (_groupBy) {
         _GroupBy.type => c.type,
-        _GroupBy.layer => layerGroupKey(c.layerFields, l: l),
-        _ => c.license.isEmpty ? l.treeUnspecified : c.license,
+        _GroupBy.layer => layerGroupKey(c.layerFields),
+        _ => c.license.isEmpty ? tr('(non spécifié)') : c.license,
       };
       (groups[k] ??= []).add(c);
     }
@@ -427,7 +424,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                         final keys = info.components
                             .map(
                               (c) =>
-                                  layerGroupKey(c.layerFields, l: context.l10n),
+                                  layerGroupKey(c.layerFields),
                             )
                             .toSet();
                         if (keys.length <= 6) _expandedGroups.addAll(keys);
@@ -440,7 +437,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                 if (_groupBy != _GroupBy.none) ...[
                   IconButton(
                     icon: const Icon(Icons.unfold_more, size: 16),
-                    tooltip: context.l10n.treeExpandAll,
+                    tooltip: tr('Tout déplier'),
                     visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() {
                       final keys = items
@@ -452,7 +449,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                   ),
                   IconButton(
                     icon: const Icon(Icons.unfold_less, size: 16),
-                    tooltip: context.l10n.treeCollapseAll,
+                    tooltip: tr('Tout replier'),
                     visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() => _expandedGroups.clear()),
                   ),
@@ -464,7 +461,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                     controller: _searchCtrl,
                     onChanged: (v) => setState(() => _searchTerm = v),
                     decoration: InputDecoration(
-                      hintText: context.l10n.treeFilterHint,
+                      hintText: tr('Filtrer par nom, purl, licence…'),
                       isDense: true,
                       prefixIcon: const Icon(Icons.search, size: 16),
                       suffixIcon: _searchTerm.isNotEmpty
@@ -518,7 +515,7 @@ class _SbomTreePanelState extends State<SbomTreePanel>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        context.l10n.treeNoMatch(_searchTerm),
+                        tr('Aucun composant pour "{term}"', {'term': _searchTerm}),
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -600,7 +597,7 @@ class _FileBar extends StatelessWidget {
             child: Text(
               selectedPath != null
                   ? selectedPath!.split('/').last
-                  : context.l10n.treeNoFileSelected,
+                  : tr('Aucun fichier SBOM sélectionné'),
               style: TextStyle(
                 fontSize: 12,
                 color: selectedPath != null
@@ -616,7 +613,7 @@ class _FileBar extends StatelessWidget {
               builder: (ctx, ctrl, child) => TextButton.icon(
                 icon: const Icon(Icons.folder_outlined, size: 14),
                 label: Text(
-                  context.l10n.treeGenerated(sbomFiles.length),
+                  tr('Générés ({count})', {'count': sbomFiles.length}),
                   style: const TextStyle(fontSize: 12),
                 ),
                 onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
@@ -642,7 +639,7 @@ class _FileBar extends StatelessWidget {
           TextButton.icon(
             icon: const Icon(Icons.file_open_outlined, size: 14),
             label: Text(
-              context.l10n.treeOpen,
+              tr('Ouvrir…'),
               style: const TextStyle(fontSize: 12),
             ),
             onPressed: onPickFile,
@@ -690,12 +687,12 @@ class _InfoBar extends StatelessWidget {
           const SizedBox(width: 6),
           _Chip(
             Icons.inventory_outlined,
-            context.l10n.treeComponentsChip(info.components.length),
+            (isPlural(info.components.length) ? tr('{count} composants', {'count': info.components.length}) : tr('{count} composant', {'count': info.components.length})),
           ),
           const SizedBox(width: 6),
           _Chip(
             Icons.gavel_outlined,
-            context.l10n.treeLicensesChip(info.uniqueLicenseCount),
+            (isPlural(info.uniqueLicenseCount) ? tr('{count} licences', {'count': info.uniqueLicenseCount}) : tr('{count} licence', {'count': info.uniqueLicenseCount})),
           ),
         ],
       ),
@@ -741,28 +738,28 @@ class _GroupBySelector extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(context.l10n.treeGroupBy, style: const TextStyle(fontSize: 11)),
+        Text(tr('Grouper :'), style: const TextStyle(fontSize: 11)),
         const SizedBox(width: 2),
-        HelpIcon(context.l10n.treeGroupHelp),
+        HelpIcon(tr('Mode de regroupement des composants.\n• Aucun : liste à plat alphabétique\n• Type : groupé par écosystème (rpm, pypi…)\n• Licence : groupé par expression SPDX\n• Couche : groupé par couche d\'origine (SBOM global) ou par changement (SBOM de couche) — SBOM produits avec --per-layer')),
         const SizedBox(width: 4),
         SegmentedButton<_GroupBy>(
           segments: [
             ButtonSegment(
               value: _GroupBy.none,
-              label: Text(context.l10n.treeGroupNone),
+              label: Text(tr('Aucun')),
             ),
             ButtonSegment(
               value: _GroupBy.type,
-              label: Text(context.l10n.treeGroupType),
+              label: Text(tr('Type')),
             ),
             ButtonSegment(
               value: _GroupBy.license,
-              label: Text(context.l10n.treeGroupLicense),
+              label: Text(tr('Licence')),
             ),
             if (showLayer)
               ButtonSegment(
                 value: _GroupBy.layer,
-                label: Text(context.l10n.treeGroupLayer),
+                label: Text(tr('Couche')),
               ),
           ],
           selected: {value},
@@ -938,11 +935,11 @@ class _ComponentTile extends StatelessWidget {
                 _DetailRow('Version', comp.version),
                 if (comp.type != 'package') _DetailRow('Type', comp.type),
                 if (comp.license.isNotEmpty)
-                  _DetailRow(context.l10n.treeDetailLicense, comp.license),
-                if (comp.layerText(context.l10n).isNotEmpty)
+                  _DetailRow(tr('Licence'), comp.license),
+                if (comp.layerText().isNotEmpty)
                   _DetailRow(
-                    context.l10n.treeDetailLayer,
-                    comp.layerText(context.l10n),
+                    tr('Couche'),
+                    comp.layerText(),
                   ),
               ],
             ),
@@ -987,7 +984,7 @@ class _DetailRow extends StatelessWidget {
           if (copyable)
             IconButton(
               icon: const Icon(Icons.copy, size: 12),
-              tooltip: context.l10n.commonCopy,
+              tooltip: tr('Copier'),
               onPressed: () => Clipboard.setData(ClipboardData(text: value)),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -1016,15 +1013,15 @@ class _EmptyView extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             hasOutputFiles
-                ? context.l10n.treeEmptyNoSbom
-                : context.l10n.treeEmptyGenerate,
+                ? tr('Aucun fichier SBOM (JSON/JSON-LD) dans les sorties.')
+                : tr('Générez un SBOM ou ouvrez un fichier existant.'),
             style: const TextStyle(color: Colors.grey, fontSize: 14),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.file_open_outlined, size: 16),
-            label: Text(context.l10n.treeOpenSbom),
+            label: Text(tr('Ouvrir un fichier SBOM')),
             onPressed: onPick,
           ),
         ],

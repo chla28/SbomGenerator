@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 
 sealed class GrypeEvent {}
 
@@ -124,7 +124,7 @@ class GrypeRunner {
           _process = null;
           if (!controller.isClosed) {
             final msg = e.toString().contains('No such file')
-                ? appL10n().svcGrypeMissing
+                ? tr('grype introuvable. Installez-le : https://github.com/anchore/grype')
                 : e.toString();
             controller.add(GrypeDoneEvent(1, stderr: msg));
             controller.close();

@@ -10,8 +10,7 @@ class ComposerParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('composer.lock introuvable : $path',
-              'composer.lock not found: $path'));
+          tr('composer.lock introuvable : {path}', {'path': path}));
       return [];
     }
 
@@ -20,7 +19,7 @@ class ComposerParser {
       data = jsonDecode(file.readAsStringSync());
     } on FormatException catch (e) {
       stderr.writeln('Warning: ' +
-          tr('analyse impossible de $path : $e', 'cannot parse $path: $e'));
+          tr('analyse impossible de {path} : {e}', {'path': path, 'e': e}));
       return [];
     }
     if (data is! Map) return [];

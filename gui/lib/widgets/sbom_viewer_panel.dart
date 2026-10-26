@@ -5,10 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../i18n.dart';
 import '../models/layer_nav.dart';
 import '../models/spdx3_view.dart';
 import 'layer_selector.dart';
-import '../l10n/l10n.dart';
 
 // ─── Modèles ──────────────────────────────────────────────────────────────────
 
@@ -37,18 +37,16 @@ class _Component {
   });
 
   static List<_Component> fromSbom(
-    Map<String, dynamic> raw, {
-    AppLocalizations? l,
-  }) {
-    if (raw['bomFormat'] == 'CycloneDX') return _fromCdx(raw, l);
-    if (raw.containsKey('spdxVersion')) return _fromSpdx(raw, l);
-    if (raw.containsKey('@graph')) return _fromSpdx3(raw, l);
+    Map<String, dynamic> raw) {
+    if (raw['bomFormat'] == 'CycloneDX') return _fromCdx(raw);
+    if (raw.containsKey('spdxVersion')) return _fromSpdx(raw);
+    if (raw.containsKey('@graph')) return _fromSpdx3(raw);
     return [];
   }
 
   static List<_Component> _fromCdx(
     Map<String, dynamic> d,
-    AppLocalizations? l,
+    
   ) {
     return ((d['components'] as List?) ?? [])
         .map((e) {
@@ -81,7 +79,7 @@ class _Component {
             purl: c['purl'] as String? ?? '',
             description: c['description'] as String? ?? '',
             url: homepage,
-            layer: layerColumnLabel(layerFieldsOf(c), l: l),
+            layer: layerColumnLabel(layerFieldsOf(c)),
           );
         })
         .where((c) => c.name.isNotEmpty)
@@ -90,7 +88,7 @@ class _Component {
 
   static List<_Component> _fromSpdx(
     Map<String, dynamic> d,
-    AppLocalizations? l,
+    
   ) {
     return ((d['packages'] as List?) ?? [])
         .map((e) {
@@ -111,7 +109,7 @@ class _Component {
             purl: purl,
             description: p['comment'] as String? ?? '',
             url: p['downloadLocation'] as String? ?? '',
-            layer: layerColumnLabel(layerFieldsOf(p), l: l),
+            layer: layerColumnLabel(layerFieldsOf(p)),
           );
         })
         .where((c) => c.name.isNotEmpty)
@@ -120,7 +118,7 @@ class _Component {
 
   static List<_Component> _fromSpdx3(
     Map<String, dynamic> d,
-    AppLocalizations? l,
+    
   ) {
     final graph = (d['@graph'] as List? ?? []).cast<Map<String, dynamic>>();
     return spdx3Packages(graph)
@@ -145,7 +143,7 @@ class _Component {
             purl: purl,
             description: p['summary'] as String? ?? '',
             url: p['software:downloadLocation'] as String? ?? '',
-            layer: layerColumnLabel(layerFieldsOf(p), l: l),
+            layer: layerColumnLabel(layerFieldsOf(p)),
           );
         })
         .where((c) => c.name.isNotEmpty)
@@ -192,7 +190,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
 
   Future<void> _loadFile() async {
     final result = await FilePicker.pickFile(
-      dialogTitle: context.l10n.viewerOpenTitle,
+      dialogTitle: tr('Ouvrir un fichier SBOM'),
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
     );
@@ -201,7 +199,6 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   }
 
   Future<void> _openPath(String path) async {
-    final l = context.l10n;
     setState(() {
       _loading = true;
       _error = null;
@@ -218,10 +215,10 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
     try {
       final raw = await File(path).readAsString();
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      final components = _Component.fromSbom(json, l: l);
+      final components = _Component.fromSbom(json);
       final nav = LayerNav.discover(path);
-      final layerInfo = LayerDocInfo.fromSbom(json, l: l);
-      final layerLabels = await _labelsFor(nav, layerInfo, l);
+      final layerInfo = LayerDocInfo.fromSbom(json);
+      final layerLabels = await _labelsFor(nav, layerInfo);
 
       String? docName;
       String? fmt;
@@ -257,7 +254,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
       });
     } catch (e) {
       setState(() {
-        _error = l.viewerParseError('$e');
+        _error = tr('Impossible de parser le fichier : {error}', {'error': '$e'});
         _loading = false;
       });
     }
@@ -268,14 +265,14 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   Future<Map<int, String>> _labelsFor(
     LayerNav? nav,
     LayerDocInfo info,
-    AppLocalizations l,
+    
   ) async {
     if (nav == null) return const {};
     if (info.layerLabels.isNotEmpty) return info.layerLabels;
     if (nav.globalPath == _nav?.globalPath && _layerLabels.isNotEmpty) {
       return _layerLabels;
     }
-    return readLayerLabels(nav.globalPath, l: l);
+    return readLayerLabels(nav.globalPath);
   }
 
   bool get _hasLayerColumn => _all.any((c) => c.layer.isNotEmpty);
@@ -342,7 +339,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
   Map<String, int> get _licenses {
     final m = <String, int>{};
     for (final c in _all) {
-      final k = c.license.isEmpty ? context.l10n.viewerUnspecified : c.license;
+      final k = c.license.isEmpty ? tr('Non spécifiée') : c.license;
       m[k] = (m[k] ?? 0) + 1;
     }
     return m;
@@ -383,7 +380,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
           ),
           const SizedBox(height: 16),
           Text(
-            _error ?? context.l10n.viewerNoFile,
+            _error ?? tr('Aucun fichier SBOM chargé'),
             style: TextStyle(
               color: _error != null
                   ? Theme.of(context).colorScheme.error
@@ -396,7 +393,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
           const SizedBox(height: 20),
           FilledButton.icon(
             icon: const Icon(Icons.folder_open_outlined),
-            label: Text(context.l10n.viewerOpenEllipsis),
+            label: Text(tr('Ouvrir un fichier SBOM…')),
             onPressed: _loadFile,
           ),
         ],
@@ -441,15 +438,15 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                 ),
               ),
               // Badges statistiques
-              _StatBadge('${_all.length}', context.l10n.viewerStatComponents),
+              _StatBadge('${_all.length}', tr('composants')),
               const SizedBox(width: 8),
-              _StatBadge('${eco.length}', context.l10n.viewerStatTypes),
+              _StatBadge('${eco.length}', tr('types')),
               const SizedBox(width: 8),
-              _StatBadge('${lic.length}', context.l10n.viewerStatLicenses),
+              _StatBadge('${lic.length}', tr('licences')),
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 icon: const Icon(Icons.folder_open_outlined, size: 16),
-                label: Text(context.l10n.viewerOpenShort),
+                label: Text(tr('Ouvrir…')),
                 onPressed: _loadFile,
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
@@ -482,7 +479,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                 child: TextField(
                   controller: _searchCtrl,
                   decoration: InputDecoration(
-                    hintText: context.l10n.viewerFilterHint,
+                    hintText: tr('Filtrer…'),
                     prefixIcon: const Icon(Icons.search, size: 18),
                     isDense: true,
                     border: const OutlineInputBorder(),
@@ -500,12 +497,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
               const SizedBox(width: 8),
               DropdownButton<String>(
                 value: _typeFilter.isEmpty ? null : _typeFilter,
-                hint: Text(context.l10n.viewerTypeHint),
+                hint: Text(tr('Type')),
                 isDense: true,
                 items: [
                   DropdownMenuItem(
                     value: '',
-                    child: Text(context.l10n.viewerAll),
+                    child: Text(tr('Tous')),
                   ),
                   ..._types.map(
                     (t) => DropdownMenuItem(value: t, child: Text(t)),
@@ -532,7 +529,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
           child: _filtered.isEmpty
               ? Center(
                   child: Text(
-                    context.l10n.viewerNoResult,
+                    tr('Aucun résultat'),
                     style: TextStyle(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
@@ -546,7 +543,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                       child: Row(
                         children: [
                           _Header(
-                            context.l10n.viewerColName,
+                            tr('Nom'),
                             0,
                             _sortCol,
                             _sortAsc,
@@ -570,7 +567,7 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                             flex: 2,
                           ),
                           _Header(
-                            context.l10n.viewerColLicense,
+                            tr('Licence'),
                             3,
                             _sortCol,
                             _sortAsc,
@@ -580,8 +577,8 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                           if (_hasLayerColumn)
                             _Header(
                               _nav?.isLayer == true
-                                  ? context.l10n.viewerColChange
-                                  : context.l10n.viewerColLayer,
+                                  ? tr('Changement')
+                                  : tr('Couche'),
                               4,
                               _sortCol,
                               _sortAsc,
@@ -715,12 +712,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                   _DetailRow('Version', c.version),
                   _DetailRow('Type', c.type),
                   if (c.license.isNotEmpty)
-                    _DetailRow(context.l10n.viewerColLicense, c.license),
+                    _DetailRow(tr('Licence'), c.license),
                   if (c.layer.isNotEmpty)
                     _DetailRow(
                       _nav?.isLayer == true
-                          ? context.l10n.viewerColChange
-                          : context.l10n.viewerColLayer,
+                          ? tr('Changement')
+                          : tr('Couche'),
                       c.layer,
                     ),
                   if (c.description.isNotEmpty)
@@ -751,12 +748,12 @@ class _SbomViewerPanelState extends State<SbomViewerPanel> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.copy_outlined, size: 15),
-                          tooltip: context.l10n.viewerCopyPurl,
+                          tooltip: tr('Copier le PURL'),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: c.purl));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(context.l10n.viewerPurlCopied),
+                                content: Text(tr('PURL copié')),
                                 duration: const Duration(seconds: 2),
                               ),
                             );

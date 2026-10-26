@@ -67,9 +67,7 @@ class IgnoreList {
       final parts = raw.split(';').map((p) => p.trim()).toList();
       final id = parts.first;
       if (id.isEmpty || id.contains('=') || id.contains(' ')) {
-        warnings.add(tr(
-            'ligne ${i + 1} ignorée (identifiant attendu en premier)',
-            'line ${i + 1} skipped (identifier expected first)'));
+        warnings.add(tr('ligne {i} ignorée (identifiant attendu en premier)', {'i': i + 1}));
         continue;
       }
       String? pkg, reason;
@@ -87,9 +85,7 @@ class IgnoreList {
           case 'expires':
             final d = DateTime.tryParse(v);
             if (d == null) {
-              warnings.add(tr(
-                  'ligne ${i + 1} : date « $v » illisible (attendu AAAA-MM-JJ), règle sans expiration',
-                  'line ${i + 1}: unreadable date "$v" (expected YYYY-MM-DD), rule has no expiry'));
+              warnings.add(tr('ligne {i} : date « {v} » illisible (attendu AAAA-MM-JJ), règle sans expiration', {'i': i + 1, 'v': v}));
             } else {
               // Inclusif : valable jusqu'à la fin du jour indiqué.
               expires = DateTime(d.year, d.month, d.day, 23, 59, 59);
@@ -97,8 +93,7 @@ class IgnoreList {
         }
       }
       if (reason == null || reason.isEmpty) {
-        warnings.add(tr('ligne ${i + 1} ($id) : aucune justification (reason=)',
-            'line ${i + 1} ($id): no justification (reason=)'));
+        warnings.add(tr('ligne {i} ({id}) : aucune justification (reason=)', {'i': i + 1, 'id': id}));
       }
       entries.add(IgnoreEntry(
           id: id, package: pkg, expires: expires, reason: reason, line: i + 1));
@@ -147,9 +142,7 @@ class Baseline {
   factory Baseline.fromJson(Map<String, dynamic> json) {
     final findings = json['findings'];
     if (findings is! List) {
-      throw FormatException(tr(
-          'référence invalide : tableau "findings" absent (produire le fichier avec `scan --format json`)',
-          'invalid baseline: "findings" array missing (produce the file with `scan --format json`)'));
+      throw FormatException(tr('référence invalide : tableau "findings" absent (produire le fichier avec `scan --format json`)'));
     }
     return Baseline({
       for (final f in findings)

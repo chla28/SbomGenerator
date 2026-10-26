@@ -12,8 +12,7 @@ class GoParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('fichier go.sum introuvable : $path',
-              'go.sum file not found: $path'));
+          tr('fichier go.sum introuvable : {path}', {'path': path}));
       return [];
     }
 
@@ -60,8 +59,7 @@ class GoParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('fichier go.mod introuvable : $path',
-              'go.mod file not found: $path'));
+          tr('fichier go.mod introuvable : {path}', {'path': path}));
       return [];
     }
 

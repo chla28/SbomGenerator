@@ -12,8 +12,7 @@ class GemParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('Gemfile.lock introuvable : $path',
-              'Gemfile.lock not found: $path'));
+          tr('Gemfile.lock introuvable : {path}', {'path': path}));
       return [];
     }
 

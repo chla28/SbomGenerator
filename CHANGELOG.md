@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.10.8] - 2026-10-26
+
+### Changed
+- **i18n unifiée sur `tr('texte français {param}')`** : la GUI quitte `gen-l10n` (fichiers ARB, classe `AppLocalizations`, `context.l10n`) et le CLI quitte `tr(fr, en)` / `plural()`. Une seule méthode partout : le texte français est la clé, la traduction anglaise est dans `lib/l10n/en.dart` (CLI) et `gui/lib/l10n/en.dart` (GUI), `isPlural(n)` choisit le pluriel ; `test/unit/i18n_catalog_test.dart` et `gui/test/l10n_test.dart` échouent s'il manque une traduction. Les textes affichés sont inchangés. Les fonctions de rapport de la GUI ne prennent plus de paramètre `AppLocalizations l` : elles suivent la langue courante.
+
 ## [1.10.7] - 2026-10-21
 
 ### Fixed

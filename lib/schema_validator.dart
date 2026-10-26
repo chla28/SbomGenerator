@@ -114,8 +114,7 @@ class SchemaValidator {
       final path = e.instancePath.isEmpty ? '/' : e.instancePath;
       errors.add('$path : ${e.message}');
       if (errors.length >= max) {
-        errors.add(tr('… (liste tronquée à $max erreurs)',
-            '… (list truncated to $max errors)'));
+        errors.add(tr('… (liste tronquée à {max} erreurs)', {'max': max}));
         break;
       }
     }

@@ -13,8 +13,7 @@ class PnpmParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('pnpm-lock.yaml introuvable : $path',
-              'pnpm-lock.yaml not found: $path'));
+          tr('pnpm-lock.yaml introuvable : {path}', {'path': path}));
       return [];
     }
 

@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../i18n.dart';
 import '../models/sbom_result.dart';
 import 'settings_service.dart';
-import '../l10n/l10n.dart';
 
 // ─── Événements de progression ───────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ class SbomRunner {
           _process = null;
           if (!controller.isClosed) {
             controller.add(
-              SbomLogEvent(appL10n().svcLaunchError('$e'), isError: true),
+              SbomLogEvent(tr('Erreur de lancement : {error}', {'error': '$e'}), isError: true),
             );
             controller.add(SbomDoneEvent(1));
             controller.close();

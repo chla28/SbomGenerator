@@ -130,8 +130,7 @@ Map<String, dynamic>? _readJson(File f) {
 List<ImageLayer> readDockerArchiveLayers(String dir) {
   final manifest = jsonDecode(File('$dir/manifest.json').readAsStringSync());
   if (manifest is! List || manifest.isEmpty || manifest.first is! Map) {
-    throw FormatException(tr('manifest.json inattendu (tableau attendu)',
-        'unexpected manifest.json (array expected)'));
+    throw FormatException(tr('manifest.json inattendu (tableau attendu)'));
   }
   final entry = manifest.first as Map;
   final paths = [
@@ -172,8 +171,7 @@ List<ImageLayer> readOciLayoutLayers(String dir) {
     node = _readJson(File(blob(pick['digest'] as String)));
   }
   if (node == null || node['layers'] is! List) {
-    throw StateError(tr('layout OCI sans manifeste d\'image exploitable : $dir',
-        'OCI layout without a usable image manifest: $dir'));
+    throw StateError(tr('layout OCI sans manifeste d\'image exploitable : {dir}', {'dir': dir}));
   }
   final paths = [
     for (final l in node['layers'] as List)
@@ -404,10 +402,9 @@ Future<LayerAnalysis> analyzeRootfsLayers({
   for (final layer in layers) {
     final blob = layer.blobPath;
     if (blob == null || !File(blob).existsSync()) {
-      throw StateError(tr('tar de la couche ${layer.index} introuvable : $blob',
-          'tar of layer ${layer.index} not found: $blob'));
+      throw StateError(tr('tar de la couche {index} introuvable : {blob}', {'index': layer.index, 'blob': blob}));
     }
-    log?.call('  ${tr('couche', 'layer')} ${layer.index}/${layers.length} '
+    log?.call('  ${tr('couche')} ${layer.index}/${layers.length} '
         '(${layer.shortDigest})'
         '${layer.createdBy != null ? ' — ${_truncate(layer.createdBy!, 70)}' : ''}');
     final layerDir = Directory('$workDir/layer')..createSync();
@@ -428,7 +425,7 @@ Future<LayerAnalysis> analyzeRootfsLayers({
       final first = (x.stderr as String).split('\n').first.trim();
       if (first.isNotEmpty) {
         log?.call(
-            tr('    avertissement tar : $first', '    tar warning: $first'));
+            tr('    avertissement tar : {first}', {'first': first}));
       }
     }
     // Rend tout déplaçable/supprimable (répertoires 0555 d'une image…).
@@ -443,7 +440,7 @@ Future<LayerAnalysis> analyzeRootfsLayers({
     ];
     final delta = diffPackages(previous, current);
     log?.call('    +${delta.added.length} ~${delta.modified.length} '
-        '-${delta.removed.length} (${current.length} ${tr('au total', 'in total')})');
+        '-${delta.removed.length} (${current.length} ${tr('au total')})');
     deltas.add(delta);
     previous = current;
   }

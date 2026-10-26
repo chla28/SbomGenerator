@@ -32,9 +32,7 @@ class SbomReader {
         SbomFormat.cyclonedx => _readCycloneDx(json),
         SbomFormat.spdx2 => _readSpdx2(json),
         SbomFormat.spdx3 => _readSpdx3(json),
-        SbomFormat.unknown => throw Exception(tr(
-            'Format SBOM non reconnu dans le fichier fourni.',
-            'Unrecognised SBOM format in the given file.')),
+        SbomFormat.unknown => throw Exception(tr('Format SBOM non reconnu dans le fichier fourni.')),
       };
 
   /// Extracts the document name from the SBOM metadata.

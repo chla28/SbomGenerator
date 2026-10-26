@@ -9,12 +9,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 Widget _app() => MaterialApp(
   locale: const Locale('fr'),
   localizationsDelegates: const [
-    AppLocalizations.delegate,
     GlobalMaterialLocalizations.delegate,
     GlobalWidgetsLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
   ],
-  supportedLocales: AppLocalizations.supportedLocales,
+  supportedLocales: supportedAppLocales,
   home: HomeScreen(
     themeMode: ThemeMode.light,
     onThemeToggle: () {},

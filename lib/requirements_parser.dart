@@ -25,8 +25,7 @@ class RequirementsParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('fichier requirements introuvable : $path',
-              'requirements file not found: $path'));
+          tr('fichier requirements introuvable : {path}', {'path': path}));
       return [];
     }
 

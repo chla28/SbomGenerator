@@ -111,41 +111,27 @@ class CycloneDxGenerator {
     LayerAnnotations? layers,
   }) {
     if (!supportedSpecVersions.contains(specVersion)) {
-      throw ArgumentError(tr(
-          'specVersion non supporté : "$specVersion" (valides : ${supportedSpecVersions.join(', ')})',
-          'unsupported specVersion: "$specVersion" (valid: ${supportedSpecVersions.join(', ')})'));
+      throw ArgumentError(tr('specVersion non supporté : "{specVersion}" (valides : {supportedSpecVersions})', {'specVersion': specVersion, 'supportedSpecVersions': supportedSpecVersions.join(', ')}));
     }
     final is17 = specVersion == '1.7';
     final patents = patentsByPackageName ?? const {};
 
     if (!is17 &&
         (tlp != null || citationSource != null || patents.isNotEmpty)) {
-      throw ArgumentError(tr(
-          'tlp / citationSource / patentsByPackageName nécessitent specVersion="1.7" '
-              '(CycloneDX 1.6 n\'a pas ces champs : le schéma 1.6 rejette les propriétés inconnues)',
-          'tlp / citationSource / patentsByPackageName require specVersion="1.7" '
-              '(CycloneDX 1.6 lacks these fields: the 1.6 schema rejects unknown properties)'));
+      throw ArgumentError(tr('tlp / citationSource / patentsByPackageName nécessitent specVersion="1.7" (CycloneDX 1.6 n\'a pas ces champs : le schéma 1.6 rejette les propriétés inconnues)'));
     }
     if (tlp != null && !validTlpClassifications.contains(tlp)) {
-      throw ArgumentError(tr(
-          'tlp invalide : "$tlp" (valides : ${validTlpClassifications.join(', ')})',
-          'invalid tlp: "$tlp" (valid: ${validTlpClassifications.join(', ')})'));
+      throw ArgumentError(tr('tlp invalide : "{tlp}" (valides : {validTlpClassifications})', {'tlp': tlp, 'validTlpClassifications': validTlpClassifications.join(', ')}));
     }
     for (final p in patents.values) {
       if (!RegExp(r'^[A-Z]{2}$').hasMatch(p.jurisdiction)) {
-        throw ArgumentError(tr(
-            'jurisdiction de brevet invalide : "${p.jurisdiction}" (2 lettres majuscules attendues, ex: US)',
-            'invalid patent jurisdiction: "${p.jurisdiction}" (2 uppercase letters expected, e.g. US)'));
+        throw ArgumentError(tr('jurisdiction de brevet invalide : "{jurisdiction}" (2 lettres majuscules attendues, ex: US)', {'jurisdiction': p.jurisdiction}));
       }
       if (!PatentAssertion.validLegalStatuses.contains(p.legalStatus)) {
-        throw ArgumentError(tr(
-            'legalStatus de brevet invalide : "${p.legalStatus}" (valides : ${PatentAssertion.validLegalStatuses.join(', ')})',
-            'invalid patent legalStatus: "${p.legalStatus}" (valid: ${PatentAssertion.validLegalStatuses.join(', ')})'));
+        throw ArgumentError(tr('legalStatus de brevet invalide : "{legalStatus}" (valides : {validLegalStatuses})', {'legalStatus': p.legalStatus, 'validLegalStatuses': PatentAssertion.validLegalStatuses.join(', ')}));
       }
       if (!PatentAssertion.validAssertionTypes.contains(p.assertionType)) {
-        throw ArgumentError(tr(
-            'assertionType de brevet invalide : "${p.assertionType}" (valides : ${PatentAssertion.validAssertionTypes.join(', ')})',
-            'invalid patent assertionType: "${p.assertionType}" (valid: ${PatentAssertion.validAssertionTypes.join(', ')})'));
+        throw ArgumentError(tr('assertionType de brevet invalide : "{assertionType}" (valides : {validAssertionTypes})', {'assertionType': p.assertionType, 'validAssertionTypes': PatentAssertion.validAssertionTypes.join(', ')}));
       }
     }
 
@@ -264,7 +250,7 @@ class CycloneDxGenerator {
         'type': 'application',
         'bom-ref': 'tool-sbom_generator',
         'name': 'sbom_generator',
-        'version': '1.10.7',
+        'version': '1.10.8',
       }
     ];
     if (extraTool != null && extraTool != 'sbom_generator') {

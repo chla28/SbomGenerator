@@ -5,9 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../i18n.dart';
 import '../models/sbom_result.dart';
 import 'help_icon.dart';
-import '../l10n/l10n.dart';
 
 // ─── Modèles sbomqs ──────────────────────────────────────────────────────────
 
@@ -279,7 +279,7 @@ class _QualityPanelState extends State<QualityPanel>
 
   Future<void> _pickFile({bool filtered = true}) async {
     final result = await FilePicker.pickFile(
-      dialogTitle: context.l10n.qualityPickTitle,
+      dialogTitle: tr('Sélectionner un fichier SBOM'),
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? ['json', 'jsonld'] : null,
     );
@@ -305,7 +305,6 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   Future<void> _runSbomqs(String path) async {
-    final l = context.l10n;
     try {
       final args = ['score', '--json'];
       if (_selectedProfiles.isNotEmpty) {
@@ -326,7 +325,7 @@ class _QualityPanelState extends State<QualityPanel>
           _sbomqsRaw = stdout;
           _sbomqsResult = parsed;
           if (parsed == null && stdout.isEmpty) {
-            _sbomqsError = context.l10n.qualitySbomqsNoResult;
+            _sbomqsError = tr('Aucun résultat retourné par sbomqs');
           }
         });
       } else {
@@ -334,12 +333,12 @@ class _QualityPanelState extends State<QualityPanel>
         setState(
           () => _sbomqsError = stderr.isNotEmpty
               ? stderr
-              : l.qualitySbomqsError(result.exitCode),
+              : tr('Erreur sbomqs (exit {code})', {'code': result.exitCode}),
         );
       }
     } on ProcessException {
       if (mounted) {
-        setState(() => _sbomqsError = l.qualitySbomqsMissing);
+        setState(() => _sbomqsError = tr('sbomqs introuvable — installez-le et ajoutez-le au PATH'));
       }
     } catch (e) {
       if (mounted) setState(() => _sbomqsError = e.toString());
@@ -347,7 +346,6 @@ class _QualityPanelState extends State<QualityPanel>
   }
 
   Future<void> _runScorecard(String path) async {
-    final l = context.l10n;
     try {
       final result = await Process.run('sbom-scorecard', ['score', path]);
       final stdout = (result.stdout as String).trim();
@@ -370,12 +368,12 @@ class _QualityPanelState extends State<QualityPanel>
         setState(
           () => _scorecardError = stderr.isNotEmpty
               ? stderr
-              : l.qualityScorecardError(result.exitCode),
+              : tr('Erreur sbom-scorecard (exit {code})', {'code': result.exitCode}),
         );
       }
     } on ProcessException {
       if (mounted) {
-        setState(() => _scorecardError = l.qualityScorecardMissing);
+        setState(() => _scorecardError = tr('sbom-scorecard introuvable — installez-le et ajoutez-le au PATH'));
       }
     } catch (e) {
       if (mounted) setState(() => _scorecardError = e.toString());
@@ -489,7 +487,7 @@ class _ConfigSection extends StatelessWidget {
                 child: TextFormField(
                   controller: fileCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.qualityFileLabel,
+                    labelText: tr('Fichier SBOM'),
                     isDense: true,
                     suffixIcon: _SplitPickButton(onPick: onPick),
                   ),
@@ -499,7 +497,7 @@ class _ConfigSection extends StatelessWidget {
               FilledButton.icon(
                 onPressed: isRunning ? null : onAnalyze,
                 icon: const Icon(Icons.analytics_outlined, size: 18),
-                label: Text(context.l10n.qualityAnalyze),
+                label: Text(tr('Analyser')),
               ),
             ],
           ),
@@ -513,7 +511,7 @@ class _ConfigSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    context.l10n.qualityProfiles,
+                    tr('Profils :'),
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(
@@ -522,7 +520,7 @@ class _ConfigSection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  HelpIcon(context.l10n.qualityProfilesHelp),
+                  HelpIcon(tr('Profils de conformité SBOM évalués par sbomqs.\nChaque profil vérifie un ensemble de critères\nspécifiques (NTIA, BSI, OpenChain, Interlynk…).\nAucun profil sélectionné = tous évalués.')),
                 ],
               ),
               for (final (key, label) in _profiles)
@@ -559,12 +557,12 @@ class _HintCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              context.l10n.qualityTitle,
+              tr('Évaluation de la qualité SBOM'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              context.l10n.qualityIntro,
+              tr('Sélectionnez un fichier SBOM puis cliquez sur Analyser.\nL\'analyse utilise sbomqs (Interlynk) et sbom-scorecard (eBay).'),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13),
             ),
@@ -653,14 +651,14 @@ class _SbomqsSectionState extends State<_SbomqsSection> {
                       size: 18,
                     ),
                     tooltip: _showRaw
-                        ? context.l10n.qualityTableView
-                        : context.l10n.qualityRawJson,
+                        ? tr('Vue tableau')
+                        : tr('JSON brut'),
                     color: theme.colorScheme.onPrimaryContainer,
                     onPressed: () => setState(() => _showRaw = !_showRaw),
                   ),
                   IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    tooltip: context.l10n.commonCopy,
+                    tooltip: tr('Copier'),
                     color: theme.colorScheme.onPrimaryContainer,
                     onPressed: () => Clipboard.setData(
                       ClipboardData(text: widget.rawOutput!),
@@ -701,7 +699,7 @@ class _SbomqsSectionState extends State<_SbomqsSection> {
             ] else
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(context.l10n.qualityNoCriteria),
+                child: Text(tr('Aucun critère détaillé disponible.')),
               ),
           ] else if (widget.rawOutput != null)
             _RawOutput(text: widget.rawOutput!),
@@ -736,7 +734,7 @@ class _CategoryFilter extends StatelessWidget {
           for (final cat in categories)
             FilterChip(
               label: Text(
-                cat.isEmpty ? context.l10n.qualityOther : cat,
+                cat.isEmpty ? tr('Autre') : cat,
                 style: const TextStyle(fontSize: 12),
               ),
               selected: activeFilters.contains(cat),
@@ -746,7 +744,7 @@ class _CategoryFilter extends StatelessWidget {
           if (activeFilters.isNotEmpty)
             ActionChip(
               label: Text(
-                context.l10n.qualityShowAll,
+                tr('Tout voir'),
                 style: const TextStyle(fontSize: 12),
               ),
               onPressed: () {
@@ -897,14 +895,14 @@ class _ScorecardSectionState extends State<_ScorecardSection> {
                       size: 18,
                     ),
                     tooltip: _showRaw
-                        ? context.l10n.qualityChartView
-                        : context.l10n.qualityRawOutput,
+                        ? tr('Vue graphique')
+                        : tr('Sortie brute'),
                     color: theme.colorScheme.onSecondaryContainer,
                     onPressed: () => setState(() => _showRaw = !_showRaw),
                   ),
                   IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    tooltip: context.l10n.commonCopy,
+                    tooltip: tr('Copier'),
                     color: theme.colorScheme.onSecondaryContainer,
                     onPressed: () => Clipboard.setData(
                       ClipboardData(text: widget.rawOutput!),
@@ -1171,7 +1169,7 @@ class _ProfilesCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  context.l10n.qualityIndustryProfiles,
+                  tr('Profils d\'industrie'),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -1181,7 +1179,7 @@ class _ProfilesCard extends StatelessWidget {
                 if (!hasAnyFeatures) ...[
                   const SizedBox(width: 8),
                   Tooltip(
-                    message: context.l10n.qualityIndustryHint,
+                    message: tr('Sélectionnez des profils dans la barre de configuration\npour afficher le détail des critères'),
                     child: Icon(
                       Icons.info_outline,
                       size: 14,
@@ -1255,11 +1253,7 @@ class _ProfileTile extends StatelessWidget {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
         ),
         subtitle: Text(
-          context.l10n.qualityProfileSummary(
-            profile.score.toStringAsFixed(1),
-            passed,
-            profile.features.length,
-          ),
+          tr('{score}/10  ·  {passed}/{total} critères', {'score': profile.score.toStringAsFixed(1), 'passed': passed, 'total': profile.features.length}),
           style: const TextStyle(fontSize: 11),
         ),
         children: [
@@ -1302,7 +1296,7 @@ class _ProfileTile extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(32, 0, 32, 10),
               child: Text(
-                context.l10n.qualityRequiredNote,
+                tr('* critère obligatoire'),
                 style: TextStyle(
                   fontSize: 10,
                   color: Theme.of(
@@ -1361,17 +1355,17 @@ class _SplitPickButton extends StatelessWidget {
       controller: controller,
       menuChildren: [
         MenuItemButton(
-          child: Text(context.l10n.commonPickFiltered('.json, .jsonld')),
+          child: Text(tr('Type filtré ({filter})', {'filter': '.json, .jsonld'})),
           onPressed: () => onPick(filtered: true),
         ),
         MenuItemButton(
-          child: Text(context.l10n.commonPickAllFiles),
+          child: Text(tr('Tous les fichiers')),
           onPressed: () => onPick(filtered: false),
         ),
       ],
       child: IconButton(
         icon: const Icon(Icons.folder_open_outlined, size: 20),
-        tooltip: context.l10n.commonBrowse,
+        tooltip: tr('Choisir'),
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
       ),

@@ -52,22 +52,18 @@ class PolicyChecker {
     final check = await runTool('sbomqs', ['version'])
         .catchError((Object _) => ProcessResult(0, 127, '', ''));
     if (check.exitCode != 0) {
-      stderr.writeln(tr(
-          'policy: sbomqs introuvable — vérification qualité ignorée.',
-          'policy: sbomqs not found — quality check skipped.'));
+      stderr.writeln(tr('policy: sbomqs introuvable — vérification qualité ignorée.'));
       return null;
     }
 
     if (verbose) {
-      print(tr(
-          'sbomqs : évaluation de $sbomPath…', 'sbomqs: assessing $sbomPath…'));
+      print(tr('sbomqs : évaluation de {sbomPath}…', {'sbomPath': sbomPath}));
     }
     // --basic force une sortie sur une seule ligne (score en premier champ) ;
     // sans ce flag, sbomqs >= 2.0 imprime un tableau détaillé illisible ici.
     final result = await runTool('sbomqs', ['score', '--basic', sbomPath]);
     if (result.exitCode != 0) {
-      stderr.writeln(tr('sbomqs: échec (code ${result.exitCode})',
-          'sbomqs: failed (code ${result.exitCode})'));
+      stderr.writeln(tr('sbomqs: échec (code {exitCode})', {'exitCode': result.exitCode}));
       return null;
     }
 

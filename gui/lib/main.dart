@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'home_screen.dart';
 import 'l10n/l10n.dart';
@@ -109,8 +110,8 @@ class _SbomGeneratorAppState extends State<SbomGeneratorApp> {
     return MaterialApp(
       title: 'SBOM Generator',
       debugShowCheckedModeBanner: false,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: supportedAppLocales,
       locale: _language.locale,
       localeListResolutionCallback: (locales, _) => resolveAppLocale(locales),
       themeMode: _themeMode,
@@ -127,15 +128,20 @@ class _SbomGeneratorAppState extends State<SbomGeneratorApp> {
         ),
         inputDecorationTheme: inputTheme,
       ),
-      home: HomeScreen(
-        initialConfig: widget.initialConfig,
-        initialSbom: widget.initialSbom,
-        themeMode: _themeMode,
-        onThemeToggle: _toggleTheme,
-        themeIndex: _themeIndex,
-        onThemeIndexChanged: _onThemeIndexChanged,
-        language: _language,
-        onLanguageChanged: _onLanguageChanged,
+      // Les textes viennent de tr() : la clé reconstruit tout l'écran quand la
+      // langue change.
+      home: KeyedSubtree(
+        key: ValueKey(appLocale.languageCode),
+        child: HomeScreen(
+          initialConfig: widget.initialConfig,
+          initialSbom: widget.initialSbom,
+          themeMode: _themeMode,
+          onThemeToggle: _toggleTheme,
+          themeIndex: _themeIndex,
+          onThemeIndexChanged: _onThemeIndexChanged,
+          language: _language,
+          onLanguageChanged: _onLanguageChanged,
+        ),
       ),
     );
   }

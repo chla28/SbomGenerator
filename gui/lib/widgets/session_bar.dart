@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 import '../services/save_dialog.dart';
 import '../models/scan_session.dart';
 import '../services/session_store.dart';
@@ -51,16 +51,15 @@ class SessionBar extends StatelessWidget {
   const SessionBar({super.key, required this.actions});
 
   Future<void> _save(BuildContext context) async {
-    final l = context.l10n;
     final session = actions.current();
     if (session.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l.sessNothingToSave)));
+      ).showSnackBar(SnackBar(content: Text(tr('Aucun résultat de scan à enregistrer.'))));
       return;
     }
     final path = await pickSavePath(
-      dialogTitle: l.sessDialogSave,
+      dialogTitle: tr('Enregistrer la session'),
       fileName: SessionStore.fileNameFor(session),
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -70,13 +69,12 @@ class SessionBar extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(l.sessSaved(path))));
+    ).showSnackBar(SnackBar(content: Text(tr('Session enregistrée → {path}', {'path': path}))));
   }
 
   Future<void> _open(BuildContext context) async {
-    final l = context.l10n;
     final picked = await FilePicker.pickFile(
-      dialogTitle: l.sessDialogOpen,
+      dialogTitle: tr('Ouvrir une session'),
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
@@ -88,18 +86,17 @@ class SessionBar extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l.sessLoaded(_day(s.savedAt)))));
+      ).showSnackBar(SnackBar(content: Text(tr('Session du {date} chargée dans le tableau de bord', {'date': _day(s.savedAt)}))));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l.sessInvalid('$e'))));
+      ).showSnackBar(SnackBar(content: Text(tr('Fichier de session illisible : {error}', {'error': '$e'}))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final baseline = actions.baseline;
     final store = actions.store;
     return Column(
@@ -112,20 +109,20 @@ class SessionBar extends StatelessWidget {
             OutlinedButton.icon(
               key: const Key('session-save'),
               icon: const Icon(Icons.save_outlined, size: 18),
-              label: Text(l.sessSave),
+              label: Text(tr('Enregistrer la session…')),
               onPressed: () => _save(context),
             ),
             OutlinedButton.icon(
               key: const Key('session-open'),
               icon: const Icon(Icons.folder_open, size: 18),
-              label: Text(l.sessOpen),
+              label: Text(tr('Ouvrir une session…')),
               onPressed: () => _open(context),
             ),
             if (store != null)
               OutlinedButton.icon(
                 key: const Key('session-history'),
                 icon: const Icon(Icons.history, size: 18),
-                label: Text(l.sessHistory),
+                label: Text(tr('Historique')),
                 onPressed: () => showDialog<void>(
                   context: context,
                   builder: (_) => SessionHistoryDialog(
@@ -165,7 +162,6 @@ class TrendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final t = SessionTrend.compare(baseline, current);
     final same = t.added.isEmpty && t.removed.isEmpty;
     final newOnes = t.added.entries.toList()
@@ -183,46 +179,46 @@ class TrendCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    l.sessTrendTitle(_day(baseline.savedAt)),
+                    tr('Tendance depuis le {date}', {'date': _day(baseline.savedAt)}),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
                   ),
                 ),
-                TextButton(onPressed: onClear, child: Text(l.sessTrendClear)),
+                TextButton(onPressed: onClear, child: Text(tr('Retirer la comparaison'))),
               ],
             ),
             const SizedBox(height: 4),
             if (same)
-              Text(l.sessTrendNone)
+              Text(tr('Aucune différence avec la session de référence.'))
             else
               Wrap(
                 spacing: 16,
                 runSpacing: 4,
                 children: [
                   Text(
-                    l.sessTrendNew(t.added.length),
+                    tr('{count} nouvelle(s)', {'count': t.added.length}),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: t.added.isEmpty ? null : severityFg('high'),
                     ),
                   ),
                   Text(
-                    l.sessTrendFixed(t.removed.length),
+                    tr('{count} disparue(s)', {'count': t.removed.length}),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: t.removed.isEmpty ? null : severityFg('low'),
                     ),
                   ),
-                  Text(l.sessTrendSame(t.unchanged)),
-                  Text(l.sessTrendTotals(t.beforeTotal, t.afterTotal)),
+                  Text(tr('{count} inchangée(s)', {'count': t.unchanged})),
+                  Text(tr('Total : {before} → {after}', {'before': t.beforeTotal, 'after': t.afterTotal})),
                 ],
               ),
             if (newOnes.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                l.sessTrendNewList,
+                tr('Nouvelles :'),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Wrap(
@@ -286,19 +282,18 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
   void _reload() => setState(() => _entries = widget.store.list());
 
   Future<void> _clear() async {
-    final l = context.l10n;
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        content: Text(l.sessClearConfirm),
+        content: Text(tr('Supprimer toutes les analyses enregistrées ?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
-            child: Text(l.homeCancel),
+            child: Text(tr('Annuler')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(c, true),
-            child: Text(l.sessClearHistory),
+            child: Text(tr('Vider l\'historique')),
           ),
         ],
       ),
@@ -310,13 +305,12 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     return AlertDialog(
       title: Row(
         children: [
           const Icon(Icons.history, size: 20),
           const SizedBox(width: 8),
-          Text(l.sessHistoryTitle),
+          Text(tr('Historique des analyses')),
         ],
       ),
       content: SizedBox(
@@ -330,7 +324,7 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
             }
             final list = snap.data!;
             if (list.isEmpty) {
-              return Center(child: Text(l.sessHistoryEmpty));
+              return Center(child: Text(tr('Aucune analyse enregistrée. Les résultats des scans sont conservés automatiquement (une entrée par cible et par jour).')));
             }
             return ListView(
               children: [
@@ -345,7 +339,7 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
                     ),
                     subtitle: Text(
                       '${_day(e.session.savedAt)} · '
-                      '${l.sessHistoryItem(e.session.uniqueCveCount)}',
+                      '${tr('{count} CVE', {'count': e.session.uniqueCveCount})}',
                     ),
                     trailing: Wrap(
                       children: [
@@ -354,17 +348,17 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
                             widget.onOpen(e.session);
                             Navigator.pop(context);
                           },
-                          child: Text(l.sessOpenAction),
+                          child: Text(tr('Ouvrir')),
                         ),
                         TextButton(
                           onPressed: () {
                             widget.onCompare(e.session);
                             Navigator.pop(context);
                           },
-                          child: Text(l.sessCompareAction),
+                          child: Text(tr('Comparer')),
                         ),
                         IconButton(
-                          tooltip: l.sessDeleteAction,
+                          tooltip: tr('Supprimer'),
                           icon: const Icon(Icons.delete_outline, size: 18),
                           onPressed: () async {
                             await widget.store.delete(e.file);
@@ -380,10 +374,10 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _clear, child: Text(l.sessClearHistory)),
+        TextButton(onPressed: _clear, child: Text(tr('Vider l\'historique'))),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(l.commonClose),
+          child: Text(tr('Fermer')),
         ),
       ],
     );

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 import '../models/sbom_result.dart';
 import '../services/scan_job_runner.dart';
 import '../services/scan_queue.dart';
@@ -105,20 +105,19 @@ class _TasksPanelState extends State<TasksPanel>
     final r = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['json', 'jsonld'],
-      dialogTitle: context.l10n.tasksPickDialog,
+      dialogTitle: tr('Choisir un SBOM à analyser'),
     );
     final path = r?.path;
     if (path != null) setState(() => _target = path);
   }
 
   void _enqueue() {
-    final l = context.l10n;
     if (_target == null) {
-      setState(() => _message = l.tasksNeedTarget);
+      setState(() => _message = tr('Choisissez d\'abord un SBOM.'));
       return;
     }
     if (_selected.isEmpty) {
-      setState(() => _message = l.tasksNeedScanner);
+      setState(() => _message = tr('Cochez au moins un scanner.'));
       return;
     }
     setState(() => _message = null);
@@ -130,7 +129,6 @@ class _TasksPanelState extends State<TasksPanel>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final l = context.l10n;
     final theme = Theme.of(context);
     final jobs = _queue.jobs;
     return Padding(
@@ -138,24 +136,24 @@ class _TasksPanelState extends State<TasksPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l.tasksIntro, style: theme.textTheme.bodySmall),
+          Text(tr('Mettez en file des analyses de vulnérabilités : elles s\'exécutent une à une, peuvent être annulées ou relancées, et leurs résultats alimentent le tableau de bord.'), style: theme.textTheme.bodySmall),
           const SizedBox(height: 12),
           Row(
             children: [
               Text(
-                '${l.tasksTargetLabel} : ',
+                '${tr('SBOM à analyser')} : ',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               Expanded(
                 child: Text(
-                  _target ?? l.tasksTargetNone,
+                  _target ?? tr('Aucun SBOM sélectionné'),
                   overflow: TextOverflow.ellipsis,
                   key: const Key('tasks-target'),
                 ),
               ),
               TextButton.icon(
                 icon: const Icon(Icons.folder_open, size: 18),
-                label: Text(l.tasksBrowse),
+                label: Text(tr('Parcourir…')),
                 onPressed: _browse,
               ),
             ],
@@ -176,7 +174,7 @@ class _TasksPanelState extends State<TasksPanel>
               FilledButton.icon(
                 key: const Key('tasks-enqueue'),
                 icon: const Icon(Icons.playlist_add, size: 18),
-                label: Text(l.tasksEnqueue),
+                label: Text(tr('Ajouter à la file')),
                 onPressed: _enqueue,
               ),
             ],
@@ -194,12 +192,12 @@ class _TasksPanelState extends State<TasksPanel>
             children: [
               TextButton.icon(
                 icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                label: Text(l.tasksCancelAll),
+                label: Text(tr('Tout annuler')),
                 onPressed: _queue.isBusy ? _queue.cancelAll : null,
               ),
               TextButton.icon(
                 icon: const Icon(Icons.clear_all, size: 18),
-                label: Text(l.tasksClearFinished),
+                label: Text(tr('Retirer les terminées')),
                 onPressed: jobs.any((j) => j.isFinished)
                     ? _queue.clearFinished
                     : null,
@@ -208,7 +206,7 @@ class _TasksPanelState extends State<TasksPanel>
           ),
           Expanded(
             child: jobs.isEmpty
-                ? Center(child: Text(l.tasksEmpty))
+                ? Center(child: Text(tr('Aucune analyse en file.')))
                 : ListView(
                     children: [
                       for (final j in jobs)
@@ -233,7 +231,6 @@ class _JobTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final scheme = Theme.of(context).colorScheme;
     final name = job.target.split(RegExp(r'[/\\]')).last;
     final secs = job.duration?.inSeconds;
@@ -241,27 +238,27 @@ class _JobTile extends StatelessWidget {
       ScanJobStatus.queued => (
         Icons.schedule,
         scheme.outline,
-        l.tasksStatusQueued,
+        tr('En attente'),
       ),
       ScanJobStatus.running => (
         Icons.sync,
         scheme.primary,
-        l.tasksStatusRunning,
+        tr('En cours…'),
       ),
       ScanJobStatus.done => (
         Icons.check_circle_outline,
         Colors.green.shade700,
-        l.tasksStatusDone(job.findings ?? 0),
+        (isPlural((job.findings ?? 0)) ? tr('Terminée — {count} vulnérabilités', {'count': job.findings ?? 0}) : tr('Terminée — {count} vulnérabilité', {'count': job.findings ?? 0})),
       ),
       ScanJobStatus.failed => (
         Icons.error_outline,
         scheme.error,
-        l.tasksStatusFailed(job.error ?? ''),
+        tr('Échec : {error}', {'error': job.error ?? ''}),
       ),
       ScanJobStatus.cancelled => (
         Icons.cancel_outlined,
         scheme.outline,
-        l.tasksStatusCancelled,
+        tr('Annulée'),
       ),
     };
     return ListTile(
@@ -275,7 +272,7 @@ class _JobTile extends StatelessWidget {
           : Icon(icon, color: color),
       title: Text('${job.scanner} · $name'),
       subtitle: Text(
-        '$text${secs != null && job.status != ScanJobStatus.queued ? ' · ${l.tasksDuration(secs)}' : ''}',
+        '$text${secs != null && job.status != ScanJobStatus.queued ? ' · ${tr('{seconds} s', {'seconds': secs})}' : ''}',
         style: TextStyle(color: color),
       ),
       trailing: Wrap(
@@ -283,20 +280,20 @@ class _JobTile extends StatelessWidget {
           if (job.status == ScanJobStatus.queued ||
               job.status == ScanJobStatus.running)
             IconButton(
-              tooltip: l.tasksCancel,
+              tooltip: tr('Annuler'),
               icon: const Icon(Icons.stop_circle_outlined),
               onPressed: () => queue.cancel(job.id),
             ),
           if (job.status == ScanJobStatus.failed ||
               job.status == ScanJobStatus.cancelled)
             IconButton(
-              tooltip: l.tasksRetry,
+              tooltip: tr('Relancer'),
               icon: const Icon(Icons.replay),
               onPressed: () => queue.retry(job.id),
             ),
           if (job.status != ScanJobStatus.running)
             IconButton(
-              tooltip: l.tasksRemove,
+              tooltip: tr('Retirer de la liste'),
               icon: const Icon(Icons.close),
               onPressed: () => queue.remove(job.id),
             ),

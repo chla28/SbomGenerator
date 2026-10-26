@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 
 sealed class OsvEvent {}
 
@@ -103,7 +103,7 @@ class OsvRunner {
           cleanup();
           if (!controller.isClosed) {
             final msg = e.toString().contains('No such file')
-                ? appL10n().svcOsvMissing
+                ? tr('osv-scanner introuvable — https://github.com/google/osv-scanner')
                 : e.toString();
             controller.add(OsvDoneEvent(127, stderr: msg));
             controller.close();

@@ -13,7 +13,7 @@ class CargoParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('Cargo.lock introuvable : $path', 'Cargo.lock not found: $path'));
+          tr('Cargo.lock introuvable : {path}', {'path': path}));
       return [];
     }
 

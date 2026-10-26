@@ -15,7 +15,7 @@ class DebParser {
 
     if (result.exitCode != 0) {
       stderr.writeln('Warning: ' +
-          tr('lecture impossible de "$path"', 'cannot read "$path"'));
+          tr('lecture impossible de "{path}"', {'path': path}));
       final err = result.stderr.toString().trim();
       if (err.isNotEmpty) stderr.writeln('  $err');
       return null;
@@ -26,8 +26,7 @@ class DebParser {
     final name = fields['package'] ?? '';
     if (name.isEmpty) {
       stderr.writeln('Warning: ' +
-          tr('aucun champ Package dans "$path"',
-              'no Package field in "$path"'));
+          tr('aucun champ Package dans "{path}"', {'path': path}));
       return null;
     }
 

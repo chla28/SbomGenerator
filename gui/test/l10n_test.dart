@@ -1,71 +1,99 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sbom_generator_gui/i18n.dart';
+import 'package:sbom_generator_gui/l10n/en.dart';
 import 'package:sbom_generator_gui/l10n/l10n.dart';
 import 'package:sbom_generator_gui/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Clés de message (hors métadonnées `@…`) d'un fichier ARB.
-Map<String, dynamic> _arb(String lang) =>
-    jsonDecode(File('lib/l10n/app_$lang.arb').readAsStringSync())
-        as Map<String, dynamic>;
+/// Extrait les textes passés à `tr(...)` : littéraux adjacents concaténés,
+/// comme le fait Dart.
+Map<String, String> _extractTr(String source, String file) {
+  final found = <String, String>{};
+  final re = RegExp(r'(?<![\w.$])tr\(');
+  for (final m in re.allMatches(source)) {
+    var i = m.end;
+    final buf = StringBuffer();
+    var literals = 0;
+    while (true) {
+      while (i < source.length && ' \t\r\n'.contains(source[i])) {
+        i++;
+      }
+      if (source.startsWith('//', i)) {
+        while (i < source.length && source[i] != '\n') {
+          i++;
+        }
+        continue;
+      }
+      if (i >= source.length || (source[i] != "'" && source[i] != '"')) break;
+      final triple = source.startsWith(source[i] * 3, i);
+      final quote = source[i];
+      i += triple ? 3 : 1;
+      bool closed() =>
+          triple ? source.startsWith(quote * 3, i) : source[i] == quote;
+      while (i < source.length && !closed()) {
+        if (source[i] == r'\') {
+          final next = source[i + 1];
+          buf.write(switch (next) {
+            'n' => '\n',
+            't' => '\t',
+            'r' => '\r',
+            _ => next,
+          });
+          i += 2;
+        } else {
+          buf.write(source[i++]);
+        }
+      }
+      i += triple ? 3 : 1;
+      literals++;
+    }
+    if (literals > 0) found[buf.toString()] = file;
+  }
+  return found;
+}
+
+Map<String, String> _sourceTexts() {
+  final all = <String, String>{};
+  for (final f in Directory('lib').listSync(recursive: true)) {
+    if (f is! File || !f.path.endsWith('.dart')) continue;
+    if (f.path.contains('/l10n/') || f.path.endsWith('lib/i18n.dart')) continue;
+    all.addAll(_extractTr(f.readAsStringSync(), f.path));
+  }
+  return all;
+}
 
 Set<String> _placeholders(String message) =>
-    RegExp(r'\{(\w+)').allMatches(message).map((m) => m.group(1)!).toSet();
+    RegExp(r'\{(\w+)\}').allMatches(message).map((m) => m.group(1)!).toSet();
 
 void main() {
-  group('fichiers ARB', () {
-    final fr = _arb('fr');
-    final languages = Directory('lib/l10n')
-        .listSync()
-        .map((e) => e.path.split('/').last)
-        .where((n) => n.startsWith('app_') && n.endsWith('.arb'))
-        .map((n) => n.substring(4, n.length - 4))
-        .toList();
-    final keys = {
-      for (final k in fr.keys)
-        if (!k.startsWith('@')) k,
-    };
+  tearDown(() => appLocale = fallbackLocale);
 
-    test('le français (référence) documente chaque clé', () {
-      for (final k in keys) {
-        final meta = fr['@$k'];
-        expect(
-          meta is Map && (meta['description'] as String?)?.isNotEmpty == true,
-          isTrue,
-          reason: 'app_fr.arb : @$k.description manquante',
-        );
-      }
+  group('catalogue anglais', () {
+    final texts = _sourceTexts();
+
+    test('chaque texte passé à tr() a sa traduction anglaise', () {
+      final missing = texts.entries
+          .where((e) => !catalogEn.containsKey(e.key))
+          .map((e) => '${e.value}: ${e.key}')
+          .toList();
+      expect(missing, isEmpty, reason: missing.take(20).join('\n'));
     });
 
-    for (final lang in languages.where((l) => l != 'fr')) {
-      test('$lang : mêmes clés et mêmes paramètres que le français', () {
-        final other = _arb(lang);
-        final otherKeys = {
-          for (final k in other.keys)
-            if (!k.startsWith('@')) k,
-        };
-        expect(
-          otherKeys.difference(keys),
-          isEmpty,
-          reason: 'clés inconnues de app_fr.arb',
-        );
-        expect(
-          keys.difference(otherKeys),
-          isEmpty,
-          reason: 'clés non traduites dans app_$lang.arb',
-        );
-        for (final k in keys) {
-          expect(
-            _placeholders(other[k] as String),
-            _placeholders(fr[k] as String),
-            reason: 'paramètres différents pour « $k »',
-          );
-        }
-      });
-    }
+    test("le catalogue ne garde pas d'entrée orpheline", () {
+      final orphans = catalogEn.keys
+          .where((k) => !texts.containsKey(k))
+          .toList();
+      expect(orphans, isEmpty, reason: orphans.take(20).join('\n'));
+    });
+
+    test('mêmes {paramètres} en français et en anglais', () {
+      for (final e in catalogEn.entries) {
+        expect(_placeholders(e.value), _placeholders(e.key), reason: e.key);
+      }
+    });
   });
 
   test('langue : résolution et repli sur le français', () {
@@ -82,37 +110,11 @@ void main() {
     expect(AppLanguage.system.locale, isNull);
   });
 
-  testWidgets('context.l10n : langue de l\'application, repli hors délégués', (
-    tester,
-  ) async {
-    late String inApp;
-    late String bare;
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) {
-            inApp = context.l10n.languageSystem;
-            return const SizedBox();
-          },
-        ),
-      ),
-    );
-    expect(inApp, 'System');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            bare = context.l10n.languageSystem;
-            return const SizedBox();
-          },
-        ),
-      ),
-    );
-    expect(bare, 'Système');
+  test('tr() suit la langue de l\'application', () {
+    appLocale = const Locale('en');
+    expect(tr('Système'), 'System');
+    appLocale = const Locale('fr');
+    expect(tr('Système'), 'Système');
   });
 
   testWidgets('menu de langue : bascule de l\'application et mémorisation', (

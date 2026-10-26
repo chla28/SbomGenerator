@@ -1,9 +1,9 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
 import '../models/sbom_result.dart';
 import '../services/sbom_runner.dart';
-import '../l10n/l10n.dart';
 
 class SbomMergePanel extends StatefulWidget {
   final List<OutputFile> outputFiles;
@@ -44,7 +44,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
 
   Future<void> _pickFiles({bool filtered = true}) async {
     final r = await FilePicker.pickFiles(
-      dialogTitle: context.l10n.mergePickTitle,
+      dialogTitle: tr('Sélectionner des fichiers SBOM à fusionner'),
       type: filtered ? FileType.custom : FileType.any,
       allowedExtensions: filtered ? const ['json', 'jsonld'] : null,
     );
@@ -112,7 +112,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
               MenuAnchor(
                 builder: (ctx, ctrl, child) => OutlinedButton.icon(
                   icon: const Icon(Icons.add, size: 16),
-                  label: Text(context.l10n.mergeAddFiles),
+                  label: Text(tr('Ajouter des fichiers…')),
                   onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
                 ),
                 menuChildren: [
@@ -127,7 +127,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
                   MenuItemButton(
                     leadingIcon: const Icon(Icons.folder_open, size: 16),
                     onPressed: () => _pickFiles(filtered: false),
-                    child: Text(context.l10n.mergeAllFiles),
+                    child: Text(tr('Tous les fichiers')),
                   ),
                 ],
               ),
@@ -136,7 +136,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
                 MenuAnchor(
                   builder: (ctx, ctrl, child) => OutlinedButton.icon(
                     icon: const Icon(Icons.folder_outlined, size: 16),
-                    label: Text(context.l10n.commonGeneratedFiles),
+                    label: Text(tr('Fichiers générés')),
                     onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
                   ),
                   menuChildren: [
@@ -150,9 +150,9 @@ class _SbomMergePanelState extends State<SbomMergePanel>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  context.l10n.mergeSelected(_inputFiles.length) +
+                  (isPlural(_inputFiles.length) ? tr('{count} fichiers sélectionnés', {'count': _inputFiles.length}) : tr('{count} fichier sélectionné', {'count': _inputFiles.length})) +
                       (_inputFiles.length < 2
-                          ? context.l10n.mergeAtLeastTwo
+                          ? tr(' — au moins 2 requis')
                           : ''),
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -168,7 +168,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
           child: _inputFiles.isEmpty
               ? Center(
                   child: Text(
-                    context.l10n.mergeHint,
+                    tr('Ajoutez au moins deux fichiers SBOM à fusionner\n(CycloneDX ou SPDX 2.x — un même format des deux côtés).'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
@@ -203,7 +203,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
                   controller: _outputCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    labelText: context.l10n.commonOutputFile,
+                    labelText: tr('Fichier de sortie'),
                     isDense: true,
                     border: const OutlineInputBorder(),
                   ),
@@ -214,7 +214,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
                 child: TextField(
                   controller: _nameCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.commonDocNameOptional,
+                    labelText: tr('Nom du document (optionnel)'),
                     isDense: true,
                     border: const OutlineInputBorder(),
                   ),
@@ -229,7 +229,7 @@ class _SbomMergePanelState extends State<SbomMergePanel>
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.merge_type, size: 16),
-                label: Text(context.l10n.mergeButton),
+                label: Text(tr('Fusionner')),
                 onPressed: canMerge ? _runMerge : null,
               ),
             ],
@@ -250,8 +250,8 @@ class _SbomMergePanelState extends State<SbomMergePanel>
                 Expanded(
                   child: Text(
                     _exitCode == 0
-                        ? context.l10n.mergeOk(_resultPath ?? '')
-                        : context.l10n.mergeFailed(_exitCode ?? -1),
+                        ? tr('Fusion réussie → {path}', {'path': _resultPath ?? ''})
+                        : tr('Échec de la fusion (code {code}) — voir le journal ci-dessous.', {'code': _exitCode ?? -1}),
                   ),
                 ),
               ],

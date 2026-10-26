@@ -1,20 +1,28 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sbom_generator_gui/i18n.dart';
 import 'package:sbom_generator_gui/l10n/l10n.dart';
 import 'package:sbom_generator_gui/models/sbom_result.dart';
 import 'package:sbom_generator_gui/widgets/grype_panel.dart';
 import 'package:sbom_generator_gui/widgets/vuln_shared.dart';
 
-Widget _app(Widget home, Locale locale) => MaterialApp(
-  locale: locale,
-  localizationsDelegates: AppLocalizations.localizationsDelegates,
-  supportedLocales: AppLocalizations.supportedLocales,
-  home: Scaffold(body: home),
-);
+// La langue des textes (tr) est globale : on la fixe avec la locale demandée.
+Widget _app(Widget home, Locale locale) {
+  appLocale = locale;
+  return MaterialApp(
+    locale: locale,
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    supportedLocales: supportedAppLocales,
+    home: Scaffold(body: home),
+  );
+}
 
 void main() {
+  tearDown(() => appLocale = fallbackLocale);
+
   testWidgets('onglet Grype en anglais', (tester) async {
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -89,16 +97,30 @@ void main() {
     expect(find.byTooltip('Exporter CSV'), findsOneWidget);
   });
 
-  test('pluriels ICU', () {
-    final fr = lookupAppLocalizations(const Locale('fr'));
-    final en = lookupAppLocalizations(const Locale('en'));
-    expect(fr.scanSummary(1, '1 High'), '1 vulnérabilité : 1 High');
-    expect(fr.scanSummary(3, '3 Low'), '3 vulnérabilités : 3 Low');
-    expect(en.scanSummary(1, '1 High'), '1 vulnerability: 1 High');
+  test('pluriels et paramètres de tr()', () {
+    appLocale = const Locale('fr');
     expect(
-      en.vulnTableExported(2, '/tmp/x.csv'),
+      tr('{count} vulnérabilités : {details}', {
+        'count': 3,
+        'details': '3 Low',
+      }),
+      '3 vulnérabilités : 3 Low',
+    );
+    expect(isPlural(0), isFalse);
+    expect(isPlural(2), isTrue);
+    appLocale = const Locale('en');
+    expect(
+      tr('1 vulnérabilité : {details}', {'details': '1 High'}),
+      '1 vulnerability: 1 High',
+    );
+    expect(
+      tr('{count} vulnérabilités exportées → {path}', {
+        'count': 2,
+        'path': '/tmp/x.csv',
+      }),
       '2 vulnerabilities exported → /tmp/x.csv',
     );
-    expect(en.layerScanStepLayer(2, 9), 'Layer 2/9…');
+    expect(isPlural(0), isTrue);
+    expect(isPlural(1), isFalse);
   });
 }

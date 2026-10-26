@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../i18n.dart';
 import '../models/cve_date_filter.dart';
 import '../models/layer_scan.dart';
 import '../models/sbom_result.dart';
@@ -31,7 +32,6 @@ import '../services/settings_service.dart';
 import '../services/vex_controller.dart';
 import 'tasks_panel.dart';
 import 'trivy_panel.dart';
-import '../l10n/l10n.dart';
 import '../services/save_dialog.dart';
 
 class ResultsPanel extends StatefulWidget {
@@ -321,7 +321,6 @@ class ResultsPanelState extends State<ResultsPanel>
   }
 
   Future<void> _loadPreview(OutputFile file) async {
-    final l = context.l10n;
     setState(() {
       _previewFile = file;
       _previewLoading = true;
@@ -333,14 +332,14 @@ class ResultsPanelState extends State<ResultsPanel>
       if (!mounted) return;
       setState(() {
         _previewContent = raw.length > maxChars
-            ? '${raw.substring(0, maxChars)}\n\n${l.resultsPreviewTruncated(raw.length)}'
+            ? '${raw.substring(0, maxChars)}\n\n${tr('[… tronqué — {total} caractères au total]', {'total': raw.length})}'
             : raw;
         _previewLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _previewContent = l.resultsReadError('$e');
+        _previewContent = tr('Erreur de lecture : {error}', {'error': '$e'});
         _previewLoading = false;
       });
     }
@@ -385,7 +384,7 @@ class ResultsPanelState extends State<ResultsPanel>
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  context.l10n.resultsPdfConverting,
+                  tr('Conversion PDF (asciidoctor-pdf) en cours…'),
                   style: TextStyle(fontSize: 13, color: Colors.blue[800]),
                 ),
               ],
@@ -422,7 +421,7 @@ class ResultsPanelState extends State<ResultsPanel>
                     else
                       const Icon(Icons.terminal, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabProgress),
+                    Text(tr('Progression')),
                   ],
                 ),
               ),
@@ -434,10 +433,8 @@ class ResultsPanelState extends State<ResultsPanel>
                     const SizedBox(width: 6),
                     Text(
                       widget.outputFiles.isEmpty
-                          ? context.l10n.tabResults
-                          : context.l10n.tabResultsCount(
-                              widget.outputFiles.length,
-                            ),
+                          ? tr('Résultats')
+                          : tr('Résultats ({count})', {'count': widget.outputFiles.length}),
                     ),
                   ],
                 ),
@@ -448,7 +445,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.dashboard_outlined, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabDashboard),
+                    Text(tr('Tableau de bord')),
                   ],
                 ),
               ),
@@ -458,7 +455,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.playlist_play, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabTasks),
+                    Text(tr('Tâches')),
                   ],
                 ),
               ),
@@ -498,7 +495,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.gpp_good_outlined, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabCra),
+                    Text(tr('Conformité CRA')),
                   ],
                 ),
               ),
@@ -508,7 +505,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.verified_outlined, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabQuality),
+                    Text(tr('Qualité SBOM')),
                   ],
                 ),
               ),
@@ -518,7 +515,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.account_tree_outlined, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabTree),
+                    Text(tr('Arborescence')),
                   ],
                 ),
               ),
@@ -528,7 +525,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.compare_arrows, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabCompare),
+                    Text(tr('Comparaison')),
                   ],
                 ),
               ),
@@ -538,7 +535,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.merge_type, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabMerge),
+                    Text(tr('Fusion')),
                   ],
                 ),
               ),
@@ -548,7 +545,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.gavel_outlined, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabLicenses),
+                    Text(tr('Licences')),
                   ],
                 ),
               ),
@@ -558,7 +555,7 @@ class ResultsPanelState extends State<ResultsPanel>
                   children: [
                     const Icon(Icons.manage_search_outlined, size: 16),
                     const SizedBox(width: 6),
-                    Text(context.l10n.tabViewer),
+                    Text(tr('Visionneuse')),
                   ],
                 ),
               ),
@@ -570,10 +567,8 @@ class ResultsPanelState extends State<ResultsPanel>
                     const SizedBox(width: 6),
                     Text(
                       previewableFiles.isEmpty
-                          ? context.l10n.tabPreview
-                          : context.l10n.tabPreviewCount(
-                              previewableFiles.length,
-                            ),
+                          ? tr('Aperçu')
+                          : tr('Aperçu ({count})', {'count': previewableFiles.length}),
                     ),
                   ],
                 ),
@@ -792,7 +787,7 @@ class _ProgressBar extends StatelessWidget {
           Row(
             children: [
               Text(
-                context.l10n.resultsProgressPackages(current, total),
+                tr('{current} / {total} paquets', {'current': current, 'total': total}),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -865,14 +860,12 @@ class _StatusBanner extends StatelessWidget {
           Expanded(
             child: Text(
               ok
-                  ? context.l10n.resultsSummaryOk(outputFiles.length) +
+                  ? (isPlural(outputFiles.length) ? tr('{count} fichiers SBOM générés', {'count': outputFiles.length}) : tr('{count} fichier SBOM généré', {'count': outputFiles.length})) +
                         (warnings.isNotEmpty
-                            ? context.l10n.resultsSummaryWarnings(
-                                warnings.length,
-                              )
+                            ? (isPlural(warnings.length) ? tr(' — {count} avertissements', {'count': warnings.length}) : tr(' — {count} avertissement', {'count': warnings.length}))
                             : '')
                   : fatalError ??
-                        context.l10n.resultsGenerationFailed(exitCode),
+                        tr('Échec de la génération (exit {code})', {'code': exitCode}),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: ok ? Colors.green[800] : Colors.red[800],
@@ -904,21 +897,21 @@ class _LogExportBar extends StatelessWidget {
               Clipboard.setData(ClipboardData(text: lines.join('\n')));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(context.l10n.resultsLogsCopied),
+                  content: Text(tr('Logs copiés dans le presse-papier')),
                   duration: const Duration(seconds: 2),
                 ),
               );
             },
             icon: const Icon(Icons.copy, size: 14, color: Colors.grey),
             label: Text(
-              context.l10n.commonCopy,
+              tr('Copier'),
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ),
           TextButton.icon(
             onPressed: () async {
               final path = await pickSavePath(
-                dialogTitle: context.l10n.resultsSaveLogsTitle,
+                dialogTitle: tr('Enregistrer les logs'),
                 fileName: 'sbom_generator.log',
               );
               if (path != null) {
@@ -927,7 +920,7 @@ class _LogExportBar extends StatelessWidget {
             },
             icon: const Icon(Icons.save_outlined, size: 14, color: Colors.grey),
             label: Text(
-              context.l10n.resultsSave,
+              tr('Enregistrer'),
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ),
@@ -973,16 +966,16 @@ class _StatsCard extends StatelessWidget {
               children: [
                 _StatItem(
                   icon: Icons.inventory_2_outlined,
-                  label: context.l10n.resultsStatPackages(packageCount),
+                  label: (isPlural(packageCount) ? tr('{count} paquets', {'count': packageCount}) : tr('{count} paquet', {'count': packageCount})),
                 ),
                 _StatItem(
                   icon: Icons.description_outlined,
-                  label: context.l10n.resultsStatFiles(fileCount),
+                  label: (isPlural(fileCount) ? tr('{count} fichiers SBOM', {'count': fileCount}) : tr('{count} fichier SBOM', {'count': fileCount})),
                 ),
                 if (warningCount > 0)
                   _StatItem(
                     icon: Icons.warning_amber_outlined,
-                    label: context.l10n.resultsStatWarnings(warningCount),
+                    label: (isPlural(warningCount) ? tr('{count} avertissements', {'count': warningCount}) : tr('{count} avertissement', {'count': warningCount})),
                     color: Colors.orange,
                   ),
               ],
@@ -1107,7 +1100,7 @@ class _ResultsView extends StatelessWidget {
         if (outputFiles.isNotEmpty) ...[
           _SectionTitle(
             icon: Icons.insert_drive_file_outlined,
-            label: context.l10n.resultsSectionFiles,
+            label: tr('Fichiers générés'),
           ),
           const SizedBox(height: 8),
           for (final f in outputFiles) _OutputFileCard(file: f),
@@ -1118,7 +1111,7 @@ class _ResultsView extends StatelessWidget {
         if (sbomqsOutput != null) ...[
           _SectionTitle(
             icon: Icons.analytics_outlined,
-            label: context.l10n.resultsSectionScore,
+            label: tr('Score sbomqs'),
             color: Colors.indigo[600],
           ),
           const SizedBox(height: 8),
@@ -1145,7 +1138,7 @@ class _ResultsView extends StatelessWidget {
         if (warnings.isNotEmpty) ...[
           _SectionTitle(
             icon: Icons.warning_amber_outlined,
-            label: context.l10n.resultsSectionWarnings(warnings.length),
+            label: tr('Avertissements ({count})', {'count': warnings.length}),
             color: Colors.orange[700],
           ),
           const SizedBox(height: 8),
@@ -1157,7 +1150,7 @@ class _ResultsView extends StatelessWidget {
         if (fatalError != null) ...[
           _SectionTitle(
             icon: Icons.error_outline,
-            label: context.l10n.resultsSectionError,
+            label: tr('Erreur'),
             color: Colors.red[700],
           ),
           const SizedBox(height: 8),
@@ -1205,7 +1198,7 @@ class _SbomPreviewTab extends StatelessWidget {
     if (files.isEmpty) {
       return _EmptyHint(
         icon: Icons.preview_outlined,
-        message: context.l10n.resultsNoPreview,
+        message: tr('Aucun fichier texte généré pour la prévisualisation'),
       );
     }
 
@@ -1248,12 +1241,12 @@ class _SbomPreviewTab extends StatelessWidget {
               if (content != null)
                 IconButton(
                   icon: const Icon(Icons.copy_outlined, size: 16),
-                  tooltip: context.l10n.resultsCopyContent,
+                  tooltip: tr('Copier le contenu'),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: content!));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(context.l10n.resultsContentCopied),
+                        content: Text(tr('Contenu copié')),
                         duration: const Duration(seconds: 2),
                       ),
                     );
@@ -1270,7 +1263,7 @@ class _SbomPreviewTab extends StatelessWidget {
               : content == null
               ? _EmptyHint(
                   icon: Icons.preview_outlined,
-                  message: context.l10n.resultsSelectFile,
+                  message: tr('Sélectionnez un fichier'),
                 )
               : Container(
                   color: const Color(0xFF1E1E1E),
@@ -1349,12 +1342,12 @@ class _OutputFileCard extends StatelessWidget {
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18),
-              tooltip: context.l10n.resultsCopyPath,
+              tooltip: tr('Copier le chemin'),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: file.path));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(context.l10n.resultsPathCopied),
+                    content: Text(tr('Chemin copié')),
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -1363,7 +1356,7 @@ class _OutputFileCard extends StatelessWidget {
             if (exists)
               IconButton(
                 icon: const Icon(Icons.open_in_new, size: 18),
-                tooltip: context.l10n.resultsOpenFile,
+                tooltip: tr('Ouvrir le fichier'),
                 onPressed: () => launchUrl(Uri.file(file.path)),
               ),
           ],
@@ -1425,10 +1418,8 @@ class _WarningsListState extends State<_WarningsList> {
             onPressed: () => setState(() => _expanded = !_expanded),
             child: Text(
               _expanded
-                  ? context.l10n.resultsCollapse
-                  : context.l10n.resultsShowMore(
-                      widget.warnings.length - _previewCount,
-                    ),
+                  ? tr('Réduire')
+                  : tr('Voir {count} de plus…', {'count': widget.warnings.length - _previewCount}),
             ),
           ),
         ],
@@ -1474,7 +1465,7 @@ class _EmptyHint extends StatelessWidget {
         Icon(icon, size: 56, color: Colors.grey),
         const SizedBox(height: 12),
         Text(
-          message ?? context.l10n.resultsEmptyHint,
+          message ?? tr('Configurez les options et lancez la génération'),
           style: const TextStyle(color: Colors.grey, fontSize: 15),
           textAlign: TextAlign.center,
         ),

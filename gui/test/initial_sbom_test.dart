@@ -32,12 +32,11 @@ void main() {
       MaterialApp(
         locale: const Locale('fr'),
         localizationsDelegates: const [
-          AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: AppLocalizations.supportedLocales,
+        supportedLocales: supportedAppLocales,
         home: HomeScreen(
           initialSbom: '/tmp/demo.cdx.json',
           themeMode: ThemeMode.light,

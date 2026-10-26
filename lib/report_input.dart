@@ -58,9 +58,7 @@ class ReportInput {
     if (json['format'] is int && json['savedAt'] is String) {
       return ReportInput._fromSession(json);
     }
-    throw FormatException(tr(
-        'fichier non reconnu : attendu un `scan --format json` ou une session de la GUI',
-        'unrecognised file: expected a `scan --format json` output or a GUI session'));
+    throw FormatException(tr('fichier non reconnu : attendu un `scan --format json` ou une session de la GUI'));
   }
 
   factory ReportInput.decode(String text) =>

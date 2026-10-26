@@ -12,7 +12,7 @@ class MavenParser {
     final file = File(path);
     if (!file.existsSync()) {
       stderr.writeln('Warning: ' +
-          tr('pom.xml introuvable : $path', 'pom.xml not found: $path'));
+          tr('pom.xml introuvable : {path}', {'path': path}));
       return [];
     }
 

@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../i18n.dart';
 import '../models/layer_scan.dart';
 import '../widgets/vuln_shared.dart' show VulnRow;
 import 'settings_service.dart';
-import '../l10n/l10n.dart';
 
 /// Sortie d'une exécution de scanner.
 typedef ScanOutput = ({String json, int exitCode, String? stderr});
@@ -89,13 +89,13 @@ class LayerScanService {
     _process = null;
     if (code != 0 || !File(out).existsSync()) {
       throw Exception(
-        appL10n().svcLayerSbomFailed(code, err.toString().trim()),
+        tr('génération des SBOM de couche impossible (code {code}) : {detail}', {'code': code, 'detail': err.toString().trim()}),
       );
     }
     final json = jsonDecode(await File(out).readAsString());
     final set = LayeredSbomSet.parse(out, json as Map<String, dynamic>);
     if (set.layers.isEmpty) {
-      throw Exception(appL10n().svcNoLayer(image));
+      throw Exception(tr('aucune couche trouvée dans {image}', {'image': image}));
     }
     return set;
   }

@@ -27,8 +27,7 @@ sys.stdout.buffer.write(z.read(name))
 
     if (result.exitCode != 0) {
       stderr.writeln('Warning: ' +
-          tr('lecture impossible de la wheel "$path"',
-              'cannot read wheel "$path"'));
+          tr('lecture impossible de la wheel "{path}"', {'path': path}));
       final err = result.stderr.toString().trim();
       if (err.isNotEmpty) stderr.writeln('  $err');
       return null;
@@ -37,7 +36,7 @@ sys.stdout.buffer.write(z.read(name))
     final text = result.stdout.toString();
     if (text.isEmpty) {
       stderr.writeln('Warning: ' +
-          tr('METADATA vide pour "$path"', 'empty METADATA for "$path"'));
+          tr('METADATA vide pour "{path}"', {'path': path}));
       return null;
     }
 
@@ -58,8 +57,7 @@ sys.stdout.buffer.write(z.read(name))
     final name = headers['name']?.first ?? '';
     if (name.isEmpty) {
       stderr.writeln('Warning: ' +
-          tr('aucun Name dans METADATA pour "$path"',
-              'no Name in METADATA for "$path"'));
+          tr('aucun Name dans METADATA pour "{path}"', {'path': path}));
       return null;
     }
 

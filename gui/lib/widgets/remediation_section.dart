@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 import '../services/save_dialog.dart';
 import '../models/remediation.dart';
 import 'grype_panel.dart';
@@ -91,10 +91,9 @@ class _RemediationSectionState extends State<RemediationSection> {
   bool _showAll = false;
 
   Future<void> _exportCsv() async {
-    final l = context.l10n;
-    final csv = remediationCsv(widget.items, l.remedCsvHeader);
+    final csv = remediationCsv(widget.items, tr('paquet,version installée,version cible,CVE corrigées,dont KEV,CVE sans correctif,gain de risque'));
     final path = await pickSavePath(
-      dialogTitle: l.remedCsvDialog,
+      dialogTitle: tr('Exporter le plan de remédiation'),
       fileName: 'remediation.csv',
       type: FileType.custom,
       allowedExtensions: ['csv'],
@@ -104,21 +103,19 @@ class _RemediationSectionState extends State<RemediationSection> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(l.remedCsvSaved(path))));
+    ).showSnackBar(SnackBar(content: Text(tr('Plan de remédiation exporté → {path}', {'path': path}))));
   }
 
   Future<void> _copy() async {
-    final l = context.l10n;
     await Clipboard.setData(ClipboardData(text: remediationText(widget.items)));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(l.remedCopied)));
+    ).showSnackBar(SnackBar(content: Text(tr('Plan de remédiation copié'))));
   }
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final items = widget.items;
     if (items.isEmpty) return const SizedBox.shrink();
     final shown = _showAll ? items : items.take(_collapsedCount).toList();
@@ -135,7 +132,7 @@ class _RemediationSectionState extends State<RemediationSection> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    l.remedTitle,
+                    tr('Remédiation : quoi mettre à jour'),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -143,19 +140,19 @@ class _RemediationSectionState extends State<RemediationSection> {
                   ),
                 ),
                 IconButton(
-                  tooltip: l.remedCopyCommand,
+                  tooltip: tr('Copier la liste'),
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: _copy,
                 ),
                 IconButton(
-                  tooltip: l.remedExportCsv,
+                  tooltip: tr('Exporter en CSV'),
                   icon: const Icon(Icons.download_outlined, size: 18),
                   onPressed: _exportCsv,
                 ),
               ],
             ),
             Text(
-              l.remedSubtitle(items.length),
+              (isPlural(items.length) ? tr('{count} paquets à mettre à jour, classés par gain de risque (sévérité, exploitation active KEV, EPSS).', {'count': items.length}) : tr('1 paquet à mettre à jour, classés par gain de risque (sévérité, exploitation active KEV, EPSS).')),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -166,13 +163,13 @@ class _RemediationSectionState extends State<RemediationSection> {
                 child: TextButton(
                   onPressed: () => setState(() => _showAll = !_showAll),
                   child: Text(
-                    _showAll ? l.remedShowLess : l.remedShowAll(items.length),
+                    _showAll ? tr('Réduire la liste') : tr('Afficher les {count} paquets', {'count': items.length}),
                   ),
                 ),
               ),
             const SizedBox(height: 4),
             Text(
-              l.remedHelpNote,
+              tr('Heuristique : la version cible est la plus petite qui corrige toutes les CVE corrigeables du paquet ; vérifiez-la avec votre gestionnaire de paquets.'),
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
@@ -193,17 +190,16 @@ class _RemediationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l10n;
     final theme = Theme.of(context);
     final target = item.targetVersion;
     final title = target == null
-        ? l.remedNoFixTitle(item.packageName, item.installedVersion)
-        : l.remedUpgrade(item.packageName, item.installedVersion, target);
+        ? tr('{pkg} {from} — aucun correctif connu', {'pkg': item.packageName, 'from': item.installedVersion})
+        : tr('{pkg} {from} → {to}', {'pkg': item.packageName, 'from': item.installedVersion, 'to': target});
     final details = <String>[
-      if (item.fixed.isNotEmpty) l.remedFixes(item.fixed.length),
-      if (item.kevFixed > 0) l.remedKev(item.kevFixed),
-      if (item.unfixed.isNotEmpty) l.remedRemaining(item.unfixed.length),
-      if (item.fixed.isNotEmpty) l.remedGain(_gain(item.gain)),
+      if (item.fixed.isNotEmpty) (isPlural(item.fixed.length) ? tr('{count} CVE corrigées', {'count': item.fixed.length}) : tr('1 CVE corrigée')),
+      if (item.kevFixed > 0) tr('{count} exploitée(s) (KEV)', {'count': item.kevFixed}),
+      if (item.unfixed.isNotEmpty) (isPlural(item.unfixed.length) ? tr('{count} CVE resteront sans correctif', {'count': item.unfixed.length}) : tr('1 CVE restera sans correctif')),
+      if (item.fixed.isNotEmpty) tr('Gain de risque : {gain}', {'gain': _gain(item.gain)}),
     ];
     final all = [...item.fixed, ...item.unfixed];
     return ExpansionTile(
@@ -250,7 +246,7 @@ class _RemediationTile extends StatelessWidget {
                     ],
                     if (all.length > _maxListed)
                       TextSpan(
-                        text: l.remedMoreCves(all.length - _maxListed),
+                        text: tr('… et {count} autre(s) CVE (voir l\'export CSV ou le détail ci-dessus)', {'count': all.length - _maxListed}),
                         style: theme.textTheme.bodySmall,
                       ),
                   ],

@@ -1,14 +1,17 @@
-/// Localisation FR / EN des messages du CLI.
+/// Localisation FR / EN des messages du CLI, des rapports et de la GUI.
 ///
-/// Pas de catalogue de clés : chaque message est écrit en ligne avec ses deux
-/// versions, `tr('texte français', 'english text')`, au plus près de son
-/// usage. La langue est fixée une fois au démarrage (`initLang`) ; tout texte
-/// destiné à un humain (aide, erreurs, progression, rapports) passe par
-/// `tr()`. Ne jamais traduire un texte lu par un programme (clés JSON, valeurs
-/// de formats, propriétés des SBOM, sortie des outils tiers).
+/// Le texte source est en français : `tr('texte français {param}', {...})`.
+/// La version anglaise est cherchée dans `catalogEn` (`l10n/en.dart`, clé =
+/// texte français) ; un texte absent du catalogue reste en français. La langue
+/// est fixée une fois au démarrage (`initLang`) ; tout texte destiné à un
+/// humain (aide, erreurs, progression, rapports) passe par `tr()`. Ne jamais
+/// traduire un texte lu par un programme (clés JSON, valeurs de formats,
+/// propriétés des SBOM, sortie des outils tiers).
 library;
 
 import 'dart:io';
+
+import 'l10n/en.dart';
 
 /// Langues prises en charge.
 enum Lang { fr, en }
@@ -21,15 +24,30 @@ Lang get currentLang => _current;
 /// Force la langue courante (tests, `--lang`).
 set currentLang(Lang l) => _current = l;
 
-/// Renvoie [fr] ou [en] selon la langue courante.
-String tr(String fr, String en) => _current == Lang.fr ? fr : en;
+/// Traductions demandées mais absentes du catalogue (utile aux tests).
+final Set<String> missingTranslations = {};
 
-/// Pluriel simple : [n] vaut 1 → forme singulière, sinon plurielle.
-///
-/// `plural(n, 'paquet', 'paquets', 'package', 'packages')`
-String plural(
-        int n, String frOne, String frMany, String enOne, String enMany) =>
-    _current == Lang.fr ? (n > 1 ? frMany : frOne) : (n == 1 ? enOne : enMany);
+/// Texte traduit. [fr] est le texte source (clé du catalogue) ; chaque
+/// `{nom}` est remplacé par `args['nom']`.
+String tr(String fr, [Map<String, Object?> args = const {}]) {
+  var text = fr;
+  if (_current == Lang.en) {
+    final en = catalogEn[fr];
+    if (en == null) {
+      missingTranslations.add(fr);
+    } else {
+      text = en;
+    }
+  }
+  if (args.isEmpty) return text;
+  return text.replaceAllMapped(RegExp(r'\{(\w+)\}'), (m) {
+    final key = m[1]!;
+    return args.containsKey(key) ? '${args[key]}' : m[0]!;
+  });
+}
+
+/// Pluriel : le français met 0 au singulier, l'anglais au pluriel.
+bool isPlural(num n) => _current == Lang.fr ? n > 1 : n != 1;
 
 /// Déduit une langue d'un code de locale (`fr_FR.UTF-8`, `en`, `C`…).
 /// Renvoie `null` si le code n'est pas reconnu.

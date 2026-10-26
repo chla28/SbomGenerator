@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
 import '../models/layer_nav.dart';
-import '../l10n/l10n.dart';
 
 /// Menu « SBOM global / couche N » d'un jeu de SBOM produit avec
 /// `--per-layer`, et bandeau descriptif de la couche affichée.
@@ -33,7 +33,7 @@ class LayerSelector extends StatelessWidget {
         DropdownMenuItem(
           value: nav.globalPath,
           child: Text(
-            context.l10n.layerGlobalSbom,
+            tr('SBOM global'),
             style: const TextStyle(fontSize: 12),
           ),
         ),
@@ -41,7 +41,7 @@ class LayerSelector extends StatelessWidget {
         DropdownMenuItem(
           value: l.path,
           child: Text(
-            context.l10n.layerOption(l.index, total, l.shortDigest) +
+            tr('Couche {index}/{total} ({digest})', {'index': l.index, 'total': total, 'digest': l.shortDigest}) +
                 (layerLabels[l.index] != null
                     ? '  ${layerLabels[l.index]}'
                     : ''),
@@ -68,7 +68,7 @@ class LayerSelector extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                context.l10n.layerCount(nav.layers.length),
+                (isPlural(nav.layers.length) ? tr('{count} couches :', {'count': nav.layers.length}) : tr('{count} couche :', {'count': nav.layers.length})),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -94,7 +94,7 @@ class LayerSelector extends StatelessWidget {
                   child: Chip(
                     visualDensity: VisualDensity.compact,
                     label: Text(
-                      context.l10n.layerRemovedChip(info.removed.length),
+                      (isPlural(info.removed.length) ? tr('{count} supprimés', {'count': info.removed.length}) : tr('{count} supprimé', {'count': info.removed.length})),
                       style: const TextStyle(fontSize: 11),
                     ),
                     avatar: const Icon(Icons.remove_circle_outline, size: 14),

@@ -4,10 +4,10 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
 import '../models/license_report.dart';
 import '../models/sbom_result.dart';
 import '../services/sbom_runner.dart';
-import '../l10n/l10n.dart';
 
 /// Formats du rapport (valeurs de `sbom_generator licenses --format`).
 enum _ReportFormat {
@@ -108,7 +108,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
 
   Future<void> _pickFile() async {
     final r = await FilePicker.pickFile(
-      dialogTitle: context.l10n.licPickTitle,
+      dialogTitle: tr('Sélectionner un fichier SBOM'),
       type: FileType.custom,
       allowedExtensions: const ['json', 'jsonld'],
     );
@@ -206,7 +206,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
             children: [
               OutlinedButton.icon(
                 icon: const Icon(Icons.description_outlined, size: 16),
-                label: Text(context.l10n.licChooseFile),
+                label: Text(tr('Choisir un fichier…')),
                 onPressed: _pickFile,
               ),
               const SizedBox(width: 8),
@@ -214,7 +214,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                 MenuAnchor(
                   builder: (ctx, ctrl, child) => OutlinedButton.icon(
                     icon: const Icon(Icons.folder_outlined, size: 16),
-                    label: Text(context.l10n.commonGeneratedFiles),
+                    label: Text(tr('Fichiers générés')),
                     onPressed: () => ctrl.isOpen ? ctrl.close() : ctrl.open(),
                   ),
                   menuChildren: [
@@ -228,7 +228,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  _inputFile == null ? context.l10n.licNoFile : _inputFile!,
+                  _inputFile == null ? tr('Aucun fichier sélectionné') : _inputFile!,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -273,7 +273,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                   controller: _outputCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    labelText: context.l10n.commonOutputFile,
+                    labelText: tr('Fichier de sortie'),
                     isDense: true,
                     border: const OutlineInputBorder(),
                   ),
@@ -284,7 +284,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                 child: TextField(
                   controller: _nameCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.commonDocNameOptional,
+                    labelText: tr('Nom du document (optionnel)'),
                     isDense: true,
                     border: const OutlineInputBorder(),
                   ),
@@ -299,7 +299,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.gavel_outlined, size: 16),
-                label: Text(context.l10n.licGenerate),
+                label: Text(tr('Générer')),
                 onPressed: canRun ? _runLicenses : null,
               ),
             ],
@@ -320,8 +320,8 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                 Expanded(
                   child: Text(
                     _exitCode == 0
-                        ? context.l10n.licReportGenerated(_resultPath ?? '')
-                        : context.l10n.licReportFailed(_exitCode ?? -1),
+                        ? tr('Rapport généré → {path}', {'path': _resultPath ?? ''})
+                        : tr('Échec de la génération (code {code}) — voir le journal ci-dessous.', {'code': _exitCode ?? -1}),
                   ),
                 ),
               ],
@@ -359,7 +359,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: SelectableText(
-            context.l10n.licLoadError('$_loadError'),
+            tr('Impossible de lire les licences : {error}', {'error': '$_loadError'}),
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ),
@@ -371,7 +371,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            context.l10n.licSelectHint,
+            tr('Sélectionnez un fichier CycloneDX ou SPDX pour visualiser ses licences (regroupées par licence, avec signalement des licences copyleft et des paquets sans licence détectée), puis générer un rapport ci-dessous.'),
             textAlign: TextAlign.center,
             style: muted,
           ),
@@ -394,7 +394,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: context.l10n.licFilterHint,
+                    hintText: tr('Filtrer par licence ou par paquet…'),
                     prefixIcon: const Icon(Icons.search, size: 18),
                     suffixIcon: _searchCtrl.text.isEmpty
                         ? null
@@ -415,12 +415,12 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
                   ButtonSegment(
                     value: _View.grouped,
                     icon: const Icon(Icons.account_tree_outlined, size: 16),
-                    label: Text(context.l10n.licViewGrouped),
+                    label: Text(tr('Par licence')),
                   ),
                   ButtonSegment(
                     value: _View.table,
                     icon: const Icon(Icons.table_rows_outlined, size: 16),
-                    label: Text(context.l10n.licViewTable),
+                    label: Text(tr('Tableau')),
                   ),
                 ],
                 selected: {_view},
@@ -431,7 +431,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
         ),
         Expanded(
           child: groups.isEmpty
-              ? Center(child: Text(context.l10n.licNoResult, style: muted))
+              ? Center(child: Text(tr('Aucun résultat.'), style: muted))
               : _view == _View.grouped
               ? _groupedView(groups)
               : _tableView(groups, theme),
@@ -453,21 +453,21 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
         spacing: 8,
         runSpacing: 0,
         children: [
-          chip(context.l10n.licChipPackages(d.totalPackages)),
-          chip(context.l10n.licChipLicenses(d.distinctLicenses)),
+          chip((isPlural(d.totalPackages) ? tr('{count} paquets', {'count': d.totalPackages}) : tr('{count} paquet', {'count': d.totalPackages}))),
+          chip((isPlural(d.distinctLicenses) ? tr('{count} licences', {'count': d.distinctLicenses}) : tr('{count} licence', {'count': d.distinctLicenses}))),
           if (d.strongCopyleftPackages > 0)
             chip(
-              context.l10n.licChipStrong(d.strongCopyleftPackages),
+              tr('{count} copyleft fort', {'count': d.strongCopyleftPackages}),
               color: _categoryColor(LicenseCategory.strongCopyleft),
             ),
           if (d.weakCopyleftPackages > 0)
             chip(
-              context.l10n.licChipWeak(d.weakCopyleftPackages),
+              tr('{count} copyleft faible', {'count': d.weakCopyleftPackages}),
               color: _categoryColor(LicenseCategory.weakCopyleft),
             ),
           if (d.unknownPackages > 0)
             chip(
-              context.l10n.licChipNone(d.unknownPackages),
+              tr('{count} sans licence', {'count': d.unknownPackages}),
               color: _categoryColor(LicenseCategory.unknown),
             ),
         ],
@@ -482,19 +482,19 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
     LicenseCategory.permissive => Colors.green.shade700,
   };
 
-  static String _categoryLabel(LicenseCategory c, AppLocalizations l) =>
+  static String _categoryLabel(LicenseCategory c) =>
       switch (c) {
-        LicenseCategory.strongCopyleft => l.licCategoryStrong,
-        LicenseCategory.weakCopyleft => l.licCategoryWeak,
-        LicenseCategory.unknown => l.licCategoryNone,
+        LicenseCategory.strongCopyleft => tr('copyleft fort'),
+        LicenseCategory.weakCopyleft => tr('copyleft faible'),
+        LicenseCategory.unknown => tr('sans licence'),
         LicenseCategory.permissive => '',
       };
 
-  static String _licenseTitle(LicenseGroup g, AppLocalizations l) =>
-      g.license.isEmpty ? l.licNoLicenseDetected : g.license;
+  static String _licenseTitle(LicenseGroup g) =>
+      g.license.isEmpty ? tr('Sans licence détectée') : g.license;
 
   Widget _badge(LicenseCategory c) {
-    final text = _categoryLabel(c, context.l10n);
+    final text = _categoryLabel(c);
     if (text.isEmpty) return const SizedBox.shrink();
     final color = _categoryColor(c);
     return Container(
@@ -525,7 +525,7 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
             children: [
               Flexible(
                 child: Text(
-                  _licenseTitle(g, context.l10n),
+                  _licenseTitle(g),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -602,9 +602,9 @@ class _SbomLicensesPanelState extends State<SbomLicensesPanel>
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              header(context.l10n.licColPackage, _Sort.name, flex: 3),
+              header(tr('Paquet'), _Sort.name, flex: 3),
               header('Version', _Sort.version, flex: 2),
-              header(context.l10n.licColLicense, _Sort.license, flex: 4),
+              header(tr('Licence'), _Sort.license, flex: 4),
             ],
           ),
         ),

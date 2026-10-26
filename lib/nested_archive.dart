@@ -184,8 +184,7 @@ class NestedExplorer {
         try {
           pkgs = await _parse(abs);
         } catch (e) {
-          out.warnings.add(tr('$location : analyse impossible ($e)',
-              '$location: analysis failed ($e)'));
+          out.warnings.add(tr('{location} : analyse impossible ({e})', {'location': location, 'e': e}));
           pkgs = const [];
         }
         pkgs = [for (final p in pkgs) p.copyWith(sourceRef: location)];
@@ -279,15 +278,12 @@ class NestedExplorer {
         '$_maxMemberBytes',
       ]);
     } on ProcessException {
-      out.warnings.add(tr(
-          'python3 introuvable : impossible de descendre dans $label.',
-          'python3 not found: cannot descend into $label.'));
+      out.warnings.add(tr('python3 introuvable : impossible de descendre dans {label}.', {'label': label}));
       return const [];
     }
     if (r.exitCode != 0) {
       final err = r.stderr.toString().trim().split('\n').last;
-      out.warnings.add(tr('$label : extraction impossible ($err)',
-          '$label: extraction failed ($err)'));
+      out.warnings.add(tr('{label} : extraction impossible ({err})', {'label': label, 'err': err}));
       return const [];
     }
     try {
@@ -297,8 +293,7 @@ class NestedExplorer {
       }
       return [for (final f in (json['files'] as List)) f as String];
     } catch (_) {
-      out.warnings.add(tr('$label : sortie d\'extraction illisible',
-          '$label: unreadable extraction output'));
+      out.warnings.add(tr('{label} : sortie d\'extraction illisible', {'label': label}));
       return const [];
     }
   }

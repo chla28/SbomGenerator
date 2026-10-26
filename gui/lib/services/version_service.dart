@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../l10n/l10n.dart';
+import '../i18n.dart';
 
 // ─── Modèle ───────────────────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ class ToolVersionBadge extends StatelessWidget {
           const Icon(Icons.error_outline, size: 13, color: Colors.red),
           const SizedBox(width: 4),
           Text(
-            context.l10n.svcNotInstalled,
+            tr('non installé'),
             style: const TextStyle(fontSize: 11, color: Colors.red),
           ),
         ],
@@ -155,7 +155,7 @@ class ToolVersionBadge extends StatelessWidget {
 
     // Mise à jour disponible — lien cliquable vers la release GitHub
     return Tooltip(
-      message: context.l10n.svcUpdateAvailable,
+      message: tr('Mise à jour disponible — cliquez pour accéder à la release'),
       child: InkWell(
         onTap: v.releaseUrl != null
             ? () => launchUrl(
