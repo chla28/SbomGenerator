@@ -283,6 +283,7 @@ Map<String, dynamic> vexToJson(VexStatement s) => {
       if (s.justification != null) 'justification': s.justification,
       if (s.impactStatement != null) 'impact': s.impactStatement,
       if (s.actionStatement != null) 'action': s.actionStatement,
+      if (s.source != null) 'source': s.source,
     };
 
 List<VexStatement> _vex(Object? raw) => [
@@ -297,5 +298,6 @@ List<VexStatement> _vex(Object? raw) => [
             justification: s['justification'] as String?,
             impactStatement: s['impact'] as String?,
             actionStatement: s['action'] as String?,
+            source: s['source'] as String?,
           ),
     ];

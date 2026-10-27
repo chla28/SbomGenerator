@@ -140,6 +140,45 @@ void main() {
     expect(affected['action_statement'], contains('9.9'));
   });
 
+  test('--vex répété : documents fusionnés, la déclaration prudente l\'emporte',
+      () async {
+    Map<String, dynamic> openvex(String id, String pkg, String status) => {
+          '@context': 'https://openvex.dev/ns/v0.2.0',
+          'statements': [
+            {
+              'vulnerability': {'name': id},
+              'products': [
+                {'@id': pkg}
+              ],
+              'status': status,
+              if (status == 'not_affected')
+                'justification': 'component_not_present',
+            },
+          ],
+        };
+    final a = File('${tmp.path}/a.vex.json')
+      ..writeAsStringSync(jsonEncode(
+          openvex('CVE-2024-0001', 'pkg:generic/liba@1.0', 'not_affected')));
+    final b = File('${tmp.path}/b.vex.json')
+      ..writeAsStringSync(jsonEncode(
+          openvex('CVE-2024-0002', 'pkg:generic/libb@2.0', 'not_affected')));
+    // Contredit a.vex.json : liba est déclarée affectée ailleurs.
+    final c = File('${tmp.path}/c.vex.json')
+      ..writeAsStringSync(jsonEncode(
+          openvex('CVE-2024-0001', 'pkg:generic/liba@1.0', 'affected')));
+
+    final both =
+        parse(await scan(['-f', 'json', '--vex', a.path, '--vex', b.path]));
+    expect(both['summary']['vexSuppressed'], 2);
+    expect(both['summary']['total'], 1);
+
+    final conflict = parse(await scan(
+        ['-f', 'json', '--vex', a.path, '--vex', b.path, '--vex', c.path]));
+    expect(conflict['summary']['vexSuppressed'], 1);
+    expect((conflict['findings'] as List).map((f) => f['id']),
+        contains('CVE-2024-0001'));
+  });
+
   test('--baseline : seules les nouvelles CVE restent ; code retour', () async {
     final base = File('${tmp.path}/base.json');
     final first = await scan(['-f', 'json']);

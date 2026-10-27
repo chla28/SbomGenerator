@@ -250,8 +250,6 @@ const Map<String, String> catalogEn = {
       'Keep only the CVEs whose EPSS score is ≥ this value (0..1, e.g. 0.1).',
   'Ordre d\'affichage console.\n  severity  pire sévérité d\'abord (défaut)\n  risk      KEV, puis EPSS décroissant, puis sévérité':
       'Console display order.\n  severity  worst severity first (default)\n  risk      KEV, then EPSS descending, then severity',
-  'Document VEX (OpenVEX, CSAF ou CycloneDX VEX) : les CVE déclarées\n"not_affected" ou "fixed" pour le paquet concerné sont\nécartées des résultats (et comptées).':
-      'VEX document (OpenVEX, CSAF or CycloneDX VEX): CVEs declared\n"not_affected" or "fixed" for the package concerned are\nremoved from the results (and counted).',
   'Écrit un document VEX : les CVE restantes en "affected" (avec\nla version corrigée), plus les déclarations "not_affected"\nreprises de --vex.':
       'Writes a VEX document: remaining CVEs as "affected" (with the\nfixed version), plus the "not_affected" statements carried\nover from --vex.',
   'Format de --vex-out.': 'Format of --vex-out.',
@@ -396,8 +394,6 @@ const Map<String, String> catalogEn = {
       'Keep only the CVEs whose worst severity reaches this threshold\n(critical, high, medium), plus those in the CISA KEV catalog.',
   'Section « Tendance » par rapport à un autre fichier de résultats.':
       '"Trend" section against another results file.',
-  'Document VEX supplémentaire (OpenVEX / CSAF / CycloneDX) : les CVE\n« non affectées » / « corrigées » sont écartées du rapport.':
-      'Additional VEX document (OpenVEX / CSAF / CycloneDX): "not affected" /\n"fixed" CVEs are dropped from the report.',
   'Ignorer les déclarations VEX embarquées dans le fichier.':
       'Ignore the VEX statements embedded in the file.',
   'sbom_generator report – Rapport de vulnérabilités (synthèse inter-scanners,\nremédiation, tendance, VEX, détail des CVE) à partir de résultats déjà obtenus,\nsans relancer les scanners. C\'est le même rapport que `scan --format pdf` et que\nl\'export du tableau de bord de la GUI.\n\nUsage:\n  sbom-generator report -i resultats.json -o rapport.pdf\n  sbom-generator report -i session.json -s high --compare-with ancien.json -o rapport.pdf\n\n{usage}\n':
@@ -492,8 +488,6 @@ const Map<String, String> catalogEn = {
       'Run a vulnerability scan (grype/osv/trivy) to assess the inventory and the fixes. --no-scan to skip it.',
   'Scanner(s) : grype (défaut), osv, trivy, all.':
       'Scanner(s): grype (default), osv, trivy, all.',
-  'Document VEX (OpenVEX / CycloneDX) : les CVE "not_affected" ou\n"fixed" sont écartées de l\'inventaire des vulnérabilités.':
-      'VEX document (OpenVEX / CSAF / CycloneDX): "not_affected" or "fixed"\nCVEs are removed from the vulnerability inventory.',
   'Fichier de CVE ignorées (voir `scan --help`) : règles\njustifiées et datées, écartées de l\'inventaire.':
       'File of ignored CVEs (see `scan --help`): justified, dated\nrules removed from the inventory.',
   'Enrichir les CVE (CISA KEV / EPSS). --no-enrich pour rester hors-ligne.':
@@ -657,8 +651,7 @@ const Map<String, String> catalogEn = {
   'version calculée ignorée pour {name} dans {path}':
       'computed version ignored for {name} in {path}',
   'lockfile Python introuvable : {path}': 'Python lockfile not found: {path}',
-  'Package.resolved introuvable : {path}':
-      'Package.resolved not found: {path}',
+  'Package.resolved introuvable : {path}': 'Package.resolved not found: {path}',
   'analyse impossible de {path} : {e}': 'cannot parse {path}: {e}',
   '[.verdict-ok]*Conforme*': '[.verdict-ok]*Compliant*',
   '[.verdict-watch]*Partiel*': '[.verdict-watch]*Partial*',
@@ -1206,4 +1199,85 @@ const Map<String, String> catalogEn = {
   'Action immédiate requise. {kev} CVE du catalogue CISA KEV est exploitée activement dans la nature — appliquer les correctifs sans délai.':
       'Immediate action required. {kev} CVE from the CISA KEV catalog is actively exploited in the wild — apply the fixes without delay.',
   '*{count}* CVE uniques': '*{count}* unique CVEs',
+  'au moins un --subject est requis.': 'at least one --subject is required.',
+  'sujet introuvable : {path}': 'subject not found: {path}',
+  'deux sujets portent le même nom : {name}':
+      'two subjects have the same name: {name}',
+  'ligne {n} ignorée (clé: valeur attendu)':
+      'line {n} ignored (key: value expected)',
+  'ligne {n} : unknown doit valoir fail, warn ou allow':
+      'line {n}: unknown must be fail, warn or allow',
+  'ligne {n} : date illisible': 'line {n}: unreadable date',
+  'ligne {n} : clé inconnue « {key} »': 'line {n}: unknown key "{key}"',
+  'licence inconnue': 'unknown license',
+  'licence refusée : {id}': 'denied license: {id}',
+  'licence hors liste autorisée : {id}':
+      'license not in the allowed list: {id}',
+  'Qualité du SBOM : {score}/100 (note {grade})':
+      'SBOM quality: {score}/100 (grade {grade})',
+  'manquant sur : {list}': 'missing on: {list}',
+  'Document VEX (OpenVEX, CSAF ou CycloneDX VEX) : les CVE déclarées\n"not_affected" ou "fixed" pour le paquet concerné sont\nécartées des résultats (et comptées). Répétable : les documents\nsont fusionnés et, en cas de contradiction, la déclaration la plus\nprudente (affected) l\'emporte.':
+      'VEX document (OpenVEX, CSAF or CycloneDX VEX): CVEs declared\n"not_affected" or "fixed" for the package concerned are\nremoved from the results (and counted). Repeatable: documents\nare merged and, if they contradict each other, the most\ncautious statement (affected) wins.',
+  'Document VEX supplémentaire (OpenVEX / CSAF / CycloneDX), répétable :\nles CVE « non affectées » / « corrigées » sont écartées du rapport.':
+      'Additional VEX document (OpenVEX / CSAF / CycloneDX), repeatable:\n"not affected" / "fixed" CVEs are dropped from the report.',
+  'Fichier de politique de licences (allow / deny / unknown / except).\nCode retour 2 si au moins un composant la viole.':
+      'License policy file (allow / deny / unknown / except).\nExit code 2 if at least one component violates it.',
+  'licenses: fichier --policy introuvable : {policyPath}':
+      'licenses: --policy file not found: {policyPath}',
+  'licenses: exception EXPIRÉE : {package} — non appliquée.':
+      'licenses: EXPIRED exception: {package} — not applied.',
+  'licenses: avertissement : licence inconnue pour {name}@{version}':
+      'licenses: warning: unknown license for {name}@{version}',
+  '\n{n} composant(s) violent la politique de licences — code retour 2':
+      '\n{n} component(s) violate the license policy — exit code 2',
+  'Fichier SBOM (CycloneDX JSON ou SPDX 2.3 JSON).':
+      'SBOM file (CycloneDX JSON or SPDX 2.3 JSON).',
+  'Artefact attesté (binaire, image exportée, archive…). Son SHA-256\nest calculé. Répétable ; un seul avec --sign.':
+      'Attested artifact (binary, exported image, archive…). Its SHA-256\nis computed. Repeatable; only one with --sign.',
+  'Contenu attesté :\n  sbom        le SBOM lui-même (défaut)\n  provenance  provenance SLSA v1 (le SBOM est la matière d\'entrée)':
+      'Attested content:\n  sbom        the SBOM itself (default)\n  provenance  SLSA v1 provenance (the SBOM is the input material)',
+  'Identité du constructeur (URI) — obligatoire avec --predicate provenance.':
+      'Builder identity (URI) — required with --predicate provenance.',
+  'Type de construction de la provenance (URI).':
+      'Provenance build type (URI).',
+  'Identifiant de l\'exécution de la construction (ex. numéro de pipeline).':
+      'Identifier of the build run (e.g. pipeline number).',
+  'Fichier de la déclaration (défaut : <sbom>.intoto.json).':
+      'Statement file (default: <sbom>.intoto.json).',
+  'Signe la déclaration avec cosign attest-blob (bundle <sortie>.bundle).':
+      'Signs the statement with cosign attest-blob (bundle <output>.bundle).',
+  'sbom_generator attest – Produit une déclaration in-toto v1 (facultativement\nsignée par cosign) qui lie un SBOM ou une provenance SLSA à des artefacts.\n\nUsage:\n  sbom_generator attest -i sbom.cdx.json -s app.bin\n  sbom_generator attest -i sbom.cdx.json -s app.bin --predicate provenance \\\n      --builder-id https://ci.example/builder --invocation-id 4242\n  sbom_generator attest -i sbom.cdx.json -s app.bin --sign\n\n{usage}\n\nCodes de retour : 0 = succès, 1 = erreur d\'usage ou de signature.\n':
+      'sbom_generator attest – Produces an in-toto v1 statement (optionally\nsigned by cosign) that binds an SBOM or a SLSA provenance to artifacts.\n\nUsage:\n  sbom_generator attest -i sbom.cdx.json -s app.bin\n  sbom_generator attest -i sbom.cdx.json -s app.bin --predicate provenance \\\\\n      --builder-id https://ci.example/builder --invocation-id 4242\n  sbom_generator attest -i sbom.cdx.json -s app.bin --sign\n\n{usage}\n\nExit codes: 0 = success, 1 = usage or signing error.\n',
+  'fichier introuvable : {inputPath}': 'file not found: {inputPath}',
+  '--sign accepte un seul --subject (cosign attest-blob).':
+      '--sign accepts a single --subject (cosign attest-blob).',
+  '--predicate provenance exige --builder-id.':
+      '--predicate provenance requires --builder-id.',
+  'impossible de lire le JSON : {e}': 'cannot read the JSON: {e}',
+  'format SBOM sans type de prédicat in-toto (SPDX 3.0 ou inconnu) : convertir en CycloneDX ou SPDX 2.3.':
+      'SBOM format has no in-toto predicate type (SPDX 3.0 or unknown): convert to CycloneDX or SPDX 2.3.',
+  'cosign introuvable — signature impossible.':
+      'cosign not found — cannot sign.',
+  'cosign a échoué (code {code}) : {err}': 'cosign failed (code {code}): {err}',
+  'Fichier SBOM à évaluer (CycloneDX JSON ou SPDX JSON/JSON-LD).':
+      'SBOM file to assess (CycloneDX JSON or SPDX JSON/JSON-LD).',
+  'Format de sortie.': 'Output format.',
+  'Fichier de sortie (défaut : sortie standard).':
+      'Output file (default: standard output).',
+  'Note minimale (0-100). Code retour 2 si la note est inférieure.':
+      'Minimum score (0-100). Exit code 2 if the score is lower.',
+  'sbom_generator quality – Note de qualité d\'un SBOM (0-100).\n\nLa note combine les 7 éléments minimaux NTIA (70 %) et la présence des\nempreintes et des licences (30 %). Les composants qui manquent un critère\nsont listés.\n\nUsage:\n  sbom_generator quality -i sbom.cdx.json\n  sbom_generator quality -i sbom.cdx.json --min-score 80 -f json\n\n{usage}\n\nCodes de retour : 0 = succès, 2 = note inférieure à --min-score.\n':
+      'sbom_generator quality – Quality score of an SBOM (0-100).\n\nThe score combines the 7 NTIA minimum elements (70%) and the presence of\nhashes and licenses (30%). Components missing a criterion are listed.\n\nUsage:\n  sbom_generator quality -i sbom.cdx.json\n  sbom_generator quality -i sbom.cdx.json --min-score 80 -f json\n\n{usage}\n\nExit codes: 0 = success, 2 = score lower than --min-score.\n',
+  'quality: --min-score attend un entier entre 0 et 100.':
+      'quality: --min-score expects an integer between 0 and 100.',
+  'quality: fichier introuvable : {inputPath}':
+      'quality: file not found: {inputPath}',
+  'quality: impossible de lire le JSON : {e}':
+      'quality: cannot read the JSON: {e}',
+  'quality: format SBOM non reconnu dans {inputPath}':
+      'quality: SBOM format not recognised in {inputPath}',
+  'quality: note {score} inférieure au minimum {min} — code retour 2':
+      'quality: score {score} is below the minimum {min} — exit code 2',
+  'Document VEX (OpenVEX / CSAF / CycloneDX), répétable : les CVE\n"not_affected" ou "fixed" sont écartées de l\'inventaire des\nvulnérabilités.':
+      'VEX document (OpenVEX / CSAF / CycloneDX), repeatable: "not_affected" or\n"fixed" CVEs are removed from the vulnerability inventory.',
 };

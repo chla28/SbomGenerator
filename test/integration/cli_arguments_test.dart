@@ -25,6 +25,8 @@ void main() {
       ('report', '--input'),
       ('vex', '--status'),
       ('watch', '--state-dir'),
+      ('quality', '--input'),
+      ('attest', '--input'),
     ]) {
       test('$cmd sans $option : erreur d\'usage, code 1, pas d\'exception',
           () async {

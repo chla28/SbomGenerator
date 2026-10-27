@@ -26,10 +26,13 @@ import 'package:sbom_generator/image_layers.dart';
 import 'package:sbom_generator/layer_scan.dart';
 import 'package:sbom_generator/sbom_diff.dart';
 import 'package:sbom_generator/sbom_merger.dart';
+import 'package:sbom_generator/license_policy.dart';
 import 'package:sbom_generator/policy_checker.dart';
+import 'package:sbom_generator/sbom_quality.dart';
 import 'package:sbom_generator/go_parser.dart';
 import 'package:sbom_generator/npm_parser.dart';
 import 'package:sbom_generator/yarn_parser.dart';
+import 'package:sbom_generator/attestation.dart';
 import 'package:sbom_generator/cargo_parser.dart';
 import 'package:sbom_generator/nuget_parser.dart';
 import 'package:sbom_generator/python_lock_parser.dart';
@@ -133,6 +136,18 @@ Future<void> main(List<String> rawArguments) async {
   // Sous-commande `verify` : vérifie la signature cosign d'un SBOM
   if (arguments.isNotEmpty && arguments.first == 'verify') {
     await _runVerify(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `attest` : déclaration in-toto (SBOM ou provenance SLSA)
+  if (arguments.isNotEmpty && arguments.first == 'attest') {
+    await _runAttest(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `quality` : note de qualité d'un SBOM (éléments NTIA)
+  if (arguments.isNotEmpty && arguments.first == 'quality') {
+    await _runQuality(arguments.sublist(1));
     return;
   }
 
@@ -1851,8 +1866,8 @@ Future<void> _runScan(List<String> arguments) async {
         allowed: ['severity', 'risk'],
         defaultsTo: 'severity',
         help: tr('Ordre d\'affichage console.\n  severity  pire sévérité d\'abord (défaut)\n  risk      KEV, puis EPSS décroissant, puis sévérité'))
-    ..addOption('vex',
-        help: tr('Document VEX (OpenVEX, CSAF ou CycloneDX VEX) : les CVE déclarées\n"not_affected" ou "fixed" pour le paquet concerné sont\nécartées des résultats (et comptées).'))
+    ..addMultiOption('vex',
+        help: tr('Document VEX (OpenVEX, CSAF ou CycloneDX VEX) : les CVE déclarées\n"not_affected" ou "fixed" pour le paquet concerné sont\nécartées des résultats (et comptées). Répétable : les documents\nsont fusionnés et, en cas de contradiction, la déclaration la plus\nprudente (affected) l\'emporte.'))
     ..addOption('vex-out',
         help: tr('Écrit un document VEX : les CVE restantes en "affected" (avec\nla version corrigée), plus les déclarations "not_affected"\nreprises de --vex.'))
     ..addOption('vex-format',
@@ -2017,8 +2032,7 @@ Future<void> _runScan(List<String> arguments) async {
     exit(1);
   }
 
-  final vexPath = args['vex'] as String?;
-  final vexDoc = vexPath != null ? _loadVexOrExit('scan', vexPath) : null;
+  final vexDoc = _loadVexesOrExit('scan', args['vex'] as List<String>);
   final ignorePath = args['ignore'] as String?;
   final ignoreList =
       ignorePath != null ? _loadIgnoreOrExit('scan', ignorePath) : null;
@@ -2440,6 +2454,13 @@ VexDocument _loadVexOrExit(String cmd, String path) {
     stderr.writeln(tr('{cmd}: --vex {path} : JSON illisible ({e})', {'cmd': cmd, 'path': path, 'e': e}));
   }
   exit(1);
+}
+
+/// Charge et fusionne les documents `--vex` ; `null` si aucun n'est fourni.
+VexDocument? _loadVexesOrExit(String cmd, List<String> paths) {
+  if (paths.isEmpty) return null;
+  if (paths.length == 1) return _loadVexOrExit(cmd, paths.first);
+  return VexDocument.merge({for (final p in paths) p: _loadVexOrExit(cmd, p)});
 }
 
 /// Charge un fichier `--ignore` (avertissements et règles expirées sur
@@ -3363,8 +3384,8 @@ Future<void> _runReport(List<String> arguments) async {
         help: tr('Ne garder que les CVE dont la pire sévérité atteint ce seuil\n(critical, high, medium), plus celles du catalogue CISA KEV.'))
     ..addOption('compare-with',
         help: tr('Section « Tendance » par rapport à un autre fichier de résultats.'))
-    ..addOption('vex',
-        help: tr('Document VEX supplémentaire (OpenVEX / CSAF / CycloneDX) : les CVE\n« non affectées » / « corrigées » sont écartées du rapport.'))
+    ..addMultiOption('vex',
+        help: tr('Document VEX supplémentaire (OpenVEX / CSAF / CycloneDX), répétable :\nles CVE « non affectées » / « corrigées » sont écartées du rapport.'))
     ..addFlag('no-vex',
         negatable: false,
         help: tr('Ignorer les déclarations VEX embarquées dans le fichier.'))
@@ -3387,7 +3408,7 @@ Future<void> _runReport(List<String> arguments) async {
   }
 
   var input = _loadReportInputOrExit('report', args['input'] as String);
-  final extraVex = args['vex'] as String?;
+  final extraVex = _loadVexesOrExit('report', args['vex'] as List<String>);
   final noVex = args['no-vex'] as bool;
   if (extraVex != null || noVex) {
     input = ReportInput(
@@ -3399,7 +3420,7 @@ Future<void> _runReport(List<String> arguments) async {
       targets: input.targets,
       vex: [
         if (!noVex) ...input.vex,
-        if (extraVex != null) ..._loadVexOrExit('report', extraVex).statements,
+        if (extraVex != null) ...extraVex.statements,
       ],
       vexSuppressed: noVex ? const [] : input.vexSuppressed,
       generatedAt: input.generatedAt,
@@ -3701,6 +3722,8 @@ Future<void> _runLicenses(List<String> arguments) async {
     ..addOption('name',
         abbr: 'n',
         help: tr('Nom du document (remplace celui du fichier source).'))
+    ..addOption('policy',
+        help: tr('Fichier de politique de licences (allow / deny / unknown / except).\nCode retour 2 si au moins un composant la viole.'))
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Aide.');
 
   ArgResults args;
@@ -3760,6 +3783,9 @@ Future<void> _runLicenses(List<String> arguments) async {
     exit(1);
   }
 
+  final policyPath = args['policy'] as String?;
+  if (policyPath != null) _checkLicensePolicyOrFlag(policyPath, packages);
+
   final name = docName ?? reader.documentName(json);
   final generator = LicenseReportGenerator();
   if (outputPath == null) {
@@ -3782,8 +3808,271 @@ Future<void> _runLicenses(List<String> arguments) async {
   print('→ $outputPath  (${(sz / 1024).toStringAsFixed(1)} KB)');
 }
 
+/// Applique la politique de licences ; les violations sont listées sur stderr
+/// et font sortir en code 2 (le rapport demandé est tout de même produit).
+void _checkLicensePolicyOrFlag(String policyPath, List<Package> packages) {
+  final String text;
+  try {
+    text = File(policyPath).readAsStringSync();
+  } on FileSystemException {
+    stderr.writeln(tr('licenses: fichier --policy introuvable : {policyPath}',
+        {'policyPath': policyPath}));
+    exit(1);
+  }
+  final policy = LicensePolicy.parse(text);
+  for (final w in policy.warnings) {
+    stderr.writeln('licenses: --policy : $w');
+  }
+  final expired = <LicenseException>[];
+  final violations = policy.evaluate(packages, expiredOut: expired);
+  for (final e in expired) {
+    stderr.writeln(tr(
+        'licenses: exception EXPIRÉE : {package} — non appliquée.',
+        {'package': e.package}));
+  }
+  if (policy.unknown == 'warn') {
+    for (final p in packages.where((p) => policy.isUnknown(p.license.trim()))) {
+      stderr.writeln(tr(
+          'licenses: avertissement : licence inconnue pour {name}@{version}',
+          {'name': p.name, 'version': p.version}));
+    }
+  }
+  for (final v in violations) {
+    stderr.writeln(
+        '  ✗ ${v.package.name}@${v.package.version} [${v.package.license.isEmpty ? '-' : v.package.license}] : ${v.reason}');
+  }
+  if (violations.isNotEmpty) {
+    stderr.writeln(tr(
+        '\n{n} composant(s) violent la politique de licences — code retour 2',
+        {'n': violations.length}));
+    exitCode = 2;
+  }
+}
+
 void _printLicensesUsage(ArgParser parser) {
   stdout.writeln(tr('sbom_generator licenses – Génère un rapport de licences à partir d\'un fichier SBOM\n(AsciiDoc par défaut ; Markdown, HTML, CSV ou JSON avec --format).\n\nLe rapport regroupe les paquets par licence, avec un résumé et des\navertissements pour les licences copyleft (GPL/AGPL/LGPL/MPL/EPL/CDDL/CPL/EUPL)\net les paquets sans licence détectée.\n\nUsage:\n  sbom_generator licenses -i sbom.cdx.json -o licences.adoc\n  sbom_generator licenses -i sbom.spdx.json -o licences.adoc -n "Mon projet"\n  sbom_generator licenses -i sbom.cdx.json -f html -o licences.html\n  sbom_generator licenses -i sbom.cdx.json -f json        # JSON sur stdout\n\nFormats source supportés : CycloneDX 1.x JSON, SPDX 2.3 JSON, SPDX 3.0 JSON-LD\n\n{usage}\n', {'usage': parser.usage}));
+}
+
+// ── Sous-commande attest ──────────────────────────────────────────────────────
+
+Future<void> _runAttest(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('input',
+        abbr: 'i',
+        mandatory: true,
+        help: tr('Fichier SBOM (CycloneDX JSON ou SPDX 2.3 JSON).'))
+    ..addMultiOption('subject',
+        abbr: 's',
+        help: tr('Artefact attesté (binaire, image exportée, archive…). Son SHA-256\nest calculé. Répétable ; un seul avec --sign.'))
+    ..addOption('predicate',
+        defaultsTo: 'sbom',
+        allowed: ['sbom', 'provenance'],
+        help: tr('Contenu attesté :\n  sbom        le SBOM lui-même (défaut)\n  provenance  provenance SLSA v1 (le SBOM est la matière d\'entrée)'))
+    ..addOption('builder-id',
+        help: tr('Identité du constructeur (URI) — obligatoire avec --predicate provenance.'))
+    ..addOption('build-type',
+        defaultsTo: 'https://github.com/chla28/SbomGenerator/attest/v1',
+        help: tr('Type de construction de la provenance (URI).'))
+    ..addOption('invocation-id',
+        help: tr('Identifiant de l\'exécution de la construction (ex. numéro de pipeline).'))
+    ..addOption('output',
+        abbr: 'o',
+        help: tr('Fichier de la déclaration (défaut : <sbom>.intoto.json).'))
+    ..addFlag('sign',
+        negatable: false,
+        help: tr('Signe la déclaration avec cosign attest-blob (bundle <sortie>.bundle).'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.'));
+
+  void usage() => stdout.writeln(tr('sbom_generator attest – Produit une déclaration in-toto v1 (facultativement\nsignée par cosign) qui lie un SBOM ou une provenance SLSA à des artefacts.\n\nUsage:\n  sbom_generator attest -i sbom.cdx.json -s app.bin\n  sbom_generator attest -i sbom.cdx.json -s app.bin --predicate provenance \\\n      --builder-id https://ci.example/builder --invocation-id 4242\n  sbom_generator attest -i sbom.cdx.json -s app.bin --sign\n\n{usage}\n\nCodes de retour : 0 = succès, 1 = erreur d\'usage ou de signature.\n', {'usage': parser.usage}));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('attest: ${_argError(e.message)}');
+    usage();
+    exit(1);
+  }
+  if (!(args['help'] as bool)) {
+    _requireMandatory(parser, args, 'attest', usage);
+  }
+  if (args['help'] as bool) {
+    usage();
+    exit(0);
+  }
+
+  void fail(String msg) {
+    stderr.writeln('attest: $msg');
+    exit(1);
+  }
+
+  final inputPath = args['input'] as String;
+  final subjects = args['subject'] as List<String>;
+  final provenance = args['predicate'] == 'provenance';
+  final sign = args['sign'] as bool;
+  if (!File(inputPath).existsSync()) {
+    fail(tr('fichier introuvable : {inputPath}', {'inputPath': inputPath}));
+  }
+  final subjectError = validateSubjects(subjects);
+  if (subjectError != null) fail(subjectError);
+  if (sign && subjects.length > 1) {
+    fail(tr('--sign accepte un seul --subject (cosign attest-blob).'));
+  }
+  if (provenance && args['builder-id'] == null) {
+    fail(tr('--predicate provenance exige --builder-id.'));
+  }
+
+  final Map<String, dynamic> sbom;
+  try {
+    sbom = await SbomReader.loadJson(inputPath);
+  } catch (e) {
+    fail(tr('impossible de lire le JSON : {e}', {'e': e}));
+    return;
+  }
+  final String predicateType;
+  final Map<String, dynamic> predicate;
+  if (provenance) {
+    predicateType = slsaProvenanceType;
+    predicate = buildProvenance(
+      builderId: args['builder-id'] as String,
+      buildType: args['build-type'] as String,
+      sbomName: inputPath.split('/').last,
+      sbomSha256: await sha256OfFile(inputPath),
+      invocationId: args['invocation-id'] as String?,
+    );
+  } else {
+    final type = sbomPredicateType(SbomReader.detectFormat(sbom));
+    if (type == null) {
+      fail(tr('format SBOM sans type de prédicat in-toto (SPDX 3.0 ou inconnu) : convertir en CycloneDX ou SPDX 2.3.'));
+      return;
+    }
+    predicateType = type;
+    predicate = sbom;
+  }
+
+  final statement = buildStatement(
+    subjects: {
+      for (final p in subjects) p.split('/').last: await sha256OfFile(p),
+    },
+    predicateType: predicateType,
+    predicate: predicate,
+  );
+  final outPath = args['output'] as String? ??
+      '$inputPath.${provenance ? 'provenance.' : ''}intoto.json';
+  File(outPath).writeAsStringSync('${encodeStatement(statement)}\n');
+  print('→ $outPath');
+
+  if (!sign) return;
+  // cosign reconstruit lui-même la déclaration à partir du prédicat seul.
+  final predFile = File('$outPath.predicate.tmp')
+    ..writeAsStringSync(const JsonEncoder.withIndent('  ').convert(predicate));
+  try {
+    final r = await runTool('cosign', [
+      'attest-blob',
+      '--predicate',
+      predFile.path,
+      '--type',
+      cosignAttestType(predicateType),
+      '--bundle',
+      '$outPath.bundle',
+      '--yes',
+      subjects.single,
+    ]);
+    if (r.exitCode == 127) fail(tr('cosign introuvable — signature impossible.'));
+    if (r.exitCode != 0) {
+      fail(tr('cosign a échoué (code {code}) : {err}', {'code': r.exitCode, 'err': '${r.stderr}'.trim()}));
+    }
+    print('→ $outPath.bundle');
+  } finally {
+    if (predFile.existsSync()) predFile.deleteSync();
+  }
+}
+
+// ── Sous-commande quality ─────────────────────────────────────────────────────
+
+Future<void> _runQuality(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('input',
+        abbr: 'i',
+        mandatory: true,
+        help:
+            tr('Fichier SBOM à évaluer (CycloneDX JSON ou SPDX JSON/JSON-LD).'))
+    ..addOption('format',
+        abbr: 'f',
+        defaultsTo: 'text',
+        allowed: ['text', 'json'],
+        help: tr('Format de sortie.'))
+    ..addOption('output',
+        abbr: 'o', help: tr('Fichier de sortie (défaut : sortie standard).'))
+    ..addOption('min-score',
+        help: tr(
+            'Note minimale (0-100). Code retour 2 si la note est inférieure.'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.'));
+
+  void usage() => stdout.writeln(tr(
+      'sbom_generator quality – Note de qualité d\'un SBOM (0-100).\n\nLa note combine les 7 éléments minimaux NTIA (70 %) et la présence des\nempreintes et des licences (30 %). Les composants qui manquent un critère\nsont listés.\n\nUsage:\n  sbom_generator quality -i sbom.cdx.json\n  sbom_generator quality -i sbom.cdx.json --min-score 80 -f json\n\n{usage}\n\nCodes de retour : 0 = succès, 2 = note inférieure à --min-score.\n',
+      {'usage': parser.usage}));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('quality: ${_argError(e.message)}');
+    usage();
+    exit(1);
+  }
+  if (!(args['help'] as bool)) {
+    _requireMandatory(parser, args, 'quality', usage);
+  }
+  if (args['help'] as bool) {
+    usage();
+    exit(0);
+  }
+
+  final min = args['min-score'] == null
+      ? null
+      : int.tryParse(args['min-score'] as String);
+  if (args['min-score'] != null && (min == null || min < 0 || min > 100)) {
+    stderr.writeln(tr('quality: --min-score attend un entier entre 0 et 100.'));
+    exit(1);
+  }
+
+  final inputPath = args['input'] as String;
+  if (!File(inputPath).existsSync()) {
+    stderr.writeln(tr('quality: fichier introuvable : {inputPath}',
+        {'inputPath': inputPath}));
+    exit(1);
+  }
+  final Map<String, dynamic> json;
+  try {
+    json = await SbomReader.loadJson(inputPath);
+  } catch (e) {
+    stderr.writeln(tr('quality: impossible de lire le JSON : {e}', {'e': e}));
+    exit(1);
+  }
+  if (SbomReader.detectFormat(json) == SbomFormat.unknown) {
+    stderr.writeln(tr('quality: format SBOM non reconnu dans {inputPath}',
+        {'inputPath': inputPath}));
+    exit(1);
+  }
+
+  final report = assessQuality(inputPath, json);
+  final out = args['format'] == 'json'
+      ? const JsonEncoder.withIndent('  ').convert(report.toJson())
+      : report.toText();
+  final outputPath = args['output'] as String?;
+  if (outputPath == null) {
+    stdout.writeln(out);
+  } else {
+    File(outputPath).writeAsStringSync('$out\n');
+    print('→ $outputPath');
+  }
+  if (min != null && report.score < min) {
+    stderr.writeln(tr(
+        'quality: note {score} inférieure au minimum {min} — code retour 2',
+        {'score': report.score, 'min': min}));
+    exitCode = 2;
+  }
 }
 
 // ── Sous-commande cra ─────────────────────────────────────────────────────────
@@ -3815,8 +4104,8 @@ Future<void> _runCra(List<String> arguments) async {
         abbr: 'S',
         defaultsTo: 'grype',
         help: tr('Scanner(s) : grype (défaut), osv, trivy, all.'))
-    ..addOption('vex',
-        help: tr('Document VEX (OpenVEX / CycloneDX) : les CVE "not_affected" ou\n"fixed" sont écartées de l\'inventaire des vulnérabilités.'))
+    ..addMultiOption('vex',
+        help: tr('Document VEX (OpenVEX / CSAF / CycloneDX), répétable : les CVE\n"not_affected" ou "fixed" sont écartées de l\'inventaire des\nvulnérabilités.'))
     ..addOption('ignore',
         help: tr('Fichier de CVE ignorées (voir `scan --help`) : règles\njustifiées et datées, écartées de l\'inventaire.'))
     ..addFlag('enrich',
@@ -3917,11 +4206,10 @@ Future<void> _runCra(List<String> arguments) async {
       stderr.writeln(tr('cra: aucun scanner disponible — rapport produit sans inventaire de vulnérabilités (utilisez --no-scan pour l\'assumer).'));
       scanResults = null;
     } else {
-      final vexPath = args['vex'] as String?;
       final ignorePath = args['ignore'] as String?;
       final policy = _applyScanPolicy(
         scanResults,
-        vex: vexPath != null ? _loadVexOrExit('cra', vexPath) : null,
+        vex: _loadVexesOrExit('cra', args['vex'] as List<String>),
         ignore:
             ignorePath != null ? _loadIgnoreOrExit('cra', ignorePath) : null,
         now: DateTime.now(),

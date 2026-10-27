@@ -425,6 +425,8 @@ class CraReportGenerator {
       [for (final (_, label, st) in _ntia) (label, st)];
 
   /// Idem, avec l'identifiant stable (utilisé comme clé dans le JSON).
+  List<(String, String, CraStatus)> get ntiaById => _ntia;
+
   List<(String, String, CraStatus)> get _ntia {
     final fc = {for (final c in fieldChecks) c.id: c};
     CraStatus f(String id) => fc[id]?.status ?? CraStatus.na;

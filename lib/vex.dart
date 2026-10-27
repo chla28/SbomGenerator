@@ -51,6 +51,9 @@ class VexStatement {
   final String? impactStatement;
   final String? actionStatement;
 
+  /// Fichier VEX d'origine, renseigné quand plusieurs documents sont fusionnés.
+  final String? source;
+
   const VexStatement({
     required this.vulnId,
     this.products = const [],
@@ -58,7 +61,18 @@ class VexStatement {
     this.justification,
     this.impactStatement,
     this.actionStatement,
+    this.source,
   });
+
+  VexStatement withSource(String source) => VexStatement(
+        vulnId: vulnId,
+        products: products,
+        status: status,
+        justification: justification,
+        impactStatement: impactStatement,
+        actionStatement: actionStatement,
+        source: source,
+      );
 
   /// Une déclaration « non affecté » / « corrigé » écarte la CVE des résultats.
   bool get suppresses => status == 'not_affected' || status == 'fixed';
@@ -246,13 +260,28 @@ class VexDocument {
     return out;
   }
 
-  /// Première déclaration qui vise [vulnId] pour le paquet `name@version`.
+  /// Fusionne plusieurs documents (nom de fichier → document) en un seul ;
+  /// chaque déclaration garde son fichier d'origine.
+  factory VexDocument.merge(Map<String, VexDocument> docs) => VexDocument([
+        for (final e in docs.entries)
+          for (final s in e.value.statements) s.withSource(e.key),
+      ]);
+
+  /// Déclaration qui vise [vulnId] pour le paquet `name@version`.
+  ///
+  /// Si des documents se contredisent, la plus prudente l'emporte : une
+  /// déclaration qui n'écarte pas la CVE (affected, under_investigation) prime
+  /// sur « not_affected » / « fixed », pour ne jamais masquer un risque sur la
+  /// foi d'un seul document.
   VexStatement? find(String vulnId, String name, String version) {
     final id = vulnId.toUpperCase();
+    VexStatement? first;
     for (final s in statements) {
-      if (s.vulnId.toUpperCase() == id && s.appliesTo(name, version)) return s;
+      if (s.vulnId.toUpperCase() != id || !s.appliesTo(name, version)) continue;
+      if (!s.suppresses) return s;
+      first ??= s;
     }
-    return null;
+    return first;
   }
 }
 
