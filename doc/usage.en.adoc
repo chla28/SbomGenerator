@@ -12,7 +12,7 @@
 🇫🇷 link:usage.adoc[Français] · 🇬🇧 *English*
 
 SBOM (Software Bill of Materials) generator from a mixed list of packages or an OCI image.
-Supports the input types *RPM*, *Python wheel*, *tar/zip archives*, *Debian packages*, *Java archives* (`.jar`), *requirements.txt*, *Go modules* (go.sum/go.mod), *npm/yarn packages* (package-lock.json/yarn.lock), *Maven packages* (pom.xml), *Dart/Flutter packages* (pubspec.lock/pubspec.yaml), *pnpm packages* (pnpm-lock.yaml), *Rust crates* (Cargo.lock), *PHP packages* (composer.lock), *Ruby gems* (Gemfile.lock) and *OCI images* (via syft, trivy, skopeo or cdxgen). `--input` also accepts a directory, scanned recursively for all these types.
+Supports the input types *RPM*, *Python wheel*, *tar/zip archives*, *Debian packages*, *Java archives* (`.jar`), *requirements.txt*, *Go modules* (go.sum/go.mod), *npm/yarn packages* (package-lock.json/yarn.lock), *Maven packages* (pom.xml), *Dart/Flutter packages* (pubspec.lock/pubspec.yaml), *pnpm packages* (pnpm-lock.yaml), *Rust crates* (Cargo.lock), *PHP packages* (composer.lock), *Ruby gems* (Gemfile.lock), *NuGet packages* (packages.lock.json, *.deps.json, *.csproj), *Python lockfiles* (uv.lock, poetry.lock, pdm.lock), *Swift packages* (Package.resolved) and *OCI images* (via syft, trivy, skopeo or cdxgen). `--input` also accepts a directory, scanned recursively for all these types.
 Supports the output formats *CycloneDX 1.6/1.7*, *SPDX 2.3*, *SPDX 3.0 JSON-LD*, *custom JSON*, *Markdown*, *AsciiDoc*, *interactive HTML* and *CSV*.
 
 == Prerequisites
@@ -1011,6 +1011,29 @@ echo "/opt/javaapp/pom.xml" > sources.txt
 ./sbom_generator -i sources.txt -f cyclonedx -n "MyJavaService" -o sbom.cdx.json
 ----
 
+=== NuGet, Python lockfiles (uv, poetry, pdm) and Swift
+
+[source,bash]
+----
+# .NET: lockfile, built dependency manifest or project
+echo "/opt/dotnetapp/packages.lock.json" > sources.txt   # resolved versions + SHA-512
+echo "/opt/dotnetapp/bin/app.deps.json"  >> sources.txt   # components actually shipped
+echo "/opt/dotnetapp/app.csproj"         >> sources.txt   # literal PackageReference versions
+
+# Python: uv.lock, poetry.lock, pdm.lock (the project itself and local dependencies are dropped)
+echo "/opt/pyapp/uv.lock" >> sources.txt
+
+# Swift Package Manager (formats v1, v2 and v3)
+echo "/opt/iosapp/Package.resolved" >> sources.txt
+./sbom_generator -i sources.txt -f cyclonedx -o sbom.cdx.json
+----
+
+PURLs produced: `pkg:nuget/Newtonsoft.Json@13.0.1` (the name keeps its case),
+`pkg:pypi/requests@2.31.0`, `pkg:swift/github.com/apple/swift-nio@2.62.0`. For a
+`.csproj` project, computed versions (`$(Prop)`) cannot be resolved without MSBuild:
+the package is skipped with a warning, and a range `[1.0,2.0)` yields its lower
+bound. A Swift dependency pinned to a branch uses its commit as its version.
+
 === Format conversion (`convert`)
 
 Converts an existing SBOM file to one or more formats without re-scanning:
@@ -1055,6 +1078,25 @@ the packages concerned. `--format` chooses the rendering (`asciidoc` by default,
 category, packages with no license) is the one read by the *Licenses* tab of the
 GUI. Accepted source formats: CycloneDX 1.x JSON, SPDX 2.3
 JSON, SPDX 3.0 JSON-LD.
+
+*License policy (`--policy`).* `licenses --policy policy.txt` checks the SBOM against a
+policy, lists the offending components on stderr and exits with code `2` (the requested
+report is still produced) — usable as is in CI:
+
+[source,text]
+----
+# policy.txt — one key per line
+allow: MIT, Apache-2.0, BSD-*
+deny: GPL-*, AGPL-*
+unknown: fail            # missing license: fail (default), warn or allow
+except: pkg:npm/foo; expires=2027-01-01; reason=Negotiated dual license
+----
+
+Patterns accept `*` and ignore case. An SPDX expression is evaluated logically:
+`A OR B` is accepted if either choice is, `A AND B` only if both are (`WITH exception`
+is ignored). Without `allow`, anything not denied is accepted. An exception targets a
+PURL, a PURL prefix or a package name; an expired exception is no longer applied and is
+reported.
 
 === SBOM validation (`validate`)
 
@@ -1347,6 +1389,12 @@ dropped. `--vex-out file.json` writes a VEX (`--vex-format openvex|cyclonedx|csa
 remaining CVEs as `affected` (with the fixed version) and the `not_affected`
 statements carried over from `--vex`.
 
+`--vex` is *repeatable* (`scan`, `report`, `cra`): the documents are merged and, if two
+of them contradict each other for the same CVE and product, the most cautious statement
+(`affected`, `under_investigation`) wins over `not_affected` / `fixed` — a CVE is never
+hidden on the strength of a single document. Each statement kept remembers its source
+file (`source` key of the JSON report).
+
 [source,bash]
 ----
 # Declare that a CVE does not affect a component
@@ -1584,6 +1632,102 @@ command receives `SBOMGEN_WATCH_SBOM`, `SBOMGEN_WATCH_NEW` (count) and
 updated and the alert is retried on the next pass. `--format json` writes one event
 per SBOM. Exit codes (single pass): `0` nothing new, `3` new CVEs, `1` error.
 
+*Other alert channels.* In addition to `--notify-cmd`:
+
+[source,bash]
+----
+# JSON webhook (Slack, Mattermost, Teams or in-house tool): "text" key + details
+./sbom_generator watch sbom/ -d .watch --notify-webhook https://hooks.example.org/T000/B000/XXXX
+
+# SMTP e-mail (STARTTLS by default; tls = port 465; none = local relay, no credentials)
+SBOMGEN_SMTP_USER=alerts SBOMGEN_SMTP_PASSWORD=… \
+./sbom_generator watch sbom/ -d .watch --notify-smtp smtp.example.org \
+  --notify-from watch@example.org --notify-to secu@example.org
+----
+
+`--notify-webhook` and `--notify-to` are repeatable; a webhook URL is never displayed
+(it often carries a secret). SMTP credentials only travel through the
+`SBOMGEN_SMTP_USER` / `SBOMGEN_SMTP_PASSWORD` environment variables and are never sent
+over an unencrypted connection. As with `--notify-cmd`, a failed notification keeps the
+state: the alert is retried on the next pass.
+
+*History.* Each pass appends a line to `<state>.history.jsonl` (date, total, new and
+resolved, findings by severity; 1000 lines kept per SBOM). The GUI draws charts from it
+in the *Monitoring* tab.
+
+*Scheduling.* `--print-schedule systemd|cron`, together with `--interval`, prints —
+without running anything — the equivalent of the command for a scheduler, to be
+installed by hand:
+
+[source,bash]
+----
+./sbom_generator watch sbom/ -d .watch --interval 6h --print-schedule systemd
+# → sbom-generator-watch.service (oneshot, SuccessExitStatus=3) + sbom-generator-watch.timer
+./sbom_generator watch sbom/ -d .watch --interval 30m --print-schedule cron
+# → */30 * * * * cd /path && /usr/bin/sbom_generator watch sbom/ -d .watch
+----
+
+With cron, minutes must divide 60 and hours must divide 24.
+
+=== Offline enrichment cache (`offline`)
+
+KEV / EPSS / PoC signals are cached (`~/.cache/sbom-generator`); with
+`SBOMGEN_OFFLINE=1` only that cache is read. `offline` carries it to a machine without
+network access:
+
+[source,bash]
+----
+# connected machine
+./sbom_generator scan --sbom sbom.cdx.json -f json -o scan.json
+./sbom_generator offline prepare --from-scan scan.json     # full KEV + EPSS of the CVEs found
+./sbom_generator offline export -o offline.json.gz
+
+# isolated machine
+./sbom_generator offline import offline.json.gz
+SBOMGEN_OFFLINE=1 ./sbom_generator scan --sbom sbom.cdx.json
+./sbom_generator offline status
+----
+
+On import, KEV is replaced when newer, EPSS and PoC are merged per CVE (the most recent
+entry wins). The bundle is a gzipped JSON whose files are each checked by SHA-256; an
+unexpected name or a tampered content is refused before anything is written. The
+scanner's own database is not included: carry it with its own tool (for example
+`grype db import`).
+
+=== SBOM quality score (`quality`)
+
+[source,bash]
+----
+./sbom_generator quality -i sbom.cdx.json                        # text
+./sbom_generator quality -i sbom.cdx.json -f json --min-score 80  # exit code 2 if < 80
+----
+
+Score out of 100: the 7 NTIA minimum elements (supplier, name, version, identifier,
+dependencies, SBOM author, timestamp) weigh 70%, the presence of hashes and licenses
+30%. Each criterion is scored by its coverage over the components, and the components
+that miss it are listed. Same checks as the `cra` report, so the two never diverge; the
+grade runs from A (≥ 90) to E (< 40).
+
+=== in-toto / SLSA attestation (`attest`)
+
+Binds an SBOM or a SLSA provenance to artifacts in an in-toto v1 statement:
+
+[source,bash]
+----
+# the SBOM attests the artifact (CycloneDX or SPDX 2.3 predicate)
+./sbom_generator attest -i sbom.cdx.json -s app.bin
+# SLSA v1 provenance (the SBOM is the input material)
+./sbom_generator attest -i sbom.cdx.json -s app.bin --predicate provenance \
+  --builder-id https://ci.example.org/builder --invocation-id 4242
+# statement signed by cosign attest-blob (bundle <output>.bundle)
+./sbom_generator attest -i sbom.cdx.json -s app.bin --sign
+----
+
+The SHA-256 of each `--subject` is computed; the statement is written to
+`<sbom>.intoto.json` (`-o` for another name). SPDX 3.0 has no registered in-toto
+predicate type: convert it first (`convert`). `--sign` accepts a single subject and
+requires cosign.
+
 === Cyber Resilience Act compliance report (`cra`)
 
 Produces a compliance report with Regulation (EU) 2024/2847 (*Cyber
@@ -1747,7 +1891,7 @@ forwards its own language to the CLI it launches (via `SBOM_LANG`).
 |Generation date/time (UTC ISO 8601)
 
 |Tool
-|`sbom_generator 1.10.8`
+|`sbom_generator 1.11.0`
 
 |Author
 |Fixed to `sbom_generator` (not configurable)

@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-27
+
+### Added
+- **New ecosystems**: `packages.lock.json`, `*.deps.json` and `*.csproj`/`*.fsproj`/`*.vbproj` (NuGet/.NET, `pkg:nuget` PURL with case kept, SHA-512 from lockfiles), `uv.lock`, `poetry.lock` and `pdm.lock` (project and local dependencies dropped, sdist hash) and `Package.resolved` (Swift Package Manager v1/v2/v3, `pkg:swift` PURL). Also recognised in directories and archives (`--depth`).
+- **`quality`**: SBOM quality score out of 100 (7 NTIA minimum elements at 70%, hashes and licenses at 30%), offending components listed, `--min-score` (exit code 2), `-f json`. Same logic as the `cra` report.
+- **`licenses --policy`**: license policy (`allow`, `deny`, `unknown`, dated `except`), SPDX expressions evaluated logically (`OR`, `AND`), exit code 2 on violation, expired exceptions reported.
+- **`attest`**: in-toto v1 statement binding an SBOM (CycloneDX or SPDX 2.3) or a SLSA v1 provenance to artifacts (`--subject`, SHA-256 computed), signable with `cosign attest-blob` (`--sign`).
+- **Repeatable `--vex`** (`scan`, `report`, `cra`): documents are merged; when they contradict each other, the most cautious statement wins over `not_affected` / `fixed`. Each statement keeps its source file (`source`).
+- **`watch`**: alerts through `--notify-webhook` (JSON, Slack/Mattermost/Teams compatible, URL never displayed) and `--notify-smtp` (STARTTLS, TLS or plain without credentials), per-SBOM history (`<state>.history.jsonl`) and `--print-schedule systemd|cron`.
+- **`offline`** (`prepare`, `export`, `import`, `status`): KEV/EPSS/PoC enrichment cache that can be carried to an isolated machine (gzipped bundle checked by SHA-256, merged per CVE).
+- **GUI**: CSAF 2.0 VEX export and import, *Monitoring* tab (evolution of the CVEs reported by `watch`, cosign signature verification).
+- **`scripts/release.sh`**: version and git-tree checks, tests, distribution, `SHA256SUMS` and release notes; tag and publication on request (replaces the removed GitHub workflows).
+
+### Changed
+- `VexDocument.find` prefers a statement that does not drop the CVE when several documents contradict each other.
+
 ## [1.10.8] - 2026-10-26
 
 ### Changed

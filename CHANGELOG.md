@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-27
+
+### Added
+- **Nouveaux écosystèmes** : `packages.lock.json`, `*.deps.json` et `*.csproj`/`*.fsproj`/`*.vbproj` (NuGet/.NET, PURL `pkg:nuget` à casse conservée, SHA-512 des lockfiles), `uv.lock`, `poetry.lock` et `pdm.lock` (projet et dépendances locales écartés, empreinte du sdist) et `Package.resolved` (Swift Package Manager v1/v2/v3, PURL `pkg:swift`). Reconnus aussi dans les dossiers et les archives (`--depth`).
+- **`quality`** : note de qualité d'un SBOM sur 100 (7 éléments minimaux NTIA à 70 %, empreintes et licences à 30 %), composants fautifs listés, `--min-score` (code 2), `-f json`. Même logique que le rapport `cra`.
+- **`licenses --policy`** : politique de licences (`allow`, `deny`, `unknown`, `except` datées), expressions SPDX évaluées logiquement (`OR`, `AND`), code 2 en cas de violation, exceptions expirées signalées.
+- **`attest`** : déclaration in-toto v1 liant un SBOM (CycloneDX ou SPDX 2.3) ou une provenance SLSA v1 à des artefacts (`--subject`, SHA-256 calculé), signable avec `cosign attest-blob` (`--sign`).
+- **`--vex` répétable** (`scan`, `report`, `cra`) : documents fusionnés ; en cas de contradiction, la déclaration la plus prudente l'emporte sur `not_affected` / `fixed`. Chaque déclaration garde son fichier d'origine (`source`).
+- **`watch`** : alertes par `--notify-webhook` (JSON, compatible Slack/Mattermost/Teams, URL jamais affichée) et `--notify-smtp` (STARTTLS, TLS ou clair sans identifiants), historique par SBOM (`<état>.history.jsonl`) et `--print-schedule systemd|cron`.
+- **`offline`** (`prepare`, `export`, `import`, `status`) : cache d'enrichissement KEV/EPSS/PoC transportable vers une machine isolée (bundle gzippé contrôlé par SHA-256, fusion par CVE).
+- **GUI** : export et import CSAF 2.0 VEX, onglet *Suivi* (évolution des CVE relevées par `watch`, vérification de signature cosign).
+- **`scripts/release.sh`** : contrôle des versions et de l'arbre git, tests, distribution, `SHA256SUMS` et notes de version ; tag et publication sur option (remplace les workflows GitHub supprimés).
+
+### Changed
+- `VexDocument.find` privilégie une déclaration qui n'écarte pas la CVE quand plusieurs documents se contredisent.
+
 ## [1.10.8] - 2026-10-26
 
 ### Changed
