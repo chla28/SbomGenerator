@@ -83,4 +83,56 @@ void main() {
       'requests',
     });
   }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('--input <dossier> reconnaît NuGet, Swift et les lockfiles Python TOML',
+      () async {
+    File('${tmp.path}/packages.lock.json').writeAsStringSync(jsonEncode({
+      'version': 1,
+      'dependencies': {
+        'net8.0': {
+          'Newtonsoft.Json': {'type': 'Direct', 'resolved': '13.0.1'},
+        },
+      },
+    }));
+    File('${tmp.path}/Package.resolved').writeAsStringSync(jsonEncode({
+      'version': 2,
+      'pins': [
+        {
+          'identity': 'swift-nio',
+          'location': 'https://github.com/apple/swift-nio.git',
+          'state': {'version': '2.62.0'},
+        },
+      ],
+    }));
+    File('${tmp.path}/uv.lock')
+        .writeAsStringSync('[[package]]\nname = "idna"\nversion = "3.6"\n');
+
+    final outPath = '${tmp.path}/out.cdx.json';
+    final result = await Process.run(
+      'dart',
+      [
+        'run',
+        'bin/sbom_generator.dart',
+        '--lang',
+        'fr',
+        '--input',
+        tmp.path,
+        '-o',
+        outPath
+      ],
+      workingDirectory: Directory.current.path,
+    );
+    expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+
+    final doc =
+        jsonDecode(await File(outPath).readAsString()) as Map<String, dynamic>;
+    final purls = (doc['components'] as List)
+        .map((c) => (c as Map)['purl'] as String)
+        .toSet();
+    expect(purls, {
+      'pkg:nuget/Newtonsoft.Json@13.0.1',
+      'pkg:swift/github.com/apple/swift-nio@2.62.0',
+      'pkg:pypi/idna@3.6',
+    });
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

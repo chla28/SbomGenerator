@@ -31,6 +31,9 @@ import 'package:sbom_generator/go_parser.dart';
 import 'package:sbom_generator/npm_parser.dart';
 import 'package:sbom_generator/yarn_parser.dart';
 import 'package:sbom_generator/cargo_parser.dart';
+import 'package:sbom_generator/nuget_parser.dart';
+import 'package:sbom_generator/python_lock_parser.dart';
+import 'package:sbom_generator/swift_parser.dart';
 import 'package:sbom_generator/composer_parser.dart';
 import 'package:sbom_generator/gem_parser.dart';
 import 'package:sbom_generator/pnpm_parser.dart';
@@ -196,7 +199,7 @@ Future<void> _runGenerate(List<String> arguments) async {
     ..addOption(
       'input',
       abbr: 'i',
-      help: tr('Fichier d\'entrée contenant une référence de paquet par ligne, un\nfichier archive/paquet unique, ou un dossier à parcourir\nrécursivement. Chaque ligne (ou fichier découvert) peut être :\n  • un nom de paquet RPM, un NEVRA ou un chemin vers un .rpm\n  • un chemin vers un paquet Debian .deb\n  • un chemin vers une wheel Python .whl\n  • un chemin vers un fichier requirements.txt\n  • un chemin vers une archive .tar / .tar.gz / .tgz / .zip\n  • un chemin vers un .jar (coordonnées Maven via\n    META-INF/maven/*/*/pom.properties, ou convention de nom)\n  • un chemin vers un fichier go.sum ou go.mod\n  • un chemin vers un package-lock.json ou un yarn.lock\n  • un chemin vers un fichier pom.xml\n  • un chemin vers un pubspec.lock ou un pubspec.yaml\n  • un chemin vers un Cargo.lock, un pnpm-lock.yaml, un composer.lock\n    ou un Gemfile.lock\nSi --input est un dossier, tous les types de fichiers ci-dessus\ny sont recherchés récursivement (unzip requis pour les .jar).\nFacultatif si --image est fourni.'),
+      help: tr('Fichier d\'entrée contenant une référence de paquet par ligne, un\nfichier archive/paquet unique, ou un dossier à parcourir\nrécursivement. Chaque ligne (ou fichier découvert) peut être :\n  • un nom de paquet RPM, un NEVRA ou un chemin vers un .rpm\n  • un chemin vers un paquet Debian .deb\n  • un chemin vers une wheel Python .whl\n  • un chemin vers un fichier requirements.txt\n  • un chemin vers une archive .tar / .tar.gz / .tgz / .zip\n  • un chemin vers un .jar (coordonnées Maven via\n    META-INF/maven/*/*/pom.properties, ou convention de nom)\n  • un chemin vers un fichier go.sum ou go.mod\n  • un chemin vers un package-lock.json ou un yarn.lock\n  • un chemin vers un fichier pom.xml\n  • un chemin vers un pubspec.lock ou un pubspec.yaml\n  • un chemin vers un Cargo.lock, un pnpm-lock.yaml, un composer.lock\n    ou un Gemfile.lock\n  • un chemin vers un uv.lock, un poetry.lock ou un pdm.lock\n  • un chemin vers un Package.resolved (Swift)\n  • un chemin vers un packages.lock.json, un *.deps.json ou un projet\n    .NET (*.csproj, *.fsproj, *.vbproj)\nSi --input est un dossier, tous les types de fichiers ci-dessus\ny sont recherchés récursivement (unzip requis pour les .jar).\nFacultatif si --image est fourni.'),
     )
     ..addOption(
       'image',
@@ -651,6 +654,9 @@ Future<void> _runGenerate(List<String> arguments) async {
   final npmParser = NpmParser();
   final yarnParser = YarnParser();
   final cargoParser = CargoParser();
+  final nugetParser = NugetParser();
+  final pyLockParser = PythonLockParser();
+  final swiftParser = SwiftParser();
   final pnpmParser = PnpmParser();
   final composerParser = ComposerParser();
   final gemParser = GemParser();
@@ -671,6 +677,16 @@ Future<void> _runGenerate(List<String> arguments) async {
       preloadedPackages.addAll(yarnParser.parseYarnLock(ref));
     } else if (_isCargoLock(ref)) {
       preloadedPackages.addAll(cargoParser.parseCargoLock(ref));
+    } else if (_isPythonLock(ref)) {
+      preloadedPackages.addAll(pyLockParser.parseLock(ref));
+    } else if (_isSwiftResolved(ref)) {
+      preloadedPackages.addAll(swiftParser.parsePackageResolved(ref));
+    } else if (_isNugetLock(ref)) {
+      preloadedPackages.addAll(nugetParser.parsePackagesLock(ref));
+    } else if (ref.endsWith('.deps.json')) {
+      preloadedPackages.addAll(nugetParser.parseDepsJson(ref));
+    } else if (_isDotnetProject(ref)) {
+      preloadedPackages.addAll(nugetParser.parseProject(ref));
     } else if (_isPnpmLock(ref)) {
       preloadedPackages.addAll(pnpmParser.parsePnpmLock(ref));
     } else if (_isComposerLock(ref)) {
@@ -1539,6 +1555,17 @@ bool _isGoMod(String ref) => ref.endsWith('go.mod');
 bool _isPackageLock(String ref) => ref.endsWith('package-lock.json');
 bool _isYarnLock(String ref) => ref.endsWith('yarn.lock');
 bool _isCargoLock(String ref) => ref.endsWith('Cargo.lock');
+bool _isPythonLock(String ref) {
+  final base = ref.split('/').last;
+  return base == 'uv.lock' || base == 'poetry.lock' || base == 'pdm.lock';
+}
+
+bool _isSwiftResolved(String ref) => ref.endsWith('Package.resolved');
+bool _isNugetLock(String ref) => ref.endsWith('packages.lock.json');
+bool _isDotnetProject(String ref) =>
+    ref.endsWith('.csproj') ||
+    ref.endsWith('.fsproj') ||
+    ref.endsWith('.vbproj');
 bool _isPnpmLock(String ref) => ref.endsWith('pnpm-lock.yaml');
 bool _isComposerLock(String ref) => ref.endsWith('composer.lock');
 bool _isGemfileLock(String ref) => ref.endsWith('Gemfile.lock');
@@ -1566,6 +1593,13 @@ bool _isSupportedPackageFile(String path) {
       base == 'package-lock.json' ||
       base == 'yarn.lock' ||
       base == 'Cargo.lock' ||
+      base == 'uv.lock' ||
+      base == 'poetry.lock' ||
+      base == 'pdm.lock' ||
+      base == 'Package.resolved' ||
+      base == 'packages.lock.json' ||
+      base.endsWith('.deps.json') ||
+      _isDotnetProject(base) ||
       base == 'pnpm-lock.yaml' ||
       base == 'composer.lock' ||
       base == 'Gemfile.lock' ||
@@ -4538,5 +4572,5 @@ void _printValidateUsage(ArgParser parser) {
 }
 
 void _printUsage(ArgParser parser) {
-  stdout.writeln(tr('sbom_generator – Génère un SBOM à partir d\'une liste de paquets ou d\'une image de conteneur OCI.\n\nUsage:\n  dart run bin/sbom_generator.dart --input <file> [options]\n  dart run bin/sbom_generator.dart --image <ref>  [options]\n  dart run bin/sbom_generator.dart --image <ref> --input <file> [options]\n  dart run bin/sbom_generator.dart --binary <fichier> [options]\n\n{usage}\n\nFormat du fichier d\'entrée (--input) :\n  Une référence de paquet par ligne. Les lignes commençant par # sont ignorées.\n  Les références peuvent être mélangées :\n    • RPM : nom de paquet installé/NEVRA, ou chemin vers un fichier .rpm\n    • Wheel Python : chemin vers un fichier .whl\n    • Archive source : chemin vers un .tar, .tar.gz ou .tgz\n        - sdist Python (PKG-INFO présent) → PURL pkg:pypi/…\n        - Archive générique (sans métadonnées) → PURL pkg:generic/…\n    • Debian : chemin vers un fichier .deb\n    • requirements.txt : chemin vers un fichier de dépendances pip\n    • Manifestes/lockfiles : go.sum, go.mod, package-lock.json, yarn.lock,\n      pnpm-lock.yaml, Cargo.lock, composer.lock, Gemfile.lock,\n      pom.xml, pubspec.lock, pubspec.yaml\n\nFormats d\'image OCI (--image) :\n    • Registre  : nginx:latest  ubuntu:22.04  myregistry.io/app@sha256:…\n    • Archive   : /chemin/image.tar        (docker save / skopeo docker-archive)\n    • OCI layout: /chemin/vers/oci_dir/    (dossier contenant index.json)\n\nExamples:\n  # CycloneDX depuis une image Docker Hub (via syft, défaut)\n  dart run bin/sbom_generator.dart --image nginx:latest -o nginx.cdx.json\n\n  # SPDX 2.3 depuis une archive tar, backend trivy\n  dart run bin/sbom_generator.dart --image ./ubuntu.tar --oci-tool trivy -f spdx -o sbom.spdx.json\n\n  # OCI layout directory, backend skopeo\n  dart run bin/sbom_generator.dart --image ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json\n\n  # CycloneDX depuis une image Docker Hub, backend cdxgen\n  dart run bin/sbom_generator.dart --image nginx:latest --oci-tool cdxgen -o nginx.cdx.json\n\n  # Un SBOM par couche de l\'image (delta), en plus du global\n  dart run bin/sbom_generator.dart --image ./app.tar --per-layer -o out/app\n  dart run bin/sbom_generator.dart --image ./app.tar --per-layer --layer-mode rootfs -o out/app\n\n  # Combiner image OCI + liste de paquets supplémentaires\n  dart run bin/sbom_generator.dart --image nginx:latest -i extra_pkgs.txt -o sbom.cdx.json\n\n  # Multi-format en un seul passage\n  dart run bin/sbom_generator.dart --image nginx:latest -f cyclonedx,spdx,markdown -o sbom\n\n  # Depuis un fichier de paquets (mode classique)\n  dart run bin/sbom_generator.dart -i packages.txt -o sbom.cdx.json\n\n  # Binaire lié statiquement (ex. exécutable Go) — dépendances embarquées\n  # lues via syft (buildinfo Go / classifieur générique), sans dépôt/registre\n  dart run bin/sbom_generator.dart --binary /usr/local/bin/mon-app -o app.cdx.json\n', {'usage': parser.usage}));
+  stdout.writeln(tr('sbom_generator – Génère un SBOM à partir d\'une liste de paquets ou d\'une image de conteneur OCI.\n\nUsage:\n  dart run bin/sbom_generator.dart --input <file> [options]\n  dart run bin/sbom_generator.dart --image <ref>  [options]\n  dart run bin/sbom_generator.dart --image <ref> --input <file> [options]\n  dart run bin/sbom_generator.dart --binary <fichier> [options]\n\n{usage}\n\nFormat du fichier d\'entrée (--input) :\n  Une référence de paquet par ligne. Les lignes commençant par # sont ignorées.\n  Les références peuvent être mélangées :\n    • RPM : nom de paquet installé/NEVRA, ou chemin vers un fichier .rpm\n    • Wheel Python : chemin vers un fichier .whl\n    • Archive source : chemin vers un .tar, .tar.gz ou .tgz\n        - sdist Python (PKG-INFO présent) → PURL pkg:pypi/…\n        - Archive générique (sans métadonnées) → PURL pkg:generic/…\n    • Debian : chemin vers un fichier .deb\n    • requirements.txt : chemin vers un fichier de dépendances pip\n    • Manifestes/lockfiles : go.sum, go.mod, package-lock.json, yarn.lock,\n      pnpm-lock.yaml, Cargo.lock, composer.lock, Gemfile.lock,\n      uv.lock, poetry.lock, pdm.lock, Package.resolved, packages.lock.json,\n      *.deps.json, *.csproj, pom.xml, pubspec.lock, pubspec.yaml\n\nFormats d\'image OCI (--image) :\n    • Registre  : nginx:latest  ubuntu:22.04  myregistry.io/app@sha256:…\n    • Archive   : /chemin/image.tar        (docker save / skopeo docker-archive)\n    • OCI layout: /chemin/vers/oci_dir/    (dossier contenant index.json)\n\nExamples:\n  # CycloneDX depuis une image Docker Hub (via syft, défaut)\n  dart run bin/sbom_generator.dart --image nginx:latest -o nginx.cdx.json\n\n  # SPDX 2.3 depuis une archive tar, backend trivy\n  dart run bin/sbom_generator.dart --image ./ubuntu.tar --oci-tool trivy -f spdx -o sbom.spdx.json\n\n  # OCI layout directory, backend skopeo\n  dart run bin/sbom_generator.dart --image ./oci_layout/ --oci-tool skopeo -o sbom.cdx.json\n\n  # CycloneDX depuis une image Docker Hub, backend cdxgen\n  dart run bin/sbom_generator.dart --image nginx:latest --oci-tool cdxgen -o nginx.cdx.json\n\n  # Un SBOM par couche de l\'image (delta), en plus du global\n  dart run bin/sbom_generator.dart --image ./app.tar --per-layer -o out/app\n  dart run bin/sbom_generator.dart --image ./app.tar --per-layer --layer-mode rootfs -o out/app\n\n  # Combiner image OCI + liste de paquets supplémentaires\n  dart run bin/sbom_generator.dart --image nginx:latest -i extra_pkgs.txt -o sbom.cdx.json\n\n  # Multi-format en un seul passage\n  dart run bin/sbom_generator.dart --image nginx:latest -f cyclonedx,spdx,markdown -o sbom\n\n  # Depuis un fichier de paquets (mode classique)\n  dart run bin/sbom_generator.dart -i packages.txt -o sbom.cdx.json\n\n  # Binaire lié statiquement (ex. exécutable Go) — dépendances embarquées\n  # lues via syft (buildinfo Go / classifieur générique), sans dépôt/registre\n  dart run bin/sbom_generator.dart --binary /usr/local/bin/mon-app -o app.cdx.json\n', {'usage': parser.usage}));
 }

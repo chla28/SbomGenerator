@@ -277,6 +277,8 @@ class SbomReader {
     if (purl.startsWith('pkg:cargo/')) return 'cargo';
     if (purl.startsWith('pkg:composer/')) return 'composer';
     if (purl.startsWith('pkg:gem/')) return 'gem';
+    if (purl.startsWith('pkg:nuget/')) return 'nuget';
+    if (purl.startsWith('pkg:swift/')) return 'swift';
     if (purl.startsWith('pkg:apk/')) return 'apk';
     return 'generic';
   }

@@ -36,6 +36,9 @@ import 'tar_parser.dart';
 import 'wheel_parser.dart';
 import 'yarn_parser.dart';
 import 'cargo_parser.dart';
+import 'nuget_parser.dart';
+import 'python_lock_parser.dart';
+import 'swift_parser.dart';
 import 'composer_parser.dart';
 import 'gem_parser.dart';
 import 'pnpm_parser.dart';
@@ -147,6 +150,9 @@ class NestedExplorer {
   final _npm = NpmParser();
   final _yarn = YarnParser();
   final _cargo = CargoParser();
+  final _nuget = NugetParser();
+  final _pyLock = PythonLockParser();
+  final _swift = SwiftParser();
   final _pnpm = PnpmParser();
   final _composer = ComposerParser();
   final _gem = GemParser();
@@ -229,6 +235,14 @@ class NestedExplorer {
         return _yarn.parseYarnLock(path);
       case 'cargo.lock':
         return _cargo.parseCargoLock(path);
+      case 'uv.lock':
+      case 'poetry.lock':
+      case 'pdm.lock':
+        return _pyLock.parseLock(path);
+      case 'package.resolved':
+        return _swift.parsePackageResolved(path);
+      case 'packages.lock.json':
+        return _nuget.parsePackagesLock(path);
       case 'pnpm-lock.yaml':
         return _pnpm.parsePnpmLock(path);
       case 'composer.lock':
@@ -245,6 +259,8 @@ class NestedExplorer {
       case 'pubspec.yaml':
         return _pubspec.parsePubspecYaml(path, sdkVersions: sdkVersions);
     }
+    if (base.endsWith('.deps.json')) return _nuget.parseDepsJson(path);
+    if (_isDotnetProject(base)) return _nuget.parseProject(path);
     Package? single;
     if (lower.endsWith('.whl')) {
       single = await _whl.parseWheelFile(path);
@@ -311,12 +327,22 @@ const _manifestNames = {
   'package-lock.json',
   'yarn.lock',
   'cargo.lock',
+  'uv.lock',
+  'poetry.lock',
+  'pdm.lock',
+  'package.resolved',
+  'packages.lock.json',
   'pnpm-lock.yaml',
   'composer.lock',
   'gemfile.lock',
   'pubspec.lock',
   'pubspec.yaml',
 };
+
+bool _isDotnetProject(String lower) =>
+    lower.endsWith('.csproj') ||
+    lower.endsWith('.fsproj') ||
+    lower.endsWith('.vbproj');
 
 bool _isJarName(String lower) =>
     lower.endsWith('.jar') || lower.endsWith('.war') || lower.endsWith('.ear');
@@ -328,7 +354,12 @@ bool _isTarName(String lower) =>
 
 _Kind _kindOf(String path) {
   final lower = path.toLowerCase();
-  if (_manifestNames.contains(lower.split('/').last)) return _Kind.manifest;
+  final base = lower.split('/').last;
+  if (_manifestNames.contains(base) ||
+      base.endsWith('.deps.json') ||
+      _isDotnetProject(base)) {
+    return _Kind.manifest;
+  }
   if (lower.endsWith('.rpm') ||
       lower.endsWith('.deb') ||
       lower.endsWith('.whl') ||
@@ -477,7 +508,10 @@ MAX_TOTAL, MAX_FILES, MAX_MEMBER = (int(x) for x in sys.argv[3:6])
 ARCH = re.compile(r'\.(jar|war|ear|whl|zip|rpm|deb|tar|tgz|tar\.gz)$', re.I)
 MANIFESTS = {'requirements.txt', 'pom.xml', 'go.sum', 'go.mod',
              'package-lock.json', 'yarn.lock', 'cargo.lock', 'pnpm-lock.yaml',
-             'composer.lock', 'gemfile.lock', 'pubspec.lock', 'pubspec.yaml'}
+             'composer.lock', 'gemfile.lock', 'pubspec.lock', 'pubspec.yaml',
+             'uv.lock', 'poetry.lock', 'pdm.lock', 'package.resolved',
+             'packages.lock.json'}
+MANIFEST_SUFFIXES = ('.deps.json', '.csproj', '.fsproj', '.vbproj')
 
 out, warnings = [], []
 written = 0
@@ -490,7 +524,9 @@ def wanted(path):
     base = parts[-1]
     if ARCH.search(base):
         return True
-    return base in MANIFESTS and 'META-INF' not in parts[:-1]
+    low = base.lower()
+    return (low in MANIFESTS or low.endswith(MANIFEST_SUFFIXES)) \
+        and 'META-INF' not in parts[:-1]
 
 def safe_rel(name):
     n = os.path.normpath(name.replace('\\', '/').lstrip('/'))

@@ -290,6 +290,15 @@ class WheelPackage extends Package {
       final cn = name.toLowerCase();
       return version.isNotEmpty ? 'pkg:composer/$cn@$v' : 'pkg:composer/$cn';
     }
+    if (_packageType == 'nuget') {
+      // purl-spec : le nom NuGet garde sa casse.
+      final nn = Uri.encodeComponent(name);
+      return version.isNotEmpty ? 'pkg:nuget/$nn@$v' : 'pkg:nuget/$nn';
+    }
+    if (_packageType == 'swift') {
+      // host/org/repo : les '/' restent des séparateurs de namespace.
+      return version.isNotEmpty ? 'pkg:swift/$name@$v' : 'pkg:swift/$name';
+    }
     final n = Uri.encodeComponent(name.toLowerCase());
     return switch (_packageType) {
       'gem' => version.isNotEmpty ? 'pkg:gem/$n@$v' : 'pkg:gem/$n',
@@ -312,6 +321,8 @@ class WheelPackage extends Package {
       'cargo' => 'pkg-cargo',
       'composer' => 'pkg-composer',
       'gem' => 'pkg-gem',
+      'nuget' => 'pkg-nuget',
+      'swift' => 'pkg-swift',
       _ => 'pkg-src',
     };
     return '$prefix-${_safeId(name)}-${_safeId(version)}';
@@ -328,6 +339,8 @@ class WheelPackage extends Package {
       'cargo' => 'SPDXRef-cargo',
       'composer' => 'SPDXRef-composer',
       'gem' => 'SPDXRef-gem',
+      'nuget' => 'SPDXRef-nuget',
+      'swift' => 'SPDXRef-swift',
       _ => 'SPDXRef-src',
     };
     return '$prefix-${_spdxSafe(name)}-${_spdxSafe(version)}';
