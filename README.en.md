@@ -38,6 +38,9 @@ This GitHub repository (as well as several others) is the result of that researc
 | Rust crates `Cargo.lock` | `/opt/rustapp/Cargo.lock` (external crates) | *(none)* |
 | PHP packages `composer.lock` | `/opt/phpapp/composer.lock` (`packages` and `packages-dev`) | package author |
 | Ruby gems `Gemfile.lock` | `/opt/rubyapp/Gemfile.lock` | *(none)* |
+| NuGet packages `packages.lock.json`, `*.deps.json`, `*.csproj` | `/opt/dotnetapp/packages.lock.json` (SHA-512 included) | *(none)* |
+| Python lockfiles `uv.lock`, `poetry.lock`, `pdm.lock` | `/opt/pyapp/uv.lock` (project and local dependencies dropped) | *(none)* |
+| Swift Package Manager `Package.resolved` | `/opt/iosapp/Package.resolved` (formats v1, v2, v3) | *(none)* |
 | Maven dependencies `pom.xml` | `/opt/javaapp/pom.xml` (compile scope) | *(none)* |
 | Dart/Flutter lockfile `pubspec.lock` | `/opt/flutterapp/pubspec.lock` (resolved + transitive versions) | *(none)* |
 | Dart/Flutter manifest `pubspec.yaml` | `/opt/flutterapp/pubspec.yaml` (direct dependencies) | *(none)* |
@@ -110,7 +113,7 @@ storage for a locally built image).
 - OCI image (`--image`): analysis via `syft`, `trivy`, `skopeo` or `cdxgen` (`--oci-tool`), outside the concurrent loop; can be combined with `--input`
   - `--per-layer`: additional per-layer analysis (`lib/image_layers.dart`); packages coming from `--input` only appear in the global SBOM
   - `cdxgen`: produces a complete CycloneDX SBOM from which only the components carrying a real ecosystem PURL are kept (cdxgen's file-by-file inventory and its cryptographic assets are discarded); the base OS is reconstructed from the `distro=` qualifier of system PURLs
-- Directory: recursive traversal (symbolic links ignored); only files recognised by extension/exact name (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `pubspec.lock`, `pubspec.yaml`) are kept — an arbitrary `.txt` is not treated as requirements unless it is named exactly `requirements.txt`
+- Directory: recursive traversal (symbolic links ignored); only files recognised by extension/exact name (`.rpm`, `.deb`, `.whl`, `.jar`, `.zip`, `.tar`/`.tar.gz`/`.tgz`, `requirements.txt`, `pom.xml`, `go.sum`, `go.mod`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `uv.lock`, `poetry.lock`, `pdm.lock`, `Package.resolved`, `packages.lock.json`, `*.deps.json`, `*.csproj`, `pubspec.lock`, `pubspec.yaml`) are kept — an arbitrary `.txt` is not treated as requirements unless it is named exactly `requirements.txt`
 
 **Cryptographic hashes:** a component's hash is filled in without any network
 request when the source provides it — `integrity` of npm/yarn lockfiles,
@@ -323,6 +326,21 @@ sbom_generator verify sbom.cdx.json --key cosign.pub
 # Watch archived SBOMs for new CVEs (single pass: exit code 3 if any;
 # --interval 6h to loop; --notify-cmd to alert)
 sbom_generator watch sbom/ --state-dir .watch --scan-arg=--no-enrich
+# alerts: --notify-webhook URL, --notify-smtp host --notify-from … --notify-to … ;
+# --interval 6h --print-schedule systemd|cron prints the equivalent schedule
+
+# SBOM quality score (NTIA elements, hashes, licenses); exit code 2 below the minimum
+sbom_generator quality -i sbom.cdx.json --min-score 80
+
+# License policy in CI (allow / deny / unknown / except); exit code 2 if violated
+sbom_generator licenses -i sbom.cdx.json -f json --policy policy.txt
+
+# in-toto attestation (SBOM or SLSA provenance) bound to an artifact, signable by cosign
+sbom_generator attest -i sbom.cdx.json -s app.bin --sign
+
+# KEV/EPSS/PoC cache carried to a machine without network (SBOMGEN_OFFLINE=1)
+sbom_generator offline prepare --from-scan results.json
+sbom_generator offline export -o offline.json.gz     # then "offline import" on the isolated machine
 ```
 
 ### Examples
@@ -532,7 +550,8 @@ mongosh-2.5.6-linux-x64               → name=mongosh           ver=2.5.6    ar
 sbom_generator/
 ├── bin/
 │   └── sbom_generator.dart      # CLI entry point + subcommands
-│                                #   diff/merge/convert/validate/licenses/scan/cra/report/vex/verify/watch
+│                                #   diff/merge/convert/validate/licenses/scan/cra/report/vex/verify/watch/
+│                                #   quality/attest/offline
 ├── lib/
 │   ├── i18n.dart                # FR / EN localisation of messages (tr(), --lang)
 │   ├── models.dart              # Package, RpmPackage, WheelPackage, DebPackage,
@@ -554,6 +573,9 @@ sbom_generator/
 │   ├── pnpm_parser.dart         # pnpm-lock.yaml v5/v6/v9 parsing (pure Dart)
 │   ├── composer_parser.dart     # composer.lock parsing (PHP, pure Dart)
 │   ├── gem_parser.dart          # Gemfile.lock parsing (Ruby, pure Dart)
+│   ├── nuget_parser.dart        # packages.lock.json, *.deps.json, *.csproj parsing (.NET, pure Dart)
+│   ├── python_lock_parser.dart  # uv.lock, poetry.lock, pdm.lock parsing (TOML, pure Dart)
+│   ├── swift_parser.dart        # Package.resolved parsing (Swift Package Manager, pure Dart)
 │   ├── oci_parser.dart          # OCI image analysis (syft / trivy / skopeo / cdxgen)
 │   │                            #   skopeo: RPM, dpkg, APK, Maven JARs, PyPI, npm
 │   │                            #   cdxgen: native CycloneDX SBOM, filtered to real PURLs
@@ -579,6 +601,13 @@ sbom_generator/
 │   ├── report_input.dart        # Common input of the vulnerability reports
 │   ├── signature.dart           # cosign signature verification (verify subcommand)
 │   ├── watch.dart               # New-CVE monitoring (watch subcommand)
+│   ├── watch_history.dart       # Per-SBOM history (<state>.history.jsonl)
+│   ├── watch_schedule.dart      # systemd unit/timer and cron line (--print-schedule)
+│   ├── notify.dart              # watch alerts: JSON webhook and SMTP e-mail (STARTTLS/TLS)
+│   ├── offline_bundle.dart      # Enrichment cache bundle (offline subcommand)
+│   ├── sbom_quality.dart        # NTIA quality score (quality subcommand)
+│   ├── license_policy.dart      # allow/deny license policy (licenses --policy)
+│   ├── attestation.dart         # in-toto statements and SLSA provenance (attest subcommand)
 │   ├── tool_runner.dart         # External tool launcher (exit code 127 if missing)
 │   ├── cyclonedx_generator.dart # CycloneDX 1.6/1.7 JSON format
 │   ├── spdx_generator.dart      # SPDX 2.3 JSON format
@@ -618,6 +647,11 @@ sbom_generator/
 | Go (`go.sum` / `go.mod`) | `pkg:golang/<module>@<ver>` | `pkg:golang/github.com/gorilla/mux@1.8.1` |
 | npm / yarn (`package-lock.json`, `yarn.lock`, or OCI via skopeo) | `pkg:npm/<name>@<ver>` | `pkg:npm/semver@7.5.4` |
 | Dart/Flutter (`pubspec.lock` / `pubspec.yaml`) | `pkg:pub/<name>@<ver>` | `pkg:pub/provider@6.1.2` |
+| Rust (`Cargo.lock`) | `pkg:cargo/<name>@<ver>` | `pkg:cargo/serde@1.0.200` |
+| PHP (`composer.lock`) | `pkg:composer/<vendor>/<name>@<ver>` | `pkg:composer/monolog/monolog@3.5.0` |
+| Ruby (`Gemfile.lock`) | `pkg:gem/<name>@<ver>` | `pkg:gem/racc@1.7.1` |
+| .NET (`packages.lock.json`, `*.deps.json`, `*.csproj`) | `pkg:nuget/<Name>@<ver>` (case kept) | `pkg:nuget/Newtonsoft.Json@13.0.1` |
+| Swift (`Package.resolved`) | `pkg:swift/<host>/<org>/<repo>@<ver>` | `pkg:swift/github.com/apple/swift-nio@2.62.0` |
 | Container image (`--image`) | PURL provided by the analysis tool (syft/trivy/cdxgen), or rebuilt from the detected ecosystem | `pkg:apk/alpine/musl@1.2.4-r2` |
 
 ## License

@@ -325,7 +325,7 @@ Fixed width (390 px). Settings are restored automatically at each start. The
 equivalent CLI command is displayed under the *▶ Generate the SBOM* button and
 is updated in real time.
 
-*Right panel — Results*: fifteen tabs — Progress (with log export and
+*Right panel — Results*: sixteen tabs — Progress (with log export and
 summary), Results (files + sbomqs score), Dashboard (multi-scanner CVE
 synthesis, remediation, sessions, VEX), Tasks (scan queue), Grype, OSV-Scanner
 and Trivy (CVE analyses), CRA Compliance
@@ -334,7 +334,8 @@ sbom-scorecard), SBOM Tree (exploration of the SBOM components), SBOM
 Comparison (diff of two SBOMs), SBOM Merge (combines several SBOMs into one),
 SBOM Licenses (visualization of the SBOM licenses and compliance report in
 AsciiDoc, Markdown, HTML, CSV or JSON), SBOM Viewer (interactive exploration
-of an external SBOM file) and Preview (preview of the SBOM content).
+of an external SBOM file), Preview (preview of the SBOM content) and Monitoring
+(evolution of the CVEs reported by `watch`, signature verification).
 
 The *❓* button in the title bar opens this user manual directly in the
 application (table of contents on the left, selected chapter on the right) —
@@ -2105,8 +2106,8 @@ dashboard's *VEX* bar:
 
 * hides covered CVEs ("not affected" / "fixed") while *Hide CVEs covered by a VEX*
 is ticked — the counts, the comparison, the remediation and the report follow;
-* *Import a VEX…* reads an OpenVEX or CycloneDX VEX document;
-* *Export* writes the statements as OpenVEX or CycloneDX VEX (usable with
+* *Import a VEX…* reads an OpenVEX, CycloneDX VEX or CSAF 2.0 VEX document;
+* *Export* writes the statements as OpenVEX, CycloneDX VEX or CSAF 2.0 VEX (usable with
 `sbom-generator scan --vex`);
 * *Manage* lists and deletes statements.
 
@@ -2641,6 +2642,24 @@ copyleft classification is a detection heuristic based on the SPDX
 identifier, not a legal analysis.
 
 [[sec-shortcuts]]
+== Monitoring tab
+
+Two tools in one tab:
+
+*CVE evolution (`watch`).* *State folder…* opens the `--state-dir` folder used by
+`sbom_generator watch`. For each monitored SBOM, a card shows the number of CVEs of the
+last run, its change since the previous run (red when it grows, green when it drops), the
+split by severity and a chart: one stacked bar per run (the last 60), most recent on the
+right. *Refresh* rereads the folder. Histories are written by `watch` at each run (see the
+CLI usage guide); with no run yet, the tab says so.
+
+*Signature verification.* Choose the SBOM, optionally its bundle (default
+`<sbom>.bundle`, written by `--sign`), then the *cosign public key* — or the *certificate
+identity* and the *OIDC issuer* for a keyless signature. *Verify* runs
+`sbom_generator verify` (cosign required): "Valid signature", "INVALID signature" or
+"Verification impossible", with the command output below. The button stays disabled until
+the SBOM and the key (or the identity and the issuer) are filled in.
+
 == Keyboard shortcuts
 
 The *⌨* button in the title bar (or *Ctrl+/*) shows this list.

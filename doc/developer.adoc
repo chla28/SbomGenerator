@@ -31,6 +31,9 @@ Fichier d'entrée (.txt)           Image OCI (--image)
         ├─ pom.xml       ─► MavenParser     (pur Dart, pré-expansion)
         ├─ pubspec.lock  ─► PubspecParser   (pur Dart, pré-expansion)
         ├─ pubspec.yaml  ─► PubspecParser   (pur Dart, pré-expansion)
+        ├─ packages.lock.json, *.deps.json, *.csproj ─► NugetParser (pur Dart)
+        ├─ uv.lock, poetry.lock, pdm.lock ─► PythonLockParser (pur Dart)
+        ├─ Package.resolved ─► SwiftParser  (pur Dart, pré-expansion)
         │                                  │
         ▼                                  ▼
 ┌────────────────────────────────────────────────────────────┐
@@ -44,7 +47,8 @@ Fichier d'entrée (.txt)           Image OCI (--image)
 │  5. Dispatch concurrent (--concurrency N)                  │
 │  6. Déduplication par bomRef                               │
 │  7. Sous-commandes : diff, merge, convert, validate, scan, │
-│     cra, report, vex, verify, watch, licenses              │
+│     cra, report, vex, verify, watch, licenses, quality,    │
+│     attest, offline                                        │
 └──┬──────┬──────┬──────┬──────┬──────────────────┬──────────┘
    │      │      │      │      │                  │
    ▼      ▼      ▼      ▼      ▼                  ▼
@@ -3746,6 +3750,90 @@ d'erreur, `0` sinon) ; avec, une boucle sans fin.
 Tests : `test/unit/watch_test.dart`, `test/integration/watch_test.dart` (faux
 `grype` dont la sortie change entre deux passages).
 
+== Lot 1.11 — nouveaux modules
+
+[cols="2,4",options="header"]
+|===
+|Module |Rôle
+
+|`lib/nuget_parser.dart` — `NugetParser`
+|`parsePackagesLock` (`dependencies.<tfm>`, types `Project` exclus, doublons entre
+frameworks fusionnés, `contentHash` base64 → SHA-512), `parseDepsJson`
+(`libraries."nom/version"` de type `package`), `parseProject` (`PackageReference` en
+attribut ou élément `<Version>` ; `$(Prop)` ignoré avec avertissement ; plage
+`[1.0,2.0)` → borne basse). Type `nuget`, PURL `pkg:nuget/Nom@ver` (casse conservée).
+
+|`lib/python_lock_parser.dart` — `PythonLockParser.parseLock`
+|`uv.lock`, `poetry.lock`, `pdm.lock` : blocs TOML `[[package]]`. Sont écartés le
+projet lui-même et les sources locales (`virtual`, `editable`, `directory`, `path` en
+uv ; `type = "directory"|"file"` en poetry). Les clés des sous-tables
+(`[package.dependencies]`) ne sont jamais lues comme `name`/`version`. Seule l'empreinte
+de l'archive source (`.tar.gz`) est gardée : les roues sont multiples par paquet.
+
+|`lib/swift_parser.dart` — `SwiftParser.parsePackageResolved`
+|formats v1 (`object.pins`) et v2/v3 (`pins`) ; la version est `state.version`, à défaut
+le commit (`state.revision`) ; `git@hôte:org/dépôt.git` et `https://…` donnent tous deux
+`hôte/org/dépôt`. Type `swift`.
+
+|`lib/sbom_quality.dart` — `assessQuality`
+|réutilise `CraReportGenerator.fieldChecks` et `ntiaById` (rendu public pour l'occasion) :
+7 éléments NTIA (70 %) + hash/licence (30 %), note A–E. `QualityReport.toJson/toText`.
+
+|`lib/license_policy.dart` — `LicensePolicy`
+|`allow` / `deny` (motifs `*`, casse ignorée) / `unknown` / `except` ; les expressions
+SPDX sont évaluées par descente récursive (`_ExprEval` : `OR` = un choix suffit, `AND` =
+tous, `WITH` ignoré). Une exception expirée est signalée (`expiredOut`) et non appliquée.
+
+|`lib/attestation.dart`
+|`buildStatement` (in-toto v1), `buildProvenance` (SLSA v1), `sbomPredicateType`
+(SPDX 3.0 sans type enregistré → refusé), `cosignAttestType`, `sha256OfFile`,
+`validateSubjects`. La signature passe par `cosign attest-blob` avec le seul prédicat
+(cosign reconstruit la déclaration).
+
+|`lib/notify.dart`
+|`postWebhook` (POST JSON, l'URL n'apparaît jamais dans les erreurs) et `sendMail`
+(SMTP sur `RawSocket` : STARTTLS par `RawSecureSocket.secure(..., subscription:)` pour ne
+pas perdre l'abonnement aux événements, TLS implicite, AUTH PLAIN refusé sans chiffrement,
+corps MIME en base64, adresses nettoyées contre l'injection de commandes). `WatchAlert`
+fournit le texte et la charge utile.
+
+|`lib/watch_history.dart`
+|`HistoryEntry`, `historyEntryFromScan`, `appendHistory` (borné à 1000 lignes),
+`readHistory` (lignes corrompues ignorées). Fichier `<état>.history.jsonl`.
+
+|`lib/watch_schedule.dart`
+|`cronExpression` (minutes qui divisent 60, heures qui divisent 24), `systemdService`
+(`Type=oneshot`, `SuccessExitStatus=3` car `watch` sort en 3 sur nouvelles CVE),
+`systemdTimer`, `cronLine`, `shellQuote`.
+
+|`lib/offline_bundle.dart`
+|`exportOfflineBundle` / `importOfflineBundle` / `cacheStatus` : JSON gzippé, noms
+limités à `kev.json`, `epss.json`, `poc.json`, SHA-256 contrôlé et contenu validé *avant*
+toute écriture ; KEV : le plus récent gagne, EPSS/PoC : fusion par CVE.
+|===
+
+Points d'intégration dans `bin/sbom_generator.dart` : `_runQuality`, `_runAttest`,
+`_runOffline`, `_checkLicensePolicyOrFlag` (appelé par `licenses --policy`),
+`_printWatchSchedule` (reconstruit la commande `watch` sans `--print-schedule` ni
+`--interval`), `_loadVexesOrExit` (fusion des `--vex` répétés via `VexDocument.merge`).
+`VexDocument.find` renvoie en priorité une déclaration qui n'écarte *pas* la CVE : en cas
+de contradiction entre documents, la plus prudente l'emporte. `VexStatement.source`
+garde le fichier d'origine (clé `source` du JSON).
+
+Tests : `test/unit/lockfile_parsers_ecosystems_test.dart`,
+`test/unit/license_policy_quality_test.dart`, `test/unit/attestation_test.dart`,
+`test/unit/notify_test.dart` (faux serveur SMTP sur `RawServerSocket`, STARTTLS et TLS
+avec un certificat auto-signé généré par `openssl`, sauté s'il est absent),
+`test/unit/watch_ops_test.dart`, `test/integration/quality_policy_attest_test.dart` (faux
+`cosign`), `test/integration/offline_test.dart`, `test/integration/watch_test.dart`
+(webhook, SMTP, historique, `--print-schedule`).
+
+Côté GUI : `gui/lib/models/watch_history.dart` (copie du format d'historique + `verifyArgs`),
+`gui/lib/widgets/watch_panel.dart` (onglet *Suivi* : barres empilées par sévérité,
+vérification de signature via `SbomRunner`), export CSAF dans `gui/lib/models/vex.dart`.
+`scripts/release.sh` remplace les workflows GitHub (contrôle des versions, tests,
+`build-dist.sh`, `SHA256SUMS`, notes extraites du CHANGELOG ; tag et publication sur option).
+
 == Flux de données — exemples concrets
 
 === RPM : `bash` depuis un fichier .rpm
@@ -4271,9 +4359,9 @@ main()
 
 [source,bash]
 ----
-dart test                            # tous les tests (577 au total)
-dart test test/unit/                 # tests unitaires seuls (491)
-dart test test/integration/          # tests d'intégration (86, dont 8 sautés
+dart test                            # tous les tests (649 au total)
+dart test test/unit/                 # tests unitaires seuls (537)
+dart test test/integration/          # tests d'intégration (112, plus 8 sautés
                                       # automatiquement selon l'environnement)
 ----
 
@@ -4458,7 +4546,7 @@ nécessitent une archive `keycloak_26.tar` non versionnée
 |`PolicyChecker.runSbomqs` sur un SBOM réel — nécessite `sbomqs`
 
 |`test/integration/input_directory_test.dart`
-|1
+|2
 |`--input <dossier>` : scan récursif, filtrage par type de fichier reconnu
 
 |`test/integration/pubspec_input_test.dart`
@@ -4478,7 +4566,7 @@ repli `--supplier`
 introuvable, `--oci-tool` ≠ syft, `--binary` + `--image`
 
 |`test/integration/cli_arguments_test.dart`
-|20
+|22
 |options obligatoires, dates de scan strictes, messages d'`args` traduits, `--sign` sans cosign, `verify` (faux `cosign`), dénominateur « Analysés »
 
 |`test/integration/cli_machine_output_test.dart`
@@ -4510,12 +4598,40 @@ introuvable, `--oci-tool` ≠ syft, `--binary` + `--image`
 |enrichissement KEV / EPSS / PoC, `--only-kev`, `--epss-min`, `--sort risk` (sauté sans grype)
 
 |`test/integration/scan_policy_test.dart`
-|8
+|9
 |`scan` : VEX, `--ignore`, `--baseline`, `--fail-on`, `--cache`, JSON, avec un faux `grype`
 
 |`test/integration/watch_test.dart`
+|14
+|`watch` : état initial, nouvelles CVE, `--notify-cmd`, webhook, SMTP, historique, `--print-schedule`, codes de retour (faux `grype` changeant)
+
+|`test/unit/lockfile_parsers_ecosystems_test.dart`
+|8
+|NuGet (`packages.lock.json`, `deps.json`, `csproj`), `uv.lock` / `poetry.lock` / `pdm.lock`, `Package.resolved`
+
+|`test/unit/license_policy_quality_test.dart`
 |7
-|`watch` : état initial, nouvelles CVE, `--notify-cmd`, codes de retour (faux `grype` changeant)
+|`LicensePolicy` (allow/deny, expressions SPDX, exceptions), `assessQuality`
+
+|`test/unit/attestation_test.dart`
+|5
+|types de prédicat, déclaration in-toto, provenance SLSA, `validateSubjects`
+
+|`test/unit/notify_test.dart`
+|12
+|webhook, SMTP clair / STARTTLS / TLS (faux serveur, certificat auto-signé)
+
+|`test/unit/watch_ops_test.dart`
+|11
+|historique, cron / systemd, bundle hors-ligne
+
+|`test/integration/quality_policy_attest_test.dart`
+|12
+|`quality`, `licenses --policy`, `attest` (faux `cosign`)
+
+|`test/integration/offline_test.dart`
+|3
+|`offline` : export, import, status
 
 |`test/unit/cra_report_test.dart`
 |7

@@ -120,7 +120,8 @@ gui/
 │   │   ├── layer_nav.dart            # --per-layer SBOM set: global ↔ layers, layer fields
 │   │   ├── remediation.dart          # Remediation plan (target versions, risk reduction)
 │   │   ├── scan_session.dart         # Scan session (JSON) + trend
-│   │   ├── vex.dart                  # OpenVEX / CycloneDX VEX (copy of the CLI core)
+│   │   ├── vex.dart                  # OpenVEX / CycloneDX VEX / CSAF 2.0 (copy of the CLI core)
+│   │   ├── watch_history.dart        # watch history (<state>.history.jsonl) + verify arguments
 │   │   └── layer_scan.dart           # Per-layer vulnerability analysis: set, result, JSON merges
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Runs sbom-generator, event stream
@@ -139,7 +140,7 @@ gui/
 │   │   └── settings_service.dart     # Binary lookup + settings persistence + theme + enrichment
 │   └── widgets/
 │       ├── config_panel.dart         # Left panel: form + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Right panel: 15 tabs; merges the ExploitInfo of the 3 tabs
+│       ├── results_panel.dart        # Right panel: 16 tabs; merges the ExploitInfo of the 3 tabs
 │       ├── grype_panel.dart          # Grype tab (standalone + KeepAlive)
 │       ├── osv_panel.dart            # OSV-Scanner tab (standalone + KeepAlive)
 │       ├── trivy_panel.dart          # Trivy tab (standalone + KeepAlive)
@@ -163,7 +164,8 @@ gui/
 │       ├── sbom_diff_panel.dart      # SBOM Comparison tab — diff of two SBOMs
 │       ├── sbom_merge_panel.dart     # SBOM Merge tab — merges several SBOMs
 │       ├── sbom_licenses_panel.dart  # SBOM Licenses tab — visualization + report via `licenses`
-│       └── sbom_viewer_panel.dart    # SBOM Viewer tab — external file exploration
+│       ├── sbom_viewer_panel.dart    # SBOM Viewer tab — external file exploration
+│       └── watch_panel.dart          # Monitoring tab — watch history + signature verification
 ├── doc/
 │   ├── developer.adoc               # This document (French)
 │   ├── developer.en.adoc            # This document (English)
@@ -1699,6 +1701,10 @@ tabs**:
 |14
 |Preview (N)
 |`_SbomPreviewTab` — preview of the content of an SBOM file
+
+|15
+|Monitoring
+|`WatchPanel` — `watch` history (stacked bars by severity) and cosign signature verification
 |===
 
 Local state of `_ResultsPanelState`:
@@ -1851,7 +1857,7 @@ injected (`historyStore`, `null` in tests) so that no test writes into the user'
 |*Tasks* tab (index 3). Results go up through `ResultsPanel._applyJobResult`.
 
 |`models/vex.dart` + `services/vex_controller.dart`
-|Copy of the CLI's VEX core (`lib/vex.dart`): OpenVEX / CycloneDX VEX read and write,
+|Copy of the CLI's VEX core (`lib/vex.dart`): OpenVEX / CycloneDX VEX / CSAF 2.0 VEX read and write,
 product matching (PURL, `name`, `name@version`). `VexController` (`ChangeNotifier`) holds
 the statements, persists them (`SettingsService.saveVex`) and `filterByVex` hides covered
 CVEs. `widgets/vex_ui.dart`: `VexScope` (`InheritedNotifier`, so `CveDetailPanel` reaches
@@ -2555,7 +2561,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 15, vsync: this);  // ResultsPanel: 15 tabs
+    _tabs = TabController(length: 16, vsync: this);  // ResultsPanel: 16 tabs
   }
 
   @override

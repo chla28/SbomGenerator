@@ -120,7 +120,8 @@ gui/
 │   │   ├── layer_nav.dart            # Jeu de SBOM --per-layer : global ↔ couches, champs de couche
 │   │   ├── remediation.dart          # Plan de remédiation (versions cibles, gain de risque)
 │   │   ├── scan_session.dart         # Session de scan (JSON) + tendance
-│   │   ├── vex.dart                  # OpenVEX / CycloneDX VEX (copie du noyau CLI)
+│   │   ├── vex.dart                  # OpenVEX / CycloneDX VEX / CSAF 2.0 (copie du noyau CLI)
+│   │   ├── watch_history.dart        # Historique watch (<état>.history.jsonl) + arguments de verify
 │   │   └── layer_scan.dart           # Analyse de vulnérabilités par couche : jeu, résultat, fusions JSON
 │   ├── services/
 │   │   ├── sbom_runner.dart          # Exécute sbom-generator, stream d'événements
@@ -139,7 +140,7 @@ gui/
 │   │   └── settings_service.dart     # Localisation binaire + persistance settings + thème + enrichissement
 │   └── widgets/
 │       ├── config_panel.dart         # Panneau gauche : formulaire + drag & drop + _CommandPreview
-│       ├── results_panel.dart        # Panneau droit : 15 onglets ; fusionne les ExploitInfo des 3 onglets
+│       ├── results_panel.dart        # Panneau droit : 16 onglets ; fusionne les ExploitInfo des 3 onglets
 │       ├── grype_panel.dart          # Onglet Grype (autonome + KeepAlive)
 │       ├── osv_panel.dart            # Onglet OSV-Scanner (autonome + KeepAlive)
 │       ├── trivy_panel.dart          # Onglet Trivy (autonome + KeepAlive)
@@ -163,7 +164,8 @@ gui/
 │       ├── sbom_diff_panel.dart      # Onglet Comparaison SBOM — diff de deux SBOM
 │       ├── sbom_merge_panel.dart     # Onglet Fusion SBOM — fusionne plusieurs SBOM
 │       ├── sbom_licenses_panel.dart  # Onglet Licences SBOM — visualisation + rapport via `licenses`
-│       └── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
+│       ├── sbom_viewer_panel.dart    # Onglet Visionneuse SBOM — exploration fichier externe
+│       └── watch_panel.dart          # Onglet Suivi — historique watch + vérification de signature
 ├── doc/
 │   ├── developer.adoc               # Ce document (français)
 │   ├── developer.en.adoc            # Ce document (anglais)
@@ -1639,7 +1641,7 @@ l'Arborescence et la Visionneuse :
 
 ==== `widgets/results_panel.dart` — Panneau de résultats
 
-`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **15 onglets** :
+`ResultsPanel` est un `StatefulWidget` qui gère un `TabController` à **16 onglets** :
 
 [cols="1,1,2", options="header"]
 |===
@@ -1704,6 +1706,10 @@ l'Arborescence et la Visionneuse :
 |14
 |Aperçu (N)
 |`_SbomPreviewTab` — prévisualisation du contenu d'un fichier SBOM
+
+|15
+|Suivi
+|`WatchPanel` — historique `watch` (barres empilées par sévérité) et vérification de signature cosign
 |===
 
 État local de `_ResultsPanelState` :
@@ -1860,7 +1866,7 @@ fournit le vrai (runners → `fromJson` → `dedupeVulns` → `enrichCves`).
 |Onglet *Tâches* (index 3). Les résultats remontent par `ResultsPanel._applyJobResult`.
 
 |`models/vex.dart` + `services/vex_controller.dart`
-|Copie du noyau VEX du CLI (`lib/vex.dart`) : OpenVEX / CycloneDX VEX en lecture et en
+|Copie du noyau VEX du CLI (`lib/vex.dart`) : OpenVEX / CycloneDX VEX / CSAF 2.0 VEX en lecture et en
 écriture, correspondance des produits (PURL, `nom`, `nom@version`). `VexController`
 (`ChangeNotifier`) porte les déclarations, les persiste (`SettingsService.saveVex`) et
 `filterByVex` masque les CVE couvertes. `widgets/vex_ui.dart` : `VexScope`
@@ -2588,7 +2594,7 @@ class _MyState extends State<My> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 15, vsync: this);  // ResultsPanel : 15 onglets
+    _tabs = TabController(length: 16, vsync: this);  // ResultsPanel : 16 onglets
   }
 
   @override

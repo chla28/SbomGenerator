@@ -328,7 +328,7 @@ le lancement. Largeur fixe (390 px). Les paramètres sont restaurés
 automatiquement à chaque démarrage. La commande CLI équivalente s'affiche
 sous le bouton *▶ Générer le SBOM* et se met à jour en temps réel.
 
-*Panneau droit — Résultats* : quinze onglets — Progression (avec export
+*Panneau droit — Résultats* : seize onglets — Progression (avec export
 des logs et résumé), Résultats (fichiers + score sbomqs), Tableau de bord
 (synthèse CVE multi-scanners, remédiation, sessions, VEX), Tâches (file d'attente
 d'analyses), Grype, OSV-Scanner et Trivy (analyses CVE),
@@ -337,8 +337,9 @@ Conformité CRA (rapport de conformité Cyber Resilience Act), Qualité SBOM
 composants du SBOM), Comparaison SBOM (diff de deux SBOM), Fusion SBOM
 (combine plusieurs SBOM en un seul), Licences SBOM (visualisation des licences du
 SBOM et rapport de conformité AsciiDoc, Markdown, HTML, CSV ou JSON), Visionneuse SBOM (exploration
-interactive d'un fichier SBOM externe) et Aperçu (prévisualisation du
-contenu SBOM).
+interactive d'un fichier SBOM externe), Aperçu (prévisualisation du
+contenu SBOM) et Suivi (évolution des CVE relevées par `watch`, vérification de
+signature).
 
 Le bouton *❓* dans la barre de titre ouvre ce manuel utilisateur directement
 dans l'application (sommaire à gauche, chapitre sélectionné à droite) — à
@@ -2154,8 +2155,8 @@ tous). La barre *VEX* du tableau de bord :
 * masque les CVE couvertes (« non affectée » / « corrigée ») tant que la case
 *Masquer les CVE couvertes par un VEX* est cochée — les chiffres, la comparaison, la
 remédiation et le rapport suivent ;
-* *Importer un VEX…* lit un document OpenVEX ou CycloneDX VEX ;
-* *Exporter* écrit les déclarations en OpenVEX ou CycloneDX VEX (utilisable avec
+* *Importer un VEX…* lit un document OpenVEX, CycloneDX VEX ou CSAF 2.0 VEX ;
+* *Exporter* écrit les déclarations en OpenVEX, CycloneDX VEX ou CSAF 2.0 VEX (utilisable avec
 `sbom-generator scan --vex`) ;
 * *Gérer* liste et supprime les déclarations.
 
@@ -2711,6 +2712,25 @@ classification copyleft est une heuristique de repérage par identifiant
 SPDX, pas une analyse juridique.
 
 [[sec-raccourcis]]
+== Onglet Suivi
+
+Deux outils dans un même onglet :
+
+*Évolution des CVE (`watch`).* *Dossier d'état…* ouvre le dossier `--state-dir` utilisé par
+`sbom_generator watch`. Pour chaque SBOM suivi, une carte affiche le nombre de CVE du
+dernier passage, sa variation depuis le passage précédent (en rouge si elle augmente, en
+vert si elle baisse), la répartition par sévérité et un graphique : une barre empilée par
+passage (les 60 derniers), les plus récents à droite. *Actualiser* relit le dossier. Les
+historiques sont écrits par `watch` à chaque passage (voir le guide d'usage du CLI) ; sans
+passage, l'onglet l'indique.
+
+*Vérification de signature.* Choisissez le SBOM, éventuellement son bundle (par défaut
+`<sbom>.bundle`, écrit par `--sign`), puis la *clé publique cosign* — ou l'*identité du
+certificat* et l'*émetteur OIDC* pour une signature sans clé. *Vérifier* lance
+`sbom_generator verify` (cosign requis) : « Signature valide », « Signature INVALIDE » ou
+« Vérification impossible », avec la sortie de la commande en dessous. Le bouton reste
+grisé tant que le SBOM et la clé (ou l'identité et l'émetteur) ne sont pas renseignés.
+
 == Raccourcis clavier
 
 Le bouton *⌨* de la barre de titre (ou *Ctrl+/*) affiche cette liste.
