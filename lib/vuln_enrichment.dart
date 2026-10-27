@@ -237,7 +237,7 @@ class VulnEnricher {
     Uri? epssApiUrl,
     Uri? pocApiBase,
     HttpClient Function()? httpClientFactory,
-  })  : _cacheDir = cacheDir ?? _defaultCacheDir(),
+  })  : _cacheDir = cacheDir ?? defaultCacheDir(),
         _kevFeedUrl = kevFeedUrl ??
             Uri.parse('https://www.cisa.gov/sites/default/files/feeds/'
                 'known_exploited_vulnerabilities.json'),
@@ -247,7 +247,8 @@ class VulnEnricher {
             Uri.parse('https://poc-in-github.motikan2010.net/api/v1/'),
         _clientFactory = httpClientFactory ?? HttpClient.new;
 
-  static Directory _defaultCacheDir() {
+  /// Dossier de cache par défaut (`$XDG_CACHE_HOME` ou `~/.cache`).
+  static Directory defaultCacheDir() {
     final env = Platform.environment;
     final base = env['XDG_CACHE_HOME'] ??
         (env['HOME'] != null ? '${env['HOME']}/.cache' : null) ??

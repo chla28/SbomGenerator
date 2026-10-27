@@ -1280,4 +1280,79 @@ const Map<String, String> catalogEn = {
       'quality: score {score} is below the minimum {min} — exit code 2',
   'Document VEX (OpenVEX / CSAF / CycloneDX), répétable : les CVE\n"not_affected" ou "fixed" sont écartées de l\'inventaire des\nvulnérabilités.':
       'VEX document (OpenVEX / CSAF / CycloneDX), repeatable: "not_affected" or\n"fixed" CVEs are removed from the vulnerability inventory.',
+  '{sbom} : {n} nouvelle(s) CVE ({total} au total)':
+      '{sbom}: {n} new CVE(s) ({total} in total)',
+  'webhook : schéma non pris en charge ({scheme})':
+      'webhook: unsupported scheme ({scheme})',
+  'webhook {host} : réponse HTTP {code}':
+      'webhook {host}: HTTP response {code}',
+  'webhook {host} : {e}': 'webhook {host}: {e}',
+  'adresse SMTP invalide : « {text} » (attendu : hote[:port])':
+      'invalid SMTP address: "{text}" (expected: host[:port])',
+  'smtp : refus d\'envoyer des identifiants sans chiffrement (utiliser --smtp-security starttls ou tls)':
+      'smtp: refusing to send credentials without encryption (use --smtp-security starttls or tls)',
+  'smtp : le serveur ne propose pas STARTTLS':
+      'smtp: the server does not offer STARTTLS',
+  'smtp {host} : {e}': 'smtp {host}: {e}',
+  'connexion SMTP fermée par le serveur':
+      'SMTP connection closed by the server',
+  'délai SMTP dépassé': 'SMTP timeout',
+  'réponse SMTP inattendue : {line}': 'unexpected SMTP reply: {line}',
+  'cron : intervalle minimal d\'une minute':
+      'cron: minimum interval is one minute',
+  'cron : les minutes doivent diviser 60 (1, 2, 3, 5, 10, 15, 20, 30)':
+      'cron: minutes must divide 60 (1, 2, 3, 5, 10, 15, 20, 30)',
+  'cron : les heures doivent diviser 24 (1, 2, 3, 4, 6, 8, 12)':
+      'cron: hours must divide 24 (1, 2, 3, 4, 6, 8, 12)',
+  'cron : intervalle non exprimable (utiliser un multiple de jours entiers)':
+      'cron: interval cannot be expressed (use a whole number of days)',
+  'cache vide : lancer d\'abord « offline prepare » (ou un scan en ligne)':
+      'empty cache: run "offline prepare" first (or an online scan)',
+  'bundle illisible : {path}': 'unreadable bundle: {path}',
+  'format de bundle inconnu': 'unknown bundle format',
+  'fichier inattendu dans le bundle : {name}':
+      'unexpected file in the bundle: {name}',
+  'empreinte invalide pour {name} : bundle altéré':
+      'invalid digest for {name}: tampered bundle',
+  'contenu invalide pour {name}': 'invalid content for {name}',
+  'URL d\'un webhook (Slack, Mattermost, Teams ou outil maison) :\nPOST JSON avec la clé « text » et le détail des nouvelles CVE.\nRépétable. L\'URL n\'est jamais affichée.':
+      'Webhook URL (Slack, Mattermost, Teams or in-house tool):\nJSON POST with a "text" key and the details of the new CVEs.\nRepeatable. The URL is never displayed.',
+  'Serveur SMTP (hote[:port]) pour une alerte par e-mail ; exige\n--notify-from et --notify-to. Identifiants éventuels dans les\nvariables SBOMGEN_SMTP_USER / SBOMGEN_SMTP_PASSWORD.':
+      'SMTP server (host[:port]) for an e-mail alert; requires\n--notify-from and --notify-to. Optional credentials in the\nSBOMGEN_SMTP_USER / SBOMGEN_SMTP_PASSWORD variables.',
+  'Expéditeur de l\'e-mail (--notify-smtp).': 'E-mail sender (--notify-smtp).',
+  'Destinataire de l\'e-mail (--notify-smtp), répétable.':
+      'E-mail recipient (--notify-smtp), repeatable.',
+  'Chiffrement SMTP : starttls (587, défaut), tls (465) ou none\n(relais local ; refusé si des identifiants sont fournis).':
+      'SMTP encryption: starttls (587, default), tls (465) or none\n(local relay; refused if credentials are provided).',
+  'Affiche la planification (unité + minuterie systemd, ou ligne\ncrontab) équivalente à cette commande avec --interval, puis sort\nsans rien lancer. À installer soi-même.':
+      'Prints the schedule (systemd unit + timer, or crontab line)\nequivalent to this command with --interval, then exits without\nrunning anything. To be installed by hand.',
+  'watch: --print-schedule exige --interval.':
+      'watch: --print-schedule requires --interval.',
+  'watch: --notify-webhook : URL invalide.':
+      'watch: --notify-webhook: invalid URL.',
+  'watch: --notify-smtp exige --notify-from et --notify-to.':
+      'watch: --notify-smtp requires --notify-from and --notify-to.',
+  'watch: identifiants SMTP refusés sans chiffrement (--smtp-security starttls ou tls).':
+      'watch: SMTP credentials refused without encryption (--smtp-security starttls or tls).',
+  'état conservé': 'state kept',
+  'Dossier du cache d\'enrichissement (défaut : ~/.cache/sbom-generator).':
+      'Enrichment cache directory (default: ~/.cache/sbom-generator).',
+  'Bundle à écrire (export).': 'Bundle to write (export).',
+  'Rapport `scan --format json` dont les CVE sont préchargées (prepare), répétable.':
+      '`scan --format json` report whose CVEs are preloaded (prepare), repeatable.',
+  'prepare : interroge aussi la source PoC publique.':
+      'prepare: also queries the public PoC source.',
+  'sbom_generator offline – Cache d\'enrichissement (KEV, EPSS, PoC) transportable\nvers une machine sans accès réseau (SBOMGEN_OFFLINE=1).\n\nUsage:\n  sbom_generator offline prepare --from-scan scan.json   # machine connectée\n  sbom_generator offline export -o offline.json.gz       # machine connectée\n  sbom_generator offline import offline.json.gz          # machine isolée\n  sbom_generator offline status\n\nLa base de vulnérabilités du scanner n\'est pas incluse : la transporter avec\nl\'outil du scanner (p. ex. `grype db import`).\n\n{usage}\n':
+      'sbom_generator offline – Enrichment cache (KEV, EPSS, PoC) that can be carried\nto a machine without network access (SBOMGEN_OFFLINE=1).\n\nUsage:\n  sbom_generator offline prepare --from-scan scan.json   # connected machine\n  sbom_generator offline export -o offline.json.gz       # connected machine\n  sbom_generator offline import offline.json.gz          # isolated machine\n  sbom_generator offline status\n\nThe scanner\'s vulnerability database is not included: carry it with the\nscanner\'s own tool (e.g. `grype db import`).\n\n{usage}\n',
+  '  (cache vide)': '  (empty cache)',
+  'entrée(s)': 'entries',
+  '--output est requis pour export.': '--output is required for export.',
+  'import : un seul fichier bundle attendu.':
+      'import: exactly one bundle file expected.',
+  'Importé dans {dir} : {names}': 'Imported into {dir}: {names}',
+  'rapport illisible {path} : {e}': 'unreadable report {path}: {e}',
+  'Cache à jour : KEV complet, {n} CVE enrichie(s).':
+      'Cache up to date: full KEV, {n} CVE(s) enriched.',
+  'action inconnue « {action} » (prepare, export, import, status).':
+      'unknown action "{action}" (prepare, export, import, status).',
 };

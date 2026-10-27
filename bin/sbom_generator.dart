@@ -14,6 +14,8 @@ import 'package:sbom_generator/cyclonedx_generator.dart';
 import 'package:sbom_generator/spdx_generator.dart';
 import 'package:sbom_generator/signature.dart';
 import 'package:sbom_generator/watch.dart';
+import 'package:sbom_generator/watch_history.dart';
+import 'package:sbom_generator/watch_schedule.dart';
 import 'package:sbom_generator/spdx3_generator.dart';
 import 'package:sbom_generator/spdx3_view.dart';
 import 'package:sbom_generator/simple_json_generator.dart';
@@ -27,6 +29,8 @@ import 'package:sbom_generator/layer_scan.dart';
 import 'package:sbom_generator/sbom_diff.dart';
 import 'package:sbom_generator/sbom_merger.dart';
 import 'package:sbom_generator/license_policy.dart';
+import 'package:sbom_generator/notify.dart';
+import 'package:sbom_generator/offline_bundle.dart';
 import 'package:sbom_generator/policy_checker.dart';
 import 'package:sbom_generator/sbom_quality.dart';
 import 'package:sbom_generator/go_parser.dart';
@@ -136,6 +140,12 @@ Future<void> main(List<String> rawArguments) async {
   // Sous-commande `verify` : vérifie la signature cosign d'un SBOM
   if (arguments.isNotEmpty && arguments.first == 'verify') {
     await _runVerify(arguments.sublist(1));
+    return;
+  }
+
+  // Sous-commande `offline` : cache d'enrichissement transportable
+  if (arguments.isNotEmpty && arguments.first == 'offline') {
+    await _runOffline(arguments.sublist(1));
     return;
   }
 
@@ -4581,6 +4591,19 @@ Future<void> _runWatch(List<String> arguments) async {
         help: tr('Rescanne en boucle à cet intervalle (90s, 30m, 6h, 1d).\nOmis : un seul passage (adapté à cron / CI).'))
     ..addOption('notify-cmd',
         help: tr('Commande shell lancée pour chaque SBOM ayant de nouvelles CVE.\nVariables : SBOMGEN_WATCH_SBOM, SBOMGEN_WATCH_NEW (nombre),\nSBOMGEN_WATCH_REPORT (JSON des nouveaux constats). Si elle\néchoue, l\'état n\'est pas mis à jour : nouvelle tentative au\npassage suivant.'))
+    ..addMultiOption('notify-webhook',
+        help: tr('URL d\'un webhook (Slack, Mattermost, Teams ou outil maison) :\nPOST JSON avec la clé « text » et le détail des nouvelles CVE.\nRépétable. L\'URL n\'est jamais affichée.'))
+    ..addOption('notify-smtp',
+        help: tr('Serveur SMTP (hote[:port]) pour une alerte par e-mail ; exige\n--notify-from et --notify-to. Identifiants éventuels dans les\nvariables SBOMGEN_SMTP_USER / SBOMGEN_SMTP_PASSWORD.'))
+    ..addOption('notify-from', help: tr('Expéditeur de l\'e-mail (--notify-smtp).'))
+    ..addMultiOption('notify-to', help: tr('Destinataire de l\'e-mail (--notify-smtp), répétable.'))
+    ..addOption('smtp-security',
+        allowed: ['starttls', 'tls', 'none'],
+        defaultsTo: 'starttls',
+        help: tr('Chiffrement SMTP : starttls (587, défaut), tls (465) ou none\n(relais local ; refusé si des identifiants sont fournis).'))
+    ..addOption('print-schedule',
+        allowed: ['systemd', 'cron'],
+        help: tr('Affiche la planification (unité + minuterie systemd, ou ligne\ncrontab) équivalente à cette commande avec --interval, puis sort\nsans rien lancer. À installer soi-même.'))
     ..addMultiOption('scan-arg',
         help: tr('Option transmise telle quelle à `scan` (répétable), p. ex.\n--scan-arg=--no-enrich.'))
     ..addOption('format',
@@ -4621,9 +4644,54 @@ Future<void> _runWatch(List<String> arguments) async {
     }
   }
 
+  final scheduleKind = args['print-schedule'] as String?;
+  if (scheduleKind != null) {
+    if (interval == null) {
+      stderr.writeln(tr('watch: --print-schedule exige --interval.'));
+      exit(1);
+    }
+    _printWatchSchedule(scheduleKind, interval, arguments);
+    exit(0);
+  }
+
   final stateDir = args['state-dir'] as String;
   final asJson = args['format'] == 'json';
   final notifyCmd = args['notify-cmd'] as String?;
+  final webhooks = <Uri>[];
+  for (final u in args['notify-webhook'] as List<String>) {
+    final uri = Uri.tryParse(u);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      stderr.writeln(tr('watch: --notify-webhook : URL invalide.'));
+      exit(1);
+    }
+    webhooks.add(uri);
+  }
+  SmtpConfig? smtp;
+  final smtpTarget = args['notify-smtp'] as String?;
+  if (smtpTarget != null) {
+    final from = args['notify-from'] as String?;
+    final to = args['notify-to'] as List<String>;
+    if (from == null || to.isEmpty) {
+      stderr.writeln(tr('watch: --notify-smtp exige --notify-from et --notify-to.'));
+      exit(1);
+    }
+    final security = SmtpSecurity.values.byName(args['smtp-security'] as String);
+    final (host, port) = parseSmtpTarget(smtpTarget, security);
+    final env = Platform.environment;
+    if (security == SmtpSecurity.none && env['SBOMGEN_SMTP_USER'] != null) {
+      stderr.writeln(tr('watch: identifiants SMTP refusés sans chiffrement (--smtp-security starttls ou tls).'));
+      exit(1);
+    }
+    smtp = SmtpConfig(
+      host: host,
+      port: port,
+      security: security,
+      from: from,
+      to: to,
+      user: env['SBOMGEN_SMTP_USER'],
+      password: env['SBOMGEN_SMTP_PASSWORD'],
+    );
+  }
   Directory(stateDir).createSync(recursive: true);
 
   void emit(Map<String, dynamic> event, String text) =>
@@ -4684,6 +4752,7 @@ Future<void> _runWatch(List<String> arguments) async {
 
       if (previous == null) {
         File(stateFile).writeAsStringSync(jsonEncode(current));
+        appendHistory(stateFile, historyEntryFromScan(current));
         final total = (current['findings'] as List).length;
         emit({
           'event': 'watch',
@@ -4697,6 +4766,8 @@ Future<void> _runWatch(List<String> arguments) async {
       final diff = diffScans(previous, current);
       if (diff.added.isEmpty) {
         File(stateFile).writeAsStringSync(jsonEncode(current));
+        appendHistory(
+            stateFile, historyEntryFromScan(current, resolved: diff.resolved));
         emit(
             {
               'event': 'watch',
@@ -4743,7 +4814,31 @@ Future<void> _runWatch(List<String> arguments) async {
           fail(tr('--notify-cmd en échec (code {exitCode}) : état conservé', {'exitCode': r.exitCode}));
         }
       }
-      if (notified) File(stateFile).writeAsStringSync(jsonEncode(current));
+      final alert = WatchAlert(sbom, diff.added, diff.total, diff.resolved);
+      for (final url in webhooks) {
+        try {
+          await postWebhook(url, alert.toPayload());
+        } on NotifyException catch (e) {
+          notified = false;
+          fail('${e.message} — ${tr('état conservé')}');
+        }
+      }
+      if (smtp != null) {
+        try {
+          await sendMail(smtp,
+              subject: '[sbom_generator] ${alert.summary}', body: alert.text);
+        } on NotifyException catch (e) {
+          notified = false;
+          fail('${e.message} — ${tr('état conservé')}');
+        }
+      }
+      if (notified) {
+        File(stateFile).writeAsStringSync(jsonEncode(current));
+        appendHistory(
+            stateFile,
+            historyEntryFromScan(current,
+                added: diff.added.length, resolved: diff.resolved));
+      }
     }
     return (withNew, errors);
   }
@@ -4755,6 +4850,125 @@ Future<void> _runWatch(List<String> arguments) async {
   while (true) {
     await pass();
     await Future<void>.delayed(interval);
+  }
+}
+
+/// Reconstruit la commande `watch` sans `--print-schedule` ni `--interval`
+/// (la minuterie les remplace) et l'affiche pour systemd ou cron.
+void _printWatchSchedule(String kind, Duration interval, List<String> arguments) {
+  const dropWithValue = {'--print-schedule', '--interval', '-i'};
+  final argv = [
+    ..._selfCommand().map((p) => File(p).absolute.path),
+    'watch',
+  ];
+  for (var i = 0; i < arguments.length; i++) {
+    final a = arguments[i];
+    if (dropWithValue.contains(a)) {
+      i++;
+    } else if (a.startsWith('--print-schedule=') ||
+        a.startsWith('--interval=') ||
+        (a.startsWith('-i') && a.length > 2 && !a.startsWith('--'))) {
+      continue;
+    } else {
+      argv.add(a);
+    }
+  }
+  final cwd = Directory.current.path;
+  try {
+    if (kind == 'cron') {
+      print(cronLine(cronExpression(interval), argv, workingDir: cwd));
+      return;
+    }
+  } on FormatException catch (e) {
+    stderr.writeln('watch: ${e.message}');
+    exit(1);
+  }
+  print('# --- sbom-generator-watch.service ---');
+  print(systemdService(argv, workingDir: cwd));
+  print('# --- sbom-generator-watch.timer ---');
+  print(systemdTimer(interval));
+}
+
+Future<void> _runOffline(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('cache-dir',
+        help: tr('Dossier du cache d\'enrichissement (défaut : ~/.cache/sbom-generator).'))
+    ..addOption('output', abbr: 'o', help: tr('Bundle à écrire (export).'))
+    ..addMultiOption('from-scan',
+        help: tr('Rapport `scan --format json` dont les CVE sont préchargées (prepare), répétable.'))
+    ..addFlag('poc',
+        negatable: false,
+        help: tr('prepare : interroge aussi la source PoC publique.'))
+    ..addFlag('help', abbr: 'h', negatable: false, help: tr('Aide.'));
+
+  void usage() => stdout.writeln(tr('sbom_generator offline – Cache d\'enrichissement (KEV, EPSS, PoC) transportable\nvers une machine sans accès réseau (SBOMGEN_OFFLINE=1).\n\nUsage:\n  sbom_generator offline prepare --from-scan scan.json   # machine connectée\n  sbom_generator offline export -o offline.json.gz       # machine connectée\n  sbom_generator offline import offline.json.gz          # machine isolée\n  sbom_generator offline status\n\nLa base de vulnérabilités du scanner n\'est pas incluse : la transporter avec\nl\'outil du scanner (p. ex. `grype db import`).\n\n{usage}\n', {'usage': parser.usage}));
+
+  ArgResults args;
+  try {
+    args = parser.parse(arguments);
+  } on ArgParserException catch (e) {
+    stderr.writeln('offline: ${_argError(e.message)}');
+    usage();
+    exit(1);
+  }
+  if (args['help'] as bool) {
+    usage();
+    exit(0);
+  }
+  if (args.rest.isEmpty) {
+    usage();
+    exit(1);
+  }
+  final cacheDir = args['cache-dir'] != null
+      ? Directory(args['cache-dir'] as String)
+      : VulnEnricher.defaultCacheDir();
+  final action = args.rest.first;
+  void fail(String msg) {
+    stderr.writeln('offline: $msg');
+    exit(1);
+  }
+
+  try {
+    switch (action) {
+      case 'status':
+        final info = cacheStatus(cacheDir);
+        print(cacheDir.path);
+        if (info.isEmpty) print(tr('  (cache vide)'));
+        for (final i in info) {
+          print('  ${i.name}  ${i.entries} ${tr('entrée(s)')}  '
+              '${(i.bytes / 1024).toStringAsFixed(1)} KB  '
+              '${i.modified.toLocal().toIso8601String().substring(0, 16)}');
+        }
+      case 'export':
+        final out = args['output'] as String?;
+        if (out == null) fail(tr('--output est requis pour export.'));
+        final names = exportOfflineBundle(cacheDir, out!);
+        print('→ $out (${names.join(', ')})');
+      case 'import':
+        if (args.rest.length != 2) fail(tr('import : un seul fichier bundle attendu.'));
+        final names = importOfflineBundle(args.rest[1], cacheDir);
+        print(tr('Importé dans {dir} : {names}', {'dir': cacheDir.path, 'names': names.join(', ')}));
+      case 'prepare':
+        final ids = <String>{};
+        for (final path in args['from-scan'] as List<String>) {
+          try {
+            final j = jsonDecode(File(path).readAsStringSync()) as Map;
+            for (final f in (j['findings'] as List? ?? const [])) {
+              if (f is Map && f['id'] != null) ids.add('${f['id']}');
+            }
+          } catch (e) {
+            fail(tr('rapport illisible {path} : {e}', {'path': path, 'e': e}));
+          }
+        }
+        final enricher = VulnEnricher(
+            enablePoc: args['poc'] as bool, cacheDir: cacheDir);
+        final info = await enricher.enrich(ids);
+        print(tr('Cache à jour : KEV complet, {n} CVE enrichie(s).', {'n': info.length}));
+      default:
+        fail(tr('action inconnue « {action} » (prepare, export, import, status).', {'action': action}));
+    }
+  } on OfflineException catch (e) {
+    fail(e.message);
   }
 }
 

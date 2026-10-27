@@ -155,4 +155,133 @@ void main() {
     expect(r.exitCode, 1);
     expect(r.stderr, contains('--interval'));
   });
+
+  group('notifications et historique', () {
+    test('webhook : reçoit les nouvelles CVE ; en échec, l\'état est conservé',
+        () async {
+      await watch([]);
+      grypeFinds(['CVE-2024-0001', 'CVE-2024-0002']);
+      final received = <Map<String, dynamic>>[];
+      var status = 500;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((req) async {
+        received.add(jsonDecode(await utf8.decoder.bind(req).join())
+            as Map<String, dynamic>);
+        req.response.statusCode = status;
+        await req.response.close();
+      });
+      final url = 'http://127.0.0.1:${server.port}/hook?token=SECRET';
+
+      var r = await watch(['--notify-webhook', url]);
+      expect(r.exitCode, 1); // webhook en échec
+      expect('${r.stdout}${r.stderr}', isNot(contains('SECRET')));
+      expect(received.single['newCount'], 1);
+      expect(received.single['text'], contains('CVE-2024-0002'));
+
+      status = 200;
+      r = await watch(['--notify-webhook', url]);
+      expect(r.exitCode, 3, reason: '${r.stderr}'); // renvoyé car état conservé
+      expect(received, hasLength(2));
+      r = await watch(['--notify-webhook', url]);
+      expect(r.exitCode, 0);
+      expect(received, hasLength(2));
+    });
+
+    test('SMTP sans chiffrement : message remis au relais', () async {
+      await watch([]);
+      grypeFinds(['CVE-2024-0001', 'CVE-2024-0002']);
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      final commands = <String>[];
+      server.listen((sock) {
+        void send(String l) => sock.write('$l\r\n');
+        send('220 hi');
+        var inData = false;
+        utf8.decoder.bind(sock).transform(const LineSplitter()).listen((l) {
+          if (inData) {
+            if (l == '.') {
+              inData = false;
+              send('250 ok');
+            }
+            return;
+          }
+          commands.add(l);
+          if (l.startsWith('EHLO')) {
+            send('250 hi');
+          } else if (l == 'DATA') {
+            inData = true;
+            send('354 go');
+          } else if (l == 'QUIT') {
+            send('221 bye');
+            sock.close();
+          } else {
+            send('250 ok');
+          }
+        });
+      });
+      final r = await watch([
+        '--notify-smtp',
+        '127.0.0.1:${server.port}',
+        '--smtp-security',
+        'none',
+        '--notify-from',
+        'watch@example.org',
+        '--notify-to',
+        'ops@example.org',
+      ]);
+      expect(r.exitCode, 3, reason: '${r.stderr}');
+      expect(commands, contains('RCPT TO:<ops@example.org>'));
+    });
+
+    test('--notify-smtp sans destinataire : erreur d\'usage', () async {
+      final r = await watch(['--notify-smtp', 'localhost']);
+      expect(r.exitCode, 1);
+      expect(r.stderr, contains('--notify-from'));
+    });
+
+    test('historique : une ligne par passage, nouvelle CVE comptée', () async {
+      await watch([]);
+      await watch([]);
+      grypeFinds(['CVE-2024-0001', 'CVE-2024-0002']);
+      await watch([]);
+      final h = Directory('${tmp.path}/state')
+          .listSync()
+          .whereType<File>()
+          .singleWhere((f) => f.path.endsWith('.history.jsonl'));
+      final lines = h.readAsLinesSync().map(jsonDecode).toList();
+      expect(lines.map((l) => l['total']), [1, 1, 2]);
+      expect(lines.last['added'], 1);
+      expect(lines.last['bySeverity'], {'high': 2});
+    });
+  });
+
+  group('--print-schedule', () {
+    test('systemd : service sans --interval, minuterie, code 3 accepté',
+        () async {
+      final r =
+          await watch(['--interval', '6h', '--print-schedule', 'systemd']);
+      expect(r.exitCode, 0, reason: '${r.stderr}');
+      final out = r.stdout as String;
+      expect(out, contains('sbom-generator-watch.service'));
+      expect(out, contains('OnUnitActiveSec=6h'));
+      expect(out, contains('SuccessExitStatus=3'));
+      expect(out, contains('ExecStart='));
+      expect(out, contains('watch'));
+      expect(out, isNot(contains('--interval')));
+      expect(out, isNot(contains('--print-schedule')));
+    });
+
+    test('cron : expression et répertoire de travail', () async {
+      final r = await watch(['-i', '30m', '--print-schedule', 'cron']);
+      expect(r.exitCode, 0, reason: '${r.stderr}');
+      expect(r.stdout, startsWith('*/30 * * * * cd '));
+    });
+
+    test('intervalle absent ou non exprimable en cron : erreur', () async {
+      expect((await watch(['--print-schedule', 'cron'])).exitCode, 1);
+      expect(
+          (await watch(['-i', '7m', '--print-schedule', 'cron'])).exitCode, 1);
+    });
+  });
 }
