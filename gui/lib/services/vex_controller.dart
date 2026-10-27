@@ -6,7 +6,7 @@ import '../models/vex.dart';
 import 'scan_enrichment.dart' show normalizeCveId;
 
 /// Déclarations VEX de l'utilisateur : « cette CVE ne m'affecte pas ». Servent
-/// à masquer des CVE du tableau de bord et s'exportent en OpenVEX / CycloneDX.
+/// à masquer des CVE du tableau de bord et s'exportent en OpenVEX / CycloneDX / CSAF.
 class VexController extends ChangeNotifier {
   final List<VexStatement> _statements = [];
 
@@ -86,6 +86,9 @@ class VexController extends ChangeNotifier {
 
   Map<String, dynamic> toCycloneDx(String author, String version) =>
       buildCycloneDxVex(_statements, author: author, toolVersion: version);
+
+  Map<String, dynamic> toCsaf(String author, String version) =>
+      buildCsafVex(_statements, author: author, toolVersion: version);
 
   void _changed() {
     notifyListeners();

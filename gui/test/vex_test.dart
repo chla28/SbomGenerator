@@ -40,6 +40,55 @@ void main() {
       expect(back.first.justification, 'vulnerable_code_not_in_execute_path');
     });
 
+    test('CSAF 2.0 VEX : écriture puis relecture, produit joker', () {
+      final doc = buildCsafVex(
+        [
+          notAffected,
+          const VexStatement(
+            vulnId: 'CVE-2',
+            status: 'affected',
+            actionStatement: 'Mettre à jour',
+          ),
+          const VexStatement(
+            vulnId: 'GHSA-xxxx',
+            products: ['pkg:npm/bar@2.0'],
+            status: 'fixed',
+          ),
+        ],
+        author: 'moi',
+        toolVersion: '1',
+      );
+      expect(doc['document']['category'], 'csaf_vex');
+      expect(isCsafVex(doc), isTrue);
+      final back = parseVex(jsonDecode(encodeVex(doc)) as Map<String, dynamic>);
+      expect(back, hasLength(3));
+      final cve1 = back.firstWhere((s) => s.vulnId == 'CVE-2024-1');
+      expect(cve1.status, 'not_affected');
+      expect(cve1.products, ['foo@1.0']);
+      expect(cve1.justification, 'vulnerable_code_not_in_execute_path');
+      expect(cve1.impactStatement, 'jamais appelé');
+      final cve2 = back.firstWhere((s) => s.vulnId == 'CVE-2');
+      expect(cve2.products, isEmpty); // joker => tous les produits
+      expect(cve2.actionStatement, 'Mettre à jour');
+      final ghsa = back.firstWhere((s) => s.vulnId == 'GHSA-xxxx');
+      expect(ghsa.products, ['pkg:npm/bar@2.0']);
+    });
+
+    test('CSAF : un document non VEX n\'est pas reconnu', () {
+      expect(
+        isCsafVex({
+          'document': {'category': 'csaf_security_advisory'},
+        }),
+        isFalse,
+      );
+      expect(
+        () => parseVex({
+          'document': {'category': 'csaf_security_advisory'},
+        }),
+        throwsFormatException,
+      );
+    });
+
     test('document inconnu : FormatException', () {
       expect(() => parseVex({'a': 1}), throwsFormatException);
     });

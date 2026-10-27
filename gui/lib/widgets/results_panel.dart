@@ -27,6 +27,7 @@ import 'sbom_viewer_panel.dart';
 import 'on_pale.dart';
 import 'session_bar.dart';
 import 'vex_ui.dart';
+import 'watch_panel.dart';
 import 'vuln_shared.dart' show VulnRow;
 import '../services/settings_service.dart';
 import '../services/vex_controller.dart';
@@ -250,7 +251,7 @@ class ResultsPanelState extends State<ResultsPanel>
   void initState() {
     super.initState();
     _tabs = TabController(
-      length: 15,
+      length: 16,
       vsync: this,
       initialIndex: widget.initialGrypeSbom == null ? 0 : _grypeTabIndex,
     );
@@ -573,6 +574,16 @@ class ResultsPanelState extends State<ResultsPanel>
                   ],
                 ),
               ),
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.monitor_heart_outlined, size: 16),
+                    const SizedBox(width: 6),
+                    Text(tr('Suivi')),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -751,6 +762,9 @@ class ResultsPanelState extends State<ResultsPanel>
                   isLoading: _previewLoading,
                   onSelectFile: _loadPreview,
                 ),
+
+                // Tab 15 : Suivi (watch) et signature
+                WatchPanel(outputFiles: widget.outputFiles),
               ],
             ),
           ),

@@ -315,7 +315,7 @@ class VexBar extends StatelessWidget {
     }
   }
 
-  Future<void> _export(BuildContext context, bool cdx) async {
+  Future<void> _export(BuildContext context, String format) async {
     if (controller.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -324,14 +324,20 @@ class VexBar extends StatelessWidget {
     }
     final path = await pickSavePath(
       dialogTitle: tr('Exporter les déclarations VEX'),
-      fileName: cdx ? 'vex.cdx.json' : 'vex.openvex.json',
+      fileName: switch (format) {
+        'cyclonedx' => 'vex.cdx.json',
+        'csaf' => 'vex.csaf.json',
+        _ => 'vex.openvex.json',
+      },
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
     if (path == null) return;
-    final doc = cdx
-        ? controller.toCycloneDx('sbom-generator-gui', kGuiVersion)
-        : controller.toOpenVex('sbom-generator-gui', kGuiVersion);
+    final doc = switch (format) {
+      'cyclonedx' => controller.toCycloneDx('sbom-generator-gui', kGuiVersion),
+      'csaf' => controller.toCsaf('sbom-generator-gui', kGuiVersion),
+      _ => controller.toOpenVex('sbom-generator-gui', kGuiVersion),
+    };
     await File(path).writeAsString('${encodeVex(doc)}\n');
     if (!context.mounted) return;
     ScaffoldMessenger.of(
@@ -369,12 +375,13 @@ class VexBar extends StatelessWidget {
                 label: Text(tr('Importer un VEX…')),
                 onPressed: () => _import(context),
               ),
-              PopupMenuButton<bool>(
+              PopupMenuButton<String>(
                 tooltip: tr('Exporter'),
-                onSelected: (cdx) => _export(context, cdx),
+                onSelected: (format) => _export(context, format),
                 itemBuilder: (_) => [
-                  PopupMenuItem(value: false, child: Text(tr('OpenVEX (.json)'))),
-                  PopupMenuItem(value: true, child: Text(tr('CycloneDX VEX (.json)'))),
+                  PopupMenuItem(value: 'openvex', child: Text(tr('OpenVEX (.json)'))),
+                  PopupMenuItem(value: 'cyclonedx', child: Text(tr('CycloneDX VEX (.json)'))),
+                  PopupMenuItem(value: 'csaf', child: Text(tr('CSAF 2.0 VEX (.json)'))),
                 ],
                 child: Padding(
                   padding: const EdgeInsets.symmetric(

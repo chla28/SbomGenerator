@@ -66,7 +66,7 @@ void main() {
     expect(tabs().index, 1);
     await _ctrl(tester, LogicalKeyboardKey.digit1);
     await _ctrl(tester, LogicalKeyboardKey.pageUp);
-    expect(tabs().index, 14, reason: 'retour en fin de liste');
+    expect(tabs().index, 15, reason: 'retour en fin de liste');
   });
 
   testWidgets('Ctrl+/ affiche la liste des raccourcis', (tester) async {
