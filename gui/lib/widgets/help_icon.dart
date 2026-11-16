@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Icône ❓ affichant un tooltip d'aide au survol (et au clic sur mobile).
 ///

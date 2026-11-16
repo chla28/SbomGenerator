@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Couleur de texte sombre posée sur les fonds pastel (bandeaux, lignes de
 /// comparaison) : en thème sombre, le texte par défaut est clair et devient

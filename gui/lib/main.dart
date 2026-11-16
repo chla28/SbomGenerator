@@ -1,7 +1,6 @@
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'home_screen.dart';
 import 'l10n/l10n.dart';

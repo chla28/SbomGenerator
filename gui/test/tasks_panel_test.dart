@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sbom_generator_gui/models/sbom_result.dart';
 import 'package:sbom_generator_gui/services/scan_queue.dart';

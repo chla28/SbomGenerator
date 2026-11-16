@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  material_ui: ^1.11.0
+  cupertino_ui: ^1.1.6
   # Localisation de l'interface (gen-l10n, fichiers lib/l10n/*.arb) ; la
   # version d'intl est imposée par flutter_localizations.
   flutter_localizations:
