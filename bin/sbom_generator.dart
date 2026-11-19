@@ -59,7 +59,7 @@ import 'package:sbom_generator/vex.dart';
 import 'package:sbom_generator/scan_policy.dart';
 import 'package:sbom_generator/report_input.dart';
 
-const _version = '1.11.1';
+const _version = '1.11.2';
 
 const _validFormats = {
   'cyclonedx',

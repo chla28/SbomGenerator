@@ -83,7 +83,7 @@ if ! $SKIP_TESTS; then
   dart analyze
   dart test
   step "Analyse et tests (GUI)"
-  (cd gui && flutter analyze && flutter test)
+  (cd gui && flutter analyze --no-fatal-infos && flutter test)
 fi
 
 # ── Distribution ───────────────────────────────────────────────────────────

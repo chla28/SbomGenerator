@@ -1,3 +1,4 @@
+import 'app_title.dart';
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
@@ -295,10 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.assignment_outlined, size: 22),
             SizedBox(width: 10),
-            Text(
-              'SBOM Generator',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            AppTitle('SBOM Generator', fallbackVersion: kGuiVersion),
           ],
         ),
         actions: [
